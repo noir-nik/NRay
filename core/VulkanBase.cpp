@@ -8,6 +8,7 @@ namespace vkw {
 struct Context
 {
 	VkInstance instance = VK_NULL_HANDLE;
+	// VkSurfaceKHR surface = VK_NULL_HANDLE;
 	VkAllocationCallbacks* allocator = VK_NULL_HANDLE;
 	VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
     std::string applicationName = "Vulkan Slang Compute";
@@ -27,17 +28,42 @@ struct Context
     std::vector<bool> activeLayers; // Available layers
     std::vector<const char*> activeLayersNames;
     std::vector<VkLayerProperties> layers;
-    std::vector<bool> activeExtensions; // Extensions
+    std::vector<bool> activeExtensions; // API Extensions
     std::vector<const char*> activeExtensionsNames;
     std::vector<VkExtensionProperties> instanceExtensions;
-	std::vector<const char*> requiredExtensions;
+	std::vector<const char*> requiredExtensions = {
+		// VK_KHR_SWAPCHAIN_EXTENSION_NAME, 
+		// VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
+		// VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
+		// VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
+		// VK_KHR_RAY_QUERY_EXTENSION_NAME,
+		// VK_EXT_SHADER_ATOMIC_FLOAT_EXTENSION_NAME,
+    };
 
+	
+	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+    // VkSampleCountFlagBits maxSamples = VK_SAMPLE_COUNT_1_BIT;
+    // VkSampleCountFlags sampleCounts;
 
-	// VkPhysicalDeviceFeatures physicalFeatures{};
-	// VkPhysicalDeviceProperties physicalProperties{};
+    VkPhysicalDeviceFeatures physicalFeatures{};
+    // VkSurfaceCapabilitiesKHR surfaceCapabilities{};
+    VkPhysicalDeviceProperties physicalProperties{};
+	
+    // std::vector<VkPresentModeKHR> availablePresentModes;
+    // std::vector<VkSurfaceFormatKHR> availableSurfaceFormats;
+    std::vector<VkExtensionProperties> availableExtensions;
+    std::vector<VkQueueFamilyProperties> availableFamilies;
 
-	// std::vector<VkExtensionProperties> availableExtensions;
-	// std::vector<VkQueueFamilyProperties> availableFamilies;
+	struct InternalQueue {
+		VkQueue queue = VK_NULL_HANDLE;
+		int family = -1;
+		// std::vector<CommandResources> commands;
+	};
+	InternalQueue queues[Queue::Count];
+	Queue currentQueue = Queue::Count;
+
+	VkPhysicalDeviceMemoryProperties memoryProperties;
+
 
 	// bindless resources
 	// VkDescriptorPool imguiDescriptorPool = VK_NULL_HANDLE;
@@ -58,7 +84,7 @@ static Context _ctx;
 
 void Init() {
 	_ctx.CreateInstance();
-	// _ctx.CreatePhysicalDevice();
+	_ctx.CreatePhysicalDevice();
 	// _ctx.CreateDevice();
 	// _ctx.CreateSurfaceFormats();
 	// _ctx.CreateSwapChain(width, height);
@@ -263,6 +289,94 @@ void Context::DestroyInstance() {
     DEBUG_TRACE("Destroyed instance.");
     LOG_INFO("Destroyed VulkanInstance");
 }
+
+void Context::CreatePhysicalDevice() {
+    // get all devices with Vulkan support
+    uint32_t count = 0;
+    vkEnumeratePhysicalDevices(instance, &count, nullptr);
+    ASSERT(count != 0, "no GPUs with Vulkan support!");
+    std::vector<VkPhysicalDevice> devices(count);
+    vkEnumeratePhysicalDevices(instance, &count, devices.data());
+
+	for (const auto& device : devices) {
+		// get all available extensions
+		uint32_t extensionCount;
+		vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
+		availableExtensions.resize(extensionCount);
+		vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
+
+		// get all available families
+		uint32_t familyCount = 0;
+		vkGetPhysicalDeviceQueueFamilyProperties(device, &familyCount, nullptr);
+		availableFamilies.resize(familyCount);
+		vkGetPhysicalDeviceQueueFamilyProperties(device, &familyCount, availableFamilies.data());
+
+		int computeFamily = -1;
+		int transferFamily = -1;
+		int graphicsFamily = -1;
+
+		// select the family for each type of queue that we want
+		for (int i = 0; i < familyCount; i++) {
+			auto& family = availableFamilies[i];
+			// if (family.queueFlags & VK_QUEUE_GRAPHICS_BIT && graphicsFamily == -1) {
+			// 	VkBool32 present = false;
+			// 	vkGetPhysicalDeviceSurfaceSupportKHR(device, i, this->surface, &present);
+			// 	if (present) {
+			// 		graphicsFamily = i;
+			// 	}
+			// 	continue;
+			// }
+
+			if (family.queueFlags & VK_QUEUE_COMPUTE_BIT && computeFamily == -1) {
+				computeFamily = i;
+				continue;
+			}
+
+			if (family.queueFlags & VK_QUEUE_TRANSFER_BIT && transferFamily == -1) {
+				transferFamily = i;
+				continue;
+			}
+		}
+
+		queues[Queue::Graphics].family = graphicsFamily;
+		queues[Queue::Compute].family = computeFamily == -1 ? graphicsFamily : computeFamily;
+		queues[Queue::Transfer].family = transferFamily == -1 ? graphicsFamily : transferFamily;
+		// get max number of samples
+		vkGetPhysicalDeviceFeatures(device, &physicalFeatures);
+		vkGetPhysicalDeviceProperties(device, &physicalProperties);
+		vkGetPhysicalDeviceMemoryProperties(device, &memoryProperties);
+
+		// VkSampleCountFlags counts = physicalProperties.limits.framebufferColorSampleCounts;
+		// counts &= physicalProperties.limits.framebufferDepthSampleCounts;
+
+		// maxSamples = VK_SAMPLE_COUNT_1_BIT;
+		// if (counts & VK_SAMPLE_COUNT_64_BIT) { maxSamples = VK_SAMPLE_COUNT_64_BIT; }
+		// else if (counts & VK_SAMPLE_COUNT_32_BIT) { maxSamples = VK_SAMPLE_COUNT_32_BIT; }
+		// else if (counts & VK_SAMPLE_COUNT_16_BIT) { maxSamples = VK_SAMPLE_COUNT_16_BIT; }
+		// else if (counts & VK_SAMPLE_COUNT_8_BIT) { maxSamples = VK_SAMPLE_COUNT_8_BIT; }
+		// else if (counts & VK_SAMPLE_COUNT_4_BIT) { maxSamples = VK_SAMPLE_COUNT_4_BIT; }
+		// else if (counts & VK_SAMPLE_COUNT_2_BIT) { maxSamples = VK_SAMPLE_COUNT_2_BIT; }
+
+		// check if all required extensions are available
+		std::set<std::string> required(requiredExtensions.begin(), requiredExtensions.end());
+		for (const auto& extension : availableExtensions) {
+			required.erase(std::string(extension.extensionName));
+		}
+
+		// check if all required queues are supported
+		bool suitable = required.empty();
+		// suitable &= graphicsFamily != -1;
+		suitable &= computeFamily != -1;
+
+		if (suitable) {
+			physicalDevice = device;
+			break;
+		}
+	}
+
+	ASSERT(physicalDevice != VK_NULL_HANDLE, "no device with Vulkan support!");
+}
+
 
 }
 
