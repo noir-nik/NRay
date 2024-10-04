@@ -31,7 +31,7 @@ void Logger::Init(){
 	_logger = std::make_shared<spdlog::logger>("Double", sinks.begin(), sinks.end());
 	spdlog::register_logger(_logger);
 	_logger->set_level(spdlog::level::trace);
-	// _logger->flush_on(spdlog::level::trace);
+	_logger->flush_on(spdlog::level::trace);
 	spdlog::set_default_logger(_logger);
 }
 

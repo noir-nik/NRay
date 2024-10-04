@@ -26,5 +26,5 @@
 #define DEBUG_VK(res, ...) { if ((res) != VK_SUCCESS) { LOG_ERROR("[VULKAN ERROR = {0}] {1}", VK_ERROR_STRING((res)), __VA_ARGS__); APP_DEBUGBREAK(); } }
 #else
 #define DEBUG_ASSERT(condition, ...)
-#define DEBUG_VK(res, ...)
+#define DEBUG_VK(res, ...) { if ((res) != VK_SUCCESS) { LOG_ERROR("[{0}] {1} in {2}:{3}", VK_ERROR_STRING(res), __VA_ARGS__, __FILE__, __LINE__); exit(1);}}
 #endif
