@@ -46,6 +46,12 @@ struct Context
 	// VkDescriptorSetLayout bindlessDescriptorLayout = VK_NULL_HANDLE;
 
 	void CreateInstance();
+	void DestroyInstance();
+
+	void CreatePhysicalDevice();
+
+	void CreateDevice();
+	void DestroyDevice();
 };
 static Context _ctx;
 
@@ -59,6 +65,13 @@ void Init() {
 	// _ctx.CreateImGui(window);
 }
 
+void Destroy() {
+    // _ctx.DestroyDevice();
+    _ctx.DestroyInstance();
+}
+
+// vulkan debug callbacks
+namespace {
 VkResult CreateDebugUtilsMessengerEXT (
     VkInstance                                instance,
     const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
@@ -80,7 +93,7 @@ VkResult CreateDebugUtilsMessengerEXT (
 void DestroyDebugUtilsMessengerEXT (
     VkInstance                   instance,
     VkDebugUtilsMessengerEXT     debugMessenger,
-    const VkAllocationCallbacks* pAllocator){
+    const VkAllocationCallbacks* pAllocator) {
     // search for the requested function and return null if cannot find
     auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr (
         instance,
@@ -116,6 +129,7 @@ void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& create
     createInfo.messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
     createInfo.pfnUserCallback = DebugCallback;
     createInfo.pUserData = nullptr;
+}
 }
 
 void Context::CreateInstance(){
@@ -167,30 +181,33 @@ void Context::CreateInstance(){
 	if (enableValidationLayers) {
 		requiredExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 	}
-	// get all available extensions
-	uint32_t extensionCount = 0;
-	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, 0);
-	instanceExtensions.resize(extensionCount);
-	activeExtensions.resize(extensionCount);
-	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, instanceExtensions.data());
 
-	// set to active all extensions that we enabled
-    for (size_t i = 0; i < requiredExtensions.size(); i++) {
-        for (size_t j = 0; j < instanceExtensions.size(); j++) {
-            if (strcmp(requiredExtensions[i], instanceExtensions[j].extensionName) == 0) {
-                activeExtensions[j] = true;
-                break;
-            }
-        }
-    }
-	
-	// get the name of all extensions that we enabled
-    activeExtensionsNames.clear();
-    for (size_t i = 0; i < instanceExtensions.size(); i++) {
-        if (activeExtensions[i]) {
-            activeExtensionsNames.push_back(instanceExtensions[i].extensionName);
-        }
-    }
+	if (!requiredExtensions.empty()) {
+		// get all available extensions
+		uint32_t extensionCount = 0;
+		vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, 0);
+		instanceExtensions.resize(extensionCount);
+		activeExtensions.resize(extensionCount);
+		vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, instanceExtensions.data());
+
+		// set to active all extensions that we enabled
+		for (size_t i = 0; i < requiredExtensions.size(); i++) {
+			for (size_t j = 0; j < instanceExtensions.size(); j++) {
+				if (strcmp(requiredExtensions[i], instanceExtensions[j].extensionName) == 0) {
+					activeExtensions[j] = true;
+					break;
+				}
+			}
+		}
+		
+		// get the name of all extensions that we enabled
+		activeExtensionsNames.clear();
+		for (size_t i = 0; i < instanceExtensions.size(); i++) {
+			if (activeExtensions[i]) {
+				activeExtensionsNames.push_back(instanceExtensions[i].extensionName);
+			}
+		}
+	}
 
 	// get and set all required extensions
     createInfo.enabledExtensionCount = static_cast<uint32_t>(activeExtensionsNames.size());
@@ -210,18 +227,16 @@ void Context::CreateInstance(){
         createInfo.enabledLayerCount = 0;
         createInfo.pNext = nullptr;
     }
-	// Instance creation
-	// auto res = vkCreateInstance(&createInfo, allocator, &instance);
-	// auto res = VK_SUCCESS;
-	auto res = VK_ERROR_UNKNOWN;
-    DEBUG_VK(res, "Failed to create Vulkan instance!");
 
+	// Instance creation
+	auto res = vkCreateInstance(&createInfo, allocator, &instance);
+	// auto res = VK_SUCCESS;
+    DEBUG_VK(res, "Failed to create Vulkan instance!");
     DEBUG_TRACE("Created instance.");
     
     if (enableValidationLayers) {
         VkDebugUtilsMessengerCreateInfoEXT messengerInfo;
         PopulateDebugMessengerCreateInfo(messengerInfo);
-
         res = CreateDebugUtilsMessengerEXT(instance, &messengerInfo, allocator, &debugMessenger);
         DEBUG_VK(res, "Failed to set up debug messenger!");
         DEBUG_TRACE("Created debug messenger.");
@@ -232,6 +247,21 @@ void Context::CreateInstance(){
     // DEBUG_TRACE("Created surface.");
 
     LOG_INFO("Created VulkanInstance.");
+}
+
+void Context::DestroyInstance() {
+    activeLayersNames.clear();
+    activeExtensionsNames.clear();
+    if (debugMessenger) {
+        DestroyDebugUtilsMessengerEXT(instance, debugMessenger, allocator);
+        DEBUG_TRACE("Destroyed debug messenger.");
+        debugMessenger = nullptr;
+    }
+    // vkDestroySurfaceKHR(instance, surface, allocator);
+    // DEBUG_TRACE("Destroyed surface.");
+    vkDestroyInstance(instance, allocator);
+    DEBUG_TRACE("Destroyed instance.");
+    LOG_INFO("Destroyed VulkanInstance");
 }
 
 }

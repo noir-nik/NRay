@@ -6,6 +6,8 @@
 	#define APP_PLATFORM_LINUX
 #endif
 
+
+
 #ifdef APP_DEBUG
 	#ifdef APP_PLATFORM_WINDOWS
 		#define APP_DEBUGBREAK() __debugbreak()

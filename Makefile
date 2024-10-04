@@ -2,7 +2,7 @@ CC := g++
 TARGET := app
 
 INCLUDES := -Iinclude -Ideps -Ibase
-CXXFLAGS := -MMD -MP $(INCLUDES) -g -ggdb -O0
+CXXFLAGS := -MMD -MP $(INCLUDES) -O0
 # -Wno-narrowing
 
 LDFLAGS := -lspdlog
@@ -33,11 +33,13 @@ OBJS := \
 	$(patsubst $(SRC_MAIN)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(SRC_MAIN)/*.cpp)) \
 	$(patsubst $(SRC_CORE)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(SRC_CORE)/*.cpp)) \
 	$(patsubst $(SRC_BASE)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(SRC_BASE)/*.cpp))
-	
 
 DEPS = $(OBJS:.o=.d)
 
 all: build_target
+
+debug: CXXFLAGS += -g -ggdb -DAPP_DEBUG
+debug: build_target
 
 build_target: create_dirs $(BUILD_DIR)/$(TARGET)
 
@@ -62,13 +64,17 @@ $(OBJ_DIR)/%.o: $(SRC_BASE)/%.cpp # base/
 	@echo "Compiling $<"
 	@$(CC) $(CXXFLAGS) -c $< -o $@
 
-
 run:
 	@./$(BUILD_DIR)/$(TARGET)
 
+# VLGRND_OUTPUT := --log-file="mem"
+VLGRND_OUTPUT := 
+VLGRND_FULL := --leak-check=full --show-leak-kinds=all
+VLGRND_FULL :=
+
 runv:
-	@valgrind ./$(BUILD_DIR)/$(TARGET)
-# valgrind --leak-check=full ./$(BUILD_DIR)/$(TARGET) 
+	@valgrind $(VLGRND_FULL) $(VLGRND_OUTPUT) ./$(BUILD_DIR)/$(TARGET) 
+# @valgrind ./$(BUILD_DIR)/$(TARGET)
 
 clean:
 	@$(CLEAN_BUILD)
