@@ -2,6 +2,9 @@
 #include <vulkan/vulkan.h>
 #include "VulkanBase.h"
 
+#define VMA_IMPLEMENTATION
+#include "vk_mem_alloc.h"
+
 static const char *VK_ERROR_STRING(VkResult result);
 namespace vkw {
 
@@ -17,7 +20,6 @@ struct Context
 	VkPhysicalDeviceProperties physicalDeviceProperties;
 	VkPhysicalDeviceFeatures physicalDeviceFeatures;
 	uint32_t presentQueueFamilyIndex;
-	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
 	VkDevice device = VK_NULL_HANDLE;
 	VkCommandPool commandPool;
 	VkCommandBuffer *commandBuffers;
@@ -297,6 +299,7 @@ void Context::CreatePhysicalDevice() {
     ASSERT(count != 0, "no GPUs with Vulkan support!");
     std::vector<VkPhysicalDevice> devices(count);
     vkEnumeratePhysicalDevices(instance, &count, devices.data());
+	DEBUG_TRACE("Found " + std::to_string(count) + " devices.");
 
 	for (const auto& device : devices) {
 		// get all available extensions
@@ -318,14 +321,14 @@ void Context::CreatePhysicalDevice() {
 		// select the family for each type of queue that we want
 		for (int i = 0; i < familyCount; i++) {
 			auto& family = availableFamilies[i];
-			// if (family.queueFlags & VK_QUEUE_GRAPHICS_BIT && graphicsFamily == -1) {
-			// 	VkBool32 present = false;
-			// 	vkGetPhysicalDeviceSurfaceSupportKHR(device, i, this->surface, &present);
-			// 	if (present) {
-			// 		graphicsFamily = i;
-			// 	}
-			// 	continue;
-			// }
+			if (family.queueFlags & VK_QUEUE_GRAPHICS_BIT && graphicsFamily == -1) {
+				// VkBool32 present = false;
+				// vkGetPhysicalDeviceSurfaceSupportKHR(device, i, this->surface, &present);
+				// if (present) {
+					graphicsFamily = i;
+				// }
+				continue;
+			}
 
 			if (family.queueFlags & VK_QUEUE_COMPUTE_BIT && computeFamily == -1) {
 				computeFamily = i;
@@ -359,24 +362,299 @@ void Context::CreatePhysicalDevice() {
 
 		// check if all required extensions are available
 		std::set<std::string> required(requiredExtensions.begin(), requiredExtensions.end());
-		for (const auto& extension : availableExtensions) {
-			required.erase(std::string(extension.extensionName));
+		for (auto requiredExtension : required) {
+			printf("Required extension: %s\n", requiredExtension.c_str());
 		}
-
+		for (const auto& extension : availableExtensions) {
+			// printf("Available extension: %s ", extension.extensionName);
+			auto erased = required.erase(std::string(extension.extensionName));
+			if (erased) {
+				printf("Erased: %s %s\n", extension.extensionName, erased ? "true" : "false");
+			}
+			// printf("Erased: %s\n", erased ? "true" : "false");
+		}
+		
 		// check if all required queues are supported
 		bool suitable = required.empty();
 		// suitable &= graphicsFamily != -1;
+		printf("Device: %s, Suitable: %s\n", physicalProperties.deviceName, suitable ? "true" : "false");
 		suitable &= computeFamily != -1;
-
+		printf("Device: %s, Suitable: %s\n", physicalProperties.deviceName, suitable ? "true" : "false");
 		if (suitable) {
 			physicalDevice = device;
 			break;
 		}
 	}
-
+	printf("Physical device: %s\n", physicalProperties.deviceName);
+	printf("Physical device: %ld\n", physicalDevice);
 	ASSERT(physicalDevice != VK_NULL_HANDLE, "no device with Vulkan support!");
 }
+/* 
+void Context::CreateDevice() {
+	
+	std::set<uint32_t> uniqueFamilies;
+	for (int q = 0; q < Queue::Count; q++) {
+		uniqueFamilies.emplace(queues[q].family);
+	};
 
+	// priority for each type of queue
+	float priority = 1.0f;
+	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+	for (uint32_t family : uniqueFamilies) {
+		VkDeviceQueueCreateInfo createInfo{};
+		createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+		createInfo.queueFamilyIndex = family;
+		createInfo.queueCount = 1;
+		createInfo.pQueuePriorities = &priority;
+		queueCreateInfos.push_back(createInfo);
+	}
+
+	auto supportedFeatures = physicalFeatures;
+
+	// logical device features
+	VkPhysicalDeviceFeatures2 features2 = {};
+	features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+	features2.features.geometryShader = VK_TRUE;
+	if (supportedFeatures.logicOp)           { features2.features.logicOp           = VK_TRUE; }
+	if (supportedFeatures.samplerAnisotropy) { features2.features.samplerAnisotropy = VK_TRUE; }
+	if (supportedFeatures.sampleRateShading) { features2.features.sampleRateShading = VK_TRUE; }
+	if (supportedFeatures.fillModeNonSolid)  { features2.features.fillModeNonSolid  = VK_TRUE; }
+	if (supportedFeatures.wideLines)         { features2.features.wideLines         = VK_TRUE; }
+	if (supportedFeatures.depthClamp)        { features2.features.depthClamp        = VK_TRUE; }
+
+	auto requiredExtensions = _ctx.requiredExtensions;
+	auto allExtensions = _ctx.availableExtensions;
+	for (auto req : requiredExtensions) {
+		bool available = false;
+		for (size_t i = 0; i < allExtensions.size(); i++) {
+			if (strcmp(allExtensions[i].extensionName, req) == 0) { 
+				available = true; 
+				break;
+			}
+		}
+		if(!available) {
+			LOG_ERROR("Required extension {0} not available!", req);
+		}
+	}
+
+	VkPhysicalDeviceDescriptorIndexingFeatures descriptorIndexingFeatures{};
+	descriptorIndexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
+	descriptorIndexingFeatures.runtimeDescriptorArray = true;
+	descriptorIndexingFeatures.descriptorBindingPartiallyBound = true;
+	descriptorIndexingFeatures.shaderSampledImageArrayNonUniformIndexing = true;
+	descriptorIndexingFeatures.shaderUniformBufferArrayNonUniformIndexing = true;
+	descriptorIndexingFeatures.shaderStorageBufferArrayNonUniformIndexing = true;
+	descriptorIndexingFeatures.descriptorBindingSampledImageUpdateAfterBind = true;
+	descriptorIndexingFeatures.descriptorBindingStorageImageUpdateAfterBind = true;
+
+	VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddresFeatures{};
+	bufferDeviceAddresFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
+	bufferDeviceAddresFeatures.bufferDeviceAddress = VK_TRUE;
+	bufferDeviceAddresFeatures.pNext = &descriptorIndexingFeatures;
+
+	VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingPipelineFeatures{};
+	rayTracingPipelineFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
+	rayTracingPipelineFeatures.rayTracingPipeline = VK_TRUE;
+	rayTracingPipelineFeatures.pNext = &bufferDeviceAddresFeatures;
+
+	VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures{};
+	accelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+	accelerationStructureFeatures.accelerationStructure = VK_TRUE;
+	accelerationStructureFeatures.descriptorBindingAccelerationStructureUpdateAfterBind = VK_TRUE;
+	accelerationStructureFeatures.accelerationStructureCaptureReplay = VK_TRUE;
+	accelerationStructureFeatures.pNext = &rayTracingPipelineFeatures;
+
+	VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures{};
+	rayQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
+	rayQueryFeatures.rayQuery = VK_TRUE;
+	rayQueryFeatures.pNext = &accelerationStructureFeatures;
+
+	VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeatures{};
+	dynamicRenderingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
+	dynamicRenderingFeatures.dynamicRendering = VK_TRUE;
+	dynamicRenderingFeatures.pNext = &rayQueryFeatures;
+
+	VkPhysicalDeviceSynchronization2FeaturesKHR sync2Features{};
+	sync2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR;
+	sync2Features.synchronization2 = VK_TRUE;
+	sync2Features.pNext = &dynamicRenderingFeatures;
+
+	VkPhysicalDeviceShaderAtomicFloatFeaturesEXT atomicFeatures{};
+	atomicFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT;
+	atomicFeatures.shaderBufferFloat32AtomicAdd = VK_TRUE;
+	atomicFeatures.pNext = &sync2Features;
+
+	features2.pNext = &atomicFeatures;
+
+	VkDeviceCreateInfo createInfo{};
+	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+	createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
+	createInfo.pQueueCreateInfos = queueCreateInfos.data();
+	createInfo.enabledExtensionCount = static_cast<uint32_t>(requiredExtensions.size());
+	createInfo.ppEnabledExtensionNames = requiredExtensions.data();
+	createInfo.pEnabledFeatures;
+	createInfo.pNext = &features2;
+
+	// specify the required layers to the device 
+	if (_ctx.enableValidationLayers) {
+		auto& layers = activeLayersNames;
+		createInfo.enabledLayerCount = static_cast<uint32_t>(layers.size());
+		createInfo.ppEnabledLayerNames = layers.data();
+	}
+	else {
+		createInfo.enabledLayerCount = 0;
+	}
+
+	auto res = vkCreateDevice(physicalDevice, &createInfo, nullptr, &device);
+	DEBUG_VK(res, "Failed to create logical device!");
+
+	VmaVulkanFunctions vulkanFunctions = {};
+	vulkanFunctions.vkGetInstanceProcAddr = &vkGetInstanceProcAddr;
+	vulkanFunctions.vkGetDeviceProcAddr = &vkGetDeviceProcAddr;
+	VmaAllocatorCreateInfo allocatorCreateInfo = {};
+	allocatorCreateInfo.flags = VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT | VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+	allocatorCreateInfo.vulkanApiVersion = VK_API_VERSION_1_3;
+	allocatorCreateInfo.physicalDevice = physicalDevice;
+	allocatorCreateInfo.device = device;
+	allocatorCreateInfo.instance = instance;
+	allocatorCreateInfo.pVulkanFunctions = &vulkanFunctions;
+	vmaCreateAllocator(&allocatorCreateInfo, &vmaAllocator);
+
+	for (int q = 0; q < Queue::Count; q++) {
+		vkGetDeviceQueue(device, queues[q].family, 0, &queues[q].queue);
+	}
+
+	genericSampler = CreateSampler(1.0);
+	vkSetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetDeviceProcAddr(device, "vkSetDebugUtilsObjectNameEXT");
+	vkGetAccelerationStructureBuildSizesKHR = (PFN_vkGetAccelerationStructureBuildSizesKHR)vkGetDeviceProcAddr(device, "vkGetAccelerationStructureBuildSizesKHR");
+	vkCreateAccelerationStructureKHR = (PFN_vkCreateAccelerationStructureKHR)vkGetDeviceProcAddr(device, "vkCreateAccelerationStructureKHR");
+	vkCmdBuildAccelerationStructuresKHR = (PFN_vkCmdBuildAccelerationStructuresKHR)vkGetDeviceProcAddr(device, "vkCmdBuildAccelerationStructuresKHR");
+	vkGetAccelerationStructureDeviceAddressKHR = (PFN_vkGetAccelerationStructureDeviceAddressKHR)vkGetDeviceProcAddr(device, "vkGetAccelerationStructureDeviceAddressKHR");
+	vkDestroyAccelerationStructureKHR = (PFN_vkDestroyAccelerationStructureKHR)vkGetDeviceProcAddr(device, "vkDestroyAccelerationStructureKHR");
+
+	VkDescriptorPoolSize imguiPoolSizes[]    = { {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000}, {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000} };
+	VkDescriptorPoolCreateInfo imguiPoolInfo{};
+	imguiPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	imguiPoolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+	imguiPoolInfo.maxSets = (uint32_t)(1024);
+	imguiPoolInfo.poolSizeCount = sizeof(imguiPoolSizes)/sizeof(VkDescriptorPoolSize);
+	imguiPoolInfo.pPoolSizes = imguiPoolSizes;
+
+	VkResult result = vkCreateDescriptorPool(device, &imguiPoolInfo, allocator, &imguiDescriptorPool);
+	DEBUG_VK(result, "Failed to create imgui descriptor pool!");
+
+	// create bindless resources
+	{
+		const u32 MAX_STORAGE = 8192;
+		const u32 MAX_SAMPLEDIMAGES = 8192;
+		const u32 MAX_ACCELERATIONSTRUCTURE = 64;
+		const u32 MAX_STORAGE_IMAGES = 8192;
+
+		for (int i = 0; i < MAX_STORAGE; i++) {
+			availableBufferRID.push_back(i);
+		}
+		for (int i = 0; i < MAX_SAMPLEDIMAGES; i++) {
+			availableImageRID.push_back(i);
+		}
+		for (int i = 0; i < MAX_ACCELERATIONSTRUCTURE; i++) {
+			availableTLASRID.push_back(i);
+		}
+
+		// create descriptor set pool for bindless resources
+		std::vector<VkDescriptorPoolSize> bindlessPoolSizes = { 
+			{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MAX_SAMPLEDIMAGES},
+			{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, MAX_STORAGE},
+			{VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, MAX_ACCELERATIONSTRUCTURE},
+			{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, MAX_STORAGE_IMAGES},
+		};
+
+		VkDescriptorPoolCreateInfo bindlessPoolInfo{};
+		bindlessPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+		bindlessPoolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
+		bindlessPoolInfo.maxSets = 1;
+		bindlessPoolInfo.poolSizeCount = bindlessPoolSizes.size();
+		bindlessPoolInfo.pPoolSizes = bindlessPoolSizes.data();
+
+		result = vkCreateDescriptorPool(device, &bindlessPoolInfo, allocator, &bindlessDescriptorPool);
+		DEBUG_VK(result, "Failed to create bindless descriptor pool!");
+
+		// create descriptor set layout for bindless resources
+		std::vector<VkDescriptorSetLayoutBinding> bindings;
+		std::vector<VkDescriptorBindingFlags> bindingFlags;
+
+		VkDescriptorSetLayoutBinding texturesBinding{};
+		texturesBinding.binding = LUZ_BINDING_TEXTURE;
+		texturesBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		texturesBinding.descriptorCount = MAX_SAMPLEDIMAGES;
+		texturesBinding.stageFlags = VK_SHADER_STAGE_ALL;
+		bindings.push_back(texturesBinding);
+		bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT });
+
+		VkDescriptorSetLayoutBinding storageBuffersBinding{};
+		storageBuffersBinding.binding = LUZ_BINDING_BUFFER;
+		storageBuffersBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+		storageBuffersBinding.descriptorCount = MAX_STORAGE;
+		storageBuffersBinding.stageFlags = VK_SHADER_STAGE_ALL;
+		bindings.push_back(storageBuffersBinding);
+		bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT });
+
+		VkDescriptorSetLayoutBinding accelerationStructureBinding{};
+		accelerationStructureBinding.binding = LUZ_BINDING_TLAS;
+		accelerationStructureBinding.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+		accelerationStructureBinding.descriptorCount = MAX_ACCELERATIONSTRUCTURE;
+		accelerationStructureBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+		bindings.push_back(accelerationStructureBinding);
+		bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT });
+
+		VkDescriptorSetLayoutBinding imageStorageBinding{};
+		imageStorageBinding.binding = LUZ_BINDING_STORAGE_IMAGE;
+		imageStorageBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+		imageStorageBinding.descriptorCount = MAX_STORAGE_IMAGES;
+		imageStorageBinding.stageFlags = VK_SHADER_STAGE_ALL;
+		bindings.push_back(imageStorageBinding);
+		bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT });
+
+		VkDescriptorSetLayoutBindingFlagsCreateInfo setLayoutBindingFlags{};
+		setLayoutBindingFlags.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
+		setLayoutBindingFlags.bindingCount = bindingFlags.size();
+		setLayoutBindingFlags.pBindingFlags = bindingFlags.data();
+
+		VkDescriptorSetLayoutCreateInfo descriptorLayoutInfo{};
+		descriptorLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+		descriptorLayoutInfo.bindingCount = bindings.size();
+		descriptorLayoutInfo.pBindings = bindings.data();
+		descriptorLayoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+		descriptorLayoutInfo.pNext = &setLayoutBindingFlags;
+
+		result = vkCreateDescriptorSetLayout(device, &descriptorLayoutInfo, allocator, &bindlessDescriptorLayout);
+		DEBUG_VK(result, "Failed to create bindless descriptor set layout!");
+
+		// create descriptor set for bindless resources
+		VkDescriptorSetAllocateInfo allocInfo{};
+		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+		allocInfo.descriptorPool = bindlessDescriptorPool;
+		allocInfo.descriptorSetCount = 1;
+		allocInfo.pSetLayouts = &bindlessDescriptorLayout;
+
+		result = vkAllocateDescriptorSets(device, &allocInfo, &bindlessDescriptorSet);
+		DEBUG_VK(result, "Failed to allocate bindless descriptor set!");
+	}
+
+	asScratchBuffer = vkw::CreateBuffer(initialScratchBufferSize, vkw::BufferUsage::Address | vkw::BufferUsage::Storage, vkw::Memory::GPU);
+	VkBufferDeviceAddressInfo scratchInfo{};
+	scratchInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+	scratchInfo.buffer = asScratchBuffer.resource->buffer;
+	asScratchAddress = vkGetBufferDeviceAddress(device, &scratchInfo);
+
+	dummyVertexBuffer = vkw::CreateBuffer(
+		6 * 3 * sizeof(float),
+		vkw::BufferUsage::Vertex | vkw::BufferUsage::AccelerationStructureInput,
+		vkw::Memory::GPU,
+		"VertexBuffer#Dummy"
+	);
+}
+
+ */
 
 }
 
