@@ -14,8 +14,8 @@ struct Context
 	// VkSurfaceKHR surface = VK_NULL_HANDLE;
 	VkAllocationCallbacks* allocator = VK_NULL_HANDLE;
 	VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
-    std::string applicationName = "Vulkan Slang Compute";
-    std::string engineName = "Vulkan Compute";
+	std::string applicationName = "Vulkan Slang Compute";
+	std::string engineName = "Vulkan Compute";
 	VmaAllocator vmaAllocator;
 
 	// VkPhysicalDeviceProperties physicalDeviceProperties;
@@ -28,13 +28,12 @@ struct Context
 
 	uint32_t apiVersion;
 	bool enableValidationLayers = false;
-    std::vector<bool> activeLayers; // Available layers
-    std::vector<const char*> activeLayersNames;
-    std::vector<VkLayerProperties> layers;
-    std::vector<bool> activeExtensions;                    // Instance Extensions
-    std::vector<const char*> activeExtensionsNames;        // Instance Extensions
-    std::vector<VkExtensionProperties> instanceExtensions; // Instance Extensions
-
+	std::vector<bool> activeLayers; // Available layers
+	std::vector<const char*> activeLayersNames;
+	std::vector<VkLayerProperties> layers;
+	std::vector<bool> activeExtensions;                    // Instance Extensions
+	std::vector<const char*> activeExtensionsNames;        // Instance Extensions
+	std::vector<VkExtensionProperties> instanceExtensions; // Instance Extensions
 
 
 		std::vector<const char*> requiredExtensions = { // Physical Device Extensions
@@ -59,10 +58,21 @@ struct Context
 		std::vector<VkExtensionProperties> availableExtensions; // Physical Device Extensions
 		std::vector<VkQueueFamilyProperties> availableFamilies;
 
+		struct CommandResources {
+			u8* stagingCpu = nullptr;
+			uint32_t stagingOffset = 0;
+			Buffer staging;
+			VkCommandPool pool = VK_NULL_HANDLE;
+			VkCommandBuffer buffer = VK_NULL_HANDLE;
+			VkFence fence = VK_NULL_HANDLE;
+			VkQueryPool queryPool;
+			std::vector<std::string> timeStampNames;
+			std::vector<uint64_t> timeStamps;
+		};
 		struct InternalQueue {
 			VkQueue queue = VK_NULL_HANDLE;
 			int family = -1;
-			// std::vector<CommandResources> commands;
+			std::vector<CommandResources> commands;
 		};
 		InternalQueue queues[Queue::Count];
 		Queue currentQueue = Queue::Count;
@@ -85,9 +95,42 @@ struct Context
 
 	void CreateDevice();
 	void DestroyDevice();
+
+	inline CommandResources& GetCurrentCommandResources() {
+        return queues[currentQueue].commands[swapChainCurrentFrame];
+    }
 };
 static Context _ctx;
 
+struct Resource {
+    std::string name;
+    int32_t rid = -1;
+    virtual ~Resource() {};
+};
+
+struct BufferResource : Resource {
+    VkBuffer buffer;
+    VmaAllocation allocation;
+
+    virtual ~BufferResource() {
+        vmaDestroyBuffer(_ctx.vmaAllocator, buffer, allocation);
+    }
+};
+
+struct PipelineResource : Resource {
+    VkPipeline pipeline;
+    VkPipelineLayout layout;
+
+    virtual ~PipelineResource() {
+        vkDestroyPipeline(_ctx.device, pipeline, _ctx.allocator);
+        vkDestroyPipelineLayout(_ctx.device, layout, _ctx.allocator);
+    }
+};
+
+uint32_t Buffer::RID() {
+    DEBUG_ASSERT(resource->rid != -1, "Invalid buffer rid");
+    return uint32_t(resource->rid);
+}
 
 void Init() {
 	_ctx.CreateInstance();
@@ -99,88 +142,340 @@ void Init() {
 }
 
 void Destroy() {
-    // ImGui_ImplVulkan_Shutdown();
-    // ImGui_ImplGlfw_Shutdown();
-    // _ctx.DestroySwapChain();
-    _ctx.DestroyDevice();
-    _ctx.DestroyInstance();
+	// ImGui_ImplVulkan_Shutdown();
+	// ImGui_ImplGlfw_Shutdown();
+	// _ctx.DestroySwapChain();
+	_ctx.DestroyDevice();
+	_ctx.DestroyInstance();
 }
 
 // vulkan debug callbacks
 namespace {
+
+// utils
+namespace{
+// https://github.com/charles-lunarg/vk-bootstrap/blob/main/src/VkBootstrap.cpp
+bool check_extension_supported(std::vector<VkExtensionProperties> const& available_extensions, const char* extension_name) {
+	if (!extension_name) return false;
+	for (const auto& extension_properties : available_extensions) {
+		if (strcmp(extension_name, extension_properties.extensionName) == 0) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool check_extensions_supported(
+	std::vector<VkExtensionProperties> const& available_extensions, std::vector<const char*> const& extension_names) {
+	bool all_found = true;
+	for (const auto& extension_name : extension_names) {
+		bool found = check_extension_supported(available_extensions, extension_name);
+		if (!found) all_found = false;
+	}
+	return all_found;
+}
+
+template <typename T> void setup_pNext_chain(T& structure, std::vector<VkBaseOutStructure*> const& structs) {
+    structure.pNext = nullptr;
+    if (structs.size() <= 0) return;
+    for (size_t i = 0; i < structs.size() - 1; i++) {
+        structs.at(i)->pNext = structs.at(i + 1);
+    }
+    structure.pNext = structs.at(0);
+}
+const char* validation_layer_name = "VK_LAYER_KHRONOS_validation";
+}
+
 VkResult CreateDebugUtilsMessengerEXT (
-    VkInstance                                instance,
-    const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
-    const VkAllocationCallbacks*              pAllocator,
-    VkDebugUtilsMessengerEXT*                 pDebugMessenger) {
-    // search for the requested function and return null if cannot find
-    auto func = (PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr (
-        instance, 
-        "vkCreateDebugUtilsMessengerEXT"
-    );
-    if (func != nullptr) {
-        return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
-    }
-    else {
-        return VK_ERROR_EXTENSION_NOT_PRESENT;
-    }
+	VkInstance                                instance,
+	const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
+	const VkAllocationCallbacks*              pAllocator,
+	VkDebugUtilsMessengerEXT*                 pDebugMessenger) {
+	// search for the requested function and return null if cannot find
+	auto func = (PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr (
+		instance, 
+		"vkCreateDebugUtilsMessengerEXT"
+	);
+	if (func != nullptr) {
+		return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
+	}
+	else {
+		return VK_ERROR_EXTENSION_NOT_PRESENT;
+	}
 }
 
 void DestroyDebugUtilsMessengerEXT (
-    VkInstance                   instance,
-    VkDebugUtilsMessengerEXT     debugMessenger,
-    const VkAllocationCallbacks* pAllocator) {
-    // search for the requested function and return null if cannot find
-    auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr (
-        instance,
-        "vkDestroyDebugUtilsMessengerEXT"
-    );
-    if (func != nullptr) {
-        func(instance, debugMessenger, pAllocator);
-    }
+	VkInstance                   instance,
+	VkDebugUtilsMessengerEXT     debugMessenger,
+	const VkAllocationCallbacks* pAllocator) {
+	// search for the requested function and return null if cannot find
+	auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr (
+		instance,
+		"vkDestroyDebugUtilsMessengerEXT"
+	);
+	if (func != nullptr) {
+		func(instance, debugMessenger, pAllocator);
+	}
 }
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback (
-    VkDebugUtilsMessageSeverityFlagBitsEXT      messageSeverity,
-    VkDebugUtilsMessageTypeFlagsEXT             messageType,
-    const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
-    void*                                       pUserData) {
-    // log the message
-    // here we can set a minimum severity to log the message
-    // if (messageSeverity > VK_DEBUG_UTILS...)
-    if (messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
-        LOG_ERROR("[Validation Layer] {0}", pCallbackData->pMessage);
-    }
-    return VK_FALSE;
+	VkDebugUtilsMessageSeverityFlagBitsEXT      messageSeverity,
+	VkDebugUtilsMessageTypeFlagsEXT             messageType,
+	const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+	void*                                       pUserData) {
+	// log the message
+	// here we can set a minimum severity to log the message
+	// if (messageSeverity > VK_DEBUG_UTILS...)
+	if (messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
+		LOG_ERROR("[Validation Layer] {0}", pCallbackData->pMessage);
+	}
+	return VK_FALSE;
 }
 
 void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo) {
-    createInfo = {};
-    createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-    createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
-    createInfo.messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
-    createInfo.messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-    createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT;
-    createInfo.messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
-    createInfo.messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-    createInfo.pfnUserCallback = DebugCallback;
-    createInfo.pUserData = nullptr;
+	createInfo = {};
+	createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+	createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
+	createInfo.messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
+	createInfo.messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+	createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT;
+	createInfo.messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
+	createInfo.messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+	createInfo.pfnUserCallback = DebugCallback;
+	createInfo.pUserData = nullptr;
 }
 }
+
+void Context::CreatePipeline(const PipelineDesc& desc, Pipeline& pipeline) {
+	pipeline.point = desc.point;
+	pipeline.resource->name = desc.name;
+
+	std::vector<VkPipelineShaderStageCreateInfo> shaderStages(desc.stages.size());
+	std::vector<VkShaderModule> shaderModules(desc.stages.size());
+	for (int i = 0; i < desc.stages.size(); i++) {
+		VkShaderModuleCreateInfo createInfo{};
+		createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+		createInfo.codeSize = pipeline.stageBytes[i].size();
+		createInfo.pCode = (const uint32_t*)(pipeline.stageBytes[i].data());
+		auto result = vkCreateShaderModule(device, &createInfo, allocator, &shaderModules[i]);
+		DEBUG_VK(result, "Failed to create shader module!");
+		ASSERT(result == VK_SUCCESS, "Failed to create shader module!");
+		shaderStages[i] = {};
+		shaderStages[i].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		shaderStages[i].stage = (VkShaderStageFlagBits)desc.stages[i].stage;
+		shaderStages[i].module = shaderModules[i];
+		// function to invoke inside the shader module
+		// it's possible to combine multiple shaders into a single module
+		// using different entry points
+		shaderStages[i].pName = pipeline.stages[i].entryPoint.c_str();
+		// this allow us to specify values for shader constants
+		shaderStages[i].pSpecializationInfo = nullptr;
+	}
+
+	std::vector<VkDescriptorSetLayout> layouts;
+	layouts.push_back(bindlessDescriptorLayout);
+
+	VkPushConstantRange pushConstant{};
+	pushConstant.offset = 0;
+	pushConstant.size = 256;
+	pushConstant.stageFlags = VK_SHADER_STAGE_ALL;
+
+	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	pipelineLayoutInfo.setLayoutCount = layouts.size();
+	pipelineLayoutInfo.pSetLayouts = layouts.data();
+	pipelineLayoutInfo.pushConstantRangeCount = 1;
+	pipelineLayoutInfo.pPushConstantRanges = &pushConstant;
+
+	auto vkRes = vkCreatePipelineLayout(device, &pipelineLayoutInfo, allocator, &pipeline.resource->layout);
+	DEBUG_VK(vkRes, "Failed to create pipeline layout!");
+
+	if (desc.point == PipelinePoint::Compute) {
+		ASSERT(shaderStages.size() == 1, "Compute pipeline only support 1 stage.");
+
+		VkComputePipelineCreateInfo pipelineInfo = {};
+		pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+		pipelineInfo.stage = shaderStages[0];
+		pipelineInfo.layout = pipeline.resource->layout;
+		pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+		pipelineInfo.basePipelineIndex = -1;
+		pipelineInfo.pNext = VK_NULL_HANDLE;
+
+		vkRes = vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, allocator, &pipeline.resource->pipeline);
+
+		DEBUG_VK(vkRes, "Failed to create compute pipeline!");
+	} else {
+		VkPipelineRasterizationStateCreateInfo rasterizer = {};
+		rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+		// fragments beyond near and far planes are clamped to them
+		rasterizer.depthClampEnable = VK_FALSE;
+		rasterizer.rasterizerDiscardEnable = VK_FALSE;
+		rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+		// line thickness in terms of number of fragments
+		rasterizer.lineWidth = 1.0f;
+		if (desc.cullFront) {
+			rasterizer.cullMode = VK_CULL_MODE_FRONT_BIT;
+		} else {
+			rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+		}
+		rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+		rasterizer.depthBiasEnable = VK_FALSE;
+		rasterizer.depthBiasConstantFactor = 0.0f;
+		rasterizer.depthBiasClamp = 0.0f;
+		rasterizer.depthBiasSlopeFactor = 0.0f;
+
+		VkPipelineMultisampleStateCreateInfo multisampling = {};
+		multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+		multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+		multisampling.sampleShadingEnable = VK_FALSE;
+		multisampling.minSampleShading = 0.5f;
+		multisampling.pSampleMask = nullptr;
+
+		VkPipelineDepthStencilStateCreateInfo depthStencil = {};
+		depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+		depthStencil.depthTestEnable = VK_TRUE;
+		depthStencil.depthWriteEnable = VK_TRUE;
+		depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+		depthStencil.depthBoundsTestEnable = VK_FALSE;
+		depthStencil.minDepthBounds = 0.0f;
+		depthStencil.maxDepthBounds = 1.0f;
+		depthStencil.stencilTestEnable = VK_FALSE;
+		depthStencil.front = {};
+		depthStencil.back = {};
+
+		std::vector<VkVertexInputAttributeDescription> attributeDescs(desc.vertexAttributes.size());
+		uint32_t attributeSize = 0;
+		for (int i = 0; i < desc.vertexAttributes.size(); i++) {
+			attributeDescs[i].binding = 0;
+			attributeDescs[i].location = i;
+			attributeDescs[i].format = (VkFormat)desc.vertexAttributes[i];
+			attributeDescs[i].offset = attributeSize;
+			if (desc.vertexAttributes[i] == Format::RG32_sfloat) {
+				attributeSize += 2 * sizeof(float);
+			} else if (desc.vertexAttributes[i] == Format::RGB32_sfloat) {
+				attributeSize += 3 * sizeof(float);
+			} else if (desc.vertexAttributes[i] == Format::RGBA32_sfloat) {
+				attributeSize += 4 * sizeof(float);
+			} else {
+				DEBUG_ASSERT(false, "Invalid Vertex Attribute");
+			}
+		}
+
+		VkVertexInputBindingDescription bindingDescription{};
+		bindingDescription.binding = 0;
+		bindingDescription.stride = attributeSize;
+		bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+		VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+		vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+		vertexInputInfo.vertexBindingDescriptionCount = 1;
+		vertexInputInfo.vertexAttributeDescriptionCount = (uint32_t)(attributeDescs.size());
+		// these points to an array of structs that describe how to load the vertex data
+		vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+		vertexInputInfo.pVertexAttributeDescriptions = attributeDescs.data();
+
+		std::vector<VkDynamicState> dynamicStates;
+		dynamicStates.push_back(VK_DYNAMIC_STATE_VIEWPORT);
+		dynamicStates.push_back(VK_DYNAMIC_STATE_SCISSOR);
+
+		// define the type of input of our pipeline
+		VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+		inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+		if (desc.lineTopology) {
+			inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP;
+			dynamicStates.push_back(VK_DYNAMIC_STATE_LINE_WIDTH);
+		} else {
+			inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+		}
+		// with this parameter true we can break up lines and triangles in _STRIP topology modes
+		inputAssembly.primitiveRestartEnable = VK_FALSE;
+
+		VkPipelineDynamicStateCreateInfo dynamicCreate = {};
+		dynamicCreate.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+		dynamicCreate.pDynamicStates = dynamicStates.data();
+		dynamicCreate.dynamicStateCount = dynamicStates.size();
+
+		VkPipelineViewportStateCreateInfo viewportState{};
+		viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+		viewportState.viewportCount = 1;
+		viewportState.pViewports = nullptr;
+		viewportState.scissorCount = 1;
+		viewportState.pScissors = nullptr;
+
+		VkPipelineRenderingCreateInfoKHR pipelineRendering{};
+		pipelineRendering.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
+		pipelineRendering.colorAttachmentCount = desc.colorFormats.size();
+		pipelineRendering.pColorAttachmentFormats = (VkFormat*)desc.colorFormats.data();
+		pipelineRendering.depthAttachmentFormat = desc.useDepth ? (VkFormat)desc.depthFormat : VK_FORMAT_UNDEFINED;
+		pipelineRendering.stencilAttachmentFormat = VK_FORMAT_UNDEFINED;
+		pipelineRendering.viewMask = 0;
+
+		std::vector<VkPipelineColorBlendAttachmentState> blendAttachments(desc.colorFormats.size());
+		for (int i = 0; i < desc.colorFormats.size(); i++) {
+			blendAttachments[i].colorWriteMask =  VK_COLOR_COMPONENT_R_BIT;
+			blendAttachments[i].colorWriteMask |= VK_COLOR_COMPONENT_G_BIT;
+			blendAttachments[i].colorWriteMask |= VK_COLOR_COMPONENT_B_BIT;
+			blendAttachments[i].colorWriteMask |= VK_COLOR_COMPONENT_A_BIT;
+			blendAttachments[i].blendEnable = VK_FALSE;
+		}
+
+		VkPipelineColorBlendStateCreateInfo colorBlendState{};
+		colorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+		colorBlendState.logicOpEnable = VK_FALSE;
+		colorBlendState.logicOp = VK_LOGIC_OP_COPY;
+		colorBlendState.attachmentCount = blendAttachments.size();
+		colorBlendState.pAttachments = blendAttachments.data();
+		colorBlendState.blendConstants[0] = 0.0f;
+		colorBlendState.blendConstants[1] = 0.0f;
+		colorBlendState.blendConstants[2] = 0.0f;
+		colorBlendState.blendConstants[3] = 0.0f;
+
+		VkGraphicsPipelineCreateInfo pipelineInfo{};
+		pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+		pipelineInfo.stageCount = shaderStages.size();
+		pipelineInfo.pStages = shaderStages.data();
+		pipelineInfo.pVertexInputState = &vertexInputInfo;
+		pipelineInfo.pInputAssemblyState = &inputAssembly;
+		pipelineInfo.pViewportState = &viewportState;
+		pipelineInfo.pRasterizationState = &rasterizer;
+		pipelineInfo.pMultisampleState = &multisampling;
+		pipelineInfo.pDepthStencilState = &depthStencil;
+		pipelineInfo.pColorBlendState = &colorBlendState;
+		pipelineInfo.pDynamicState = &dynamicCreate;
+		pipelineInfo.layout = pipeline.resource->layout;
+		pipelineInfo.renderPass = VK_NULL_HANDLE;
+		// pipelineInfo.renderPass = SwapChain::GetRenderPass();
+		pipelineInfo.subpass = 0;
+		// if we were creating this pipeline by deriving it from another
+		// we should specify here
+		pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+		pipelineInfo.basePipelineIndex = -1;
+		pipelineInfo.pNext = &pipelineRendering;
+
+		vkRes = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, allocator, &pipeline.resource->pipeline);
+		DEBUG_VK(vkRes, "Failed to create graphics pipeline!");
+	}
+
+	for (int i = 0; i < shaderModules.size(); i++) {
+		vkDestroyShaderModule(device, shaderModules[i], allocator);
+	}
+}
+
+
 
 void Context::CreateInstance(){
 	// optional data, provides useful info to the driver
-    VkApplicationInfo appInfo{};
-    appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    appInfo.pApplicationName = applicationName.c_str();
-    appInfo.applicationVersion = VK_MAKE_API_VERSION(0, 1, 0, 0);
-    appInfo.pEngineName = engineName.c_str();
-    appInfo.engineVersion = VK_MAKE_API_VERSION(0, 1, 0, 0);
-    appInfo.apiVersion = VK_API_VERSION_1_3;
+	VkApplicationInfo appInfo{};
+	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+	appInfo.pApplicationName = applicationName.c_str();
+	appInfo.applicationVersion = VK_MAKE_API_VERSION(0, 1, 0, 0);
+	appInfo.pEngineName = engineName.c_str();
+	appInfo.engineVersion = VK_MAKE_API_VERSION(0, 1, 0, 0);
+	appInfo.apiVersion = VK_API_VERSION_1_3;
 
 	VkInstanceCreateInfo createInfo{};
-    createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-    createInfo.pApplicationInfo = &appInfo;
+	createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+	createInfo.pApplicationInfo = &appInfo;
 
 	// get api version
 	vkEnumerateInstanceVersion(&apiVersion);
@@ -207,17 +502,17 @@ void Context::CreateInstance(){
 		if (!khronosAvailable) {LOG_ERROR("Default validation layer not available!");}
 
 		for (size_t i = 0; i < layers.size(); i++) { 
-            if (activeLayers[i]) {
-                activeLayersNames.push_back(layers[i].layerName);
-            }
-        }
+			if (activeLayers[i]) {
+				activeLayersNames.push_back(layers[i].layerName);
+			}
+		}
 	}
 	
 	// get all extensions required by glfw
-    // uint32_t glfwExtensionCount = 0;
-    // const char** glfwExtensions;
-    // glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-    // auto requiredInstanceExtensions = std::vector<const char*>(glfwExtensions, glfwExtensions + glfwExtensionCount);
+	// uint32_t glfwExtensionCount = 0;
+	// const char** glfwExtensions;
+	// glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+	// auto requiredInstanceExtensions = std::vector<const char*>(glfwExtensions, glfwExtensions + glfwExtensionCount);
 	auto requiredInstanceExtensions = std::vector<const char*>(); // Only compute
 
 	// Extensions
@@ -253,23 +548,23 @@ void Context::CreateInstance(){
 	// }
 
 	// get and set all required extensions
-    createInfo.enabledExtensionCount = static_cast<uint32_t>(activeExtensionsNames.size());
-    createInfo.ppEnabledExtensionNames = activeExtensionsNames.data();
+	createInfo.enabledExtensionCount = static_cast<uint32_t>(activeExtensionsNames.size());
+	createInfo.ppEnabledExtensionNames = activeExtensionsNames.data();
 
-    // which validation layers we need
-    VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo;
-    if (enableValidationLayers) {
-        createInfo.enabledLayerCount = static_cast<uint32_t>(activeLayersNames.size());
-        createInfo.ppEnabledLayerNames = activeLayersNames.data();
+	// which validation layers we need
+	VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo;
+	if (enableValidationLayers) {
+		createInfo.enabledLayerCount = static_cast<uint32_t>(activeLayersNames.size());
+		createInfo.ppEnabledLayerNames = activeLayersNames.data();
 
-        // we need to set up a separate logger just for the instance creation/destruction
-        // because our "default" logger is created after
-        PopulateDebugMessengerCreateInfo(debugCreateInfo);
-        // createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&debugCreateInfo;
-    } else {
-        createInfo.enabledLayerCount = 0;
-        createInfo.pNext = nullptr;
-    }
+		// we need to set up a separate logger just for the instance creation/destruction
+		// because our "default" logger is created after
+		PopulateDebugMessengerCreateInfo(debugCreateInfo);
+		// createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&debugCreateInfo;
+	} else {
+		createInfo.enabledLayerCount = 0;
+		createInfo.pNext = nullptr;
+	}
 
 	// Instance creation
 	auto res = vkCreateInstance(&createInfo, allocator, &instance);
@@ -277,46 +572,46 @@ void Context::CreateInstance(){
 	// if (createInfo.enabledExtensionCount > 0)
 	// 	LOG_DEBUG("Enabled extensions: {}", createInfo.ppEnabledExtensionNames[0]);
 	// auto res = VK_SUCCESS;
-    DEBUG_VK(res, "Failed to create Vulkan instance!");
-    DEBUG_TRACE("Created instance.");
-    
-    if (enableValidationLayers) {
-        VkDebugUtilsMessengerCreateInfoEXT messengerInfo;
-        PopulateDebugMessengerCreateInfo(messengerInfo);
-        res = CreateDebugUtilsMessengerEXT(instance, &messengerInfo, allocator, &debugMessenger);
-        DEBUG_VK(res, "Failed to set up debug messenger!");
-        DEBUG_TRACE("Created debug messenger.");
-    }
+	DEBUG_VK(res, "Failed to create Vulkan instance!");
+	DEBUG_TRACE("Created instance.");
+	
+	if (enableValidationLayers) {
+		VkDebugUtilsMessengerCreateInfoEXT messengerInfo;
+		PopulateDebugMessengerCreateInfo(messengerInfo);
+		res = CreateDebugUtilsMessengerEXT(instance, &messengerInfo, allocator, &debugMessenger);
+		DEBUG_VK(res, "Failed to set up debug messenger!");
+		DEBUG_TRACE("Created debug messenger.");
+	}
 
-    // res = glfwCreateWindowSurface(instance, glfwWindow, allocator, &surface);
-    // DEBUG_VK(res, "Failed to create window surface!");
-    // DEBUG_TRACE("Created surface.");
+	// res = glfwCreateWindowSurface(instance, glfwWindow, allocator, &surface);
+	// DEBUG_VK(res, "Failed to create window surface!");
+	// DEBUG_TRACE("Created surface.");
 
-    LOG_INFO("Created VulkanInstance.");
+	LOG_INFO("Created VulkanInstance.");
 }
 
 void Context::DestroyInstance() {
-    activeLayersNames.clear();
-    activeExtensionsNames.clear();
-    if (debugMessenger) {
-        DestroyDebugUtilsMessengerEXT(instance, debugMessenger, allocator);
-        DEBUG_TRACE("Destroyed debug messenger.");
-        debugMessenger = nullptr;
-    }
-    // vkDestroySurfaceKHR(instance, surface, allocator);
-    // DEBUG_TRACE("Destroyed surface.");
-    vkDestroyInstance(instance, allocator);
-    DEBUG_TRACE("Destroyed instance.");
-    LOG_INFO("Destroyed VulkanInstance");
+	activeLayersNames.clear();
+	activeExtensionsNames.clear();
+	if (debugMessenger) {
+		DestroyDebugUtilsMessengerEXT(instance, debugMessenger, allocator);
+		DEBUG_TRACE("Destroyed debug messenger.");
+		debugMessenger = nullptr;
+	}
+	// vkDestroySurfaceKHR(instance, surface, allocator);
+	// DEBUG_TRACE("Destroyed surface.");
+	vkDestroyInstance(instance, allocator);
+	DEBUG_TRACE("Destroyed instance.");
+	LOG_INFO("Destroyed VulkanInstance");
 }
 
 void Context::CreatePhysicalDevice() {
-    // get all devices with Vulkan support
-    uint32_t count = 0;
-    vkEnumeratePhysicalDevices(instance, &count, nullptr);
-    ASSERT(count != 0, "no GPUs with Vulkan support!");
-    std::vector<VkPhysicalDevice> devices(count);
-    vkEnumeratePhysicalDevices(instance, &count, devices.data());
+	// get all devices with Vulkan support
+	uint32_t count = 0;
+	vkEnumeratePhysicalDevices(instance, &count, nullptr);
+	ASSERT(count != 0, "no GPUs with Vulkan support!");
+	std::vector<VkPhysicalDevice> devices(count);
+	vkEnumeratePhysicalDevices(instance, &count, devices.data());
 	DEBUG_TRACE("Found {0} physical device(s).", count);
 
 	for (const auto& device : devices) {
@@ -577,20 +872,20 @@ void Context::CreateDevice() {
 }
 
 void Context::DestroyDevice() {
-    // dummyVertexBuffer = {};
-    // currentPipeline = {};
-    // asScratchBuffer = {};
-    // vkDestroyDescriptorPool(device, imguiDescriptorPool, allocator);
-    // vkDestroyDescriptorPool(device, bindlessDescriptorPool, allocator);
-    // vkDestroyDescriptorSetLayout(device, bindlessDescriptorLayout, allocator);
-    // bindlessDescriptorSet = VK_NULL_HANDLE;
-    // bindlessDescriptorPool = VK_NULL_HANDLE;
-    // bindlessDescriptorLayout = VK_NULL_HANDLE;
-    vmaDestroyAllocator(vmaAllocator);
-    // vkDestroySampler(device, genericSampler, allocator);
-    vkDestroyDevice(device, allocator);
+	// dummyVertexBuffer = {};
+	// currentPipeline = {};
+	// asScratchBuffer = {};
+	// vkDestroyDescriptorPool(device, imguiDescriptorPool, allocator);
+	// vkDestroyDescriptorPool(device, bindlessDescriptorPool, allocator);
+	// vkDestroyDescriptorSetLayout(device, bindlessDescriptorLayout, allocator);
+	// bindlessDescriptorSet = VK_NULL_HANDLE;
+	// bindlessDescriptorPool = VK_NULL_HANDLE;
+	// bindlessDescriptorLayout = VK_NULL_HANDLE;
+	vmaDestroyAllocator(vmaAllocator);
+	// vkDestroySampler(device, genericSampler, allocator);
+	vkDestroyDevice(device, allocator);
 	DEBUG_TRACE("Destroyed logical device");
-    device = VK_NULL_HANDLE;
+	device = VK_NULL_HANDLE;
 }
 
 
@@ -601,61 +896,61 @@ static const char *VK_ERROR_STRING(VkResult result) {
 	switch ((int)result)
 	{
 	case VK_SUCCESS: return "VK_SUCCESS";
-    case VK_NOT_READY: return "VK_NOT_READY";
-    case VK_TIMEOUT: return "VK_TIMEOUT";
-    case VK_EVENT_SET: return "VK_EVENT_SET";
-    case VK_EVENT_RESET: return "VK_EVENT_RESET";
-    case VK_INCOMPLETE: return "VK_INCOMPLETE";
-    case VK_ERROR_OUT_OF_HOST_MEMORY: return "VK_ERROR_OUT_OF_HOST_MEMORY";
-    case VK_ERROR_OUT_OF_DEVICE_MEMORY: return "VK_ERROR_OUT_OF_DEVICE_MEMORY";
-    case VK_ERROR_INITIALIZATION_FAILED: return "VK_ERROR_INITIALIZATION_FAILED";
-    case VK_ERROR_DEVICE_LOST: return "VK_ERROR_DEVICE_LOST";
-    case VK_ERROR_MEMORY_MAP_FAILED: return "VK_ERROR_MEMORY_MAP_FAILED";
-    case VK_ERROR_LAYER_NOT_PRESENT: return "VK_ERROR_LAYER_NOT_PRESENT";
-    case VK_ERROR_EXTENSION_NOT_PRESENT: return "VK_ERROR_EXTENSION_NOT_PRESENT";
-    case VK_ERROR_FEATURE_NOT_PRESENT: return "VK_ERROR_FEATURE_NOT_PRESENT";
-    case VK_ERROR_INCOMPATIBLE_DRIVER: return "VK_ERROR_INCOMPATIBLE_DRIVER";
-    case VK_ERROR_TOO_MANY_OBJECTS: return "VK_ERROR_TOO_MANY_OBJECTS";
-    case VK_ERROR_FORMAT_NOT_SUPPORTED: return "VK_ERROR_FORMAT_NOT_SUPPORTED";
-    case VK_ERROR_FRAGMENTED_POOL: return "VK_ERROR_FRAGMENTED_POOL";
-    case VK_ERROR_UNKNOWN: return "VK_ERROR_UNKNOWN";
-    case VK_ERROR_OUT_OF_POOL_MEMORY: return "VK_ERROR_OUT_OF_POOL_MEMORY";
-    case VK_ERROR_INVALID_EXTERNAL_HANDLE: return "VK_ERROR_INVALID_EXTERNAL_HANDLE";
-    case VK_ERROR_FRAGMENTATION: return "VK_ERROR_FRAGMENTATION";
-    case VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS: return "VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS";
-    case VK_PIPELINE_COMPILE_REQUIRED: return "VK_PIPELINE_COMPILE_REQUIRED";
-    case VK_ERROR_SURFACE_LOST_KHR: return "VK_ERROR_SURFACE_LOST_KHR";
-    case VK_ERROR_NATIVE_WINDOW_IN_USE_KHR: return "VK_ERROR_NATIVE_WINDOW_IN_USE_KHR";
-    case VK_SUBOPTIMAL_KHR: return "VK_SUBOPTIMAL_KHR";
-    case VK_ERROR_OUT_OF_DATE_KHR: return "VK_ERROR_OUT_OF_DATE_KHR";
-    case VK_ERROR_INCOMPATIBLE_DISPLAY_KHR: return "VK_ERROR_INCOMPATIBLE_DISPLAY_KHR";
-    case VK_ERROR_VALIDATION_FAILED_EXT: return "VK_ERROR_VALIDATION_FAILED_EXT";
-    case VK_ERROR_INVALID_SHADER_NV: return "VK_ERROR_INVALID_SHADER_NV";
-    case VK_ERROR_IMAGE_USAGE_NOT_SUPPORTED_KHR: return "VK_ERROR_IMAGE_USAGE_NOT_SUPPORTED_KHR";
-    case VK_ERROR_VIDEO_PICTURE_LAYOUT_NOT_SUPPORTED_KHR: return "VK_ERROR_VIDEO_PICTURE_LAYOUT_NOT_SUPPORTED_KHR";
-    case VK_ERROR_VIDEO_PROFILE_OPERATION_NOT_SUPPORTED_KHR: return "VK_ERROR_VIDEO_PROFILE_OPERATION_NOT_SUPPORTED_KHR";
-    case VK_ERROR_VIDEO_PROFILE_FORMAT_NOT_SUPPORTED_KHR: return "VK_ERROR_VIDEO_PROFILE_FORMAT_NOT_SUPPORTED_KHR";
-    case VK_ERROR_VIDEO_PROFILE_CODEC_NOT_SUPPORTED_KHR: return "VK_ERROR_VIDEO_PROFILE_CODEC_NOT_SUPPORTED_KHR";
-    case VK_ERROR_VIDEO_STD_VERSION_NOT_SUPPORTED_KHR: return "VK_ERROR_VIDEO_STD_VERSION_NOT_SUPPORTED_KHR";
-    case VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT: return "VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT";
-    case VK_ERROR_NOT_PERMITTED_KHR: return "VK_ERROR_NOT_PERMITTED_KHR";
-    case VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT: return "VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT";
-    case VK_THREAD_IDLE_KHR: return "VK_THREAD_IDLE_KHR";
-    case VK_THREAD_DONE_KHR: return "VK_THREAD_DONE_KHR";
-    case VK_OPERATION_DEFERRED_KHR: return "VK_OPERATION_DEFERRED_KHR";
-    case VK_OPERATION_NOT_DEFERRED_KHR: return "VK_OPERATION_NOT_DEFERRED_KHR";
-    case VK_ERROR_INVALID_VIDEO_STD_PARAMETERS_KHR: return "VK_ERROR_INVALID_VIDEO_STD_PARAMETERS_KHR";
-    case VK_ERROR_COMPRESSION_EXHAUSTED_EXT: return "VK_ERROR_COMPRESSION_EXHAUSTED_EXT";
-    case VK_ERROR_INCOMPATIBLE_SHADER_BINARY_EXT: return "VK_ERROR_INCOMPATIBLE_SHADER_BINARY_EXT";
-    // case VK_ERROR_OUT_OF_POOL_MEMORY_KHR: return "VK_ERROR_OUT_OF_POOL_MEMORY_KHR";
-    // case VK_ERROR_INVALID_EXTERNAL_HANDLE_KHR: return "VK_ERROR_INVALID_EXTERNAL_HANDLE_KHR";
-    // case VK_ERROR_FRAGMENTATION_EXT: return "VK_ERROR_FRAGMENTATION_EXT";
-    // case VK_ERROR_NOT_PERMITTED_EXT: return "VK_ERROR_NOT_PERMITTED_EXT";
-    // case VK_ERROR_INVALID_DEVICE_ADDRESS_EXT: return "VK_ERROR_INVALID_DEVICE_ADDRESS_EXT";
-    // case VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS_KHR: return "VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS_KHR";
-    // case VK_PIPELINE_COMPILE_REQUIRED_EXT: return "VK_PIPELINE_COMPILE_REQUIRED_EXT";
-    // case VK_ERROR_PIPELINE_COMPILE_REQUIRED_EXT: return "VK_ERROR_PIPELINE_COMPILE_REQUIRED_EXT";
-    case VK_RESULT_MAX_ENUM: return "VK_RESULT_MAX_ENUM";
+	case VK_NOT_READY: return "VK_NOT_READY";
+	case VK_TIMEOUT: return "VK_TIMEOUT";
+	case VK_EVENT_SET: return "VK_EVENT_SET";
+	case VK_EVENT_RESET: return "VK_EVENT_RESET";
+	case VK_INCOMPLETE: return "VK_INCOMPLETE";
+	case VK_ERROR_OUT_OF_HOST_MEMORY: return "VK_ERROR_OUT_OF_HOST_MEMORY";
+	case VK_ERROR_OUT_OF_DEVICE_MEMORY: return "VK_ERROR_OUT_OF_DEVICE_MEMORY";
+	case VK_ERROR_INITIALIZATION_FAILED: return "VK_ERROR_INITIALIZATION_FAILED";
+	case VK_ERROR_DEVICE_LOST: return "VK_ERROR_DEVICE_LOST";
+	case VK_ERROR_MEMORY_MAP_FAILED: return "VK_ERROR_MEMORY_MAP_FAILED";
+	case VK_ERROR_LAYER_NOT_PRESENT: return "VK_ERROR_LAYER_NOT_PRESENT";
+	case VK_ERROR_EXTENSION_NOT_PRESENT: return "VK_ERROR_EXTENSION_NOT_PRESENT";
+	case VK_ERROR_FEATURE_NOT_PRESENT: return "VK_ERROR_FEATURE_NOT_PRESENT";
+	case VK_ERROR_INCOMPATIBLE_DRIVER: return "VK_ERROR_INCOMPATIBLE_DRIVER";
+	case VK_ERROR_TOO_MANY_OBJECTS: return "VK_ERROR_TOO_MANY_OBJECTS";
+	case VK_ERROR_FORMAT_NOT_SUPPORTED: return "VK_ERROR_FORMAT_NOT_SUPPORTED";
+	case VK_ERROR_FRAGMENTED_POOL: return "VK_ERROR_FRAGMENTED_POOL";
+	case VK_ERROR_UNKNOWN: return "VK_ERROR_UNKNOWN";
+	case VK_ERROR_OUT_OF_POOL_MEMORY: return "VK_ERROR_OUT_OF_POOL_MEMORY";
+	case VK_ERROR_INVALID_EXTERNAL_HANDLE: return "VK_ERROR_INVALID_EXTERNAL_HANDLE";
+	case VK_ERROR_FRAGMENTATION: return "VK_ERROR_FRAGMENTATION";
+	case VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS: return "VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS";
+	case VK_PIPELINE_COMPILE_REQUIRED: return "VK_PIPELINE_COMPILE_REQUIRED";
+	case VK_ERROR_SURFACE_LOST_KHR: return "VK_ERROR_SURFACE_LOST_KHR";
+	case VK_ERROR_NATIVE_WINDOW_IN_USE_KHR: return "VK_ERROR_NATIVE_WINDOW_IN_USE_KHR";
+	case VK_SUBOPTIMAL_KHR: return "VK_SUBOPTIMAL_KHR";
+	case VK_ERROR_OUT_OF_DATE_KHR: return "VK_ERROR_OUT_OF_DATE_KHR";
+	case VK_ERROR_INCOMPATIBLE_DISPLAY_KHR: return "VK_ERROR_INCOMPATIBLE_DISPLAY_KHR";
+	case VK_ERROR_VALIDATION_FAILED_EXT: return "VK_ERROR_VALIDATION_FAILED_EXT";
+	case VK_ERROR_INVALID_SHADER_NV: return "VK_ERROR_INVALID_SHADER_NV";
+	case VK_ERROR_IMAGE_USAGE_NOT_SUPPORTED_KHR: return "VK_ERROR_IMAGE_USAGE_NOT_SUPPORTED_KHR";
+	case VK_ERROR_VIDEO_PICTURE_LAYOUT_NOT_SUPPORTED_KHR: return "VK_ERROR_VIDEO_PICTURE_LAYOUT_NOT_SUPPORTED_KHR";
+	case VK_ERROR_VIDEO_PROFILE_OPERATION_NOT_SUPPORTED_KHR: return "VK_ERROR_VIDEO_PROFILE_OPERATION_NOT_SUPPORTED_KHR";
+	case VK_ERROR_VIDEO_PROFILE_FORMAT_NOT_SUPPORTED_KHR: return "VK_ERROR_VIDEO_PROFILE_FORMAT_NOT_SUPPORTED_KHR";
+	case VK_ERROR_VIDEO_PROFILE_CODEC_NOT_SUPPORTED_KHR: return "VK_ERROR_VIDEO_PROFILE_CODEC_NOT_SUPPORTED_KHR";
+	case VK_ERROR_VIDEO_STD_VERSION_NOT_SUPPORTED_KHR: return "VK_ERROR_VIDEO_STD_VERSION_NOT_SUPPORTED_KHR";
+	case VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT: return "VK_ERROR_INVALID_DRM_FORMAT_MODIFIER_PLANE_LAYOUT_EXT";
+	case VK_ERROR_NOT_PERMITTED_KHR: return "VK_ERROR_NOT_PERMITTED_KHR";
+	case VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT: return "VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT";
+	case VK_THREAD_IDLE_KHR: return "VK_THREAD_IDLE_KHR";
+	case VK_THREAD_DONE_KHR: return "VK_THREAD_DONE_KHR";
+	case VK_OPERATION_DEFERRED_KHR: return "VK_OPERATION_DEFERRED_KHR";
+	case VK_OPERATION_NOT_DEFERRED_KHR: return "VK_OPERATION_NOT_DEFERRED_KHR";
+	case VK_ERROR_INVALID_VIDEO_STD_PARAMETERS_KHR: return "VK_ERROR_INVALID_VIDEO_STD_PARAMETERS_KHR";
+	case VK_ERROR_COMPRESSION_EXHAUSTED_EXT: return "VK_ERROR_COMPRESSION_EXHAUSTED_EXT";
+	case VK_ERROR_INCOMPATIBLE_SHADER_BINARY_EXT: return "VK_ERROR_INCOMPATIBLE_SHADER_BINARY_EXT";
+	// case VK_ERROR_OUT_OF_POOL_MEMORY_KHR: return "VK_ERROR_OUT_OF_POOL_MEMORY_KHR";
+	// case VK_ERROR_INVALID_EXTERNAL_HANDLE_KHR: return "VK_ERROR_INVALID_EXTERNAL_HANDLE_KHR";
+	// case VK_ERROR_FRAGMENTATION_EXT: return "VK_ERROR_FRAGMENTATION_EXT";
+	// case VK_ERROR_NOT_PERMITTED_EXT: return "VK_ERROR_NOT_PERMITTED_EXT";
+	// case VK_ERROR_INVALID_DEVICE_ADDRESS_EXT: return "VK_ERROR_INVALID_DEVICE_ADDRESS_EXT";
+	// case VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS_KHR: return "VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS_KHR";
+	// case VK_PIPELINE_COMPILE_REQUIRED_EXT: return "VK_PIPELINE_COMPILE_REQUIRED_EXT";
+	// case VK_ERROR_PIPELINE_COMPILE_REQUIRED_EXT: return "VK_ERROR_PIPELINE_COMPILE_REQUIRED_EXT";
+	case VK_RESULT_MAX_ENUM: return "VK_RESULT_MAX_ENUM";
 	default:
 		if (result < 0)
 			return "VK_ERROR_<Unknown>";
