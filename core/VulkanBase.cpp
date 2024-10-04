@@ -16,6 +16,7 @@ struct Context
 	VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
     std::string applicationName = "Vulkan Slang Compute";
     std::string engineName = "Vulkan Compute";
+	VmaAllocator vmaAllocator;
 
 	// VkPhysicalDeviceProperties physicalDeviceProperties;
 	// VkPhysicalDeviceFeatures physicalDeviceFeatures;
@@ -36,37 +37,37 @@ struct Context
 
 
 
-	std::vector<const char*> requiredExtensions = { // Physical Device Extensions
-		// VK_KHR_SWAPCHAIN_EXTENSION_NAME, 
-		// VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
-		// VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
-		// VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
-		// VK_KHR_RAY_QUERY_EXTENSION_NAME,
-		// VK_EXT_SHADER_ATOMIC_FLOAT_EXTENSION_NAME,
-    };
+		std::vector<const char*> requiredExtensions = { // Physical Device Extensions
+			// VK_KHR_SWAPCHAIN_EXTENSION_NAME, 
+			// VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
+			// VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
+			// VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
+			// VK_KHR_RAY_QUERY_EXTENSION_NAME,
+			// VK_EXT_SHADER_ATOMIC_FLOAT_EXTENSION_NAME,
+		};
 
-	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
-    // VkSampleCountFlagBits maxSamples = VK_SAMPLE_COUNT_1_BIT;
-    // VkSampleCountFlags sampleCounts;
+		VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+		// VkSampleCountFlagBits maxSamples = VK_SAMPLE_COUNT_1_BIT;
+		// VkSampleCountFlags sampleCounts;
 
-    VkPhysicalDeviceFeatures physicalFeatures{};
-    // VkSurfaceCapabilitiesKHR surfaceCapabilities{};
-    VkPhysicalDeviceProperties physicalProperties{};
-	
-    // std::vector<VkPresentModeKHR> availablePresentModes;
-    // std::vector<VkSurfaceFormatKHR> availableSurfaceFormats;
-    std::vector<VkExtensionProperties> availableExtensions; // Physical Device Extensions
-    std::vector<VkQueueFamilyProperties> availableFamilies;
+		VkPhysicalDeviceFeatures physicalFeatures{};
+		// VkSurfaceCapabilitiesKHR surfaceCapabilities{};
+		VkPhysicalDeviceProperties physicalProperties{};
+		
+		// std::vector<VkPresentModeKHR> availablePresentModes;
+		// std::vector<VkSurfaceFormatKHR> availableSurfaceFormats;
+		std::vector<VkExtensionProperties> availableExtensions; // Physical Device Extensions
+		std::vector<VkQueueFamilyProperties> availableFamilies;
 
-	struct InternalQueue {
-		VkQueue queue = VK_NULL_HANDLE;
-		int family = -1;
-		// std::vector<CommandResources> commands;
-	};
-	InternalQueue queues[Queue::Count];
-	Queue currentQueue = Queue::Count;
+		struct InternalQueue {
+			VkQueue queue = VK_NULL_HANDLE;
+			int family = -1;
+			// std::vector<CommandResources> commands;
+		};
+		InternalQueue queues[Queue::Count];
+		Queue currentQueue = Queue::Count;
 
-	VkPhysicalDeviceMemoryProperties memoryProperties;
+		VkPhysicalDeviceMemoryProperties memoryProperties;
 
 
 	// bindless resources
@@ -74,6 +75,8 @@ struct Context
 	// VkDescriptorSet bindlessDescriptorSet = VK_NULL_HANDLE;
 	// VkDescriptorPool bindlessDescriptorPool = VK_NULL_HANDLE;
 	// VkDescriptorSetLayout bindlessDescriptorLayout = VK_NULL_HANDLE;
+
+	VkDevice device = VK_NULL_HANDLE;
 
 	void CreateInstance();
 	void DestroyInstance();
@@ -89,14 +92,17 @@ static Context _ctx;
 void Init() {
 	_ctx.CreateInstance();
 	_ctx.CreatePhysicalDevice();
-	// _ctx.CreateDevice();
+	_ctx.CreateDevice();
 	// _ctx.CreateSurfaceFormats();
 	// _ctx.CreateSwapChain(width, height);
 	// _ctx.CreateImGui(window);
 }
 
 void Destroy() {
-    // _ctx.DestroyDevice();
+    // ImGui_ImplVulkan_Shutdown();
+    // ImGui_ImplGlfw_Shutdown();
+    // _ctx.DestroySwapChain();
+    _ctx.DestroyDevice();
     _ctx.DestroyInstance();
 }
 
@@ -311,7 +317,7 @@ void Context::CreatePhysicalDevice() {
     ASSERT(count != 0, "no GPUs with Vulkan support!");
     std::vector<VkPhysicalDevice> devices(count);
     vkEnumeratePhysicalDevices(instance, &count, devices.data());
-	DEBUG_TRACE("Found " + std::to_string(count) + " devices.");
+	DEBUG_TRACE("Found {0} physical device(s).", count);
 
 	for (const auto& device : devices) {
 		// get all available extensions
@@ -510,12 +516,15 @@ void Context::CreateDevice() {
 		createInfo.enabledLayerCount = 0;
 	}
 
-	auto res = vkCreateDevice(physicalDevice, &createInfo, nullptr, &device);
+	auto res = vkCreateDevice(physicalDevice, &createInfo, allocator, &device);
 	DEBUG_VK(res, "Failed to create logical device!");
+	ASSERT(res == VK_SUCCESS, "Failed to create logical device!");
+	DEBUG_TRACE("Created logical device");
 
 	VmaVulkanFunctions vulkanFunctions = {};
 	vulkanFunctions.vkGetInstanceProcAddr = &vkGetInstanceProcAddr;
 	vulkanFunctions.vkGetDeviceProcAddr = &vkGetDeviceProcAddr;
+
 	VmaAllocatorCreateInfo allocatorCreateInfo = {};
 	allocatorCreateInfo.flags = VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT | VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
 	allocatorCreateInfo.vulkanApiVersion = VK_API_VERSION_1_3;
@@ -529,135 +538,61 @@ void Context::CreateDevice() {
 		vkGetDeviceQueue(device, queues[q].family, 0, &queues[q].queue);
 	}
 
-	genericSampler = CreateSampler(1.0);
-	vkSetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetDeviceProcAddr(device, "vkSetDebugUtilsObjectNameEXT");
-	vkGetAccelerationStructureBuildSizesKHR = (PFN_vkGetAccelerationStructureBuildSizesKHR)vkGetDeviceProcAddr(device, "vkGetAccelerationStructureBuildSizesKHR");
-	vkCreateAccelerationStructureKHR = (PFN_vkCreateAccelerationStructureKHR)vkGetDeviceProcAddr(device, "vkCreateAccelerationStructureKHR");
-	vkCmdBuildAccelerationStructuresKHR = (PFN_vkCmdBuildAccelerationStructuresKHR)vkGetDeviceProcAddr(device, "vkCmdBuildAccelerationStructuresKHR");
-	vkGetAccelerationStructureDeviceAddressKHR = (PFN_vkGetAccelerationStructureDeviceAddressKHR)vkGetDeviceProcAddr(device, "vkGetAccelerationStructureDeviceAddressKHR");
-	vkDestroyAccelerationStructureKHR = (PFN_vkDestroyAccelerationStructureKHR)vkGetDeviceProcAddr(device, "vkDestroyAccelerationStructureKHR");
+	// genericSampler = CreateSampler(1.0);
+	// vkSetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetDeviceProcAddr(device, "vkSetDebugUtilsObjectNameEXT");
+	// vkGetAccelerationStructureBuildSizesKHR = (PFN_vkGetAccelerationStructureBuildSizesKHR)vkGetDeviceProcAddr(device, "vkGetAccelerationStructureBuildSizesKHR");
+	// vkCreateAccelerationStructureKHR = (PFN_vkCreateAccelerationStructureKHR)vkGetDeviceProcAddr(device, "vkCreateAccelerationStructureKHR");
+	// vkCmdBuildAccelerationStructuresKHR = (PFN_vkCmdBuildAccelerationStructuresKHR)vkGetDeviceProcAddr(device, "vkCmdBuildAccelerationStructuresKHR");
+	// vkGetAccelerationStructureDeviceAddressKHR = (PFN_vkGetAccelerationStructureDeviceAddressKHR)vkGetDeviceProcAddr(device, "vkGetAccelerationStructureDeviceAddressKHR");
+	// vkDestroyAccelerationStructureKHR = (PFN_vkDestroyAccelerationStructureKHR)vkGetDeviceProcAddr(device, "vkDestroyAccelerationStructureKHR");
 
-	VkDescriptorPoolSize imguiPoolSizes[]    = { {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000}, {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000} };
-	VkDescriptorPoolCreateInfo imguiPoolInfo{};
-	imguiPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-	imguiPoolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-	imguiPoolInfo.maxSets = (uint32_t)(1024);
-	imguiPoolInfo.poolSizeCount = sizeof(imguiPoolSizes)/sizeof(VkDescriptorPoolSize);
-	imguiPoolInfo.pPoolSizes = imguiPoolSizes;
+	// VkDescriptorPoolSize imguiPoolSizes[]    = { {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000}, {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000} };
+	// VkDescriptorPoolCreateInfo imguiPoolInfo{};
+	// imguiPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	// imguiPoolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+	// imguiPoolInfo.maxSets = (uint32_t)(1024);
+	// imguiPoolInfo.poolSizeCount = sizeof(imguiPoolSizes)/sizeof(VkDescriptorPoolSize);
+	// imguiPoolInfo.pPoolSizes = imguiPoolSizes;
 
-	VkResult result = vkCreateDescriptorPool(device, &imguiPoolInfo, allocator, &imguiDescriptorPool);
-	DEBUG_VK(result, "Failed to create imgui descriptor pool!");
+	// VkResult result = vkCreateDescriptorPool(device, &imguiPoolInfo, allocator, &imguiDescriptorPool);
+	// DEBUG_VK(result, "Failed to create imgui descriptor pool!");
 
 	// create bindless resources
 	{
-		const u32 MAX_STORAGE = 8192;
-		const u32 MAX_SAMPLEDIMAGES = 8192;
-		const u32 MAX_ACCELERATIONSTRUCTURE = 64;
-		const u32 MAX_STORAGE_IMAGES = 8192;
-
-		for (int i = 0; i < MAX_STORAGE; i++) {
-			availableBufferRID.push_back(i);
-		}
-		for (int i = 0; i < MAX_SAMPLEDIMAGES; i++) {
-			availableImageRID.push_back(i);
-		}
-		for (int i = 0; i < MAX_ACCELERATIONSTRUCTURE; i++) {
-			availableTLASRID.push_back(i);
-		}
-
-		// create descriptor set pool for bindless resources
-		std::vector<VkDescriptorPoolSize> bindlessPoolSizes = { 
-			{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MAX_SAMPLEDIMAGES},
-			{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, MAX_STORAGE},
-			{VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, MAX_ACCELERATIONSTRUCTURE},
-			{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, MAX_STORAGE_IMAGES},
-		};
-
-		VkDescriptorPoolCreateInfo bindlessPoolInfo{};
-		bindlessPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-		bindlessPoolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
-		bindlessPoolInfo.maxSets = 1;
-		bindlessPoolInfo.poolSizeCount = bindlessPoolSizes.size();
-		bindlessPoolInfo.pPoolSizes = bindlessPoolSizes.data();
-
-		result = vkCreateDescriptorPool(device, &bindlessPoolInfo, allocator, &bindlessDescriptorPool);
-		DEBUG_VK(result, "Failed to create bindless descriptor pool!");
-
-		// create descriptor set layout for bindless resources
-		std::vector<VkDescriptorSetLayoutBinding> bindings;
-		std::vector<VkDescriptorBindingFlags> bindingFlags;
-
-		VkDescriptorSetLayoutBinding texturesBinding{};
-		texturesBinding.binding = LUZ_BINDING_TEXTURE;
-		texturesBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		texturesBinding.descriptorCount = MAX_SAMPLEDIMAGES;
-		texturesBinding.stageFlags = VK_SHADER_STAGE_ALL;
-		bindings.push_back(texturesBinding);
-		bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT });
-
-		VkDescriptorSetLayoutBinding storageBuffersBinding{};
-		storageBuffersBinding.binding = LUZ_BINDING_BUFFER;
-		storageBuffersBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-		storageBuffersBinding.descriptorCount = MAX_STORAGE;
-		storageBuffersBinding.stageFlags = VK_SHADER_STAGE_ALL;
-		bindings.push_back(storageBuffersBinding);
-		bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT });
-
-		VkDescriptorSetLayoutBinding accelerationStructureBinding{};
-		accelerationStructureBinding.binding = LUZ_BINDING_TLAS;
-		accelerationStructureBinding.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
-		accelerationStructureBinding.descriptorCount = MAX_ACCELERATIONSTRUCTURE;
-		accelerationStructureBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-		bindings.push_back(accelerationStructureBinding);
-		bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT });
-
-		VkDescriptorSetLayoutBinding imageStorageBinding{};
-		imageStorageBinding.binding = LUZ_BINDING_STORAGE_IMAGE;
-		imageStorageBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-		imageStorageBinding.descriptorCount = MAX_STORAGE_IMAGES;
-		imageStorageBinding.stageFlags = VK_SHADER_STAGE_ALL;
-		bindings.push_back(imageStorageBinding);
-		bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT });
-
-		VkDescriptorSetLayoutBindingFlagsCreateInfo setLayoutBindingFlags{};
-		setLayoutBindingFlags.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
-		setLayoutBindingFlags.bindingCount = bindingFlags.size();
-		setLayoutBindingFlags.pBindingFlags = bindingFlags.data();
-
-		VkDescriptorSetLayoutCreateInfo descriptorLayoutInfo{};
-		descriptorLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-		descriptorLayoutInfo.bindingCount = bindings.size();
-		descriptorLayoutInfo.pBindings = bindings.data();
-		descriptorLayoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
-		descriptorLayoutInfo.pNext = &setLayoutBindingFlags;
-
-		result = vkCreateDescriptorSetLayout(device, &descriptorLayoutInfo, allocator, &bindlessDescriptorLayout);
-		DEBUG_VK(result, "Failed to create bindless descriptor set layout!");
-
-		// create descriptor set for bindless resources
-		VkDescriptorSetAllocateInfo allocInfo{};
-		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-		allocInfo.descriptorPool = bindlessDescriptorPool;
-		allocInfo.descriptorSetCount = 1;
-		allocInfo.pSetLayouts = &bindlessDescriptorLayout;
-
-		result = vkAllocateDescriptorSets(device, &allocInfo, &bindlessDescriptorSet);
-		DEBUG_VK(result, "Failed to allocate bindless descriptor set!");
+		// Not needed
 	}
 
-	asScratchBuffer = vkw::CreateBuffer(initialScratchBufferSize, vkw::BufferUsage::Address | vkw::BufferUsage::Storage, vkw::Memory::GPU);
-	VkBufferDeviceAddressInfo scratchInfo{};
-	scratchInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-	scratchInfo.buffer = asScratchBuffer.resource->buffer;
-	asScratchAddress = vkGetBufferDeviceAddress(device, &scratchInfo);
+	// asScratchBuffer = vkw::CreateBuffer(initialScratchBufferSize, vkw::BufferUsage::Address | vkw::BufferUsage::Storage, vkw::Memory::GPU);
+	// VkBufferDeviceAddressInfo scratchInfo{};
+	// scratchInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+	// scratchInfo.buffer = asScratchBuffer.resource->buffer;
+	// asScratchAddress = vkGetBufferDeviceAddress(device, &scratchInfo);
 
-	dummyVertexBuffer = vkw::CreateBuffer(
-		6 * 3 * sizeof(float),
-		vkw::BufferUsage::Vertex | vkw::BufferUsage::AccelerationStructureInput,
-		vkw::Memory::GPU,
-		"VertexBuffer#Dummy"
-	);
+	// dummyVertexBuffer = vkw::CreateBuffer(
+	// 	6 * 3 * sizeof(float),
+	// 	vkw::BufferUsage::Vertex | vkw::BufferUsage::AccelerationStructureInput,
+	// 	vkw::Memory::GPU,
+	// 	"VertexBuffer#Dummy"
+	// );
 }
+
+void Context::DestroyDevice() {
+    // dummyVertexBuffer = {};
+    // currentPipeline = {};
+    // asScratchBuffer = {};
+    // vkDestroyDescriptorPool(device, imguiDescriptorPool, allocator);
+    // vkDestroyDescriptorPool(device, bindlessDescriptorPool, allocator);
+    // vkDestroyDescriptorSetLayout(device, bindlessDescriptorLayout, allocator);
+    // bindlessDescriptorSet = VK_NULL_HANDLE;
+    // bindlessDescriptorPool = VK_NULL_HANDLE;
+    // bindlessDescriptorLayout = VK_NULL_HANDLE;
+    vmaDestroyAllocator(vmaAllocator);
+    // vkDestroySampler(device, genericSampler, allocator);
+    vkDestroyDevice(device, allocator);
+	DEBUG_TRACE("Destroyed logical device");
+    device = VK_NULL_HANDLE;
+}
+
 
 
 }
