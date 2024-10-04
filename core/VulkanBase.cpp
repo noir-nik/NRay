@@ -30,9 +30,9 @@ struct Context
     std::vector<bool> activeLayers; // Available layers
     std::vector<const char*> activeLayersNames;
     std::vector<VkLayerProperties> layers;
-    std::vector<bool> activeExtensions; // Instance Extensions
-    std::vector<const char*> activeExtensionsNames;
-    std::vector<VkExtensionProperties> instanceExtensions;
+    std::vector<bool> activeExtensions;                    // Instance Extensions
+    std::vector<const char*> activeExtensionsNames;        // Instance Extensions
+    std::vector<VkExtensionProperties> instanceExtensions; // Instance Extensions
 
 
 
@@ -55,7 +55,7 @@ struct Context
 	
     // std::vector<VkPresentModeKHR> availablePresentModes;
     // std::vector<VkSurfaceFormatKHR> availableSurfaceFormats;
-    std::vector<VkExtensionProperties> availableExtensions;
+    std::vector<VkExtensionProperties> availableExtensions; // Physical Device Extensions
     std::vector<VkQueueFamilyProperties> availableFamilies;
 
 	struct InternalQueue {
@@ -388,9 +388,9 @@ void Context::CreatePhysicalDevice() {
 		}
 	}
 	ASSERT(physicalDevice != VK_NULL_HANDLE, "no device with Vulkan support!");
-	DEBUG_TRACE("Created physical device: " + std::string(physicalProperties.deviceName));
+	DEBUG_TRACE("Created physical device: {0}", physicalProperties.deviceName);
 }
-/* 
+
 void Context::CreateDevice() {
 	
 	std::set<uint32_t> uniqueFamilies;
@@ -413,16 +413,18 @@ void Context::CreateDevice() {
 	auto supportedFeatures = physicalFeatures;
 
 	// logical device features
-	VkPhysicalDeviceFeatures2 features2 = {};
-	features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-	features2.features.geometryShader = VK_TRUE;
-	if (supportedFeatures.logicOp)           { features2.features.logicOp           = VK_TRUE; }
-	if (supportedFeatures.samplerAnisotropy) { features2.features.samplerAnisotropy = VK_TRUE; }
-	if (supportedFeatures.sampleRateShading) { features2.features.sampleRateShading = VK_TRUE; }
-	if (supportedFeatures.fillModeNonSolid)  { features2.features.fillModeNonSolid  = VK_TRUE; }
-	if (supportedFeatures.wideLines)         { features2.features.wideLines         = VK_TRUE; }
-	if (supportedFeatures.depthClamp)        { features2.features.depthClamp        = VK_TRUE; }
+	// VkPhysicalDeviceFeatures2 features2 = {};
+	// features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+	// features2.features.geometryShader = VK_TRUE;
+	// if (supportedFeatures.logicOp)           { features2.features.logicOp           = VK_TRUE; }
+	// if (supportedFeatures.samplerAnisotropy) { features2.features.samplerAnisotropy = VK_TRUE; }
+	// if (supportedFeatures.sampleRateShading) { features2.features.sampleRateShading = VK_TRUE; }
+	// if (supportedFeatures.fillModeNonSolid)  { features2.features.fillModeNonSolid  = VK_TRUE; }
+	// if (supportedFeatures.wideLines)         { features2.features.wideLines         = VK_TRUE; }
+	// if (supportedFeatures.depthClamp)        { features2.features.depthClamp        = VK_TRUE; }
 
+
+	// DELETE LATER (already checked in CreatePhysicalDevice)
 	auto requiredExtensions = _ctx.requiredExtensions;
 	auto allExtensions = _ctx.availableExtensions;
 	for (auto req : requiredExtensions) {
@@ -438,54 +440,54 @@ void Context::CreateDevice() {
 		}
 	}
 
-	VkPhysicalDeviceDescriptorIndexingFeatures descriptorIndexingFeatures{};
-	descriptorIndexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
-	descriptorIndexingFeatures.runtimeDescriptorArray = true;
-	descriptorIndexingFeatures.descriptorBindingPartiallyBound = true;
-	descriptorIndexingFeatures.shaderSampledImageArrayNonUniformIndexing = true;
-	descriptorIndexingFeatures.shaderUniformBufferArrayNonUniformIndexing = true;
-	descriptorIndexingFeatures.shaderStorageBufferArrayNonUniformIndexing = true;
-	descriptorIndexingFeatures.descriptorBindingSampledImageUpdateAfterBind = true;
-	descriptorIndexingFeatures.descriptorBindingStorageImageUpdateAfterBind = true;
+	// VkPhysicalDeviceDescriptorIndexingFeatures descriptorIndexingFeatures{};
+	// descriptorIndexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
+	// descriptorIndexingFeatures.runtimeDescriptorArray = true;
+	// descriptorIndexingFeatures.descriptorBindingPartiallyBound = true;
+	// descriptorIndexingFeatures.shaderSampledImageArrayNonUniformIndexing = true;
+	// descriptorIndexingFeatures.shaderUniformBufferArrayNonUniformIndexing = true;
+	// descriptorIndexingFeatures.shaderStorageBufferArrayNonUniformIndexing = true;
+	// descriptorIndexingFeatures.descriptorBindingSampledImageUpdateAfterBind = true;
+	// descriptorIndexingFeatures.descriptorBindingStorageImageUpdateAfterBind = true;
 
-	VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddresFeatures{};
-	bufferDeviceAddresFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
-	bufferDeviceAddresFeatures.bufferDeviceAddress = VK_TRUE;
-	bufferDeviceAddresFeatures.pNext = &descriptorIndexingFeatures;
+	// VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddresFeatures{};
+	// bufferDeviceAddresFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
+	// bufferDeviceAddresFeatures.bufferDeviceAddress = VK_TRUE;
+	// bufferDeviceAddresFeatures.pNext = &descriptorIndexingFeatures;
 
-	VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingPipelineFeatures{};
-	rayTracingPipelineFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
-	rayTracingPipelineFeatures.rayTracingPipeline = VK_TRUE;
-	rayTracingPipelineFeatures.pNext = &bufferDeviceAddresFeatures;
+	// VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingPipelineFeatures{};
+	// rayTracingPipelineFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
+	// rayTracingPipelineFeatures.rayTracingPipeline = VK_TRUE;
+	// rayTracingPipelineFeatures.pNext = &bufferDeviceAddresFeatures;
 
-	VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures{};
-	accelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
-	accelerationStructureFeatures.accelerationStructure = VK_TRUE;
-	accelerationStructureFeatures.descriptorBindingAccelerationStructureUpdateAfterBind = VK_TRUE;
-	accelerationStructureFeatures.accelerationStructureCaptureReplay = VK_TRUE;
-	accelerationStructureFeatures.pNext = &rayTracingPipelineFeatures;
+	// VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures{};
+	// accelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+	// accelerationStructureFeatures.accelerationStructure = VK_TRUE;
+	// accelerationStructureFeatures.descriptorBindingAccelerationStructureUpdateAfterBind = VK_TRUE;
+	// accelerationStructureFeatures.accelerationStructureCaptureReplay = VK_TRUE;
+	// accelerationStructureFeatures.pNext = &rayTracingPipelineFeatures;
 
-	VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures{};
-	rayQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
-	rayQueryFeatures.rayQuery = VK_TRUE;
-	rayQueryFeatures.pNext = &accelerationStructureFeatures;
+	// VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures{};
+	// rayQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
+	// rayQueryFeatures.rayQuery = VK_TRUE;
+	// rayQueryFeatures.pNext = &accelerationStructureFeatures;
 
-	VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeatures{};
-	dynamicRenderingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
-	dynamicRenderingFeatures.dynamicRendering = VK_TRUE;
-	dynamicRenderingFeatures.pNext = &rayQueryFeatures;
+	// VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeatures{};
+	// dynamicRenderingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
+	// dynamicRenderingFeatures.dynamicRendering = VK_TRUE;
+	// dynamicRenderingFeatures.pNext = &rayQueryFeatures;
 
-	VkPhysicalDeviceSynchronization2FeaturesKHR sync2Features{};
-	sync2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR;
-	sync2Features.synchronization2 = VK_TRUE;
-	sync2Features.pNext = &dynamicRenderingFeatures;
+	// VkPhysicalDeviceSynchronization2FeaturesKHR sync2Features{};
+	// sync2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR;
+	// sync2Features.synchronization2 = VK_TRUE;
+	// sync2Features.pNext = &dynamicRenderingFeatures;
 
-	VkPhysicalDeviceShaderAtomicFloatFeaturesEXT atomicFeatures{};
-	atomicFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT;
-	atomicFeatures.shaderBufferFloat32AtomicAdd = VK_TRUE;
-	atomicFeatures.pNext = &sync2Features;
+	// VkPhysicalDeviceShaderAtomicFloatFeaturesEXT atomicFeatures{};
+	// atomicFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT;
+	// atomicFeatures.shaderBufferFloat32AtomicAdd = VK_TRUE;
+	// atomicFeatures.pNext = &sync2Features;
 
-	features2.pNext = &atomicFeatures;
+	// features2.pNext = &atomicFeatures;
 
 	VkDeviceCreateInfo createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -493,8 +495,10 @@ void Context::CreateDevice() {
 	createInfo.pQueueCreateInfos = queueCreateInfos.data();
 	createInfo.enabledExtensionCount = static_cast<uint32_t>(requiredExtensions.size());
 	createInfo.ppEnabledExtensionNames = requiredExtensions.data();
-	createInfo.pEnabledFeatures;
-	createInfo.pNext = &features2;
+	// createInfo.pEnabledFeatures; // !Should be NULL if pNext is used
+	// createInfo.pNext = &features2; // feature chain
+	VkPhysicalDeviceFeatures deviceFeatures{}; // None just yet
+	createInfo.pEnabledFeatures = &deviceFeatures;
 
 	// specify the required layers to the device 
 	if (_ctx.enableValidationLayers) {
@@ -655,7 +659,6 @@ void Context::CreateDevice() {
 	);
 }
 
- */
 
 }
 
