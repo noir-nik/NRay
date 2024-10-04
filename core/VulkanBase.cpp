@@ -17,23 +17,26 @@ struct Context
     std::string applicationName = "Vulkan Slang Compute";
     std::string engineName = "Vulkan Compute";
 
-	VkPhysicalDeviceProperties physicalDeviceProperties;
-	VkPhysicalDeviceFeatures physicalDeviceFeatures;
-	uint32_t presentQueueFamilyIndex;
-	VkDevice device = VK_NULL_HANDLE;
-	VkCommandPool commandPool;
-	VkCommandBuffer *commandBuffers;
-	VkFence *fences;
+	// VkPhysicalDeviceProperties physicalDeviceProperties;
+	// VkPhysicalDeviceFeatures physicalDeviceFeatures;
+	// uint32_t presentQueueFamilyIndex;
+	// VkDevice device = VK_NULL_HANDLE;
+	// VkCommandPool commandPool;
+	// VkCommandBuffer *commandBuffers;
+	// VkFence *fences;
 
 	uint32_t apiVersion;
-	bool enableValidationLayers = true;
+	bool enableValidationLayers = false;
     std::vector<bool> activeLayers; // Available layers
     std::vector<const char*> activeLayersNames;
     std::vector<VkLayerProperties> layers;
-    std::vector<bool> activeExtensions; // API Extensions
+    std::vector<bool> activeExtensions; // Instance Extensions
     std::vector<const char*> activeExtensionsNames;
     std::vector<VkExtensionProperties> instanceExtensions;
-	std::vector<const char*> requiredExtensions = {
+
+
+
+	std::vector<const char*> requiredExtensions = { // Physical Device Extensions
 		// VK_KHR_SWAPCHAIN_EXTENSION_NAME, 
 		// VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
 		// VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
@@ -42,7 +45,6 @@ struct Context
 		// VK_EXT_SHADER_ATOMIC_FLOAT_EXTENSION_NAME,
     };
 
-	
 	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
     // VkSampleCountFlagBits maxSamples = VK_SAMPLE_COUNT_1_BIT;
     // VkSampleCountFlags sampleCounts;
@@ -205,12 +207,19 @@ void Context::CreateInstance(){
         }
 	}
 	
+	// get all extensions required by glfw
+    // uint32_t glfwExtensionCount = 0;
+    // const char** glfwExtensions;
+    // glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+    // auto requiredInstanceExtensions = std::vector<const char*>(glfwExtensions, glfwExtensions + glfwExtensionCount);
+	auto requiredInstanceExtensions = std::vector<const char*>(); // Only compute
+
 	// Extensions
 	if (enableValidationLayers) {
-		requiredExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+		requiredInstanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 	}
 
-	if (!requiredExtensions.empty()) {
+	// if (!requiredInstanceExtensions.empty()) {
 		// get all available extensions
 		uint32_t extensionCount = 0;
 		vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, 0);
@@ -219,9 +228,9 @@ void Context::CreateInstance(){
 		vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, instanceExtensions.data());
 
 		// set to active all extensions that we enabled
-		for (size_t i = 0; i < requiredExtensions.size(); i++) {
+		for (size_t i = 0; i < requiredInstanceExtensions.size(); i++) {
 			for (size_t j = 0; j < instanceExtensions.size(); j++) {
-				if (strcmp(requiredExtensions[i], instanceExtensions[j].extensionName) == 0) {
+				if (strcmp(requiredInstanceExtensions[i], instanceExtensions[j].extensionName) == 0) {
 					activeExtensions[j] = true;
 					break;
 				}
@@ -235,7 +244,7 @@ void Context::CreateInstance(){
 				activeExtensionsNames.push_back(instanceExtensions[i].extensionName);
 			}
 		}
-	}
+	// }
 
 	// get and set all required extensions
     createInfo.enabledExtensionCount = static_cast<uint32_t>(activeExtensionsNames.size());
@@ -258,6 +267,9 @@ void Context::CreateInstance(){
 
 	// Instance creation
 	auto res = vkCreateInstance(&createInfo, allocator, &instance);
+	// LOG_DEBUG("Enabled extensions count: {}", createInfo.enabledExtensionCount);
+	// if (createInfo.enabledExtensionCount > 0)
+	// 	LOG_DEBUG("Enabled extensions: {}", createInfo.ppEnabledExtensionNames[0]);
 	// auto res = VK_SUCCESS;
     DEBUG_VK(res, "Failed to create Vulkan instance!");
     DEBUG_TRACE("Created instance.");
@@ -321,14 +333,14 @@ void Context::CreatePhysicalDevice() {
 		// select the family for each type of queue that we want
 		for (int i = 0; i < familyCount; i++) {
 			auto& family = availableFamilies[i];
-			if (family.queueFlags & VK_QUEUE_GRAPHICS_BIT && graphicsFamily == -1) {
-				// VkBool32 present = false;
-				// vkGetPhysicalDeviceSurfaceSupportKHR(device, i, this->surface, &present);
-				// if (present) {
-					graphicsFamily = i;
-				// }
-				continue;
-			}
+			// if (family.queueFlags & VK_QUEUE_GRAPHICS_BIT && graphicsFamily == -1) {
+			// 	VkBool32 present = false;
+			// 	vkGetPhysicalDeviceSurfaceSupportKHR(device, i, this->surface, &present);
+			// 	if (present) {
+			// 		graphicsFamily = i;
+			// 	}
+			// 	continue;
+			// }
 
 			if (family.queueFlags & VK_QUEUE_COMPUTE_BIT && computeFamily == -1) {
 				computeFamily = i;
@@ -362,32 +374,21 @@ void Context::CreatePhysicalDevice() {
 
 		// check if all required extensions are available
 		std::set<std::string> required(requiredExtensions.begin(), requiredExtensions.end());
-		for (auto requiredExtension : required) {
-			printf("Required extension: %s\n", requiredExtension.c_str());
-		}
 		for (const auto& extension : availableExtensions) {
-			// printf("Available extension: %s ", extension.extensionName);
 			auto erased = required.erase(std::string(extension.extensionName));
-			if (erased) {
-				printf("Erased: %s %s\n", extension.extensionName, erased ? "true" : "false");
-			}
-			// printf("Erased: %s\n", erased ? "true" : "false");
 		}
 		
 		// check if all required queues are supported
 		bool suitable = required.empty();
-		// suitable &= graphicsFamily != -1;
-		printf("Device: %s, Suitable: %s\n", physicalProperties.deviceName, suitable ? "true" : "false");
 		suitable &= computeFamily != -1;
-		printf("Device: %s, Suitable: %s\n", physicalProperties.deviceName, suitable ? "true" : "false");
+		// suitable &= graphicsFamily != -1;
 		if (suitable) {
 			physicalDevice = device;
 			break;
 		}
 	}
-	printf("Physical device: %s\n", physicalProperties.deviceName);
-	printf("Physical device: %ld\n", physicalDevice);
 	ASSERT(physicalDevice != VK_NULL_HANDLE, "no device with Vulkan support!");
+	DEBUG_TRACE("Created physical device: " + std::string(physicalProperties.deviceName));
 }
 /* 
 void Context::CreateDevice() {
