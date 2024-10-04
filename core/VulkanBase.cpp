@@ -126,7 +126,14 @@ void Context::CreateInstance(){
     appInfo.engineVersion = VK_MAKE_API_VERSION(0, 1, 0, 0);
     appInfo.apiVersion = VK_API_VERSION_1_3;
 
+	VkInstanceCreateInfo createInfo{};
+    createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+    createInfo.pApplicationInfo = &appInfo;
 
+	// get api version
+	vkEnumerateInstanceVersion(&apiVersion);
+
+	// Validation layers
 	if (enableValidationLayers) {
 		// get all available layers
 		uint32_t layerCount;
@@ -134,11 +141,6 @@ void Context::CreateInstance(){
 		layers.resize(layerCount);
 		activeLayers.resize(layerCount);
 		vkEnumerateInstanceLayerProperties(&layerCount, layers.data());
-
-		
-
-		// get api version
-		vkEnumerateInstanceVersion(&apiVersion);
 
 		// active default khronos validation layer
 		bool khronosAvailable = false;
@@ -187,6 +189,45 @@ void Context::CreateInstance(){
             activeExtensionsNames.push_back(instanceExtensions[i].extensionName);
         }
     }
+
+	// get and set all required extensions
+    createInfo.enabledExtensionCount = static_cast<uint32_t>(activeExtensionsNames.size());
+    createInfo.ppEnabledExtensionNames = activeExtensionsNames.data();
+
+    // which validation layers we need
+    VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo;
+    if (enableValidationLayers) {
+        createInfo.enabledLayerCount = static_cast<uint32_t>(activeLayersNames.size());
+        createInfo.ppEnabledLayerNames = activeLayersNames.data();
+
+        // we need to set up a separate logger just for the instance creation/destruction
+        // because our "default" logger is created after
+        PopulateDebugMessengerCreateInfo(debugCreateInfo);
+        // createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&debugCreateInfo;
+    } else {
+        createInfo.enabledLayerCount = 0;
+        createInfo.pNext = nullptr;
+    }
+	// Instance creation
+	auto res = vkCreateInstance(&createInfo, allocator, &instance);
+    DEBUG_VK(res, "Failed to create Vulkan instance!");
+
+    DEBUG_TRACE("Created instance.");
+    
+    if (enableValidationLayers) {
+        VkDebugUtilsMessengerCreateInfoEXT messengerInfo;
+        PopulateDebugMessengerCreateInfo(messengerInfo);
+
+        res = CreateDebugUtilsMessengerEXT(instance, &messengerInfo, allocator, &debugMessenger);
+        DEBUG_VK(res, "Failed to set up debug messenger!");
+        DEBUG_TRACE("Created debug messenger.");
+    }
+
+    res = glfwCreateWindowSurface(instance, glfwWindow, allocator, &surface);
+    DEBUG_VK(res, "Failed to create window surface!");
+    DEBUG_TRACE("Created surface.");
+
+    LOG_INFO("Created VulkanInstance.");
 }
 
 }
