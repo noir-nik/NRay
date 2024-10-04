@@ -6,7 +6,11 @@ namespace vkw {
 
 struct Context
 {
-	VkInstance instance;
+	VkInstance instance = VK_NULL_HANDLE;
+	VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
+    std::string applicationName = "Vulkan Slang Compute";
+    std::string engineName = "Vulkan Compute";
+
 	VkPhysicalDeviceProperties physicalDeviceProperties;
 	VkPhysicalDeviceFeatures physicalDeviceFeatures;
 	uint32_t presentQueueFamilyIndex;
@@ -18,12 +22,13 @@ struct Context
 
 	uint32_t apiVersion;
 	bool enableValidationLayers = true;
-	std::vector<bool> activeLayers;
-	std::vector<VkLayerProperties> layers;
-	const std::vector<const char*> validationLayers = {
-		"VK_LAYER_KHRONOS_validation"
-	};
-	// std::vector<const char*> requiredExtensions;
+    std::vector<bool> activeLayers; // Available layers
+    std::vector<const char*> activeLayersNames;
+    std::vector<VkLayerProperties> layers;
+    std::vector<bool> activeExtensions; // Extensions
+    std::vector<const char*> activeExtensionsNames;
+    std::vector<VkExtensionProperties> instanceExtensions;
+	std::vector<const char*> requiredExtensions;
 
 
 	// VkPhysicalDeviceFeatures physicalFeatures{};
@@ -53,10 +58,10 @@ void Init() {
 }
 
 VkResult CreateDebugUtilsMessengerEXT (
-    VkInstance instance,
+    VkInstance                                instance,
     const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
-    const VkAllocationCallbacks* pAllocator,
-    VkDebugUtilsMessengerEXT* pDebugMessenger) {
+    const VkAllocationCallbacks*              pAllocator,
+    VkDebugUtilsMessengerEXT*                 pDebugMessenger) {
     // search for the requested function and return null if cannot find
     auto func = (PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr (
         instance, 
@@ -71,9 +76,9 @@ VkResult CreateDebugUtilsMessengerEXT (
 }
 
 void DestroyDebugUtilsMessengerEXT (
-    VkInstance instance,
-    VkDebugUtilsMessengerEXT debugMessenger,
-    const VkAllocationCallbacks* pAllocator) {
+    VkInstance                   instance,
+    VkDebugUtilsMessengerEXT     debugMessenger,
+    const VkAllocationCallbacks* pAllocator){
     // search for the requested function and return null if cannot find
     auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr (
         instance,
@@ -85,10 +90,10 @@ void DestroyDebugUtilsMessengerEXT (
 }
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback (
-    VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-    VkDebugUtilsMessageTypeFlagsEXT messageType,
+    VkDebugUtilsMessageSeverityFlagBitsEXT      messageSeverity,
+    VkDebugUtilsMessageTypeFlagsEXT             messageType,
     const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
-    void* pUserData) {
+    void*                                       pUserData) {
     // log the message
     // here we can set a minimum severity to log the message
     // if (messageSeverity > VK_DEBUG_UTILS...)
@@ -112,6 +117,16 @@ void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& create
 }
 
 void Context::CreateInstance(){
+	// optional data, provides useful info to the driver
+    VkApplicationInfo appInfo{};
+    appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+    appInfo.pApplicationName = applicationName.c_str();
+    appInfo.applicationVersion = VK_MAKE_API_VERSION(0, 1, 0, 0);
+    appInfo.pEngineName = engineName.c_str();
+    appInfo.engineVersion = VK_MAKE_API_VERSION(0, 1, 0, 0);
+    appInfo.apiVersion = VK_API_VERSION_1_3;
+
+
 	if (enableValidationLayers) {
 		// get all available layers
 		uint32_t layerCount;
@@ -120,12 +135,7 @@ void Context::CreateInstance(){
 		activeLayers.resize(layerCount);
 		vkEnumerateInstanceLayerProperties(&layerCount, layers.data());
 
-		// get all available extensions
-		// uint32_t extensionCount = 0;
-		// vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, 0);
-		// instanceExtensions.resize(extensionCount);
-		// activeExtensions.resize(extensionCount);
-		// vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, instanceExtensions.data());
+		
 
 		// get api version
 		vkEnumerateInstanceVersion(&apiVersion);
@@ -140,12 +150,43 @@ void Context::CreateInstance(){
 				break;
 			}
 		}
+		if (!khronosAvailable) {LOG_ERROR("Default validation layer not available!");}
 
-		if (enableValidationLayers && !khronosAvailable) { 
-			LOG_ERROR("Default validation layer not available!");
-		}
+		for (size_t i = 0; i < layers.size(); i++) { 
+            if (activeLayers[i]) {
+                activeLayersNames.push_back(layers[i].layerName);
+            }
+        }
 	}
+	
+	// Extensions
+	if (enableValidationLayers) {
+		requiredExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+	}
+	// get all available extensions
+	uint32_t extensionCount = 0;
+	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, 0);
+	instanceExtensions.resize(extensionCount);
+	activeExtensions.resize(extensionCount);
+	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, instanceExtensions.data());
 
+	// set to active all extensions that we enabled
+    for (size_t i = 0; i < requiredExtensions.size(); i++) {
+        for (size_t j = 0; j < instanceExtensions.size(); j++) {
+            if (strcmp(requiredExtensions[i], instanceExtensions[j].extensionName) == 0) {
+                activeExtensions[j] = true;
+                break;
+            }
+        }
+    }
+	
+	// get the name of all extensions that we enabled
+    activeExtensionsNames.clear();
+    for (size_t i = 0; i < instanceExtensions.size(); i++) {
+        if (activeExtensions[i]) {
+            activeExtensionsNames.push_back(instanceExtensions[i].extensionName);
+        }
+    }
 }
 
 }
