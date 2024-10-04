@@ -2,7 +2,7 @@ CC := g++
 TARGET := app
 
 INCLUDES := -Iinclude -Ideps -Ibase
-CXXFLAGS := -O2 -MMD -MP $(INCLUDES) -g -ggdb
+CXXFLAGS := -MMD -MP $(INCLUDES) -g -ggdb -O0
 # -Wno-narrowing
 
 LDFLAGS := -lspdlog
@@ -49,7 +49,7 @@ create_dirs:
 $(BUILD_DIR)/$(TARGET): $(OBJS)
 	@echo "Linking $(patsubst $(BUILD_DIR)/%,%,$^)"
 	@$(CC) -o $@ $^ $(LDFLAGS)
-# @echo "=== Done ==="
+	@echo "=== Done ==="
 
 #compile
 $(OBJ_DIR)/%.o: $(SRC_MAIN)/%.cpp # ./
@@ -64,14 +64,15 @@ $(OBJ_DIR)/%.o: $(SRC_BASE)/%.cpp # base/
 
 
 run:
-	./$(BUILD_DIR)/$(TARGET)
+	@./$(BUILD_DIR)/$(TARGET)
 
 runv:
-	valgrind ./$(BUILD_DIR)/$(TARGET)
+	@valgrind ./$(BUILD_DIR)/$(TARGET)
 # valgrind --leak-check=full ./$(BUILD_DIR)/$(TARGET) 
 
 clean:
 	@$(CLEAN_BUILD)
 	@$(CLEAN_OBJ)
+	@echo "=== Cleaned ==="
 
 # $(RM) $(OBJ_DIR)/
