@@ -1,7 +1,7 @@
 CC := g++
 TARGET := app
 
-INCLUDES := -Iinclude -Ideps -Ibase
+INCLUDES := -Iinclude -IDeps -IBase -IShaders
 CXXFLAGS := -MMD -MP $(INCLUDES) -O0
 # -Wno-narrowing
 

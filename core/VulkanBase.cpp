@@ -2,6 +2,8 @@
 #include <vulkan/vulkan.h>
 #include "VulkanBase.h"
 
+#include <ShaderDefinitions.h>
+
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
 
@@ -714,9 +716,67 @@ void Context::CreateDevice() {
 	// VkResult result = vkCreateDescriptorPool(device, &imguiPoolInfo, allocator, &imguiDescriptorPool);
 	// DEBUG_VK(result, "Failed to create imgui descriptor pool!");
 
+	VkResult result; 
 	// create bindless resources
 	{
-		// Not needed
+		const u32 MAX_STORAGE = 8192;
+        const u32 MAX_SAMPLEDIMAGES = 8192;
+        // const u32 MAX_ACCELERATIONSTRUCTURE = 64;
+        // const u32 MAX_STORAGE_IMAGES = 8192;
+
+		// create descriptor set pool for bindless resources
+        std::vector<VkDescriptorPoolSize> bindlessPoolSizes = { 
+            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MAX_SAMPLEDIMAGES},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, MAX_STORAGE},
+            // {VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, MAX_ACCELERATIONSTRUCTURE},
+            // {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, MAX_STORAGE_IMAGES},
+        };
+
+        VkDescriptorPoolCreateInfo bindlessPoolInfo{};
+        bindlessPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        bindlessPoolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
+        bindlessPoolInfo.maxSets = 1;
+        bindlessPoolInfo.poolSizeCount = bindlessPoolSizes.size();
+        bindlessPoolInfo.pPoolSizes = bindlessPoolSizes.data();
+
+        result = vkCreateDescriptorPool(device, &bindlessPoolInfo, allocator, &bindlessDescriptorPool);
+        DEBUG_VK(result, "Failed to create bindless descriptor pool!");
+		ASSERT(result == VK_SUCCESS, "Failed to create bindless descriptor pool!");
+
+		// create descriptor set layout for bindless resources
+        std::vector<VkDescriptorSetLayoutBinding> bindings;
+        std::vector<VkDescriptorBindingFlags> bindingFlags;
+
+		VkDescriptorSetLayoutBinding texturesBinding{};
+        texturesBinding.binding = BINDING_TEXTURE;
+        texturesBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        texturesBinding.descriptorCount = MAX_SAMPLEDIMAGES;
+        texturesBinding.stageFlags = VK_SHADER_STAGE_ALL;
+        bindings.push_back(texturesBinding);
+        bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT });
+
+        VkDescriptorSetLayoutBinding storageBuffersBinding{};
+        storageBuffersBinding.binding = BINDING_BUFFER;
+        storageBuffersBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        storageBuffersBinding.descriptorCount = MAX_STORAGE;
+        storageBuffersBinding.stageFlags = VK_SHADER_STAGE_ALL;
+        bindings.push_back(storageBuffersBinding);
+        bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT });
+
+		VkDescriptorSetLayoutBindingFlagsCreateInfo setLayoutBindingFlags{};
+		setLayoutBindingFlags.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
+		setLayoutBindingFlags.bindingCount = bindingFlags.size();
+		setLayoutBindingFlags.pBindingFlags = bindingFlags.data();
+
+		VkDescriptorSetLayoutCreateInfo descriptorLayoutInfo{};
+        descriptorLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        descriptorLayoutInfo.bindingCount = bindings.size();
+        descriptorLayoutInfo.pBindings = bindings.data();
+        descriptorLayoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+        descriptorLayoutInfo.pNext = &setLayoutBindingFlags;
+
+		result = vkCreateDescriptorSetLayout(device, &descriptorLayoutInfo, allocator, &bindlessDescriptorLayout);
+		DEBUG_VK(result, "Failed to create bindless descriptor set layout!");
 	}
 
 	// asScratchBuffer = vkw::CreateBuffer(initialScratchBufferSize, vkw::BufferUsage::Address | vkw::BufferUsage::Storage, vkw::Memory::GPU);

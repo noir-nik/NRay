@@ -1,0 +1,2 @@
+#define BINDING_TEXTURE 0
+#define BINDING_BUFFER 1
