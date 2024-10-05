@@ -513,9 +513,11 @@ void Context::CreatePhysicalDevice() {
 			}
 		}
 
+		// TODO: change logic
 		queues[Queue::Graphics].family = graphicsFamily;
-		queues[Queue::Compute].family = computeFamily == -1 ? graphicsFamily : computeFamily;
+		queues[Queue::Compute].family = computeFamily;
 		queues[Queue::Transfer].family = transferFamily == -1 ? graphicsFamily : transferFamily;
+
 		// get max number of samples
 		// TODO: replace with vkGetPhysicalDeviceFeatures2
 		vkGetPhysicalDeviceFeatures(device, &physicalFeatures);
@@ -614,45 +616,14 @@ void Context::CreateDevice() {
 	descriptorIndexingFeatures.descriptorBindingSampledImageUpdateAfterBind = true;
 	descriptorIndexingFeatures.descriptorBindingStorageImageUpdateAfterBind = true;
 
-	// VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddresFeatures{};
-	// bufferDeviceAddresFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
-	// bufferDeviceAddresFeatures.bufferDeviceAddress = VK_TRUE;
-	// bufferDeviceAddresFeatures.pNext = &descriptorIndexingFeatures;
+	VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddresFeatures{};
+	bufferDeviceAddresFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
+	bufferDeviceAddresFeatures.bufferDeviceAddress = VK_TRUE;
+	bufferDeviceAddresFeatures.pNext = &descriptorIndexingFeatures;
 
-	// VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingPipelineFeatures{};
-	// rayTracingPipelineFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
-	// rayTracingPipelineFeatures.rayTracingPipeline = VK_TRUE;
-	// rayTracingPipelineFeatures.pNext = &bufferDeviceAddresFeatures;
+	// Add other features to chain here
 
-	// VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures{};
-	// accelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
-	// accelerationStructureFeatures.accelerationStructure = VK_TRUE;
-	// accelerationStructureFeatures.descriptorBindingAccelerationStructureUpdateAfterBind = VK_TRUE;
-	// accelerationStructureFeatures.accelerationStructureCaptureReplay = VK_TRUE;
-	// accelerationStructureFeatures.pNext = &rayTracingPipelineFeatures;
-
-	// VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures{};
-	// rayQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
-	// rayQueryFeatures.rayQuery = VK_TRUE;
-	// rayQueryFeatures.pNext = &accelerationStructureFeatures;
-
-	// VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeatures{};
-	// dynamicRenderingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
-	// dynamicRenderingFeatures.dynamicRendering = VK_TRUE;
-	// dynamicRenderingFeatures.pNext = &rayQueryFeatures;
-
-	// VkPhysicalDeviceSynchronization2FeaturesKHR sync2Features{};
-	// sync2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR;
-	// sync2Features.synchronization2 = VK_TRUE;
-	// sync2Features.pNext = &dynamicRenderingFeatures;
-
-	// VkPhysicalDeviceShaderAtomicFloatFeaturesEXT atomicFeatures{};
-	// atomicFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT;
-	// atomicFeatures.shaderBufferFloat32AtomicAdd = VK_TRUE;
-	// atomicFeatures.pNext = &sync2Features;
-
-	// features2.pNext = &atomicFeatures;
-	features2.pNext = &descriptorIndexingFeatures;
+	features2.pNext = &bufferDeviceAddresFeatures;
 
 	VkDeviceCreateInfo createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -716,7 +687,6 @@ void Context::CreateDevice() {
 	// VkResult result = vkCreateDescriptorPool(device, &imguiPoolInfo, allocator, &imguiDescriptorPool);
 	// DEBUG_VK(result, "Failed to create imgui descriptor pool!");
 
-	VkResult result; 
 	// create bindless resources
 	{
 		const u32 MAX_STORAGE = 8192;
@@ -739,11 +709,11 @@ void Context::CreateDevice() {
         bindlessPoolInfo.poolSizeCount = bindlessPoolSizes.size();
         bindlessPoolInfo.pPoolSizes = bindlessPoolSizes.data();
 
-        result = vkCreateDescriptorPool(device, &bindlessPoolInfo, allocator, &bindlessDescriptorPool);
+        VkResult result = vkCreateDescriptorPool(device, &bindlessPoolInfo, allocator, &bindlessDescriptorPool);
         DEBUG_VK(result, "Failed to create bindless descriptor pool!");
 		ASSERT(result == VK_SUCCESS, "Failed to create bindless descriptor pool!");
 
-		// create descriptor set layout for bindless resources
+		// create Descriptor Set Layout for bindless resources
         std::vector<VkDescriptorSetLayoutBinding> bindings;
         std::vector<VkDescriptorBindingFlags> bindingFlags;
 
@@ -777,6 +747,16 @@ void Context::CreateDevice() {
 
 		result = vkCreateDescriptorSetLayout(device, &descriptorLayoutInfo, allocator, &bindlessDescriptorLayout);
 		DEBUG_VK(result, "Failed to create bindless descriptor set layout!");
+		
+		// create Descriptor Set for bindless resources
+		VkDescriptorSetAllocateInfo allocInfo{};
+		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+		allocInfo.descriptorPool = bindlessDescriptorPool;
+		allocInfo.descriptorSetCount = 1;
+		allocInfo.pSetLayouts = &bindlessDescriptorLayout;
+
+		result = vkAllocateDescriptorSets(device, &allocInfo, &bindlessDescriptorSet);
+		DEBUG_VK(result, "Failed to allocate bindless descriptor set!");
 	}
 
 	// asScratchBuffer = vkw::CreateBuffer(initialScratchBufferSize, vkw::BufferUsage::Address | vkw::BufferUsage::Storage, vkw::Memory::GPU);
@@ -798,11 +778,11 @@ void Context::DestroyDevice() {
 	// currentPipeline = {};
 	// asScratchBuffer = {};
 	// vkDestroyDescriptorPool(device, imguiDescriptorPool, allocator);
-	// vkDestroyDescriptorPool(device, bindlessDescriptorPool, allocator);
-	// vkDestroyDescriptorSetLayout(device, bindlessDescriptorLayout, allocator);
-	// bindlessDescriptorSet = VK_NULL_HANDLE;
-	// bindlessDescriptorPool = VK_NULL_HANDLE;
-	// bindlessDescriptorLayout = VK_NULL_HANDLE;
+	vkDestroyDescriptorPool(device, bindlessDescriptorPool, allocator);
+	vkDestroyDescriptorSetLayout(device, bindlessDescriptorLayout, allocator);
+	bindlessDescriptorSet = VK_NULL_HANDLE;
+	bindlessDescriptorPool = VK_NULL_HANDLE;
+	bindlessDescriptorLayout = VK_NULL_HANDLE;
 	vmaDestroyAllocator(vmaAllocator);
 	// vkDestroySampler(device, genericSampler, allocator);
 	vkDestroyDevice(device, allocator);

@@ -96,6 +96,7 @@ namespace Layout {
 
 struct BufferResource;
 struct ImageResource;
+struct PipelineResource;
 
 struct Buffer {
     std::shared_ptr<BufferResource> resource;
