@@ -155,11 +155,210 @@ void Destroy() {
 	_ctx.DestroyInstance();
 }
 
+void* MapBuffer(Buffer& buffer) {
+    ASSERT(buffer.memory & Memory::CPU, "Buffer not cpu accessible!");
+    void* data;
+    vmaMapMemory(_ctx.vmaAllocator, buffer.resource->allocation, &data);
+    return buffer.resource->allocation->GetMappedData();
+}
+
+void UnmapBuffer(Buffer& buffer) {
+    ASSERT(buffer.memory & Memory::CPU, "Buffer not cpu accessible!");
+    vmaUnmapMemory(_ctx.vmaAllocator, buffer.resource->allocation);
+}
+
+Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, const std::string& name) {
+    if (usage & BufferUsage::Vertex) {
+        usage |= BufferUsage::TransferDst;
+    }
+
+    if (usage & BufferUsage::Index) {
+        usage |= BufferUsage::TransferDst;
+    }
+
+    if (usage & BufferUsage::Storage) {
+        usage |= BufferUsage::Address;
+        size += size % _ctx.physicalProperties.limits.minStorageBufferOffsetAlignment;
+    }
+
+    if (usage & BufferUsage::AccelerationStructureInput) {
+        usage |= BufferUsage::Address;
+        usage |= BufferUsage::TransferDst;
+    }
+
+    if (usage & BufferUsage::AccelerationStructure) {
+        usage |= BufferUsage::Address;
+    }
+
+    std::shared_ptr<BufferResource> res = std::make_shared<BufferResource>();
+    VkBufferCreateInfo bufferInfo{};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = size;
+    bufferInfo.usage = (VkBufferUsageFlagBits)usage;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VmaAllocationCreateInfo allocInfo = {};
+    allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    if (memory & Memory::CPU) {
+        allocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    }
+    auto result = vmaCreateBuffer(_ctx.vmaAllocator, &bufferInfo, &allocInfo, &res->buffer, &res->allocation, nullptr);
+    DEBUG_VK(result, "Failed to create buffer!");
+
+    Buffer buffer = {
+        .resource = res,
+        .size = size,
+        .usage = usage,
+        .memory = memory,
+    };
+
+    if (usage & BufferUsage::Storage) {
+        res->rid = _ctx.availableBufferRID.back();
+        _ctx.availableBufferRID.pop_back();
+        VkDescriptorBufferInfo descriptorInfo = {};
+        VkWriteDescriptorSet write = {};
+        descriptorInfo.buffer = res->buffer;
+        descriptorInfo.offset = 0;
+        descriptorInfo.range = size;
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.dstSet = _ctx.bindlessDescriptorSet;
+        write.dstBinding = LUZ_BINDING_BUFFER;
+        write.dstArrayElement = buffer.RID();
+        write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        write.descriptorCount = 1;
+        write.pBufferInfo = &descriptorInfo;
+        vkUpdateDescriptorSets(_ctx.device, 1, &write, 0, nullptr);
+    }
+
+    return buffer;
+}
 
 
+// void CmdDispatch(const glm::ivec3& groups) {
+//     auto& cmd = _ctx.GetCurrentCommandResources();
+//     vkCmdDispatch(cmd.buffer, groups.x, groups.y, groups.z);
+// }
 
-// utils
-namespace{
+
+void Context::LoadShaders(Pipeline& pipeline) {
+    pipeline.stageBytes.clear();
+    for (auto& stage : pipeline.stages) {
+		// TODO: check std::move
+		// pipeline.stageBytes.push_back(std::move(CompileShader(stage.path)));
+        pipeline.stageBytes.push_back(CompileShader(stage.path));
+    }
+}
+// TODO: change for slang and check if compiled fresh spv exists
+std::vector<char> Context::CompileShader(const std::filesystem::path& path) {
+    char compile_string[1024];
+    char inpath[256];
+    char outpath[256];
+    std::string cwd = std::filesystem::current_path().string();
+    sprintf(inpath, "%s/source/Shaders/%s", cwd.c_str(), path.string().c_str());
+    sprintf(outpath, "%s/bin/%s.spv", cwd.c_str(), path.filename().string().c_str());
+    sprintf(compile_string, "%s -V %s -o %s --target-env spirv1.4", GLSL_VALIDATOR, inpath, outpath);
+    DEBUG_TRACE("[ShaderCompiler] Command: {}", compile_string);
+    DEBUG_TRACE("[ShaderCompiler] Output:");
+    while(system(compile_string)) {
+        LOG_WARN("[ShaderCompiler] Error! Press something to Compile Again");
+        std::cin.get();
+    }
+
+    // 'ate' specify to start reading at the end of the file
+    // then we can use the read position to determine the size of the file
+    std::ifstream file(outpath, std::ios::ate | std::ios::binary);
+    if (!file.is_open()) {
+        LOG_CRITICAL("Failed to open file: '{}'", outpath);
+    }
+    size_t fileSize = (size_t)file.tellg();
+    std::vector<char> buffer(fileSize);
+    file.seekg(0);
+    file.read(buffer.data(), fileSize);
+    file.close();
+
+    return buffer;
+}
+
+Pipeline CreatePipeline(const PipelineDesc& desc) {// External handle
+    Pipeline pipeline;
+    pipeline.resource = std::make_shared<PipelineResource>();
+    pipeline.stages = desc.stages;
+    _ctx.LoadShaders(pipeline); // load into pipeline
+    _ctx.CreatePipeline(desc, pipeline);
+    return pipeline;
+}
+
+void Context::CreatePipeline(const PipelineDesc& desc, Pipeline& pipeline) {
+	pipeline.point = desc.point; // Graphics or Compute
+	pipeline.resource->name = desc.name;
+
+	std::vector<VkPipelineShaderStageCreateInfo> shaderStages(desc.stages.size());
+	std::vector<VkShaderModule> shaderModules(desc.stages.size());
+	for (int i = 0; i < desc.stages.size(); i++) {
+		VkShaderModuleCreateInfo createInfo{};
+		createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+		createInfo.codeSize = pipeline.stageBytes[i].size();
+		createInfo.pCode = (const uint32_t*)(pipeline.stageBytes[i].data());
+		auto result = vkCreateShaderModule(device, &createInfo, allocator, &shaderModules[i]);
+		DEBUG_VK(result, "Failed to create shader module!");
+		ASSERT(result == VK_SUCCESS, "Failed to create shader module!");
+		shaderStages[i] = {};
+		shaderStages[i].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		shaderStages[i].stage = (VkShaderStageFlagBits)desc.stages[i].stage;
+		shaderStages[i].module = shaderModules[i];
+		// function to invoke inside the shader module
+		// it's possible to combine multiple shaders into a single module
+		// using different entry points
+		shaderStages[i].pName = pipeline.stages[i].entryPoint.c_str();
+		// this allow us to specify values for shader constants
+		shaderStages[i].pSpecializationInfo = nullptr;
+	}
+
+	std::vector<VkDescriptorSetLayout> layouts;
+	layouts.push_back(bindlessDescriptorLayout);
+
+	VkPushConstantRange pushConstant{};
+	pushConstant.offset = 0;
+	pushConstant.size = 256;
+	pushConstant.stageFlags = VK_SHADER_STAGE_ALL;
+
+	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	pipelineLayoutInfo.setLayoutCount = layouts.size();
+	pipelineLayoutInfo.pSetLayouts = layouts.data();
+	pipelineLayoutInfo.pushConstantRangeCount = 1;
+	pipelineLayoutInfo.pPushConstantRanges = &pushConstant;
+
+	auto vkRes = vkCreatePipelineLayout(device, &pipelineLayoutInfo, allocator, &pipeline.resource->layout);
+	DEBUG_VK(vkRes, "Failed to create pipeline layout!");
+	ASSERT(vkRes == VK_SUCCESS, "Failed to create pipeline layout!");
+
+	if (desc.point == PipelinePoint::Compute) {
+		ASSERT(shaderStages.size() == 1, "Compute pipeline only support 1 stage.");
+
+		VkComputePipelineCreateInfo pipelineInfo = {};
+		pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+		pipelineInfo.stage = shaderStages[0];
+		pipelineInfo.layout = pipeline.resource->layout;
+		pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+		pipelineInfo.basePipelineIndex = -1;
+		pipelineInfo.pNext = VK_NULL_HANDLE;
+
+		vkRes = vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, allocator, &pipeline.resource->pipeline);
+
+		DEBUG_VK(vkRes, "Failed to create compute pipeline!");
+		ASSERT(vkRes == VK_SUCCESS, "Failed to create compute pipeline!");
+	} else {
+		// graphics pipeline
+		ASSERT(0, "Graphics pipeline not implemented");
+	}
+
+	for (int i = 0; i < shaderModules.size(); i++) {
+		vkDestroyShaderModule(device, shaderModules[i], allocator);
+	}
+}
+
+namespace{ // utils
 // https://github.com/charles-lunarg/vk-bootstrap/blob/main/src/VkBootstrap.cpp
 bool check_extension_supported(std::vector<VkExtensionProperties> const& available_extensions, const char* extension_name) {
 	if (!extension_name) return false;
@@ -191,8 +390,7 @@ template <typename T> void setup_pNext_chain(T& structure, std::vector<VkBaseOut
 }
 }
 
-// vulkan debug callbacks
-namespace {
+namespace { // vulkan debug callbacks
 VkResult CreateDebugUtilsMessengerEXT (
 	VkInstance                                instance,
 	const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
@@ -253,127 +451,6 @@ void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& create
 }
 }
 
-void CmdDispatch(const glm::ivec3& groups) {
-    auto& cmd = _ctx.GetCurrentCommandResources();
-    vkCmdDispatch(cmd.buffer, groups.x, groups.y, groups.z);
-}
-
-Pipeline CreatePipeline(const PipelineDesc& desc) {
-    Pipeline pipeline;
-    pipeline.resource = std::make_shared<PipelineResource>();
-    pipeline.stages = desc.stages;
-    _ctx.LoadShaders(pipeline);
-    _ctx.CreatePipeline(desc, pipeline);
-    return pipeline;
-}
-
-void Context::LoadShaders(Pipeline& pipeline) {
-    pipeline.stageBytes.clear();
-    for (auto& stage : pipeline.stages) {
-        pipeline.stageBytes.push_back(CompileShader(stage.path));
-    }
-}
-
-std::vector<char> Context::CompileShader(const std::filesystem::path& path) {
-    char compile_string[1024];
-    char inpath[256];
-    char outpath[256];
-    std::string cwd = std::filesystem::current_path().string();
-    sprintf(inpath, "%s/source/Shaders/%s", cwd.c_str(), path.string().c_str());
-    sprintf(outpath, "%s/bin/%s.spv", cwd.c_str(), path.filename().string().c_str());
-    sprintf(compile_string, "%s -V %s -o %s --target-env spirv1.4", GLSL_VALIDATOR, inpath, outpath);
-    DEBUG_TRACE("[ShaderCompiler] Command: {}", compile_string);
-    DEBUG_TRACE("[ShaderCompiler] Output:");
-    while(system(compile_string)) {
-        LOG_WARN("[ShaderCompiler] Error! Press something to Compile Again");
-        std::cin.get();
-    }
-
-    // 'ate' specify to start reading at the end of the file
-    // then we can use the read position to determine the size of the file
-    std::ifstream file(outpath, std::ios::ate | std::ios::binary);
-    if (!file.is_open()) {
-        LOG_CRITICAL("Failed to open file: '{}'", outpath);
-    }
-    size_t fileSize = (size_t)file.tellg();
-    std::vector<char> buffer(fileSize);
-    file.seekg(0);
-    file.read(buffer.data(), fileSize);
-    file.close();
-
-    return buffer;
-}
-
-void Context::CreatePipeline(const PipelineDesc& desc, Pipeline& pipeline) {
-	pipeline.point = desc.point; // Graphics or Compute
-	pipeline.resource->name = desc.name;
-
-	std::vector<VkPipelineShaderStageCreateInfo> shaderStages(desc.stages.size());
-	std::vector<VkShaderModule> shaderModules(desc.stages.size());
-	for (int i = 0; i < desc.stages.size(); i++) {
-		VkShaderModuleCreateInfo createInfo{};
-		createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-		createInfo.codeSize = pipeline.stageBytes[i].size();
-		createInfo.pCode = (const uint32_t*)(pipeline.stageBytes[i].data());
-		auto result = vkCreateShaderModule(device, &createInfo, allocator, &shaderModules[i]);
-		DEBUG_VK(result, "Failed to create shader module!");
-		ASSERT(result == VK_SUCCESS, "Failed to create shader module!");
-		shaderStages[i] = {};
-		shaderStages[i].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-		shaderStages[i].stage = (VkShaderStageFlagBits)desc.stages[i].stage;
-		shaderStages[i].module = shaderModules[i];
-		// function to invoke inside the shader module
-		// it's possible to combine multiple shaders into a single module
-		// using different entry points
-		shaderStages[i].pName = pipeline.stages[i].entryPoint.c_str();
-		// this allow us to specify values for shader constants
-		shaderStages[i].pSpecializationInfo = nullptr;
-	}
-
-	std::vector<VkDescriptorSetLayout> layouts;
-	layouts.push_back(bindlessDescriptorLayout);
-
-	VkPushConstantRange pushConstant{};
-	pushConstant.offset = 0;
-	pushConstant.size = 256;
-	pushConstant.stageFlags = VK_SHADER_STAGE_ALL;
-
-	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
-	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutInfo.setLayoutCount = layouts.size();
-	pipelineLayoutInfo.pSetLayouts = layouts.data();
-	pipelineLayoutInfo.pushConstantRangeCount = 1;
-	pipelineLayoutInfo.pPushConstantRanges = &pushConstant;
-
-	auto vkRes = vkCreatePipelineLayout(device, &pipelineLayoutInfo, allocator, &pipeline.resource->layout);
-	DEBUG_VK(vkRes, "Failed to create pipeline layout!");
-
-	if (desc.point == PipelinePoint::Compute) {
-		ASSERT(shaderStages.size() == 1, "Compute pipeline only support 1 stage.");
-
-		VkComputePipelineCreateInfo pipelineInfo = {};
-		pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-		pipelineInfo.stage = shaderStages[0];
-		pipelineInfo.layout = pipeline.resource->layout;
-		pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
-		pipelineInfo.basePipelineIndex = -1;
-		pipelineInfo.pNext = VK_NULL_HANDLE;
-
-		vkRes = vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, allocator, &pipeline.resource->pipeline);
-
-		DEBUG_VK(vkRes, "Failed to create compute pipeline!");
-	} else {
-		// graphics pipeline
-		ASSERT(0, "Graphics pipeline not implemented");
-	}
-
-	for (int i = 0; i < shaderModules.size(); i++) {
-		vkDestroyShaderModule(device, shaderModules[i], allocator);
-	}
-}
-
-const char* validation_layer_name = "VK_LAYER_KHRONOS_validation";
-
 void Context::CreateInstance(){
 	// optional data, provides useful info to the driver
 	VkApplicationInfo appInfo{};
@@ -401,6 +478,7 @@ void Context::CreateInstance(){
 		vkEnumerateInstanceLayerProperties(&layerCount, layers.data());
 
 		// active default khronos validation layer
+		const char* validation_layer_name = "VK_LAYER_KHRONOS_validation";
 		bool khronosAvailable = false;
 		for (size_t i = 0; i < layers.size(); i++) {
 			activeLayers[i] = false;

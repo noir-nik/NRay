@@ -3,6 +3,13 @@
 
 #include <vector>
 #include <filesystem>
+
+#ifdef _WIN32
+#define GLSL_VALIDATOR "glslangValidator.exe"
+#else
+#define GLSL_VALIDATOR "glslangValidator"
+#endif
+
 namespace vkw {
 
 using Flags = uint32_t;

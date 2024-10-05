@@ -46,5 +46,7 @@ void CreateShaders() {
 }
 
 
-
+void Destroy() {
+    ctx = {};
+}
 };
