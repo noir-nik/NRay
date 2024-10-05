@@ -98,8 +98,8 @@ struct Context
 	void CreateDevice();
 	void DestroyDevice();
 
-	// void LoadShaders(Pipeline& pipeline);
-    // std::vector<char> CompileShader(const std::filesystem::path& path);
+	void LoadShaders(Pipeline& pipeline);
+    std::vector<char> CompileShader(const std::filesystem::path& path);
     void CreatePipeline(const PipelineDesc& desc, Pipeline& pipeline);
 
 	// inline CommandResources& GetCurrentCommandResources() {
@@ -155,8 +155,8 @@ void Destroy() {
 	_ctx.DestroyInstance();
 }
 
-// vulkan debug callbacks
-namespace {
+
+
 
 // utils
 namespace{
@@ -189,9 +189,10 @@ template <typename T> void setup_pNext_chain(T& structure, std::vector<VkBaseOut
     }
     structure.pNext = structs.at(0);
 }
-const char* validation_layer_name = "VK_LAYER_KHRONOS_validation";
 }
 
+// vulkan debug callbacks
+namespace {
 VkResult CreateDebugUtilsMessengerEXT (
 	VkInstance                                instance,
 	const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo,
@@ -250,6 +251,57 @@ void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& create
 	createInfo.pfnUserCallback = DebugCallback;
 	createInfo.pUserData = nullptr;
 }
+}
+
+void CmdDispatch(const glm::ivec3& groups) {
+    auto& cmd = _ctx.GetCurrentCommandResources();
+    vkCmdDispatch(cmd.buffer, groups.x, groups.y, groups.z);
+}
+
+Pipeline CreatePipeline(const PipelineDesc& desc) {
+    Pipeline pipeline;
+    pipeline.resource = std::make_shared<PipelineResource>();
+    pipeline.stages = desc.stages;
+    _ctx.LoadShaders(pipeline);
+    _ctx.CreatePipeline(desc, pipeline);
+    return pipeline;
+}
+
+void Context::LoadShaders(Pipeline& pipeline) {
+    pipeline.stageBytes.clear();
+    for (auto& stage : pipeline.stages) {
+        pipeline.stageBytes.push_back(CompileShader(stage.path));
+    }
+}
+
+std::vector<char> Context::CompileShader(const std::filesystem::path& path) {
+    char compile_string[1024];
+    char inpath[256];
+    char outpath[256];
+    std::string cwd = std::filesystem::current_path().string();
+    sprintf(inpath, "%s/source/Shaders/%s", cwd.c_str(), path.string().c_str());
+    sprintf(outpath, "%s/bin/%s.spv", cwd.c_str(), path.filename().string().c_str());
+    sprintf(compile_string, "%s -V %s -o %s --target-env spirv1.4", GLSL_VALIDATOR, inpath, outpath);
+    DEBUG_TRACE("[ShaderCompiler] Command: {}", compile_string);
+    DEBUG_TRACE("[ShaderCompiler] Output:");
+    while(system(compile_string)) {
+        LOG_WARN("[ShaderCompiler] Error! Press something to Compile Again");
+        std::cin.get();
+    }
+
+    // 'ate' specify to start reading at the end of the file
+    // then we can use the read position to determine the size of the file
+    std::ifstream file(outpath, std::ios::ate | std::ios::binary);
+    if (!file.is_open()) {
+        LOG_CRITICAL("Failed to open file: '{}'", outpath);
+    }
+    size_t fileSize = (size_t)file.tellg();
+    std::vector<char> buffer(fileSize);
+    file.seekg(0);
+    file.read(buffer.data(), fileSize);
+    file.close();
+
+    return buffer;
 }
 
 void Context::CreatePipeline(const PipelineDesc& desc, Pipeline& pipeline) {
@@ -320,7 +372,7 @@ void Context::CreatePipeline(const PipelineDesc& desc, Pipeline& pipeline) {
 	}
 }
 
-
+const char* validation_layer_name = "VK_LAYER_KHRONOS_validation";
 
 void Context::CreateInstance(){
 	// optional data, provides useful info to the driver
@@ -352,7 +404,7 @@ void Context::CreateInstance(){
 		bool khronosAvailable = false;
 		for (size_t i = 0; i < layers.size(); i++) {
 			activeLayers[i] = false;
-			if (strcmp("VK_LAYER_KHRONOS_validation", layers[i].layerName) == 0) {
+			if (strcmp(validation_layer_name, layers[i].layerName) == 0) {
 				activeLayers[i] = true;
 				khronosAvailable = true;
 				break;

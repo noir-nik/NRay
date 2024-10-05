@@ -2,7 +2,8 @@
 
 #include "VulkanBase.hpp"
 
-namespace DeferredRenderer {
+#include "FileManager.hpp"
+namespace ImageOptimizer {
 
 struct Context {
     vkw::Pipeline computePipeline;
@@ -11,8 +12,8 @@ struct Context {
 
     // vkw::Image compose;
 
-};
 
+};
 Context ctx;
 
 void CreatePipeline(vkw::Pipeline& pipeline, const vkw::PipelineDesc& desc) {
@@ -38,10 +39,12 @@ void CreateShaders() {
     CreatePipeline(ctx.computePipeline, {
         .point = vkw::PipelinePoint::Compute,
         .stages = {
-            {.stage = vkw::ShaderStage::Compute, .path = "Image Optimization.comp"},
+            {.stage = vkw::ShaderStage::Compute, .path = "imageOptimization.comp"},
         },
         .name = "Image Optimization Pipeline",
     });
 }
 
-}
+
+
+};
