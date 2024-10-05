@@ -1,6 +1,6 @@
-#include "Pch.h"
+#include "Pch.hpp"
 #include <vulkan/vulkan.h>
-#include "VulkanBase.h"
+#include "VulkanBase.hpp"
 
 #include <ShaderDefinitions.h>
 
@@ -253,7 +253,7 @@ void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& create
 }
 
 void Context::CreatePipeline(const PipelineDesc& desc, Pipeline& pipeline) {
-	pipeline.point = desc.point;
+	pipeline.point = desc.point; // Graphics or Compute
 	pipeline.resource->name = desc.name;
 
 	std::vector<VkPipelineShaderStageCreateInfo> shaderStages(desc.stages.size());

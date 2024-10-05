@@ -1,6 +1,6 @@
-#include "Pch.h"
+#include "Pch.hpp"
 
-#include "VulkanBase.h"
+#include "VulkanBase.hpp"
 
 namespace DeferredRenderer {
 
@@ -21,6 +21,9 @@ void CreatePipeline(vkw::Pipeline& pipeline, const vkw::PipelineDesc& desc) {
 		auto path = "source/Shaders/" + stage.path.string();
 		auto it = ctx.shaderVersions.find(path);
 		auto version = FileManager::GetFileVersion(path);
+		// TODO: Check for -1 (file not found)
+
+		// not found or outdated
 		if (it == ctx.shaderVersions.end() || version > it->second) {
 			ctx.shaderVersions[path] = version;
 			should_update = true;
@@ -32,12 +35,12 @@ void CreatePipeline(vkw::Pipeline& pipeline, const vkw::PipelineDesc& desc) {
 }
 
 void CreateShaders() {
-    CreatePipeline(ctx.ssvlPipeline, {
+    CreatePipeline(ctx.computePipeline, {
         .point = vkw::PipelinePoint::Compute,
         .stages = {
-            {.stage = vkw::ShaderStage::Compute, .path = "screenSpaceVolumetricLight.comp"},
+            {.stage = vkw::ShaderStage::Compute, .path = "Image Optimization.comp"},
         },
-        .name = "VolumetricLight Pipeline",
+        .name = "Image Optimization Pipeline",
     });
 }
 

@@ -1,7 +1,8 @@
 #pragma once
 #include <vulkan/vulkan.h>
-#include <vector>
 
+#include <vector>
+#include <filesystem>
 namespace vkw {
 
 using Flags = uint32_t;
@@ -148,7 +149,7 @@ namespace ShaderStage {
 struct Pipeline {
     struct Stage {
         ShaderStage::Stage stage;
-        // std::filesystem::path path;
+        std::filesystem::path path;
         std::string entryPoint = "main";
     };
     PipelinePoint::Point point;
