@@ -82,9 +82,9 @@ struct Context
 
 	// bindless resources
 	// VkDescriptorPool imguiDescriptorPool = VK_NULL_HANDLE;
-	// VkDescriptorSet bindlessDescriptorSet = VK_NULL_HANDLE;
-	// VkDescriptorPool bindlessDescriptorPool = VK_NULL_HANDLE;
-	// VkDescriptorSetLayout bindlessDescriptorLayout = VK_NULL_HANDLE;
+	VkDescriptorSet bindlessDescriptorSet = VK_NULL_HANDLE;
+	VkDescriptorPool bindlessDescriptorPool = VK_NULL_HANDLE;
+	VkDescriptorSetLayout bindlessDescriptorLayout = VK_NULL_HANDLE;
 
 	VkDevice device = VK_NULL_HANDLE;
 
@@ -96,9 +96,13 @@ struct Context
 	void CreateDevice();
 	void DestroyDevice();
 
-	inline CommandResources& GetCurrentCommandResources() {
-        return queues[currentQueue].commands[swapChainCurrentFrame];
-    }
+	// void LoadShaders(Pipeline& pipeline);
+    // std::vector<char> CompileShader(const std::filesystem::path& path);
+    void CreatePipeline(const PipelineDesc& desc, Pipeline& pipeline);
+
+	// inline CommandResources& GetCurrentCommandResources() {
+    //     return queues[currentQueue].commands[swapChainCurrentFrame];
+    // }
 };
 static Context _ctx;
 
@@ -305,155 +309,8 @@ void Context::CreatePipeline(const PipelineDesc& desc, Pipeline& pipeline) {
 
 		DEBUG_VK(vkRes, "Failed to create compute pipeline!");
 	} else {
-		VkPipelineRasterizationStateCreateInfo rasterizer = {};
-		rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-		// fragments beyond near and far planes are clamped to them
-		rasterizer.depthClampEnable = VK_FALSE;
-		rasterizer.rasterizerDiscardEnable = VK_FALSE;
-		rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-		// line thickness in terms of number of fragments
-		rasterizer.lineWidth = 1.0f;
-		if (desc.cullFront) {
-			rasterizer.cullMode = VK_CULL_MODE_FRONT_BIT;
-		} else {
-			rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-		}
-		rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-		rasterizer.depthBiasEnable = VK_FALSE;
-		rasterizer.depthBiasConstantFactor = 0.0f;
-		rasterizer.depthBiasClamp = 0.0f;
-		rasterizer.depthBiasSlopeFactor = 0.0f;
-
-		VkPipelineMultisampleStateCreateInfo multisampling = {};
-		multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-		multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-		multisampling.sampleShadingEnable = VK_FALSE;
-		multisampling.minSampleShading = 0.5f;
-		multisampling.pSampleMask = nullptr;
-
-		VkPipelineDepthStencilStateCreateInfo depthStencil = {};
-		depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-		depthStencil.depthTestEnable = VK_TRUE;
-		depthStencil.depthWriteEnable = VK_TRUE;
-		depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
-		depthStencil.depthBoundsTestEnable = VK_FALSE;
-		depthStencil.minDepthBounds = 0.0f;
-		depthStencil.maxDepthBounds = 1.0f;
-		depthStencil.stencilTestEnable = VK_FALSE;
-		depthStencil.front = {};
-		depthStencil.back = {};
-
-		std::vector<VkVertexInputAttributeDescription> attributeDescs(desc.vertexAttributes.size());
-		uint32_t attributeSize = 0;
-		for (int i = 0; i < desc.vertexAttributes.size(); i++) {
-			attributeDescs[i].binding = 0;
-			attributeDescs[i].location = i;
-			attributeDescs[i].format = (VkFormat)desc.vertexAttributes[i];
-			attributeDescs[i].offset = attributeSize;
-			if (desc.vertexAttributes[i] == Format::RG32_sfloat) {
-				attributeSize += 2 * sizeof(float);
-			} else if (desc.vertexAttributes[i] == Format::RGB32_sfloat) {
-				attributeSize += 3 * sizeof(float);
-			} else if (desc.vertexAttributes[i] == Format::RGBA32_sfloat) {
-				attributeSize += 4 * sizeof(float);
-			} else {
-				DEBUG_ASSERT(false, "Invalid Vertex Attribute");
-			}
-		}
-
-		VkVertexInputBindingDescription bindingDescription{};
-		bindingDescription.binding = 0;
-		bindingDescription.stride = attributeSize;
-		bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-
-		VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
-		vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-		vertexInputInfo.vertexBindingDescriptionCount = 1;
-		vertexInputInfo.vertexAttributeDescriptionCount = (uint32_t)(attributeDescs.size());
-		// these points to an array of structs that describe how to load the vertex data
-		vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-		vertexInputInfo.pVertexAttributeDescriptions = attributeDescs.data();
-
-		std::vector<VkDynamicState> dynamicStates;
-		dynamicStates.push_back(VK_DYNAMIC_STATE_VIEWPORT);
-		dynamicStates.push_back(VK_DYNAMIC_STATE_SCISSOR);
-
-		// define the type of input of our pipeline
-		VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
-		inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-		if (desc.lineTopology) {
-			inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP;
-			dynamicStates.push_back(VK_DYNAMIC_STATE_LINE_WIDTH);
-		} else {
-			inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-		}
-		// with this parameter true we can break up lines and triangles in _STRIP topology modes
-		inputAssembly.primitiveRestartEnable = VK_FALSE;
-
-		VkPipelineDynamicStateCreateInfo dynamicCreate = {};
-		dynamicCreate.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-		dynamicCreate.pDynamicStates = dynamicStates.data();
-		dynamicCreate.dynamicStateCount = dynamicStates.size();
-
-		VkPipelineViewportStateCreateInfo viewportState{};
-		viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-		viewportState.viewportCount = 1;
-		viewportState.pViewports = nullptr;
-		viewportState.scissorCount = 1;
-		viewportState.pScissors = nullptr;
-
-		VkPipelineRenderingCreateInfoKHR pipelineRendering{};
-		pipelineRendering.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR;
-		pipelineRendering.colorAttachmentCount = desc.colorFormats.size();
-		pipelineRendering.pColorAttachmentFormats = (VkFormat*)desc.colorFormats.data();
-		pipelineRendering.depthAttachmentFormat = desc.useDepth ? (VkFormat)desc.depthFormat : VK_FORMAT_UNDEFINED;
-		pipelineRendering.stencilAttachmentFormat = VK_FORMAT_UNDEFINED;
-		pipelineRendering.viewMask = 0;
-
-		std::vector<VkPipelineColorBlendAttachmentState> blendAttachments(desc.colorFormats.size());
-		for (int i = 0; i < desc.colorFormats.size(); i++) {
-			blendAttachments[i].colorWriteMask =  VK_COLOR_COMPONENT_R_BIT;
-			blendAttachments[i].colorWriteMask |= VK_COLOR_COMPONENT_G_BIT;
-			blendAttachments[i].colorWriteMask |= VK_COLOR_COMPONENT_B_BIT;
-			blendAttachments[i].colorWriteMask |= VK_COLOR_COMPONENT_A_BIT;
-			blendAttachments[i].blendEnable = VK_FALSE;
-		}
-
-		VkPipelineColorBlendStateCreateInfo colorBlendState{};
-		colorBlendState.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-		colorBlendState.logicOpEnable = VK_FALSE;
-		colorBlendState.logicOp = VK_LOGIC_OP_COPY;
-		colorBlendState.attachmentCount = blendAttachments.size();
-		colorBlendState.pAttachments = blendAttachments.data();
-		colorBlendState.blendConstants[0] = 0.0f;
-		colorBlendState.blendConstants[1] = 0.0f;
-		colorBlendState.blendConstants[2] = 0.0f;
-		colorBlendState.blendConstants[3] = 0.0f;
-
-		VkGraphicsPipelineCreateInfo pipelineInfo{};
-		pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-		pipelineInfo.stageCount = shaderStages.size();
-		pipelineInfo.pStages = shaderStages.data();
-		pipelineInfo.pVertexInputState = &vertexInputInfo;
-		pipelineInfo.pInputAssemblyState = &inputAssembly;
-		pipelineInfo.pViewportState = &viewportState;
-		pipelineInfo.pRasterizationState = &rasterizer;
-		pipelineInfo.pMultisampleState = &multisampling;
-		pipelineInfo.pDepthStencilState = &depthStencil;
-		pipelineInfo.pColorBlendState = &colorBlendState;
-		pipelineInfo.pDynamicState = &dynamicCreate;
-		pipelineInfo.layout = pipeline.resource->layout;
-		pipelineInfo.renderPass = VK_NULL_HANDLE;
-		// pipelineInfo.renderPass = SwapChain::GetRenderPass();
-		pipelineInfo.subpass = 0;
-		// if we were creating this pipeline by deriving it from another
-		// we should specify here
-		pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
-		pipelineInfo.basePipelineIndex = -1;
-		pipelineInfo.pNext = &pipelineRendering;
-
-		vkRes = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, allocator, &pipeline.resource->pipeline);
-		DEBUG_VK(vkRes, "Failed to create graphics pipeline!");
+		// graphics pipeline
+		ASSERT(0, "Graphics pipeline not implemented");
 	}
 
 	for (int i = 0; i < shaderModules.size(); i++) {
@@ -658,6 +515,7 @@ void Context::CreatePhysicalDevice() {
 		queues[Queue::Compute].family = computeFamily == -1 ? graphicsFamily : computeFamily;
 		queues[Queue::Transfer].family = transferFamily == -1 ? graphicsFamily : transferFamily;
 		// get max number of samples
+		// TODO: replace with vkGetPhysicalDeviceFeatures2
 		vkGetPhysicalDeviceFeatures(device, &physicalFeatures);
 		vkGetPhysicalDeviceProperties(device, &physicalProperties);
 		vkGetPhysicalDeviceMemoryProperties(device, &memoryProperties);
@@ -714,8 +572,8 @@ void Context::CreateDevice() {
 	auto supportedFeatures = physicalFeatures;
 
 	// logical device features
-	// VkPhysicalDeviceFeatures2 features2 = {};
-	// features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+	VkPhysicalDeviceFeatures2 features2 = {};
+	features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
 	// features2.features.geometryShader = VK_TRUE;
 	// if (supportedFeatures.logicOp)           { features2.features.logicOp           = VK_TRUE; }
 	// if (supportedFeatures.samplerAnisotropy) { features2.features.samplerAnisotropy = VK_TRUE; }
@@ -741,15 +599,18 @@ void Context::CreateDevice() {
 		}
 	}
 
-	// VkPhysicalDeviceDescriptorIndexingFeatures descriptorIndexingFeatures{};
-	// descriptorIndexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
-	// descriptorIndexingFeatures.runtimeDescriptorArray = true;
-	// descriptorIndexingFeatures.descriptorBindingPartiallyBound = true;
-	// descriptorIndexingFeatures.shaderSampledImageArrayNonUniformIndexing = true;
-	// descriptorIndexingFeatures.shaderUniformBufferArrayNonUniformIndexing = true;
-	// descriptorIndexingFeatures.shaderStorageBufferArrayNonUniformIndexing = true;
-	// descriptorIndexingFeatures.descriptorBindingSampledImageUpdateAfterBind = true;
-	// descriptorIndexingFeatures.descriptorBindingStorageImageUpdateAfterBind = true;
+	// add to member and as pNext of physicalFeatures
+	// to check with vkGetPhysicalDeviceFeatures2
+	// ref: https://dev.to/gasim/implementing-bindless-design-in-vulkan-34no
+	VkPhysicalDeviceDescriptorIndexingFeatures descriptorIndexingFeatures{};
+	descriptorIndexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
+	descriptorIndexingFeatures.runtimeDescriptorArray = true;
+	descriptorIndexingFeatures.descriptorBindingPartiallyBound = true;
+	descriptorIndexingFeatures.shaderSampledImageArrayNonUniformIndexing = true;
+	descriptorIndexingFeatures.shaderUniformBufferArrayNonUniformIndexing = true;
+	descriptorIndexingFeatures.shaderStorageBufferArrayNonUniformIndexing = true;
+	descriptorIndexingFeatures.descriptorBindingSampledImageUpdateAfterBind = true;
+	descriptorIndexingFeatures.descriptorBindingStorageImageUpdateAfterBind = true;
 
 	// VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddresFeatures{};
 	// bufferDeviceAddresFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
@@ -789,6 +650,7 @@ void Context::CreateDevice() {
 	// atomicFeatures.pNext = &sync2Features;
 
 	// features2.pNext = &atomicFeatures;
+	features2.pNext = &descriptorIndexingFeatures;
 
 	VkDeviceCreateInfo createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -796,10 +658,10 @@ void Context::CreateDevice() {
 	createInfo.pQueueCreateInfos = queueCreateInfos.data();
 	createInfo.enabledExtensionCount = static_cast<uint32_t>(requiredExtensions.size());
 	createInfo.ppEnabledExtensionNames = requiredExtensions.data();
-	// createInfo.pEnabledFeatures; // !Should be NULL if pNext is used
-	// createInfo.pNext = &features2; // feature chain
-	VkPhysicalDeviceFeatures deviceFeatures{}; // None just yet
-	createInfo.pEnabledFeatures = &deviceFeatures;
+	createInfo.pEnabledFeatures; // !Should be NULL if pNext is used
+	createInfo.pNext = &features2; // feature chain
+	// VkPhysicalDeviceFeatures deviceFeatures{}; // None just yet
+	// createInfo.pEnabledFeatures = &deviceFeatures;
 
 	// specify the required layers to the device 
 	if (_ctx.enableValidationLayers) {
