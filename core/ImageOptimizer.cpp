@@ -1,6 +1,7 @@
 #include "Pch.hpp"
 
 #include "VulkanBase.hpp"
+#include "ShaderCommon.h"
 
 #include "FileManager.hpp"
 namespace ImageOptimizer {
@@ -58,6 +59,14 @@ void CreateImages(uint32_t width, uint32_t height) {
 	ctx.luminanceAverage = vkw::CreateBuffer(sizeof(float), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferSrc, vkw::Memory::GPU | vkw::Memory::CPU, "Luminance Average");
 }
 
+void forwardPass() {
+	vkw::CmdBindPipeline(ctx.computePipeline);
+	imageOptConstants constants;
+	constants.factor = 1;
+
+	vkw::CmdPushConstants(&constants, sizeof(imageOptConstants));
+
+}
 
 void Destroy() {
     ctx = {};

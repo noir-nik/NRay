@@ -2,7 +2,7 @@
 #include <vulkan/vulkan.h>
 #include "VulkanBase.hpp"
 
-#include <ShaderDefinitions.h>
+#include "ShaderCommon.h"
 
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
@@ -60,6 +60,7 @@ struct Context
 		std::vector<VkExtensionProperties> availableExtensions; // Physical Device Extensions
 		std::vector<VkQueueFamilyProperties> availableFamilies;
 
+		const uint32_t timeStampPerPool = 64;
 		struct CommandResources {
 			u8* stagingCpu = nullptr;
 			uint32_t stagingOffset = 0;
@@ -78,6 +79,8 @@ struct Context
 		};
 		InternalQueue queues[Queue::Count];
 		Queue currentQueue = Queue::Count;
+		std::shared_ptr<PipelineResource> currentPipeline;
+		const uint32_t stagingBufferSize = 256 * 1024 * 1024;
 
 		VkPhysicalDeviceMemoryProperties memoryProperties;
 
@@ -89,6 +92,21 @@ struct Context
 	VkDescriptorSetLayout bindlessDescriptorLayout = VK_NULL_HANDLE;
 
 	VkDevice device = VK_NULL_HANDLE;
+
+	// VkSwapchainKHR swapChain = VK_NULL_HANDLE;
+    // std::vector<Image> swapChainImages;
+    // std::vector<VkImage> swapChainImageResources;
+    // std::vector<VkImageView> swapChainViews;
+    // std::vector<VkSemaphore> imageAvailableSemaphores;
+    // std::vector<VkSemaphore> renderFinishedSemaphores;
+
+    // uint32_t additionalImages = 0;
+    uint32_t framesInFlight = 1;
+    // VkFormat depthFormat;
+    // VkExtent2D swapChainExtent;
+    uint32_t swapChainCurrentFrame = 0; // 0 For compute
+    // bool swapChainDirty = true;
+    // uint32_t currentImageIndex = 0;
 
 	std::vector<int32_t> availableBufferRID;
     std::vector<int32_t> availableImageRID;
@@ -107,9 +125,21 @@ struct Context
     std::vector<char> CompileShader(const std::filesystem::path& path);
     void CreatePipeline(const PipelineDesc& desc, Pipeline& pipeline);
 
-	// inline CommandResources& GetCurrentCommandResources() {
-    //     return queues[currentQueue].commands[swapChainCurrentFrame];
+	// void CreateSurfaceFormats();
+    // void CreateSwapChain(uint32_t width, uint32_t height);
+    // void DestroySwapChain();
+
+	void createCommandPool();
+	void createCommandBuffer();
+
+
+	// inline Image& GetCurrentSwapChainImage() {
+    //     return swapChainImages[currentImageIndex];
     // }
+
+	inline CommandResources& GetCurrentCommandResources() {
+        return queues[currentQueue].commands[swapChainCurrentFrame];
+    }
 
 	// VkExtent2D ChooseExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32_t width, uint32_t height);
     // VkPresentModeKHR ChoosePresentMode(const std::vector<VkPresentModeKHR>& presentModes);
@@ -562,6 +592,43 @@ void Context::CreatePipeline(const PipelineDesc& desc, Pipeline& pipeline) {
 		vkDestroyShaderModule(device, shaderModules[i], allocator);
 	}
 }
+
+
+// int CmdBeginTimeStamp(const std::string& name) {
+//     DEBUG_ASSERT(_ctx.currentQueue != Queue::Transfer, "Time Stamp not supported in Transfer queue");
+//     auto& cmd = _ctx.GetCurrentCommandResources();
+//     int id = cmd.timeStamps.size();
+//     if (id >= _ctx.timeStampPerPool - 1) {
+//         LOG_WARN("Maximum number of time stamp per pool exceeded. Ignoring Time stamp {}", name.c_str());
+//         return -1;
+//     }
+//     vkCmdWriteTimestamp(cmd.buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, cmd.queryPool, id);
+//     cmd.timeStamps.push_back(0);
+//     cmd.timeStamps.push_back(0);
+//     cmd.timeStampNames.push_back(name);
+//     return id;
+// }
+
+// void CmdEndTimeStamp(int timeStampIndex) {
+//     if (timeStampIndex >= 0 && timeStampIndex < _ctx.timeStampPerPool - 1) {
+//         auto& cmd = _ctx.GetCurrentCommandResources();
+//         vkCmdWriteTimestamp(cmd.buffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, cmd.queryPool, timeStampIndex + 1);
+//     }
+// }
+
+void CmdBindPipeline(Pipeline& pipeline) {
+    auto& cmd = _ctx.GetCurrentCommandResources();
+    vkCmdBindPipeline(cmd.buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->pipeline);
+    vkCmdBindDescriptorSets(cmd.buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->layout, 0, 1, &_ctx.bindlessDescriptorSet, 0, nullptr);
+	
+    _ctx.currentPipeline = pipeline.resource;
+}
+
+void CmdPushConstants(void* data, uint32_t size) {
+    auto& cmd = _ctx.GetCurrentCommandResources();
+    vkCmdPushConstants(cmd.buffer, _ctx.currentPipeline->layout, VK_SHADER_STAGE_ALL, 0, size, data);
+}
+
 
 namespace{ // utils
 // https://github.com/charles-lunarg/vk-bootstrap/blob/main/src/VkBootstrap.cpp
@@ -1152,6 +1219,51 @@ void Context::DestroyDevice() {
 	DEBUG_TRACE("Destroyed logical device");
 	device = VK_NULL_HANDLE;
 }
+
+void Context::createCommandBuffer(){
+	VkCommandPoolCreateInfo poolInfo{};
+	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	poolInfo.flags = 0;
+
+	VkCommandBufferAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	allocInfo.commandBufferCount = 1;
+
+	for (int q = 0; q < Queue::Count; q++) {
+		InternalQueue& queue = queues[q];
+		poolInfo.queueFamilyIndex = queue.family;
+		queue.commands.resize(framesInFlight);
+		for (int i = 0; i < framesInFlight; i++) {
+			auto res = vkCreateCommandPool(device, &poolInfo, allocator, &queue.commands[i].pool);
+			DEBUG_VK(res, "Failed to create command pool!");
+
+			allocInfo.commandPool = queue.commands[i].pool;
+			res = vkAllocateCommandBuffers(device, &allocInfo, &queue.commands[i].buffer);
+			DEBUG_VK(res, "Failed to allocate command buffer!");
+
+			// queue.commands[i].staging = CreateBuffer(stagingBufferSize, BufferUsage::TransferSrc, Memory::CPU, "StagingBuffer" + std::to_string(q) + "_" + std::to_string(i));
+			// queue.commands[i].stagingCpu = (u8*)queue.commands[i].staging.resource->allocation->GetMappedData();
+
+			VkFenceCreateInfo fenceInfo{};
+			fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+			fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+			vkCreateFence(device, &fenceInfo, allocator, &queue.commands[i].fence);
+
+			// VkQueryPoolCreateInfo queryPoolInfo{};
+			// queryPoolInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+			// queryPoolInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
+			// queryPoolInfo.queryCount = timeStampPerPool;
+			// res = vkCreateQueryPool(device, &queryPoolInfo, allocator, &queue.commands[i].queryPool);
+			// DEBUG_VK(res, "failed to create query pool");
+
+			// queue.commands[i].timeStamps.clear();
+			// queue.commands[i].timeStampNames.clear();
+		}
+	}
+}
+
+
 
 /* 
 
