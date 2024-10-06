@@ -100,6 +100,7 @@ void NeuralSdfApplication::Compute() {
 		constants.outputImageRID = ctx.outputImage.RID();
 		vkw::CmdPushConstants(&ctx, sizeof(constants));
 		vkw::CmdDispatch({(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
+		vkw::CmdBarrier();
 		vkw::EndCommandBuffer();
 		vkw::WaitQueue(vkw::Queue::Compute);
 	}

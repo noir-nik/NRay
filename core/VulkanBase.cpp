@@ -679,6 +679,7 @@ void BeginCommandBuffer(Queue queue) {
     // }
 
     Context::InternalQueue& iqueue = _ctx.queues[queue];
+	// ?VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT
     vkResetCommandPool(_ctx.device, cmd.pool, 0); // TODO: check if this is needed
     cmd.stagingOffset = 0;
     VkCommandBufferBeginInfo beginInfo{};
@@ -704,6 +705,7 @@ void Context::EndCommandBuffer(VkSubmitInfo submitInfo) {
     DEBUG_VK(res, "Failed to submit command buffer");
 }
 
+// vkEndCommandBuffer + vkQueueSubmit
 void EndCommandBuffer() {
     _ctx.EndCommandBuffer({});
     _ctx.currentQueue = vkw::Queue::Count;
@@ -1316,7 +1318,7 @@ void Context::DestroyDevice() {
 void Context::createCommandBuffers(){
 	VkCommandPoolCreateInfo poolInfo{};
 	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	poolInfo.flags = 0;
+	poolInfo.flags = 0; // ?VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT
 
 	VkCommandBufferAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
