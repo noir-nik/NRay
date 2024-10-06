@@ -1153,9 +1153,14 @@ void Context::CreateDevice() {
 	bufferDeviceAddresFeatures.bufferDeviceAddress = VK_TRUE;
 	bufferDeviceAddresFeatures.pNext = &descriptorIndexingFeatures;
 
+	VkPhysicalDeviceSynchronization2FeaturesKHR sync2Features{};
+    sync2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR;
+    sync2Features.synchronization2 = VK_TRUE;
+    sync2Features.pNext = &bufferDeviceAddresFeatures;
+
 	// Add other features to chain here
 
-	features2.pNext = &bufferDeviceAddresFeatures;
+	features2.pNext = &sync2Features;
 
 	VkDeviceCreateInfo createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;

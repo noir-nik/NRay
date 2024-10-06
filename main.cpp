@@ -5,6 +5,8 @@
 
 int main()
 {
+	// print pwd
+	std::cout << std::filesystem::current_path() << std::endl;
 	Logger::Init();
 	NeuralSdfApplication app;
 	NeuralSdfInfo neuralSdfInfo = {

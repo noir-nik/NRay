@@ -21,7 +21,7 @@ Context ctx;
 void CreatePipeline(vkw::Pipeline& pipeline, const vkw::PipelineDesc& desc) {
 	bool should_update = false;
 	for (auto& stage : desc.stages) {
-		auto path = "source/Shaders/" + stage.path.string();
+		auto path = "Shaders/" + stage.path.string();
 		auto it = ctx.shaderVersions.find(path);
 		auto version = FileManager::GetFileVersion(path);
 		// TODO: Check for -1 (file not found)
