@@ -110,6 +110,19 @@ struct Context
 	// inline CommandResources& GetCurrentCommandResources() {
     //     return queues[currentQueue].commands[swapChainCurrentFrame];
     // }
+
+	// VkExtent2D ChooseExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32_t width, uint32_t height);
+    // VkPresentModeKHR ChoosePresentMode(const std::vector<VkPresentModeKHR>& presentModes);
+    // VkSurfaceFormatKHR ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats);
+    VkSampler CreateSampler(float maxLod);
+
+    PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT;
+    // PFN_vkGetAccelerationStructureBuildSizesKHR vkGetAccelerationStructureBuildSizesKHR;
+    // PFN_vkCreateAccelerationStructureKHR vkCreateAccelerationStructureKHR;
+    // PFN_vkGetBufferDeviceAddressKHR vkGetBufferDeviceAddressKHR;
+    // PFN_vkCmdBuildAccelerationStructuresKHR vkCmdBuildAccelerationStructuresKHR;
+    // PFN_vkGetAccelerationStructureDeviceAddressKHR vkGetAccelerationStructureDeviceAddressKHR;
+    // PFN_vkDestroyAccelerationStructureKHR vkDestroyAccelerationStructureKHR;
 };
 static Context _ctx;
 
@@ -990,8 +1003,8 @@ void Context::CreateDevice() {
 		vkGetDeviceQueue(device, queues[q].family, 0, &queues[q].queue);
 	}
 
-	// genericSampler = CreateSampler(1.0);
-	// vkSetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetDeviceProcAddr(device, "vkSetDebugUtilsObjectNameEXT");
+	genericSampler = CreateSampler(1.0);
+	vkSetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetDeviceProcAddr(device, "vkSetDebugUtilsObjectNameEXT");
 	// vkGetAccelerationStructureBuildSizesKHR = (PFN_vkGetAccelerationStructureBuildSizesKHR)vkGetDeviceProcAddr(device, "vkGetAccelerationStructureBuildSizesKHR");
 	// vkCreateAccelerationStructureKHR = (PFN_vkCreateAccelerationStructureKHR)vkGetDeviceProcAddr(device, "vkCreateAccelerationStructureKHR");
 	// vkCmdBuildAccelerationStructuresKHR = (PFN_vkCmdBuildAccelerationStructuresKHR)vkGetDeviceProcAddr(device, "vkCmdBuildAccelerationStructuresKHR");
@@ -1140,6 +1153,113 @@ void Context::DestroyDevice() {
 	device = VK_NULL_HANDLE;
 }
 
+/* 
+
+// uint32_t Context::FindMemoryType(uint32_t type, VkMemoryPropertyFlags properties) {
+// 	for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; i++) {
+// 		if (type & (1 << i)) {
+// 			if ((memoryProperties.memoryTypes[i].propertyFlags & properties) == properties) {
+// 				return i;
+// 			}
+// 		}
+// 	}
+
+// 	ASSERT(false, "failed to find suitable memory type");
+// }
+
+
+// bool Context::SupportFormat(VkFormat format, VkImageTiling tiling, VkFormatFeatureFlags features) {
+// 	VkFormatProperties props;
+// 	vkGetPhysicalDeviceFormatProperties(physicalDevice, format, &props);
+
+// 	if (tiling == VK_IMAGE_TILING_LINEAR && (props.linearTilingFeatures & features) == features) {
+// 		return true;
+// 	} else if (tiling == VK_IMAGE_TILING_OPTIMAL && (props.optimalTilingFeatures & features) == features) {
+// 		return true;
+// 	}
+
+// 	return false;
+// }
+
+// VkSurfaceFormatKHR Context::ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats) {
+// 	for (const auto& availableFormat : formats) {
+// 		if (availableFormat.format == colorFormat
+// 			&& availableFormat.colorSpace == colorSpace) {
+// 			return availableFormat;
+// 		}
+// 	}
+// 	LOG_WARN("Preferred surface format not available!");
+// 	return formats[0];
+// }
+
+// VkPresentModeKHR Context::ChoosePresentMode(const std::vector<VkPresentModeKHR>& presentModes) {
+// 	for (const auto& mode : presentModes) {
+// 		if (mode == presentMode) {
+// 			return mode;
+// 		}
+// 	}
+// 	LOG_WARN("Preferred present mode not available!");
+// 	// FIFO is guaranteed to be available
+// 	return VK_PRESENT_MODE_FIFO_KHR;
+// }
+
+// VkExtent2D Context::ChooseExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32_t width, uint32_t height) {
+// 	if (capabilities.currentExtent.width != UINT32_MAX) {
+// 		return capabilities.currentExtent;
+// 	}
+// 	else {
+// 		VkExtent2D actualExtent = { width, height };
+
+// 		actualExtent.width = std::max (
+// 			capabilities.minImageExtent.width,
+// 			std::min(capabilities.maxImageExtent.width, actualExtent.width)
+// 		);
+// 		actualExtent.height = std::max (
+// 			capabilities.minImageExtent.height,
+// 			std::min(capabilities.maxImageExtent.height, actualExtent.height)
+// 		);
+
+// 		return actualExtent;
+// 	}
+// }
+
+
+ */
+
+VkSampler Context::CreateSampler(f32 maxLod) {
+    VkSamplerCreateInfo samplerInfo{};
+    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    // todo: create separate one for shadow maps
+    samplerInfo.magFilter = VK_FILTER_LINEAR;
+    samplerInfo.minFilter = VK_FILTER_LINEAR;
+    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.anisotropyEnable = VK_TRUE;
+
+    samplerInfo.anisotropyEnable = false; //?
+
+    // what color to return when clamp is active in addressing mode
+    samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    samplerInfo.unnormalizedCoordinates = VK_FALSE;
+
+    // if comparison is enabled, texels will be compared to a value an the result 
+    // is used in filtering operations, can be used in PCF on shadow maps
+    samplerInfo.compareEnable = VK_FALSE;
+    samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+
+    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    samplerInfo.mipLodBias = 0.0f;
+    samplerInfo.minLod = 0.0f;
+    samplerInfo.maxLod = maxLod;
+
+    VkSampler sampler = VK_NULL_HANDLE;
+    auto vkRes = vkCreateSampler(device, &samplerInfo, nullptr, &sampler);
+    DEBUG_VK(vkRes, "Failed to create texture sampler!");
+	ASSERT(vkRes == VK_SUCCESS, "Failed to create texture sampler!");
+
+    return sampler;
+}
 
 
 }

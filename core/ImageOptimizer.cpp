@@ -12,7 +12,8 @@ struct Context {
 
     // vkw::Image compose;
 
-
+	vkw::Buffer luminanceHistogram;
+	vkw::Buffer luminanceAverage;
 };
 Context ctx;
 
@@ -46,76 +47,13 @@ void CreateShaders() {
 }
 
 void CreateImages(uint32_t width, uint32_t height) {
-	ctx.albedo = vkw::CreateImage({
-		.width = width,
-		.height = height,
-		.format = vkw::Format::RGBA8_unorm,
-		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled,
-		.name = "Albedo Attachment"
-	});
-	ctx.debug = vkw::CreateImage({
-		.width = width,
-		.height = height,
-		.format = vkw::Format::RGBA8_unorm,
-		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled,
-		.name = "Debug Attachment"
-	});
-	ctx.normal = vkw::CreateImage({
-		.width = width,
-		.height = height,
-		.format = vkw::Format::RGBA32_sfloat,
-		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled,
-		.name = "Normal Attachment"
-	});
-	ctx.material = vkw::CreateImage({
-		.width = width,
-		.height = height,
-		.format = vkw::Format::RGBA8_unorm,
-		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled,
-		.name = "Material Attachment"
-	});
-	ctx.emission = vkw::CreateImage({
-		.width = width,
-		.height = height,
-		.format = vkw::Format::RGBA8_unorm,
-		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled,
-		.name = "Emission Attachment"
-	});
-	ctx.lightA = vkw::CreateImage({
-		.width = width,
-		.height = height,
-		.format = vkw::Format::RGBA32_sfloat,
-		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled | vkw::ImageUsage::Storage,
-		.name = "Light Attachment A"
-	});
-	ctx.lightB = vkw::CreateImage({
-		.width = width,
-		.height = height,
-		.format = vkw::Format::RGBA32_sfloat,
-		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled | vkw::ImageUsage::Storage,
-		.name = "Light Attachment B"
-	});
-	ctx.lightHistory = vkw::CreateImage({
-		.width = width,
-		.height = height,
-		.format = vkw::Format::RGBA32_sfloat,
-		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled | vkw::ImageUsage::Storage,
-		.name = "Light History Attachment"
-	});
-	ctx.depth = vkw::CreateImage({
-		.width = width,
-		.height = height,
-		.format = vkw::Format::D32_sfloat,
-		.usage = vkw::ImageUsage::DepthAttachment | vkw::ImageUsage::Sampled,
-		.name = "Depth Attachment"
-	});
-	ctx.compose = vkw::CreateImage({
-		.width = width,
-		.height = height,
-		.format = vkw::Format::BGRA8_unorm,
-		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled,
-		.name = "Compose Attachment"
-	});
+	// ctx.lightA = vkw::CreateImage({
+	// 	.width = width,
+	// 	.height = height,
+	// 	.format = vkw::Format::RGBA32_sfloat,
+	// 	.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::Sampled | vkw::ImageUsage::Storage,
+	// 	.name = "Light Attachment A"
+	// });
 	ctx.luminanceHistogram = vkw::CreateBuffer(sizeof(float) * 256, vkw::BufferUsage::Storage, vkw::Memory::GPU, "Luminance Histogram");
 	ctx.luminanceAverage = vkw::CreateBuffer(sizeof(float), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferSrc, vkw::Memory::GPU | vkw::Memory::CPU, "Luminance Average");
 }
