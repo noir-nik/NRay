@@ -66,6 +66,7 @@ void forwardPass() {
 
 	vkw::CmdPushConstants(&constants, sizeof(imageOptConstants));
 	vkw::CmdDispatch({1, 1, 1});
+	// NOT FINISHED
 
 }
 

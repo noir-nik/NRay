@@ -30,6 +30,11 @@ layout(push_constant) uniform params_t
 
 } params;
 
+
+// layout(push_constant) uniform Constants {
+//     NeuralSdfConstants ctx;
+// };
+
 layout(std140, binding = 0) buffer buf
 {
    Pixel imageData[];

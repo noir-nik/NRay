@@ -2,7 +2,7 @@ CC := g++
 TARGET := app
 
 INCLUDES := -Iinclude -IDeps -IBase -IShaders
-CXXFLAGS := -MMD -MP $(INCLUDES) -O0
+CXXFLAGS := -MMD -MP $(INCLUDES) -O0 -DENGINE
 # -Wno-narrowing
 
 LDFLAGS := -lspdlog

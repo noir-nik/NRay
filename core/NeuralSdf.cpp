@@ -94,6 +94,9 @@ void NeuralSdfApplication::Compute() {
 		constants.numLayers = ctx.numLayers;
 		constants.layerSize = ctx.layerSize;
 		vkw::CmdPushConstants(&ctx, sizeof(constants));
+		vkw::CmdDispatch(ctx.width, ctx.height, 1);
+		vkw::EndCommandBuffer();
+		vkw::WaitQueue(vkw::Queue::Compute);
 	}
 
 void NeuralSdfApplication::MainLoop() {

@@ -679,7 +679,7 @@ void BeginCommandBuffer(Queue queue) {
     // }
 
     Context::InternalQueue& iqueue = _ctx.queues[queue];
-    vkResetCommandPool(_ctx.device, cmd.pool, 0);
+    vkResetCommandPool(_ctx.device, cmd.pool, 0); // TODO: check if this is needed
     cmd.stagingOffset = 0;
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
