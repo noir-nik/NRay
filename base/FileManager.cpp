@@ -56,11 +56,11 @@ int FileManager::GetFileVersion(const std::string& filename) {
 }
 
 namespace { // BMP helper
-struct Pixel { unsigned char r, g, b; };
+struct Pixel3 { unsigned char r, g, b; };
 
-void WriteBMP(const char* fname, Pixel* a_pixelData, int width, int height)
+void WriteBMP(const char* fname, Pixel3* a_pixelData, int width, int height)
 {
-  int paddedsize = (width*height) * sizeof(Pixel);
+  int paddedsize = (width*height) * sizeof(Pixel3);
 
   unsigned char bmpfileheader[14] = {'B','M', 0,0,0,0, 0,0, 0,0, 54,0,0,0};
   unsigned char bmpinfoheader[40] = {40,0,0,0, 0,0,0,0, 0,0,0,0, 1,0, 24,0};
@@ -87,14 +87,14 @@ void WriteBMP(const char* fname, Pixel* a_pixelData, int width, int height)
   out.close();
 }
 }
-void SaveBMP(const char* fname, const unsigned int* pixels, int w, int h)
+void FileManager::SaveBMP(const char* fname, const unsigned int* pixels, int w, int h)
 {
-  std::vector<Pixel> pixels2(w*h);
+  std::vector<Pixel3> pixels2(w*h);
 
   for (size_t i = 0; i < pixels2.size(); i++)
   {
 
-    Pixel px;
+    Pixel3 px;
     px.r       = (pixels[i] & 0x00FF0000) >> 16;
     px.g       = (pixels[i] & 0x0000FF00) >> 8;
     px.b       = (pixels[i] & 0x000000FF);

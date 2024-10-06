@@ -92,7 +92,8 @@ struct Context
 		InternalQueue queues[Queue::Count];
 		Queue currentQueue = Queue::Count;
 		std::shared_ptr<PipelineResource> currentPipeline;
-		const uint32_t stagingBufferSize = 256 * 1024 * 1024;
+		// const uint32_t stagingBufferSize = 256 * 1024 * 1024;
+		const uint32_t stagingBufferSize = 8 * 1024 * 1024;
 
 		VkPhysicalDeviceMemoryProperties memoryProperties;
 
@@ -1047,7 +1048,7 @@ void Context::CreatePhysicalDevice() {
 
 		// TODO: change logic
 		queues[Queue::Graphics].family = graphicsFamily;
-		queues[Queue::Compute].family = computeFamily;
+		queues[Queue::Compute].family = computeFamily == -1 ? graphicsFamily : computeFamily;
 		queues[Queue::Transfer].family = transferFamily == -1 ? graphicsFamily : transferFamily;
 
 		// get max number of samples
@@ -1073,9 +1074,12 @@ void Context::CreatePhysicalDevice() {
 			auto erased = required.erase(std::string(extension.extensionName));
 		}
 		
+		LOG_INFO("Families: {0}, {1}, {2}", graphicsFamily, computeFamily, transferFamily);
 		// check if all required queues are supported
 		bool suitable = required.empty();
-		suitable &= computeFamily != -1;
+		if (!suitable) LOG_ERROR("Required extensions not available: {0}", required.begin()->c_str());
+		suitable &= graphicsFamily != -1;
+		if (!suitable) LOG_ERROR("Required compute queue not available");
 		// suitable &= graphicsFamily != -1;
 		if (suitable) {
 			physicalDevice = device;
@@ -1404,6 +1408,7 @@ void Context::createCommandBuffers(){
 void Context::DestroyCommandBuffers() {
 	for (int q = 0; q < Queue::Count; q++) {
 		for (int i = 0; i < framesInFlight; i++) {
+			// vkFreeCommandBuffers(device, queues[q].commands[i].pool, 1, &queues[q].commands[i].buffer); // No OP
             vkDestroyCommandPool(device, queues[q].commands[i].pool, allocator);
             queues[q].commands[i].staging = {};
             queues[q].commands[i].stagingCpu = nullptr;

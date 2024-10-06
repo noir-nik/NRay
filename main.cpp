@@ -13,7 +13,7 @@ int main()
 		.weightsPath = "assets/sdf1_weights.bin",
 		.numLayers = 2,
 		.layerSize = 64,
-		.outputPath = "output.png",
+		.outputPath = "build/output.bmp",
 		.width = 512,
 		.height = 512,
 	};
