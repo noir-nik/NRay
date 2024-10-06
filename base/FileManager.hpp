@@ -6,5 +6,6 @@
 class FileManager {
 public:
     static std::vector<char> ReadRawBytes(const std::string& filename);
+    static std::vector<float> ReadFloats(const std::string& filename);
     static int GetFileVersion(const std::string& filename);
 };

@@ -20,12 +20,17 @@ private:
 	}
 
 	void Create() {
+		// TODO: vkw::requestCompute();
 		vkw::Init();
 		ImageOptimizer::CreateImages(width, height);
 		ImageOptimizer::CreateShaders();
 	}
 
 	void Compute() {
+		vkw::BeginCommandBuffer(vkw::Queue::Compute);
+	}
+
+	void MainLoop() {
 	}
 
 	void Finish() {
