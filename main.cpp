@@ -1,9 +1,13 @@
 #include "Pch.hpp"
 #include "VulkanBase.hpp"
 
+#include "ImageOptimizer.hpp"
 
-class computeApplication {
+class ComputeApplication {
 public:
+	uint32_t width = 1024;
+	uint32_t height = 1024;
+
     void run() {
         Setup();
         Create();
@@ -17,12 +21,15 @@ private:
 
 	void Create() {
 		vkw::Init();
+		ImageOptimizer::CreateImages(width, height);
+		ImageOptimizer::CreateShaders();
 	}
 
 	void Compute() {
 	}
 
 	void Finish() {
+		ImageOptimizer::Destroy();
 		vkw::Destroy();
 	}
 };
@@ -30,7 +37,7 @@ private:
 int main()
 {
 	Logger::Init();
-	Application app;
+	ComputeApplication app;
 	app.run();
 	return 0;
 }

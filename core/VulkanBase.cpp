@@ -150,7 +150,8 @@ struct Context
     // void CreateSwapChain(uint32_t width, uint32_t height);
     // void DestroySwapChain();
 
-	void createCommandBuffer();
+	void createCommandBuffers();
+	void DestroyCommandBuffers();
 
 	uint32_t FindMemoryType(uint32_t type, VkMemoryPropertyFlags properties);
 	bool SupportFormat(VkFormat format, VkImageTiling tiling, VkFormatFeatureFlags features);
@@ -243,6 +244,7 @@ void Init() {
 	_ctx.CreateDevice();
 	// _ctx.CreateSurfaceFormats();
 	// _ctx.CreateSwapChain(width, height);
+	_ctx.createCommandBuffers();
 	// _ctx.CreateImGui(window);
 }
 
@@ -250,6 +252,7 @@ void Destroy() {
 	// ImGui_ImplVulkan_Shutdown();
 	// ImGui_ImplGlfw_Shutdown();
 	// _ctx.DestroySwapChain();
+	_ctx.DestroyCommandBuffers();
 	_ctx.DestroyDevice();
 	_ctx.DestroyInstance();
 }
@@ -978,21 +981,21 @@ void Context::CreatePhysicalDevice() {
 		availableFamilies.resize(familyCount);
 		vkGetPhysicalDeviceQueueFamilyProperties(device, &familyCount, availableFamilies.data());
 
-		int computeFamily = -1;
-		int transferFamily = -1;
+		int computeFamily = -1; // TODO: change to uint32_t
+		int transferFamily = -1; // and use VK_QUEUE_FAMILY_IGNORED ?
 		int graphicsFamily = -1;
 
 		// select the family for each type of queue that we want
 		for (int i = 0; i < familyCount; i++) {
 			auto& family = availableFamilies[i];
-			// if (family.queueFlags & VK_QUEUE_GRAPHICS_BIT && graphicsFamily == -1) {
-			// 	VkBool32 present = false;
-			// 	vkGetPhysicalDeviceSurfaceSupportKHR(device, i, this->surface, &present);
-			// 	if (present) {
-			// 		graphicsFamily = i;
-			// 	}
-			// 	continue;
-			// }
+			if (family.queueFlags & VK_QUEUE_GRAPHICS_BIT && graphicsFamily == -1) {
+				// VkBool32 present = false;
+				// vkGetPhysicalDeviceSurfaceSupportKHR(device, i, this->surface, &present);
+				// if (present) {
+					graphicsFamily = i;
+				// }
+				continue;
+			}
 
 			if (family.queueFlags & VK_QUEUE_COMPUTE_BIT && computeFamily == -1) {
 				computeFamily = i;
@@ -1310,7 +1313,7 @@ void Context::DestroyDevice() {
 	device = VK_NULL_HANDLE;
 }
 
-void Context::createCommandBuffer(){
+void Context::createCommandBuffers(){
 	VkCommandPoolCreateInfo poolInfo{};
 	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	poolInfo.flags = 0;
@@ -1322,6 +1325,9 @@ void Context::createCommandBuffer(){
 
 	for (int q = 0; q < Queue::Count; q++) {
 		InternalQueue& queue = queues[q];
+		if (queue.family == -1) { //TODO:
+			ASSERT(0, "Queue family = -1, fix in CreatePhysicalDevice()");
+		}
 		poolInfo.queueFamilyIndex = queue.family;
 		queue.commands.resize(framesInFlight);
 		for (int i = 0; i < framesInFlight; i++) {
@@ -1332,8 +1338,8 @@ void Context::createCommandBuffer(){
 			res = vkAllocateCommandBuffers(device, &allocInfo, &queue.commands[i].buffer);
 			DEBUG_VK(res, "Failed to allocate command buffer!");
 
-			// queue.commands[i].staging = CreateBuffer(stagingBufferSize, BufferUsage::TransferSrc, Memory::CPU, "StagingBuffer" + std::to_string(q) + "_" + std::to_string(i));
-			// queue.commands[i].stagingCpu = (u8*)queue.commands[i].staging.resource->allocation->GetMappedData();
+			queue.commands[i].staging = CreateBuffer(stagingBufferSize, BufferUsage::TransferSrc, Memory::CPU, "StagingBuffer" + std::to_string(q) + "_" + std::to_string(i));
+			queue.commands[i].stagingCpu = (u8*)queue.commands[i].staging.resource->allocation->GetMappedData();
 
 			VkFenceCreateInfo fenceInfo{};
 			fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
@@ -1353,6 +1359,17 @@ void Context::createCommandBuffer(){
 	}
 }
 
+void Context::DestroyCommandBuffers() {
+	for (int q = 0; q < Queue::Count; q++) {
+		for (int i = 0; i < framesInFlight; i++) {
+            vkDestroyCommandPool(device, queues[q].commands[i].pool, allocator);
+            queues[q].commands[i].staging = {};
+            queues[q].commands[i].stagingCpu = nullptr;
+            vkDestroyFence(device, queues[q].commands[i].fence, allocator);
+            // vkDestroyQueryPool(device, queues[q].commands[i].queryPool, allocator);
+        }
+	}
+}
 
 
 /* 
