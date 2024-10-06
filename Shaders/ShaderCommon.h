@@ -27,7 +27,7 @@ struct NeuralSdfConstants {
 #ifndef ENGINE
 
 #extension GL_ARB_separate_shader_objects : enable
-// #extension GL_EXT_nonuniform_qualifier : enable
+#extension GL_EXT_nonuniform_qualifier : enable
 
 
 layout(set = 0, binding = BINDING_TEXTURE) uniform sampler2D textures[];
@@ -38,11 +38,14 @@ layout(set = 0, binding = BINDING_BUFFER) readonly buffer WeightsBuffer {
     float data[];
 } WeightsBuffers[];
 
-layout(set = 0, binding = BINDING_BUFFER) readonly buffer OutImageBuffer {
-    float res[];
+layout(set = 0, binding = BINDING_BUFFER) buffer OutImageBuffer {
+    float data[];
 } OutImageBuffers[];
 
 
 layout(binding = BINDING_STORAGE_IMAGE) uniform image2D images[];
+
+#define w_b WeightsBuffers[weightsRID].data
+#define imageData OutImageBuffers[outputImageRID].data
 
 #endif

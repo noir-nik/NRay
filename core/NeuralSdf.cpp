@@ -87,6 +87,7 @@ void NeuralSdfApplication::Create() {
 
 void NeuralSdfApplication::Compute() {
 		vkw::BeginCommandBuffer(vkw::Queue::Compute);
+		vkw::CmdCopy(ctx.weightsGPU, weights.data(), ctx.num_parameters * sizeof(float));
 		vkw::CmdBindPipeline(ctx.forwardPipeline);
 		NeuralSdfConstants constants;
 		constants.width = ctx.width;
@@ -96,7 +97,7 @@ void NeuralSdfApplication::Compute() {
 		constants.weightsRID = ctx.weightsGPU.RID();
 		constants.outputImageRID = ctx.outputImage.RID();
 		vkw::CmdPushConstants(&ctx, sizeof(constants));
-		vkw::CmdDispatch(ctx.width, ctx.height, 1);
+		vkw::CmdDispatch({(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
 		vkw::EndCommandBuffer();
 		vkw::WaitQueue(vkw::Queue::Compute);
 	}
