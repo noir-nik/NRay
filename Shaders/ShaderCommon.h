@@ -9,3 +9,10 @@ struct imageOptConstants {
 	int factor; //test
 	int pad[1];
 };
+
+struct NeuralSdfConstants {
+	int width;
+	int height;
+	int numLayers;
+	int layerSize;
+};
