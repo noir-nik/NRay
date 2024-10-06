@@ -90,6 +90,10 @@ struct Context
 
 	VkDevice device = VK_NULL_HANDLE;
 
+	std::vector<int32_t> availableBufferRID;
+    std::vector<int32_t> availableImageRID;
+    std::vector<int32_t> availableTLASRID;
+
 	void CreateInstance();
 	void DestroyInstance();
 
@@ -181,16 +185,17 @@ Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, c
         size += size % _ctx.physicalProperties.limits.minStorageBufferOffsetAlignment;
     }
 
-    if (usage & BufferUsage::AccelerationStructureInput) {
-        usage |= BufferUsage::Address;
-        usage |= BufferUsage::TransferDst;
-    }
+    // if (usage & BufferUsage::AccelerationStructureInput) {
+    //     usage |= BufferUsage::Address;
+    //     usage |= BufferUsage::TransferDst;
+    // }
 
-    if (usage & BufferUsage::AccelerationStructure) {
-        usage |= BufferUsage::Address;
-    }
+    // if (usage & BufferUsage::AccelerationStructure) {
+    //     usage |= BufferUsage::Address;
+    // }
 
     std::shared_ptr<BufferResource> res = std::make_shared<BufferResource>();
+	res->name = name;
     VkBufferCreateInfo bufferInfo{};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     bufferInfo.size = size;
@@ -204,7 +209,7 @@ Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, c
     }
     auto result = vmaCreateBuffer(_ctx.vmaAllocator, &bufferInfo, &allocInfo, &res->buffer, &res->allocation, nullptr);
     DEBUG_VK(result, "Failed to create buffer!");
-
+	ASSERT(result == VK_SUCCESS, "Failed to create buffer!");
     Buffer buffer = {
         .resource = res,
         .size = size,
@@ -215,18 +220,20 @@ Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, c
     if (usage & BufferUsage::Storage) {
         res->rid = _ctx.availableBufferRID.back();
         _ctx.availableBufferRID.pop_back();
+
         VkDescriptorBufferInfo descriptorInfo = {};
-        VkWriteDescriptorSet write = {};
         descriptorInfo.buffer = res->buffer;
         descriptorInfo.offset = 0;
-        descriptorInfo.range = size;
-        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        write.dstSet = _ctx.bindlessDescriptorSet;
-        write.dstBinding = LUZ_BINDING_BUFFER;
+        descriptorInfo.range  = size;
+
+        VkWriteDescriptorSet write = {};
+        write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.dstSet          = _ctx.bindlessDescriptorSet;
+        write.dstBinding      = BINDING_BUFFER;
         write.dstArrayElement = buffer.RID();
-        write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        write.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         write.descriptorCount = 1;
-        write.pBufferInfo = &descriptorInfo;
+        write.pBufferInfo     = &descriptorInfo;
         vkUpdateDescriptorSets(_ctx.device, 1, &write, 0, nullptr);
     }
 
@@ -832,6 +839,12 @@ void Context::CreateDevice() {
             // {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, MAX_STORAGE_IMAGES},
         };
 
+		// Fill with sequential numbers
+		availableBufferRID.resize(MAX_STORAGE);
+		std::iota(availableBufferRID.begin(), availableBufferRID.end(), 0);
+		availableImageRID.resize(MAX_SAMPLEDIMAGES);
+		std::iota(availableImageRID.begin(), availableImageRID.end(), 0);
+
         VkDescriptorPoolCreateInfo bindlessPoolInfo{};
         bindlessPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         bindlessPoolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
@@ -887,6 +900,7 @@ void Context::CreateDevice() {
 
 		result = vkAllocateDescriptorSets(device, &allocInfo, &bindlessDescriptorSet);
 		DEBUG_VK(result, "Failed to allocate bindless descriptor set!");
+		ASSERT(result == VK_SUCCESS, "Failed to allocate bindless descriptor set!");
 	}
 
 	// asScratchBuffer = vkw::CreateBuffer(initialScratchBufferSize, vkw::BufferUsage::Address | vkw::BufferUsage::Storage, vkw::Memory::GPU);
