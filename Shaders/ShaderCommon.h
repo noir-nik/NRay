@@ -3,6 +3,8 @@
 #define BINDING_TLAS 2
 #define BINDING_STORAGE_IMAGE 3
 
+#define WORKGROUP_SIZE 16
+
 struct imageOptConstants {
 	int width;
 	int height;
@@ -15,6 +17,10 @@ struct NeuralSdfConstants {
 	int height;
 	int numLayers;
 	int layerSize;
+
+	int weightsRID;
+	int outputImageRID;
+	int pad[2];
 };
 
 // for shaders only

@@ -93,6 +93,8 @@ void NeuralSdfApplication::Compute() {
 		constants.height = ctx.height;
 		constants.numLayers = ctx.numLayers;
 		constants.layerSize = ctx.layerSize;
+		constants.weightsRID = ctx.weightsGPU.RID();
+		constants.outputImageRID = ctx.outputImage.RID();
 		vkw::CmdPushConstants(&ctx, sizeof(constants));
 		vkw::CmdDispatch(ctx.width, ctx.height, 1);
 		vkw::EndCommandBuffer();

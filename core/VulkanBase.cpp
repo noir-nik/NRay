@@ -316,7 +316,7 @@ Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, c
     };
 
     if (usage & BufferUsage::Storage) {
-        res->rid = _ctx.availableBufferRID.back();
+        res->rid = _ctx.availableBufferRID.back(); // TODO test: give RID starting from 0, not from end
         _ctx.availableBufferRID.pop_back();
 
         VkDescriptorBufferInfo descriptorInfo = {};
