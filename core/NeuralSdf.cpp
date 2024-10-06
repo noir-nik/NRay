@@ -53,9 +53,11 @@ void CreateShaders() {
     });
 }
 
+
+
 void CreateImages(uint32_t width, uint32_t height) {
 	ctx.weightsGPU = vkw::CreateBuffer(ctx.num_parameters * sizeof(float), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst, vkw::Memory::GPU, "Neural Sdf Weights");
-	ctx.outputImage = vkw::CreateBuffer(width * height, vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst, vkw::Memory::CPU, "Output Image");
+	ctx.outputImage = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst, vkw::Memory::CPU, "Output Image");
 }
 
 void NeuralSdfApplication::run(NeuralSdfInfo* pNeuralSdfInfo) {

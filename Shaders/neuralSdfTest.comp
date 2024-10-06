@@ -18,9 +18,6 @@ layout (local_size_x = WORKGROUP_SIZE, local_size_y = WORKGROUP_SIZE, local_size
 
 const float W_0 = 30.0; 
 
-struct Pixel{
-  vec4 value;
-};
 
 // layout(push_constant) uniform params_t
 // {
@@ -31,11 +28,11 @@ struct Pixel{
 
 //   int 
 
-// } params;
+// } ctx;
 
 
 layout(push_constant) uniform Constants {
-    NeuralSdfConstants params;
+    NeuralSdfConstants ctx;
 };
 
 // layout(std140, binding = 0) buffer buf
@@ -53,7 +50,7 @@ float forward(vec3 p) {
 	float activations[512];
 
 	// zero out;
-	for (int i = 0; i < 2*params.layerSize; ++i) {
+	for (int i = 0; i < 2*ctx.layerSize; ++i) {
 		activations[i] = 0.0f;
 	}
 
@@ -64,58 +61,58 @@ float forward(vec3 p) {
 
 	// ===== Layer 0 =====
 	// z = Wx + b
-	for (int i = 0; i < params.layerSize; ++i) {
+	for (int i = 0; i < ctx.layerSize; ++i) {
 		for (int j = 0; j < 3; ++j) {
-			activations[params.layerSize * ((half_part + 1)%2) + i] += w_b[i * 3 + j] * activations[params.layerSize * ((half_part)%2) + j];
+			activations[ctx.layerSize * ((half_part + 1)%2) + i] += w_b[i * 3 + j] * activations[ctx.layerSize * ((half_part)%2) + j];
 		}
 	}
 	
 	// + b
-	for (int i = 0; i < params.layerSize; ++i) {
-		activations[params.layerSize * ((half_part + 1)%2) + i] += w_b[params.layerSize * 3 + i];
+	for (int i = 0; i < ctx.layerSize; ++i) {
+		activations[ctx.layerSize * ((half_part + 1)%2) + i] += w_b[ctx.layerSize * 3 + i];
 	}
 
 	// sin
-	for (int i = 0; i < params.layerSize; ++i) {
-		activations[params.layerSize * ((half_part + 1)%2) + i] = sin(W_0 * activations[params.layerSize * ((half_part + 1)%2) + i]);
+	for (int i = 0; i < ctx.layerSize; ++i) {
+		activations[ctx.layerSize * ((half_part + 1)%2) + i] = sin(W_0 * activations[ctx.layerSize * ((half_part + 1)%2) + i]);
 	}
 
 	// ===== Hidden layers =====
-	int w_b_pos = 4 * params.layerSize;
-	for (int l = 0; l < params.numLayers; ++l) {
+	int w_b_pos = 4 * ctx.layerSize;
+	for (int l = 0; l < ctx.numLayers; ++l) {
 		//zero
-		for (int i = 0; i < params.layerSize; ++i) {
-			activations[(params.layerSize * (half_part % 2)) + i] = 0.0f;
+		for (int i = 0; i < ctx.layerSize; ++i) {
+			activations[(ctx.layerSize * (half_part % 2)) + i] = 0.0f;
 		}
 		// z = Wx + b
-		for (int i = 0; i < params.layerSize; ++i) {
-			for (int j = 0; j < params.layerSize; ++j) {
-				activations[(params.layerSize * (half_part % 2)) + i] += activations[(params.layerSize * ((half_part + 1) % 2)) + j] * w_b[w_b_pos + i * params.layerSize + j];
+		for (int i = 0; i < ctx.layerSize; ++i) {
+			for (int j = 0; j < ctx.layerSize; ++j) {
+				activations[(ctx.layerSize * (half_part % 2)) + i] += activations[(ctx.layerSize * ((half_part + 1) % 2)) + j] * w_b[w_b_pos + i * ctx.layerSize + j];
 			}
 		}
 		// + b
-		for (int i = 0; i < params.layerSize; ++i) {
-			activations[(params.layerSize * (half_part % 2)) + i] += w_b[w_b_pos + params.layerSize * params.layerSize + i];
+		for (int i = 0; i < ctx.layerSize; ++i) {
+			activations[(ctx.layerSize * (half_part % 2)) + i] += w_b[w_b_pos + ctx.layerSize * ctx.layerSize + i];
 		}
 		// sin
-		for (int i = 0; i < params.layerSize; ++i) {
-			activations[(params.layerSize * (half_part % 2)) + i] = sin(W_0 * activations[(params.layerSize * (half_part % 2)) + i]);
+		for (int i = 0; i < ctx.layerSize; ++i) {
+			activations[(ctx.layerSize * (half_part % 2)) + i] = sin(W_0 * activations[(ctx.layerSize * (half_part % 2)) + i]);
 		}
-		w_b_pos += (params.layerSize + 1) * params.layerSize;
+		w_b_pos += (ctx.layerSize + 1) * ctx.layerSize;
 		half_part = (half_part + 1) % 2;
 	}
 
 	// ===== Output layer =====
 	//zero
-	activations[(params.layerSize * (half_part % 2))] = 0.0f;
+	activations[(ctx.layerSize * (half_part % 2))] = 0.0f;
 	// z = Wx + b
-	for (int j = 0; j < params.layerSize; ++j) {
-		activations[params.layerSize * (half_part % 2)] += activations[params.layerSize*((half_part + 1) % 2) + j] * w_b[w_b_pos + j];
+	for (int j = 0; j < ctx.layerSize; ++j) {
+		activations[ctx.layerSize * (half_part % 2)] += activations[ctx.layerSize*((half_part + 1) % 2) + j] * w_b[w_b_pos + j];
 	}
 	// + b
-	activations[params.layerSize * (half_part % 2)] += w_b[w_b_pos + params.layerSize];
+	activations[ctx.layerSize * (half_part % 2)] += w_b[w_b_pos + ctx.layerSize];
 	
-	return activations[params.layerSize * (half_part % 2)];
+	return activations[ctx.layerSize * (half_part % 2)];
 }
 
 float sdSphere(vec3 p, float s) {
@@ -221,10 +218,10 @@ float map(float value, float min1, float max1, float min2, float max2) {
   return min2 + (value - min1) * (max2 - min2) / (max1 - min1);
 }
 void main() {
-  if(gl_GlobalInvocationID.x >= params.width || gl_GlobalInvocationID.y >= params.height)
+  if(gl_GlobalInvocationID.x >= ctx.width || gl_GlobalInvocationID.y >= ctx.height)
     return;
 
-  vec2 iResolution = vec2(float(params.width), float(params.height));
+  vec2 iResolution = vec2(float(ctx.width), float(ctx.height));
 	vec2 uv = ((gl_GlobalInvocationID.xy + 0.5) - 0.5 * iResolution.xy) / iResolution.y;
 	uv.y =-uv.y;
 
@@ -249,7 +246,7 @@ void main() {
 			col = vec3(0.0, 0.0, 0.0);
 	}
 
-	uint pos = gl_GlobalInvocationID.y * params.width + gl_GlobalInvocationID.x;
+	uint pos = gl_GlobalInvocationID.y * ctx.width + gl_GlobalInvocationID.x;
 
 	vec4 color = vec4(col, 1.0);
 
