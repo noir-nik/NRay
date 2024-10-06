@@ -1,7 +1,7 @@
 CC := g++
 TARGET := app
 
-INCLUDES := -Iinclude -IDeps -IBase -IShaders
+INCLUDES := -Iinclude -IDeps -ICore -IBase -IShaders 
 CXXFLAGS := -MMD -MP $(INCLUDES) -O0 -DENGINE
 # -Wno-narrowing
 

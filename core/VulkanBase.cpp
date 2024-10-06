@@ -41,7 +41,7 @@ struct Context
 	// VkFence *fences;
 
 	uint32_t apiVersion;
-	bool enableValidationLayers = false;
+	bool enableValidationLayers = true;
 	std::vector<bool> activeLayers; // Available layers
 	std::vector<const char*> activeLayersNames;
 	std::vector<VkLayerProperties> layers;
@@ -235,6 +235,16 @@ struct PipelineResource : Resource {
 
 uint32_t Buffer::RID() {
     DEBUG_ASSERT(resource->rid != -1, "Invalid buffer rid");
+    return uint32_t(resource->rid);
+}
+
+// uint32_t TLAS::RID() {
+//     DEBUG_ASSERT(resource->rid != -1, "Invalid tlas rid");
+//     return uint32_t(resource->rid);
+// }
+
+uint32_t Image::RID() {
+    DEBUG_ASSERT(resource->rid != -1, "Invalid image rid");
     return uint32_t(resource->rid);
 }
 
@@ -495,10 +505,10 @@ Image CreateImage(const ImageDesc& desc) {
     return image;
 }
 
-// void CmdDispatch(const glm::ivec3& groups) {
-//     auto& cmd = _ctx.GetCurrentCommandResources();
-//     vkCmdDispatch(cmd.buffer, groups.x, groups.y, groups.z);
-// }
+void CmdDispatch(const ivec3& groups) {
+    auto& cmd = _ctx.GetCurrentCommandResources();
+    vkCmdDispatch(cmd.buffer, groups.x, groups.y, groups.z);
+}
 
 
 void Context::LoadShaders(Pipeline& pipeline) {
@@ -515,7 +525,7 @@ std::vector<char> Context::CompileShader(const std::filesystem::path& path) {
     char inpath[256];
     char outpath[256];
     std::string cwd = std::filesystem::current_path().string();
-    sprintf(inpath, "%s/source/Shaders/%s", cwd.c_str(), path.string().c_str());
+    sprintf(inpath, "%s/Shaders/%s", cwd.c_str(), path.string().c_str());
     sprintf(outpath, "%s/bin/%s.spv", cwd.c_str(), path.filename().string().c_str());
     sprintf(compile_string, "%s -V %s -o %s --target-env spirv1.4", GLSL_VALIDATOR, inpath, outpath);
     DEBUG_TRACE("[ShaderCompiler] Command: {}", compile_string);
@@ -619,6 +629,29 @@ void Context::CreatePipeline(const PipelineDesc& desc, Pipeline& pipeline) {
 	}
 }
 
+void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset) {
+    _ctx.CmdCopy(dst, data, size, dstOfsset);
+}
+
+void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset) {
+    _ctx.CmdCopy(dst, src, size, dstOffset, srcOffset);
+}
+
+void CmdCopy(Image& dst, void* data, uint32_t size) {
+    _ctx.CmdCopy(dst, data, size); 
+}
+
+void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset) {
+    _ctx.CmdCopy(dst, src, size, srcOffset); 
+}
+
+void CmdBarrier(Image& img, Layout::ImageLayout layout) {
+    _ctx.CmdBarrier(img, layout);
+}
+
+void CmdBarrier() {
+    _ctx.CmdBarrier();
+}
 
 // int CmdBeginTimeStamp(const std::string& name) {
 //     DEBUG_ASSERT(_ctx.currentQueue != Queue::Transfer, "Time Stamp not supported in Transfer queue");
@@ -660,6 +693,8 @@ void CmdPushConstants(void* data, uint32_t size) {
 //     ImGui_ImplGlfw_NewFrame();
 // }
 
+// vkWaitForFences + vkResetFences +
+// vkResetCommandPool + vkBeginCommandBuffer
 void BeginCommandBuffer(Queue queue) {
     ASSERT(_ctx.currentQueue == Queue::Count, "Already recording a command buffer");
     _ctx.currentQueue = queue;

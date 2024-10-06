@@ -26,7 +26,7 @@ Context ctx;
 void CreatePipeline(vkw::Pipeline& pipeline, const vkw::PipelineDesc& desc) {
 	bool should_update = false;
 	for (auto& stage : desc.stages) {
-		auto path = "source/Shaders/" + stage.path.string();
+		auto path = "Shaders/" + stage.path.string();
 		auto it = ctx.shaderVersions.find(path);
 		auto version = FileManager::GetFileVersion(path);
 		// TODO: Check for -1 (file not found)~
@@ -61,6 +61,7 @@ void CreateImages(uint32_t width, uint32_t height) {
 }
 
 void NeuralSdfApplication::run(NeuralSdfInfo* pNeuralSdfInfo) {
+	info = pNeuralSdfInfo;
 	Setup();
 	Create();
 	Compute();
@@ -109,6 +110,7 @@ void NeuralSdfApplication::MainLoop() {
 	}
 
 void NeuralSdfApplication::Finish() {
-		Destroy();
+		ctx = {};
+		weights.clear();
 		vkw::Destroy();
 	}
