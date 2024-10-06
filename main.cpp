@@ -1,8 +1,8 @@
-#include "Pch.h"
-#include "core/VulkanBase.h"
+#include "Pch.hpp"
+#include "VulkanBase.hpp"
 
 
-class Application {
+class computeApplication {
 public:
     void run() {
         Setup();

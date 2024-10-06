@@ -11,7 +11,19 @@ static const char *VK_ERROR_STRING(VkResult result);
 namespace vkw {
 
 struct Context
-{
+{	
+	void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset);
+    void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset);
+    void CmdCopy(Image& dst, void* data, uint32_t size);
+    void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset);
+    void CmdBarrier(Image& img, Layout::ImageLayout layout);
+    void CmdBarrier();
+    void EndCommandBuffer(VkSubmitInfo submitInfo);
+
+    void LoadShaders(Pipeline& pipeline);
+    std::vector<char> CompileShader(const std::filesystem::path& path);
+    void CreatePipeline(const PipelineDesc& desc, Pipeline& pipeline);
+
 	VkInstance instance = VK_NULL_HANDLE;
 	// VkSurfaceKHR surface = VK_NULL_HANDLE;
 	VkAllocationCallbacks* allocator = VK_NULL_HANDLE;
@@ -113,6 +125,18 @@ struct Context
     std::vector<int32_t> availableTLASRID;
 	VkSampler genericSampler;
 
+	// // preferred, warn if not available
+    // VkFormat colorFormat = VK_FORMAT_B8G8R8A8_UNORM;
+    // VkColorSpaceKHR colorSpace  = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
+    // VkPresentModeKHR presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+    // VkSampleCountFlagBits numSamples  = VK_SAMPLE_COUNT_1_BIT;
+
+	// const uint32_t initialScratchBufferSize = 64*1024*1024;
+    // Buffer asScratchBuffer;
+    // VkDeviceAddress asScratchAddress;
+
+    std::map<std::string, float> timeStampTable;
+
 	void CreateInstance();
 	void DestroyInstance();
 
@@ -121,16 +145,15 @@ struct Context
 	void CreateDevice();
 	void DestroyDevice();
 
-	void LoadShaders(Pipeline& pipeline);
-    std::vector<char> CompileShader(const std::filesystem::path& path);
-    void CreatePipeline(const PipelineDesc& desc, Pipeline& pipeline);
-
 	// void CreateSurfaceFormats();
+
     // void CreateSwapChain(uint32_t width, uint32_t height);
     // void DestroySwapChain();
 
-	void createCommandPool();
 	void createCommandBuffer();
+
+	uint32_t FindMemoryType(uint32_t type, VkMemoryPropertyFlags properties);
+	bool SupportFormat(VkFormat format, VkImageTiling tiling, VkFormatFeatureFlags features);
 
 
 	// inline Image& GetCurrentSwapChainImage() {
@@ -620,7 +643,7 @@ void CmdBindPipeline(Pipeline& pipeline) {
     auto& cmd = _ctx.GetCurrentCommandResources();
     vkCmdBindPipeline(cmd.buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->pipeline);
     vkCmdBindDescriptorSets(cmd.buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->layout, 0, 1, &_ctx.bindlessDescriptorSet, 0, nullptr);
-	
+
     _ctx.currentPipeline = pipeline.resource;
 }
 
@@ -628,6 +651,73 @@ void CmdPushConstants(void* data, uint32_t size) {
     auto& cmd = _ctx.GetCurrentCommandResources();
     vkCmdPushConstants(cmd.buffer, _ctx.currentPipeline->layout, VK_SHADER_STAGE_ALL, 0, size, data);
 }
+
+// void BeginImGui() {
+//     ImGui_ImplVulkan_NewFrame();
+//     ImGui_ImplGlfw_NewFrame();
+// }
+
+void BeginCommandBuffer(Queue queue) {
+    ASSERT(_ctx.currentQueue == Queue::Count, "Already recording a command buffer");
+    _ctx.currentQueue = queue;
+    auto& cmd = _ctx.GetCurrentCommandResources();
+    vkWaitForFences(_ctx.device, 1, &cmd.fence, VK_TRUE, UINT64_MAX);
+    vkResetFences(_ctx.device, 1, &cmd.fence);
+
+    // if (cmd.timeStamps.size() > 0) {
+    //     vkGetQueryPoolResults(_ctx.device, cmd.queryPool, 0, cmd.timeStamps.size(), cmd.timeStamps.size() * sizeof(uint64_t), cmd.timeStamps.data(), sizeof(uint64_t), VK_QUERY_RESULT_64_BIT);
+    //     for (int i = 0; i < cmd.timeStampNames.size(); i++) {
+    //         const uint64_t begin = cmd.timeStamps[2 * i];
+    //         const uint64_t end = cmd.timeStamps[2 * i + 1];
+    //         _ctx.timeStampTable[cmd.timeStampNames[i]] = float(end - begin) * _ctx.physicalProperties.limits.timestampPeriod / 1000000.0f;
+    //     }
+    //     cmd.timeStamps.clear();
+    //     cmd.timeStampNames.clear();
+    // }
+
+    Context::InternalQueue& iqueue = _ctx.queues[queue];
+    vkResetCommandPool(_ctx.device, cmd.pool, 0);
+    cmd.stagingOffset = 0;
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vkBeginCommandBuffer(cmd.buffer, &beginInfo);
+
+    // if (queue != Queue::Transfer) {
+    //     vkCmdResetQueryPool(cmd.buffer, cmd.queryPool, 0, _ctx.timeStampPerPool);
+    // }
+}
+
+void Context::EndCommandBuffer(VkSubmitInfo submitInfo) {
+    auto& cmd = GetCurrentCommandResources();
+
+    vkEndCommandBuffer(cmd.buffer);
+
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &cmd.buffer;
+
+    auto res = vkQueueSubmit(queues[currentQueue].queue, 1, &submitInfo, cmd.fence);
+    DEBUG_VK(res, "Failed to submit command buffer");
+}
+
+void EndCommandBuffer() {
+    _ctx.EndCommandBuffer({});
+    _ctx.currentQueue = vkw::Queue::Count;
+    _ctx.currentPipeline = {};
+}
+
+void WaitQueue(Queue queue) {
+    // todo: wait on fence
+    auto res = vkQueueWaitIdle(_ctx.queues[queue].queue);
+    DEBUG_VK(res, "Failed to wait idle command buffer");
+}
+
+void WaitIdle() {
+    auto res = vkDeviceWaitIdle(_ctx.device);
+    DEBUG_VK(res, "Failed to wait idle command buffer");
+}
+
 
 
 namespace{ // utils
@@ -1205,7 +1295,7 @@ void Context::CreateDevice() {
 
 void Context::DestroyDevice() {
 	// dummyVertexBuffer = {};
-	// currentPipeline = {};
+	currentPipeline = {};
 	// asScratchBuffer = {};
 	// vkDestroyDescriptorPool(device, imguiDescriptorPool, allocator);
 	vkDestroyDescriptorPool(device, bindlessDescriptorPool, allocator);
@@ -1279,7 +1369,6 @@ void Context::createCommandBuffer(){
 // 	ASSERT(false, "failed to find suitable memory type");
 // }
 
-
 // bool Context::SupportFormat(VkFormat format, VkImageTiling tiling, VkFormatFeatureFlags features) {
 // 	VkFormatProperties props;
 // 	vkGetPhysicalDeviceFormatProperties(physicalDevice, format, &props);
@@ -1337,6 +1426,100 @@ void Context::createCommandBuffer(){
 
 
  */
+
+
+void Context::CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset) {
+    CommandResources& cmd = GetCurrentCommandResources();
+    if (stagingBufferSize - cmd.stagingOffset < size) {
+        LOG_ERROR("not enough size in staging buffer to copy");
+        // todo: allocate additional buffer
+        return;
+    }
+    memcpy(cmd.stagingCpu + cmd.stagingOffset, data, size);
+    CmdCopy(dst, cmd.staging, size, dstOfsset, cmd.stagingOffset);
+    cmd.stagingOffset += size;
+}
+
+void Context::CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset) {
+    CommandResources& cmd = GetCurrentCommandResources();
+    VkBufferCopy copyRegion{};
+    copyRegion.srcOffset = srcOffset;
+    copyRegion.dstOffset = dstOffset;
+    copyRegion.size = size;
+    vkCmdCopyBuffer(cmd.buffer, src.resource->buffer, dst.resource->buffer, 1, &copyRegion);
+}
+
+void Context::CmdCopy(Image& dst, void* data, uint32_t size) {
+    CommandResources& cmd = GetCurrentCommandResources();
+    if (stagingBufferSize - cmd.stagingOffset < size) {
+        LOG_ERROR("not enough size in staging buffer to copy");
+        // todo: allocate additional buffer
+        return;
+    }
+    memcpy(cmd.stagingCpu + cmd.stagingOffset, data, size);
+    CmdCopy(dst, cmd.staging, size, cmd.stagingOffset);
+    cmd.stagingOffset += size;
+}
+
+void Context::CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset) {
+    CommandResources& cmd = GetCurrentCommandResources();
+    VkBufferImageCopy region{};
+    region.bufferOffset = srcOffset;
+    region.bufferRowLength = 0;
+    region.bufferImageHeight = 0;
+    ASSERT(!(dst.aspect & Aspect::Depth || dst.aspect & Aspect::Stencil), "CmdCopy don't support depth/stencil images");
+    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.mipLevel = 0;
+    region.imageSubresource.baseArrayLayer = 0;
+    region.imageSubresource.layerCount = 1;
+    region.imageOffset = { 0, 0, 0 };
+    region.imageExtent = { dst.width, dst.height, 1 };
+    vkCmdCopyBufferToImage(cmd.buffer, src.resource->buffer, dst.resource->image, (VkImageLayout)dst.layout, 1, &region);
+}
+
+void Context::CmdBarrier(Image& img, Layout::ImageLayout layout) {
+    CommandResources& cmd = GetCurrentCommandResources();
+    VkImageSubresourceRange range = {};
+    range.aspectMask = (VkImageAspectFlags)img.aspect;
+    range.baseMipLevel = 0;
+    range.levelCount = VK_REMAINING_MIP_LEVELS;
+    range.baseArrayLayer = 0;
+    range.layerCount = VK_REMAINING_ARRAY_LAYERS;;
+
+    VkAccessFlags srcAccess = VK_ACCESS_SHADER_WRITE_BIT;
+    VkAccessFlags dstAccess = VK_ACCESS_SHADER_READ_BIT;
+    VkPipelineStageFlags srcStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+    VkPipelineStageFlags dstStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+
+    VkImageMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.srcAccessMask = srcAccess;
+    barrier.dstAccessMask = dstAccess;
+    barrier.oldLayout = (VkImageLayout)img.layout;
+    barrier.newLayout = (VkImageLayout)layout;
+    barrier.image = img.resource->image;
+    barrier.subresourceRange = range;
+    vkCmdPipelineBarrier(cmd.buffer, srcStage, dstStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+    img.layout = layout;
+}
+
+void Context::CmdBarrier() {
+    VkMemoryBarrier2 barrier = {
+    .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+    .srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+    .srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
+    .dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+    .dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
+    };
+    VkDependencyInfo dependency = {
+        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .memoryBarrierCount = 1,
+        .pMemoryBarriers = &barrier,
+    };
+    vkCmdPipelineBarrier2(GetCurrentCommandResources().buffer, &dependency);
+}
 
 VkSampler Context::CreateSampler(f32 maxLod) {
     VkSamplerCreateInfo samplerInfo{};

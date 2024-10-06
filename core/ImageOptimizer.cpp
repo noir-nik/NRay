@@ -65,7 +65,12 @@ void forwardPass() {
 	constants.factor = 1;
 
 	vkw::CmdPushConstants(&constants, sizeof(imageOptConstants));
+	vkw::CmdDispatch({1, 1, 1});
 
+}
+
+void Run() {
+	forwardPass();
 }
 
 void Destroy() {
