@@ -93,6 +93,7 @@ struct Context
 	std::vector<int32_t> availableBufferRID;
     std::vector<int32_t> availableImageRID;
     std::vector<int32_t> availableTLASRID;
+	VkSampler genericSampler;
 
 	void CreateInstance();
 	void DestroyInstance();
@@ -124,6 +125,34 @@ struct BufferResource : Resource {
 
     virtual ~BufferResource() {
         vmaDestroyBuffer(_ctx.vmaAllocator, buffer, allocation);
+    }
+};
+
+struct ImageResource : Resource {
+    VkImage image;
+    VkImageView view;
+    VmaAllocation allocation;
+    bool fromSwapchain = false;
+    std::vector<VkImageView> layersView;
+    // std::vector<ImTextureID> imguiRIDs;
+
+    virtual ~ImageResource() {
+        if (!fromSwapchain) {
+            for (VkImageView layerView : layersView) {
+                vkDestroyImageView(_ctx.device, layerView, _ctx.allocator);
+            }
+            layersView.clear();
+            vkDestroyImageView(_ctx.device, view, _ctx.allocator);
+            vmaDestroyImage(_ctx.vmaAllocator, image, allocation);
+            if (rid >= 0) {
+                _ctx.availableImageRID.push_back(rid);
+                // for (ImTextureID imguiRID : imguiRIDs) {
+                //     ImGui_ImplVulkan_RemoveTexture((VkDescriptorSet)imguiRID);
+                // }
+                rid = -1;
+                // imguiRIDs.clear();
+            }
+        }
     }
 };
 
@@ -172,13 +201,13 @@ void UnmapBuffer(Buffer& buffer) {
 }
 
 Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, const std::string& name) {
-    if (usage & BufferUsage::Vertex) {
-        usage |= BufferUsage::TransferDst;
-    }
+    // if (usage & BufferUsage::Vertex) {
+    //     usage |= BufferUsage::TransferDst;
+    // }
 
-    if (usage & BufferUsage::Index) {
-        usage |= BufferUsage::TransferDst;
-    }
+    // if (usage & BufferUsage::Index) {
+    //     usage |= BufferUsage::TransferDst;
+    // }
 
     if (usage & BufferUsage::Storage) {
         usage |= BufferUsage::Address;
@@ -240,6 +269,162 @@ Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, c
     return buffer;
 }
 
+Image CreateImage(const ImageDesc& desc) {
+    auto device = _ctx.device;
+    auto allocator = _ctx.allocator;
+
+    std::shared_ptr<ImageResource> res = std::make_shared<ImageResource>();
+
+    VkImageCreateInfo imageInfo{};
+    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imageInfo.imageType = VK_IMAGE_TYPE_2D;
+    imageInfo.extent.width = desc.width;
+    imageInfo.extent.height = desc.height;
+    imageInfo.extent.depth = 1;
+    imageInfo.mipLevels = 1;
+    imageInfo.arrayLayers = desc.layers;
+    imageInfo.format = (VkFormat)desc.format;
+    // tiling defines how the texels lay in memory
+    // optimal tiling is implementation dependent for more efficient memory access
+    // and linear makes the texels lay in row-major order, possibly with padding on each row
+    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    // not usable by the GPU, the first transition will discard the texels
+    imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    imageInfo.usage = (VkImageUsageFlags)desc.usage;
+    imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    if (desc.layers == 6) {
+        imageInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+    }
+
+    VmaAllocationCreateInfo allocInfo = {};
+    allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    auto result = vmaCreateImage(_ctx.vmaAllocator, &imageInfo, &allocInfo, &res->image, &res->allocation, nullptr);
+    DEBUG_VK(result, "Failed to create image!");
+
+    AspectFlags aspect = Aspect::Color;
+    if (desc.format == Format::D24_unorm_S8_uint || desc.format == Format::D32_sfloat) {
+        aspect = Aspect::Depth;
+    }
+    if (desc.format == Format::D24_unorm_S8_uint) {
+        aspect |= Aspect::Stencil;
+    }
+
+    res->name = desc.name;
+
+    VkImageViewCreateInfo viewInfo{};
+    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    viewInfo.image = res->image;
+    if (desc.layers == 1) {
+        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    } else {
+        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
+    }
+    viewInfo.format = (VkFormat)desc.format;
+    viewInfo.subresourceRange.aspectMask = (VkImageAspectFlags)aspect;
+    viewInfo.subresourceRange.baseMipLevel = 0;
+    viewInfo.subresourceRange.levelCount = 1;
+    viewInfo.subresourceRange.baseArrayLayer = 0;
+    viewInfo.subresourceRange.layerCount = desc.layers;
+
+    result = vkCreateImageView(device, &viewInfo, allocator, &res->view);
+    DEBUG_VK(result, "Failed to create image view!");
+	ASSERT(result == VK_SUCCESS, "Failed to create image view!");
+
+    if (desc.layers > 1) {
+        viewInfo.subresourceRange.layerCount = 1;
+        res->layersView.resize(desc.layers);
+        for (int i = 0; i < desc.layers; i++) {
+            viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+            viewInfo.subresourceRange.baseArrayLayer = i;
+            result = vkCreateImageView(device, &viewInfo, allocator, &res->layersView[i]);
+            DEBUG_VK(result, "Failed to create image view!");
+			ASSERT(result == VK_SUCCESS, "Failed to create image view!");
+        }
+    }
+
+    Image image = {
+        .resource = res,
+        .width = desc.width,
+        .height = desc.height,
+        .usage = desc.usage,
+        .format = desc.format,
+        .layout = Layout::Undefined,
+        .aspect = aspect,
+        .layers = desc.layers,
+    };
+
+    if (desc.usage & ImageUsage::Sampled || desc.usage & ImageUsage::Storage) {
+        res->rid = _ctx.availableImageRID.back();
+        _ctx.availableImageRID.pop_back();
+    }
+
+    if (desc.usage & ImageUsage::Sampled) {
+        Layout::ImageLayout newLayout = Layout::ShaderRead;
+        if (aspect == (Aspect::Depth | Aspect::Stencil)) {
+            newLayout = Layout::DepthStencilRead;
+        } else if (aspect == Aspect::Depth) {
+            newLayout = Layout::DepthRead;
+        }
+        // res->imguiRIDs.resize(desc.layers);
+        // if (desc.layers > 1) {
+        //     for (int i = 0; i < desc.layers; i++) {
+        //         res->imguiRIDs[i] = ImGui_ImplVulkan_AddTexture(_ctx.genericSampler, res->layersView[i], (VkImageLayout)newLayout);
+        //     }
+        // } else {
+        //     res->imguiRIDs[0] = ImGui_ImplVulkan_AddTexture(_ctx.genericSampler, res->view, (VkImageLayout)newLayout);
+        // }
+
+        VkDescriptorImageInfo descriptorInfo = {
+            .sampler = _ctx.genericSampler,
+            .imageView = res->view,
+            .imageLayout = (VkImageLayout)newLayout,
+        };
+        VkWriteDescriptorSet write = {};
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.dstSet = _ctx.bindlessDescriptorSet;
+        write.dstBinding = BINDING_TEXTURE;
+        write.dstArrayElement = image.RID();
+        write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        write.descriptorCount = 1;
+        write.pImageInfo = &descriptorInfo;
+        vkUpdateDescriptorSets(_ctx.device, 1, &write, 0, nullptr);
+    }
+    if (desc.usage & ImageUsage::Storage) {
+        VkDescriptorImageInfo descriptorInfo = {
+            .sampler = _ctx.genericSampler,
+            .imageView = res->view,
+            .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+        };
+        VkWriteDescriptorSet write = {};
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.dstSet = _ctx.bindlessDescriptorSet;
+        write.dstBinding = BINDING_STORAGE_IMAGE;
+        write.dstArrayElement = image.RID();
+        write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        write.descriptorCount = 1;
+        write.pImageInfo = &descriptorInfo;
+        vkUpdateDescriptorSets(_ctx.device, 1, &write, 0, nullptr);
+    }
+
+    VkDebugUtilsObjectNameInfoEXT name = {
+    .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+    .objectType = VkObjectType::VK_OBJECT_TYPE_IMAGE,
+    .objectHandle = (uint64_t)(VkImage)res->image,
+    .pObjectName = desc.name.c_str(),
+    };
+    _ctx.vkSetDebugUtilsObjectNameEXT(_ctx.device, &name);
+    std::string strName = desc.name + "View";
+    name = {
+        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+        .objectType = VkObjectType::VK_OBJECT_TYPE_IMAGE_VIEW,
+        .objectHandle = (uint64_t)(VkImageView)res->view,
+        .pObjectName = strName.c_str(),
+    };
+    _ctx.vkSetDebugUtilsObjectNameEXT(_ctx.device, &name);
+
+    return image;
+}
 
 // void CmdDispatch(const glm::ivec3& groups) {
 //     auto& cmd = _ctx.GetCurrentCommandResources();
@@ -826,17 +1011,19 @@ void Context::CreateDevice() {
 
 	// create bindless resources
 	{
+
+		// TODO: val = min(MAX_, available)
 		const u32 MAX_STORAGE = 8192;
         const u32 MAX_SAMPLEDIMAGES = 8192;
         // const u32 MAX_ACCELERATIONSTRUCTURE = 64;
-        // const u32 MAX_STORAGE_IMAGES = 8192;
+        const u32 MAX_STORAGE_IMAGES = 8192;
 
 		// create descriptor set pool for bindless resources
         std::vector<VkDescriptorPoolSize> bindlessPoolSizes = { 
             {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MAX_SAMPLEDIMAGES},
             {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, MAX_STORAGE},
             // {VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, MAX_ACCELERATIONSTRUCTURE},
-            // {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, MAX_STORAGE_IMAGES},
+            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, MAX_STORAGE_IMAGES},
         };
 
 		// Fill with sequential numbers
@@ -844,6 +1031,8 @@ void Context::CreateDevice() {
 		std::iota(availableBufferRID.begin(), availableBufferRID.end(), 0);
 		availableImageRID.resize(MAX_SAMPLEDIMAGES);
 		std::iota(availableImageRID.begin(), availableImageRID.end(), 0);
+		// availableTLASRID.resize(MAX_ACCELERATIONSTRUCTURE);
+		// std::iota(availableTLASRID.begin(), availableTLASRID.end(), 0);
 
         VkDescriptorPoolCreateInfo bindlessPoolInfo{};
         bindlessPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -875,6 +1064,23 @@ void Context::CreateDevice() {
         storageBuffersBinding.stageFlags = VK_SHADER_STAGE_ALL;
         bindings.push_back(storageBuffersBinding);
         bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT });
+
+		// VkDescriptorSetLayoutBinding accelerationStructureBinding{};
+        // accelerationStructureBinding.binding = LUZ_BINDING_TLAS;
+        // accelerationStructureBinding.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+        // accelerationStructureBinding.descriptorCount = MAX_ACCELERATIONSTRUCTURE;
+        // accelerationStructureBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        // bindings.push_back(accelerationStructureBinding);
+        // bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT });
+
+        VkDescriptorSetLayoutBinding imageStorageBinding{};
+        imageStorageBinding.binding = BINDING_STORAGE_IMAGE;
+        imageStorageBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        imageStorageBinding.descriptorCount = MAX_STORAGE_IMAGES;
+        imageStorageBinding.stageFlags = VK_SHADER_STAGE_ALL;
+        bindings.push_back(imageStorageBinding);
+        bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT });
+
 
 		VkDescriptorSetLayoutBindingFlagsCreateInfo setLayoutBindingFlags{};
 		setLayoutBindingFlags.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
@@ -928,7 +1134,7 @@ void Context::DestroyDevice() {
 	bindlessDescriptorPool = VK_NULL_HANDLE;
 	bindlessDescriptorLayout = VK_NULL_HANDLE;
 	vmaDestroyAllocator(vmaAllocator);
-	// vkDestroySampler(device, genericSampler, allocator);
+	vkDestroySampler(device, genericSampler, allocator);
 	vkDestroyDevice(device, allocator);
 	DEBUG_TRACE("Destroyed logical device");
 	device = VK_NULL_HANDLE;

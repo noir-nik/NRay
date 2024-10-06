@@ -81,6 +81,7 @@ namespace Aspect {
 using AspectFlags = Flags;
 
 namespace Layout {
+	// VK_IMAGE_LAYOUT_
     enum ImageLayout {
         Undefined = 0,
         General = 1,
@@ -114,19 +115,28 @@ struct Buffer {
     uint32_t RID();
 };
 
-// struct Image {
-//     std::shared_ptr<ImageResource> resource;
-//     uint32_t width = 0;
-//     uint32_t height = 0;
-//     ImageUsageFlags usage;
-//     Format format;
-//     Layout::ImageLayout layout;
-//     AspectFlags aspect;
-//     uint32_t layers = 1;
-//     uint32_t RID();
-//     // ImTextureID ImGuiRID();
-//     // ImTextureID ImGuiRID(uint32_t layer);
-// };
+struct Image {
+    std::shared_ptr<ImageResource> resource;
+    uint32_t width = 0;
+    uint32_t height = 0;
+    ImageUsageFlags usage;
+    Format format;
+    Layout::ImageLayout layout;
+    AspectFlags aspect;
+    uint32_t layers = 1;
+    uint32_t RID();
+    // ImTextureID ImGuiRID();
+    // ImTextureID ImGuiRID(uint32_t layer);
+};
+
+struct ImageDesc {
+    uint32_t width;
+    uint32_t height;
+    Format format;
+    ImageUsageFlags usage;
+    std::string name = "";
+    uint32_t layers = 1;
+};
 
 enum Queue {
     Graphics = 0,
@@ -179,7 +189,7 @@ struct PipelineDesc {
 
 
 Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory = Memory::GPU, const std::string& name = "");
-// Image CreateImage(const ImageDesc& desc);
+Image CreateImage(const ImageDesc& desc);
 Pipeline CreatePipeline(const PipelineDesc& desc);
 
 
