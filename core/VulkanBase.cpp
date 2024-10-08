@@ -1490,7 +1490,7 @@ Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, c
         .usage = usage,
         .memory = memory,
     };
-	static int bufferRID = 1;
+	static int bufferRID = 0;
     if (usage & BufferUsage::Storage) {
         res->rid = bufferRID; // TODO test: give RID starting from 0, not from end
 

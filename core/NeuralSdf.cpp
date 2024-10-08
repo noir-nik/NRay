@@ -11,8 +11,10 @@ struct Context {
 
     std::unordered_map<std::string, int> shaderVersions;
     // vkw::Image outputImage;
-	vkw::Buffer weightsGPU;
+	// vkw::Buffer weightsGPU;
+
 	vkw::Buffer outputImage;
+	vkw::Buffer imageGPU;
 
 	int width, height;
 	int numLayers, layerSize;
@@ -56,6 +58,7 @@ void CreateShaders() {
 void CreateImages(uint32_t width, uint32_t height) {
 	// ctx.weightsGPU = vkw::CreateBuffer(ctx.num_parameters * sizeof(float), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst, vkw::Memory::GPU, "Neural Sdf Weights");
 	ctx.outputImage = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst | vkw::BufferUsage::TransferSrc, vkw::Memory::CPU, "Output Image");
+	ctx.imageGPU = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst | vkw::BufferUsage::TransferSrc, vkw::Memory::GPU, "Input Image");
 }
 
 
@@ -112,15 +115,16 @@ void NeuralSdfApplication::Compute() {
 	vkw::BeginCommandBuffer(vkw::Queue::Compute);
 	// vkw::CmdCopy(ctx.weightsGPU, weights.data(), ctx.num_parameters * sizeof(float));
 	vkw::CmdBindPipeline(ctx.forwardPipeline);
-	// vkw::CmdCopy(ctx.outputImage, _memm.data(), ctx.width * ctx.height * sizeof(Pixel));
-	NeuralSdfConstants constants{};
-	constants.width = ctx.width;
-	constants.height = ctx.height;
-	constants.numLayers = ctx.numLayers;
-	constants.layerSize = ctx.layerSize;
-	// constants.weightsRID = ctx.weightsGPU.RID();
-	constants.outputImageRID = ctx.outputImage.RID();
-	vkw::CmdPushConstants(&ctx, sizeof(constants));
+	vkw::CmdCopy(ctx.imageGPU, _memm.data(), ctx.width * ctx.height * sizeof(Pixel));
+	vkw::CmdCopy(ctx.outputImage, ctx.imageGPU, ctx.width * ctx.height * sizeof(Pixel));
+	// NeuralSdfConstants constants{};
+	// constants.width = ctx.width;
+	// constants.height = ctx.height;
+	// constants.numLayers = ctx.numLayers;
+	// constants.layerSize = ctx.layerSize;
+	// // constants.weightsRID = ctx.weightsGPU.RID();
+	// constants.outputImageRID = ctx.outputImage.RID();
+	// vkw::CmdPushConstants(&ctx, sizeof(constants));
 	// vkw::CmdDispatch({(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
 	// vkw::CmdBarrier();
 	vkw::EndCommandBuffer();
@@ -128,16 +132,17 @@ void NeuralSdfApplication::Compute() {
 	vkw::WaitIdle();
 
 	// vkw::ReadBuffer(ctx.outputImage, pixels.data(), ctx.width * ctx.height * sizeof(Pixel));
-	std::vector<unsigned char> image(ctx.width * ctx.height * 4);
-	// Pixel* mappedMemory = (Pixel*)vkw::MapBuffer(ctx.outputImage);
-	Pixel* mappedMemory = (Pixel*)_memm.data();
+	std::vector<unsigned char> image;
+	image.reserve(ctx.width * ctx.height * 4);
+	Pixel* mappedMemory = (Pixel*)vkw::MapBuffer(ctx.outputImage);
+	// Pixel* mappedMemory = (Pixel*)_memm.data();
 	for (int i = 0; i < ctx.width * ctx.height; i++) {
 		image.push_back(255.0f * mappedMemory[i].r);
 		image.push_back(255.0f * mappedMemory[i].g);
 		image.push_back(255.0f * mappedMemory[i].b);
 		image.push_back(255.0f);
 	}
-	// vkw::UnmapBuffer(ctx.outputImage);
+	vkw::UnmapBuffer(ctx.outputImage);
 	FileManager::SaveBMP(info->outputPath.c_str(), (const uint32_t*)image.data(), ctx.width, ctx.height);
 }
 

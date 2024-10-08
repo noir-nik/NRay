@@ -23,7 +23,7 @@ layout(push_constant) uniform Constants {
     NeuralSdfConstants ctx;
 };
 
-layout(std140, set = 0, binding = 1) buffer buf
+layout(std140, set = 0, binding = 0) buffer buf
 {
    Pixel imageData[];
 };
