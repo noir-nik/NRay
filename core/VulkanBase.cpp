@@ -103,6 +103,10 @@ struct Context
 	VkDescriptorSet bindlessDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorPool bindlessDescriptorPool = VK_NULL_HANDLE;
 	VkDescriptorSetLayout bindlessDescriptorLayout = VK_NULL_HANDLE;
+	
+    VkDescriptorSet       descriptorSet;
+	VkDescriptorPool      descriptorPool;
+    VkDescriptorSetLayout descriptorSetLayout;
 
 	VkDevice device = VK_NULL_HANDLE;
 
@@ -146,6 +150,16 @@ struct Context
 	void CreateDevice();
 	void DestroyDevice();
 
+	void CreateBindlessResources();
+	void DestroyBindlessResources();
+
+	void createDescriptorSetLayout();
+	void createDescriptorSetFor_2_Buffers();
+	void destroyDescriptorResources();
+
+	// void createDescriptorPool();
+	void createComputePipeline();
+
 	// void CreateSurfaceFormats();
 
     // void CreateSwapChain(uint32_t width, uint32_t height);
@@ -153,6 +167,7 @@ struct Context
 
 	void createCommandBuffers();
 	void DestroyCommandBuffers();
+	
 
 	uint32_t FindMemoryType(uint32_t type, VkMemoryPropertyFlags properties);
 	bool SupportFormat(VkFormat format, VkImageTiling tiling, VkFormatFeatureFlags features);
@@ -255,6 +270,10 @@ void Init() {
 	_ctx.CreateDevice();
 	// _ctx.CreateSurfaceFormats();
 	// _ctx.CreateSwapChain(width, height);
+
+	_ctx.createDescriptorSetLayout();
+	_ctx.createDescriptorSetFor_2_Buffers();
+	
 	_ctx.createCommandBuffers();
 	// _ctx.CreateImGui(window);
 }
@@ -263,7 +282,12 @@ void Destroy() {
 	// ImGui_ImplVulkan_Shutdown();
 	// ImGui_ImplGlfw_Shutdown();
 	// _ctx.DestroySwapChain();
+
+	_ctx.destroyDescriptorResources();
+	
+
 	_ctx.DestroyCommandBuffers();
+	// _ctx.DestroyBindlessResources();
 	_ctx.DestroyDevice();
 	_ctx.DestroyInstance();
 }
@@ -280,7 +304,7 @@ void UnmapBuffer(Buffer& buffer) {
     vmaUnmapMemory(_ctx.vmaAllocator, buffer.resource->allocation);
 } 
 
-Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, const std::string& name) {
+Buffer CreatebindlessBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, const std::string& name) {
     // if (usage & BufferUsage::Vertex) {
     //     usage |= BufferUsage::TransferDst;
     // }
@@ -349,7 +373,7 @@ Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, c
     return buffer;
 }
 
-Image CreateImage(const ImageDesc& desc) {
+Image CreatebindlessImage(const ImageDesc& desc) {
     auto device = _ctx.device;
     auto allocator = _ctx.allocator;
 
@@ -587,7 +611,8 @@ void Context::CreatePipeline(const PipelineDesc& desc, Pipeline& pipeline) {
 	}
 
 	std::vector<VkDescriptorSetLayout> layouts;
-	layouts.push_back(bindlessDescriptorLayout);
+	// layouts.push_back(bindlessDescriptorLayout);
+	layouts.push_back(descriptorSetLayout);
 
 	VkPushConstantRange pushConstant{};
 	pushConstant.offset = 0;
@@ -682,7 +707,8 @@ void CmdBarrier() {
 void CmdBindPipeline(Pipeline& pipeline) {
     auto& cmd = _ctx.GetCurrentCommandResources();
     vkCmdBindPipeline(cmd.buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->pipeline);
-    vkCmdBindDescriptorSets(cmd.buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->layout, 0, 1, &_ctx.bindlessDescriptorSet, 0, nullptr);
+    // vkCmdBindDescriptorSets(cmd.buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->layout, 0, 1, &_ctx.bindlessDescriptorSet, 0, nullptr);
+    vkCmdBindDescriptorSets(cmd.buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->layout, 0, 1, &_ctx.descriptorSet, 0, nullptr);
 
     _ctx.currentPipeline = pipeline.resource;
 }
@@ -1230,7 +1256,9 @@ void Context::CreateDevice() {
 
 	// VkResult result = vkCreateDescriptorPool(device, &imguiPoolInfo, allocator, &imguiDescriptorPool);
 	// DEBUG_VK(result, "Failed to create imgui descriptor pool!");
+}
 
+void Context::CreateBindlessResources() {
 	// create bindless resources
 	{
 
@@ -1345,21 +1373,168 @@ void Context::CreateDevice() {
 	// );
 }
 
+// Not bindless 2 buffers
+void Context::createDescriptorSetLayout()
+{
+	VkDescriptorSetLayoutBinding descriptorSetLayoutBinding[2];
+	descriptorSetLayoutBinding[0].binding            = 0;
+	descriptorSetLayoutBinding[0].descriptorType     = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	descriptorSetLayoutBinding[0].descriptorCount    = 1;
+	descriptorSetLayoutBinding[0].stageFlags         = VK_SHADER_STAGE_COMPUTE_BIT;
+
+	descriptorSetLayoutBinding[1].binding            = 1;
+	descriptorSetLayoutBinding[1].descriptorType     = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	descriptorSetLayoutBinding[1].descriptorCount    = 1;
+	descriptorSetLayoutBinding[1].stageFlags         = VK_SHADER_STAGE_COMPUTE_BIT;
+
+	VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {};
+	descriptorSetLayoutCreateInfo.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	descriptorSetLayoutCreateInfo.bindingCount = 2; 
+	descriptorSetLayoutCreateInfo.pBindings    = descriptorSetLayoutBinding;
+	
+	VkResult result = vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCreateInfo, NULL, &descriptorSetLayout);
+	DEBUG_VK( result, "Failed to create descriptor set layout!");
+	ASSERT(result == VK_SUCCESS, "Failed to create descriptor set layout!");
+}
+
+void Context::createDescriptorSetFor_2_Buffers()
+	{
+	VkDescriptorPoolSize descriptorPoolSize[2];
+	descriptorPoolSize[0].type            = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	descriptorPoolSize[0].descriptorCount = 1;
+	descriptorPoolSize[1].type            = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	descriptorPoolSize[1].descriptorCount = 1;
+
+	VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {};
+	descriptorPoolCreateInfo.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	descriptorPoolCreateInfo.maxSets       = 1; 
+	descriptorPoolCreateInfo.poolSizeCount = 2;
+	descriptorPoolCreateInfo.pPoolSizes    = descriptorPoolSize;
+	VkResult result = (vkCreateDescriptorPool(device, &descriptorPoolCreateInfo, NULL, &descriptorPool));
+	ASSERT(result == VK_SUCCESS, "Failed to create descriptor pool!");
+
+	VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = {};
+	descriptorSetAllocateInfo.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	descriptorSetAllocateInfo.descriptorPool     = descriptorPool; 
+	descriptorSetAllocateInfo.descriptorSetCount = 1;            
+	descriptorSetAllocateInfo.pSetLayouts        = &descriptorSetLayout;
+	result = (vkAllocateDescriptorSets(device, &descriptorSetAllocateInfo, &descriptorSet));
+	ASSERT(result == VK_SUCCESS, "Failed to allocate descriptor set!");
+	
+	// //pixels
+	// VkDescriptorBufferInfo descriptorBufferInfo = {};
+	// descriptorBufferInfo.buffer = a_buffer;
+	// descriptorBufferInfo.offset = 0;
+	// descriptorBufferInfo.range  = a_bufferSize;
+
+	// VkWriteDescriptorSet writeDescriptorSet = {};
+	// writeDescriptorSet.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	// writeDescriptorSet.dstSet          = descriptorSet; 
+	// writeDescriptorSet.dstBinding      = 0;        
+	// writeDescriptorSet.descriptorCount = 1;        
+	// writeDescriptorSet.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; 
+	// writeDescriptorSet.pBufferInfo     = &descriptorBufferInfo;
+	// vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, NULL);
+
+	// //second buffer
+	// VkDescriptorBufferInfo descriptorBufferInfo2 = {};
+	// descriptorBufferInfo2.buffer = a_secondBuffer;
+	// descriptorBufferInfo2.offset = 0;
+	// descriptorBufferInfo2.range  = a_secondBufferSize;
+	
+	// VkWriteDescriptorSet writeDescriptorSet2 = {};
+	// writeDescriptorSet2.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	// writeDescriptorSet2.dstSet          = descriptorSet; 
+	// writeDescriptorSet2.dstBinding      = 1;        
+	// writeDescriptorSet2.descriptorCount = 1;        
+	// writeDescriptorSet2.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; 
+	// writeDescriptorSet2.pBufferInfo     = &descriptorBufferInfo2;
+	// vkUpdateDescriptorSets(device, 1, &writeDescriptorSet2, 0, NULL);
+}
+
+void Context::destroyDescriptorResources(){
+	vkDestroyDescriptorPool(device, descriptorPool, allocator);
+	vkDestroyDescriptorSetLayout(device, descriptorSetLayout, allocator);
+	descriptorSet = VK_NULL_HANDLE;
+	descriptorPool = VK_NULL_HANDLE;
+	descriptorSetLayout = VK_NULL_HANDLE;
+}
+
+// Not bindless 
+Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, const std::string& name) {
+
+    if (usage & BufferUsage::Storage) {
+        usage |= BufferUsage::Address;
+        size += size % _ctx.physicalProperties.limits.minStorageBufferOffsetAlignment;
+    }
+
+    std::shared_ptr<BufferResource> res = std::make_shared<BufferResource>();
+	res->name = name;
+    VkBufferCreateInfo bufferInfo{};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = size;
+    bufferInfo.usage = (VkBufferUsageFlagBits)usage;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VmaAllocationCreateInfo allocInfo = {};
+    allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    if (memory & Memory::CPU) {
+        allocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+    }
+    auto result = vmaCreateBuffer(_ctx.vmaAllocator, &bufferInfo, &allocInfo, &res->buffer, &res->allocation, nullptr);
+    DEBUG_VK(result, "Failed to create buffer!");
+	ASSERT(result == VK_SUCCESS, "Failed to create buffer!");
+    Buffer buffer = {
+        .resource = res,
+        .size = size,
+        .usage = usage,
+        .memory = memory,
+    };
+	static int bufferRID = 1;
+    if (usage & BufferUsage::Storage) {
+        res->rid = bufferRID; // TODO test: give RID starting from 0, not from end
+
+        VkDescriptorBufferInfo descriptorInfo = {};
+        descriptorInfo.buffer = res->buffer;
+        descriptorInfo.offset = 0;
+        descriptorInfo.range  = size;
+
+        VkWriteDescriptorSet write = {};
+        write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        // write.dstSet          = _ctx.bindlessDescriptorSet;
+        write.dstSet          = _ctx.descriptorSet;
+        write.dstBinding      = buffer.RID();
+        // write.dstArrayElement = buffer.RID();
+        write.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        write.descriptorCount = 1;
+        write.pBufferInfo     = &descriptorInfo;
+        vkUpdateDescriptorSets(_ctx.device, 1, &write, 0, nullptr);
+
+		bufferRID++; //////
+    }
+
+    return buffer;
+}
+
+
 void Context::DestroyDevice() {
 	// dummyVertexBuffer = {};
 	currentPipeline = {};
 	// asScratchBuffer = {};
 	// vkDestroyDescriptorPool(device, imguiDescriptorPool, allocator);
-	vkDestroyDescriptorPool(device, bindlessDescriptorPool, allocator);
-	vkDestroyDescriptorSetLayout(device, bindlessDescriptorLayout, allocator);
-	bindlessDescriptorSet = VK_NULL_HANDLE;
-	bindlessDescriptorPool = VK_NULL_HANDLE;
-	bindlessDescriptorLayout = VK_NULL_HANDLE;
 	vmaDestroyAllocator(vmaAllocator);
 	vkDestroySampler(device, genericSampler, allocator);
 	vkDestroyDevice(device, allocator);
 	DEBUG_TRACE("Destroyed logical device");
 	device = VK_NULL_HANDLE;
+}
+
+void Context::DestroyBindlessResources(){
+	vkDestroyDescriptorPool(device, bindlessDescriptorPool, allocator);
+	vkDestroyDescriptorSetLayout(device, bindlessDescriptorLayout, allocator);
+	bindlessDescriptorSet = VK_NULL_HANDLE;
+	bindlessDescriptorPool = VK_NULL_HANDLE;
+	bindlessDescriptorLayout = VK_NULL_HANDLE;
 }
 
 void Context::createCommandBuffers(){
