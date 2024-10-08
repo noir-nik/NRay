@@ -6,10 +6,17 @@
 .vscode/
 .vscode/*
 
+bin/
+lib/
+bin/*
 build/*
 build-linux/*
 logs/*
 
+shaders/*.spv
+*.bmp
+*.log
+*.spv
 *.so
 *.so.*
 *.dll
