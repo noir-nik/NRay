@@ -278,7 +278,7 @@ void* MapBuffer(Buffer& buffer) {
 void UnmapBuffer(Buffer& buffer) {
     ASSERT(buffer.memory & Memory::CPU, "Buffer not cpu accessible!");
     vmaUnmapMemory(_ctx.vmaAllocator, buffer.resource->allocation);
-}
+} 
 
 Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, const std::string& name) {
     // if (usage & BufferUsage::Vertex) {
