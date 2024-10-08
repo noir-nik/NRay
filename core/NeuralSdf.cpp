@@ -47,15 +47,15 @@ void CreateShaders() {
     CreatePipeline(ctx.forwardPipeline, {
         .point = vkw::PipelinePoint::Compute,
         .stages = {
-            {.stage = vkw::ShaderStage::Compute, .path = "neuralSdfTest.comp"},
+            {.stage = vkw::ShaderStage::Compute, .path = "clearColor.comp"},
         },
         .name = "Neural Sdf Forward",
     });
 }
 
 void CreateImages(uint32_t width, uint32_t height) {
-	ctx.weightsGPU = vkw::CreateBuffer(ctx.num_parameters * sizeof(float), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst, vkw::Memory::GPU, "Neural Sdf Weights");
-	ctx.outputImage = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst, vkw::Memory::CPU, "Output Image");
+	// ctx.weightsGPU = vkw::CreateBuffer(ctx.num_parameters * sizeof(float), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst, vkw::Memory::GPU, "Neural Sdf Weights");
+	ctx.outputImage = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst | vkw::BufferUsage::TransferSrc, vkw::Memory::CPU, "Output Image");
 }
 
 
@@ -92,21 +92,23 @@ void NeuralSdfApplication::Create() {
 	}
 
 void NeuralSdfApplication::Compute() {
+		Context* cc = &ctx;
 		vkw::BeginCommandBuffer(vkw::Queue::Compute);
-		vkw::CmdCopy(ctx.weightsGPU, weights.data(), ctx.num_parameters * sizeof(float));
+		// vkw::CmdCopy(ctx.weightsGPU, weights.data(), ctx.num_parameters * sizeof(float));
 		vkw::CmdBindPipeline(ctx.forwardPipeline);
-		NeuralSdfConstants constants;
+		NeuralSdfConstants constants{};
 		constants.width = ctx.width;
 		constants.height = ctx.height;
 		constants.numLayers = ctx.numLayers;
 		constants.layerSize = ctx.layerSize;
-		constants.weightsRID = ctx.weightsGPU.RID();
+		// constants.weightsRID = ctx.weightsGPU.RID();
 		constants.outputImageRID = ctx.outputImage.RID();
 		vkw::CmdPushConstants(&ctx, sizeof(constants));
 		vkw::CmdDispatch({(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
-		vkw::CmdBarrier();
+		// vkw::CmdBarrier();
 		vkw::EndCommandBuffer();
-		vkw::WaitQueue(vkw::Queue::Compute);
+		// vkw::WaitQueue(vkw::Queue::Compute);
+		vkw::WaitIdle();
 
 		// vkw::ReadBuffer(ctx.outputImage, pixels.data(), ctx.width * ctx.height * sizeof(Pixel));
 		std::vector<unsigned char> image(ctx.width * ctx.height * 4);

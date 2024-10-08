@@ -1,3 +1,5 @@
+// #define ENGINE
+
 #ifdef ENGINE
 #pragma once
 struct Pixel {
@@ -5,8 +7,8 @@ struct Pixel {
 };
 #endif
 
-#define BINDING_TEXTURE 0 // Sampled image
-#define BINDING_BUFFER 1
+#define BINDING_BUFFER 0
+#define BINDING_TEXTURE 1 // Sampled image
 #define BINDING_TLAS 2
 #define BINDING_STORAGE_IMAGE 3
 
@@ -56,9 +58,9 @@ layout(set = 0, binding = BINDING_BUFFER) buffer OutImageBuffer {
 } OutImageBuffers[];
 
 
-layout(binding = BINDING_STORAGE_IMAGE) uniform image2D images[];
+layout(set = 0, binding = BINDING_STORAGE_IMAGE) uniform image2D images[];
 
-#define w_b WeightsBuffers[ctx.weightsRID].data
-#define imageData OutImageBuffers[ctx.outputImageRID].data
+// #define w_b WeightsBuffers[ctx.weightsRID].data
+// #define imageData OutImageBuffers[ctx.outputImageRID].data
 
 #endif

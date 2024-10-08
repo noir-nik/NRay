@@ -654,6 +654,9 @@ void CmdBarrier() {
     _ctx.CmdBarrier();
 }
 
+// void CmdClear(){
+// 	_ctx.CmdClear();
+// }
 // int CmdBeginTimeStamp(const std::string& name) {
 //     DEBUG_ASSERT(_ctx.currentQueue != Queue::Transfer, "Time Stamp not supported in Transfer queue");
 //     auto& cmd = _ctx.GetCurrentCommandResources();
@@ -1239,17 +1242,17 @@ void Context::CreateDevice() {
 
 		// create descriptor set pool for bindless resources
         std::vector<VkDescriptorPoolSize> bindlessPoolSizes = { 
-            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MAX_SAMPLEDIMAGES},
             {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, MAX_STORAGE},
+            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MAX_SAMPLEDIMAGES},
             // {VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, MAX_ACCELERATIONSTRUCTURE},
             {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, MAX_STORAGE_IMAGES},
         };
 
 		// Fill with sequential numbers
 		availableBufferRID.resize(MAX_STORAGE);
-		std::iota(availableBufferRID.begin(), availableBufferRID.end(), 0);
+		std::iota(availableBufferRID.rbegin(), availableBufferRID.rend(), 0);
 		availableImageRID.resize(MAX_SAMPLEDIMAGES);
-		std::iota(availableImageRID.begin(), availableImageRID.end(), 0);
+		std::iota(availableImageRID.rbegin(), availableImageRID.rend(), 0);
 		// availableTLASRID.resize(MAX_ACCELERATIONSTRUCTURE);
 		// std::iota(availableTLASRID.begin(), availableTLASRID.end(), 0);
 
@@ -1268,14 +1271,6 @@ void Context::CreateDevice() {
         std::vector<VkDescriptorSetLayoutBinding> bindings;
         std::vector<VkDescriptorBindingFlags> bindingFlags;
 
-		VkDescriptorSetLayoutBinding texturesBinding{};
-        texturesBinding.binding = BINDING_TEXTURE;
-        texturesBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        texturesBinding.descriptorCount = MAX_SAMPLEDIMAGES;
-        texturesBinding.stageFlags = VK_SHADER_STAGE_ALL;
-        bindings.push_back(texturesBinding);
-        bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT });
-
         VkDescriptorSetLayoutBinding storageBuffersBinding{};
         storageBuffersBinding.binding = BINDING_BUFFER;
         storageBuffersBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
@@ -1283,6 +1278,14 @@ void Context::CreateDevice() {
         storageBuffersBinding.stageFlags = VK_SHADER_STAGE_ALL;
         bindings.push_back(storageBuffersBinding);
         bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT });
+
+		VkDescriptorSetLayoutBinding texturesBinding{};
+        texturesBinding.binding = BINDING_TEXTURE;
+        texturesBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        texturesBinding.descriptorCount = MAX_SAMPLEDIMAGES;
+        texturesBinding.stageFlags = VK_SHADER_STAGE_ALL;
+        bindings.push_back(texturesBinding);
+        bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT });
 
 		// VkDescriptorSetLayoutBinding accelerationStructureBinding{};
         // accelerationStructureBinding.binding = LUZ_BINDING_TLAS;
@@ -1584,6 +1587,7 @@ void Context::CmdBarrier() {
     };
     vkCmdPipelineBarrier2(GetCurrentCommandResources().buffer, &dependency);
 }
+
 
 VkSampler Context::CreateSampler(f32 maxLod) {
     VkSamplerCreateInfo samplerInfo{};
