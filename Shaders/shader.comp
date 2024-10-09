@@ -238,7 +238,7 @@ void main() {
 		if(dist < tNearAndFar.y) {
 			col = getLight(ro + rd * dist, rd, vec3(0.951, 0.9686, 1.0));
 		} else
-			col = vec3(0.0, 0.0, 0.0);
+			col = vec3(0.3, 0.0, 0.2);
 	}
 
 	uint pos = gl_GlobalInvocationID.y * params.width + gl_GlobalInvocationID.x;

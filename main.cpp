@@ -7,6 +7,8 @@
 
 #include "FileManager.hpp"
 
+#include <filesystem>
+
 struct NeuralSdfInfo
 {
 	std::string weightsPath;
@@ -20,8 +22,8 @@ struct NeuralSdfInfo
 int main()
 {
 	// // print pwd
-	// std::cout << std::filesystem::current_path() << std::endl;
-	// Logger::Init();
+	std::cout << std::filesystem::current_path() << std::endl;
+	Logger::Init();
 	// NeuralSdfApplication app;
 	NeuralSdfInfo ctx = {
 		.weightsPath = "assets/sdf1_weights.bin",
@@ -31,6 +33,7 @@ int main()
 		.width = 256,
 		.height = 256,
 	};
+	// std::cout << std::filesystem::current_path().c_str() << "\n";
 	// app.run(&neuralSdfInfo);
 	// return 0;
 	int num_parameters = (3*ctx.layerSize + ctx.numLayers*ctx.layerSize*ctx.layerSize + ctx.layerSize) + (ctx.layerSize*(ctx.numLayers + 1) + 1);
