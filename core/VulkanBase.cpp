@@ -11,7 +11,7 @@
 
 #include "vk_utils.h"
 #include "FileManager.hpp"
-#include "ComputeApplication.hpp"
+#include "VulkanBase.hpp"
 
 
 #define VMA_IMPLEMENTATION
@@ -36,8 +36,6 @@ constexpr bool enableValidationLayers = true;
 static const char *VK_ERROR_STRING(VkResult result);
 
 namespace vkw{
-
-Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, const std::string& name);
 
 
 struct Context
@@ -181,6 +179,7 @@ struct Context
 
 	void createDescriptorSetLayout();
 	void createDescriptorSet();
+	void destroyDescriptorResources();
 
 	void createBindlessResources();
 	void destroyBindlessResources();
@@ -208,47 +207,15 @@ struct Context
 	// VkExtent2D ChooseExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32_t width, uint32_t height);
 	// VkPresentModeKHR ChoosePresentMode(const std::vector<VkPresentModeKHR>& presentModes);
 	// VkSurfaceFormatKHR ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats);
-	VkSampler CreateSampler(float maxLod);
+	VkSampler CreateSampler(f32 maxLod);
 
 	PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT;
 
 
-	void createComputePipeline(VkDevice a_device, const VkDescriptorSetLayout& a_dsLayout,
-									VkShaderModule* a_pShaderModule, VkPipeline* a_pPipeline,
-									VkPipelineLayout* a_pPipelineLayout);
-
-
-	// void recordCommandsTo(VkCommandBuffer a_cmdBuff, VkPipeline a_pipeline, VkPipelineLayout a_layout, const VkDescriptorSet& a_ds);
-	void runCommandBuffer(VkCommandBuffer a_cmdBuff, VkQueue a_queue, VkDevice a_device);
-	void cleanup();
-
-	void run();
-
-	// VkInstance instance;
-	VkDebugReportCallbackEXT debugReportCallback;
-	// VkPhysicalDevice physicalDevice;
-	// VkDevice device;
-	VkPipeline       pipelineApp = VK_NULL_HANDLE;
-	VkPipelineLayout pipelineLayoutApp = VK_NULL_HANDLE;
-	VkShaderModule   computeShaderModule = VK_NULL_HANDLE;
-	VkCommandPool   commandPool = VK_NULL_HANDLE;
-	VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
 	VkDescriptorPool      descriptorPool = VK_NULL_HANDLE;
 	VkDescriptorSet       descriptorSet = VK_NULL_HANDLE;
 	VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
-	std::vector<const char *> enabledLayers;
 
-	Pipeline forwardPipeline;
-	Buffer bufferPixel;
-	Buffer bufferWeightsDevice;
-
-
-	struct MLP{
-		std::vector<float> weights;
-		int num_hidden_layers;
-		int hidden_layer_size;
-	};
-	MLP mlp;
 };
 static Context _ctx;
 
@@ -326,6 +293,8 @@ void Init() {
 	_ctx.CreateInstance();
 	_ctx.CreatePhysicalDevice();
 	_ctx.CreateDevice();
+	_ctx.createDescriptorSetLayout();
+	_ctx.createDescriptorSet();
 
 	// _ctx.CreateSurfaceFormats();
 	// _ctx.CreateSwapChain(width, height);
@@ -340,6 +309,7 @@ void Destroy() {
 	// ImGui_ImplGlfw_Shutdown();
 	// _ctx.DestroySwapChain();
 
+	_ctx.destroyDescriptorResources();
 	_ctx.DestroyCommandBuffers();
 	_ctx.DestroyDevice();
 	_ctx.DestroyInstance();
@@ -685,188 +655,6 @@ void WaitIdle() {
     auto res = vkDeviceWaitIdle(_ctx.device);
     DEBUG_VK(res, "Failed to wait idle command buffer");
 }
-
-
-
-void ComputeApplication::run()	{
-	Init();
-	_ctx.mlp.weights = weights;
-	_ctx.mlp.num_hidden_layers = numLayers;
-	_ctx.mlp.hidden_layer_size = layerSize;
-	_ctx.run();
-	_ctx.cleanup();
-	Destroy();
-}
-
-void Context::run()	{
-	const int deviceId = 0;
-	std::cout << "init vulkan for device " << deviceId << " ... " << std::endl;
-
-	// uint32_t queueFamilyIndex = vk_utils::GetComputeQueueFamilyIndex(physicalDevice);
-	
-	// device = vk_utils::CreateLogicalDevice(queues[Queue::Compute].family, physicalDevice, enabledLayers);
-
-	// vkGetDeviceQueue(device, queues[Queue::Compute].family, 0, &queue);
-	
-	size_t bufferSize = sizeof(Pixel) * WIDTH * HEIGHT;
-	size_t weightsBufferSize = mlp.weights.size() * sizeof(float);//////TODO
-
-	std::cout << "creating resources ... " << std::endl;
-
-	createDescriptorSetLayout();
-	createDescriptorSet();
-	bufferPixel = CreateBuffer(bufferSize, vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst, vkw::Memory::CPU, "Output Image");
-	bufferWeightsDevice = CreateBuffer(weightsBufferSize, vkw::BufferUsage::Storage | vkw::BufferUsage::TransferSrc | vkw::BufferUsage::TransferDst, vkw::Memory::GPU, "Weights Buffer");
-
-	std::cout << "compiling shaders	... " << std::endl;
-
-	// createComputePipeline(device, descriptorSetLayout,
-	// 		&computeShaderModule, &pipelineApp, &pipelineLayoutApp);
-
-	forwardPipeline = CreatePipeline({
-        .point = vkw::PipelinePoint::Compute,
-        .stages = {
-            {.stage = vkw::ShaderStage::Compute, .path = "shader.comp"},
-        },
-        .name = "Neural Sdf Forward",
-    });
-
-	// createCommandBuffers();
-	// _ctx.currentQueue = Queue::Compute;
-	// _ctx.commandPool = queues[Queue::Compute].commands[0].pool;
-	// commandBuffer = GetCurrentCommandResources().buffer;
-
-
-	///// ============================================= RUN =======================================================
-	// VkCommandBufferBeginInfo beginInfo = {};
-	// beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	// beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT; 
-	// VK_CHECK_RESULT(vkBeginCommandBuffer(commandBuffer, &beginInfo)); 
-	// vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineApp);
-	// vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayoutApp, 0, 1, &descriptorSet, 0, NULL);
-
-	// CmdCopy(bufferWeightsDevice, mlp.weights.data(), (size_t)weightsBufferSize, 0);
-
-	// // push constants
-	// int wh[num_push_constants] = {WIDTH, HEIGHT, mlp.num_hidden_layers, mlp.hidden_layer_size};
-	// vkCmdPushConstants(commandBuffer, pipelineLayoutApp, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(int)*num_push_constants, wh);
-
-	// vkCmdDispatch(commandBuffer, (uint32_t)ceil(WIDTH / float(WORKGROUP_SIZE)), (uint32_t)ceil(HEIGHT / float(WORKGROUP_SIZE)), 1);
-	// VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffer)); 
-
-	// std::cout << "doing computations ... " << std::endl;
-	// runCommandBuffer(commandBuffer, queues[Queue::Compute].queue, device);
-	///// ============================================= RUN =======================================================
-
-	vkw::BeginCommandBuffer(vkw::Queue::Compute);
-	CmdCopy(bufferWeightsDevice, mlp.weights.data(), (size_t)weightsBufferSize, 0);
-	vkw::CmdBindPipeline(forwardPipeline);
-
-	int pc[num_push_constants] = {WIDTH, HEIGHT, mlp.num_hidden_layers, mlp.hidden_layer_size};
-	vkw::CmdPushConstants(&pc, sizeof(pc));
-	vkw::CmdDispatch({(uint32_t)ceil(SCREEN_WIDTH / float(WORKGROUP_SIZE)), (uint32_t)ceil(SCREEN_HEIGHT / float(WORKGROUP_SIZE)), 1});
-	vkw::EndCommandBuffer();
-	vkw::WaitQueue(vkw::Queue::Compute);
-
-	
-	std::cout << "saving image		 ... " << std::endl;
-	// saveRenderedImageFromDeviceMemoryApp(device, bufferMemoryPixels, 0, WIDTH, HEIGHT);
-
-	std::vector<unsigned char> image;
-	image.reserve(SCREEN_WIDTH * SCREEN_HEIGHT * 4);
-	Pixel* mappedMemory = (Pixel*)vkw::MapBuffer(bufferPixel);
-	for (int i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; i++) {
-		image.push_back(255.0f * mappedMemory[i].r);
-		image.push_back(255.0f * mappedMemory[i].g);
-		image.push_back(255.0f * mappedMemory[i].b);
-		image.push_back(255.0f);
-	}
-	vkw::UnmapBuffer(bufferPixel);
-	// for (auto i = 0; i < image.size(); ++i){
-	// 	image[i] = 130;
-	// }
-	FileManager::SaveBMP("out_gpu.bmp", (const uint32_t*)image.data(), SCREEN_WIDTH, SCREEN_HEIGHT);
-	
-	std::cout << "destroying all	 ... " << std::endl;
-}
-
-void Context::createComputePipeline(VkDevice a_device, const VkDescriptorSetLayout& a_dsLayout,
-						VkShaderModule* a_pShaderModule, VkPipeline* a_pPipeline,
-						VkPipelineLayout* a_pPipelineLayout)
-	{
-		
-		
-		
-		
-		std::vector<uint32_t> code = vk_utils::ReadFile("Shaders/comp.spv");
-		VkShaderModuleCreateInfo createInfo = {};
-		createInfo.sType	= VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-		createInfo.pCode	= code.data();
-		createInfo.codeSize = code.size()*sizeof(uint32_t);
-	
-		VK_CHECK_RESULT(vkCreateShaderModule(a_device, &createInfo, NULL, a_pShaderModule));
-		VkPipelineShaderStageCreateInfo shaderStageCreateInfo = {};
-		shaderStageCreateInfo.sType	= VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-		shaderStageCreateInfo.stage	= VK_SHADER_STAGE_COMPUTE_BIT;
-		shaderStageCreateInfo.module = (*a_pShaderModule);
-		shaderStageCreateInfo.pName	= "main";
-
-		//// Allow pass (w,h) inside shader directly from command buffer
-		//
-		VkPushConstantRange pcRange = {};	// #NOTE: we updated this to pass W/H inside shader
-		pcRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-		pcRange.offset	 = 0;
-		pcRange.size		 = num_push_constants*sizeof(int); // 3 ints
-
-		VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {};
-		pipelineLayoutCreateInfo.sType		= VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-		pipelineLayoutCreateInfo.setLayoutCount = 1;
-		pipelineLayoutCreateInfo.pSetLayouts	= &a_dsLayout;
-		pipelineLayoutCreateInfo.pushConstantRangeCount = 1;
-		pipelineLayoutCreateInfo.pPushConstantRanges	= &pcRange;
-		VK_CHECK_RESULT(vkCreatePipelineLayout(a_device, &pipelineLayoutCreateInfo, NULL, a_pPipelineLayout));
-
-		VkComputePipelineCreateInfo pipelineCreateInfo = {};
-		pipelineCreateInfo.sType	= VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-		pipelineCreateInfo.stage	= shaderStageCreateInfo;
-		pipelineCreateInfo.layout = (*a_pPipelineLayout);
-		
-		
-		VK_CHECK_RESULT(vkCreateComputePipelines(a_device, VK_NULL_HANDLE, 1, &pipelineCreateInfo, NULL, a_pPipeline));
-	}
-	
-
-void Context::runCommandBuffer(VkCommandBuffer a_cmdBuff, VkQueue a_queue, VkDevice a_device)
-{
-	VkSubmitInfo submitInfo = {};
-	submitInfo.sType			= VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.commandBufferCount = 1; 
-	submitInfo.pCommandBuffers	= &a_cmdBuff; 
-	VkFence fence;
-	VkFenceCreateInfo fenceCreateInfo = {};
-	fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-	fenceCreateInfo.flags = 0;
-	VK_CHECK_RESULT(vkCreateFence(a_device, &fenceCreateInfo, NULL, &fence));
-	VK_CHECK_RESULT(vkQueueSubmit(a_queue, 1, &submitInfo, fence));
-	VK_CHECK_RESULT(vkWaitForFences(a_device, 1, &fence, VK_TRUE, 100000000000));
-	vkDestroyFence(a_device, fence, NULL);
-}
-
-void Context::cleanup() {
-	bufferPixel = {};
-	bufferWeightsDevice = {};
-
-	// vkDestroyShaderModule(device, computeShaderModule, NULL);
-	forwardPipeline = {};
-	vkDestroyDescriptorPool(device, descriptorPool, NULL);
-	vkDestroyDescriptorSetLayout(device, descriptorSetLayout, NULL);
-	// vkDestroyPipelineLayout(device, pipelineLayoutApp, NULL);
-	// vkDestroyPipeline(device, pipelineApp, NULL);
-
-	// DestroyCommandBuffers();
-	}
-
-
 
 
 
@@ -1365,7 +1153,15 @@ void Context::createDescriptorSet()
 	result = vkAllocateDescriptorSets(device, &descriptorSetAllocateInfo, &descriptorSet);
 	
 }	
-		
+
+// vkDestroyDescriptorPool + vkDestroyDescriptorSetLayout
+void Context::destroyDescriptorResources(){
+	vkDestroyDescriptorPool(device, descriptorPool, allocator);
+	vkDestroyDescriptorSetLayout(device, descriptorSetLayout, allocator);
+	descriptorSet = VK_NULL_HANDLE;
+	descriptorPool = VK_NULL_HANDLE;
+	descriptorSetLayout = VK_NULL_HANDLE;
+}
 
 void Context::createBindlessResources(){
 	// create bindless resources
