@@ -28,6 +28,10 @@ constexpr bool enableValidationLayers = false;
 constexpr bool enableValidationLayers = true;
 #endif
 
+struct Pixel {
+	float r, g, b, a;
+};
+
 namespace vkw{
 struct Context
 {	
@@ -200,10 +204,70 @@ struct Context
 	// PFN_vkCmdBuildAccelerationStructuresKHR vkCmdBuildAccelerationStructuresKHR;
 	// PFN_vkGetAccelerationStructureDeviceAddressKHR vkGetAccelerationStructureDeviceAddressKHR;
 	// PFN_vkDestroyAccelerationStructureKHR vkDestroyAccelerationStructureKHR;
+
+
+
+
+
+
+	void saveRenderedImageFromDeviceMemory(VkDevice a_device, VkDeviceMemory a_bufferMemory, size_t a_offset, int a_width, int a_height);    
+
+	void createBufferApp(VkDevice a_device, VkPhysicalDevice a_physDevice, 
+					VkDeviceSize a_size, VkBufferUsageFlags a_usage, VkMemoryPropertyFlags a_properties,
+					VkBuffer& a_buffer, VkDeviceMemory& a_bufferMemory);
+
+	void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size, VkQueue queue);
+	// pixels + second buffer
+	void createDescriptorSetLayout(VkDevice a_device, VkDescriptorSetLayout* a_pDSLayout);
+	void createDescriptorSetFor_2_Buffers(VkDevice a_device, VkBuffer a_buffer, size_t a_bufferSize,
+												VkBuffer a_secondBuffer, size_t a_secondBufferSize,
+												const VkDescriptorSetLayout* a_pDSLayout,
+												VkDescriptorPool* a_pDSPool, VkDescriptorSet* a_pDS);
+												
+	void createComputePipeline(VkDevice a_device, const VkDescriptorSetLayout& a_dsLayout,
+									VkShaderModule* a_pShaderModule, VkPipeline* a_pPipeline,
+									VkPipelineLayout* a_pPipelineLayout);
+
+	void createCommandBuffer(VkDevice a_device, uint32_t queueFamilyIndex, VkPipeline a_pipeline, VkPipelineLayout a_layout,
+									VkCommandPool* a_pool, VkCommandBuffer* a_pCmdBuff);
+
+	void recordCommandsTo(VkCommandBuffer a_cmdBuff, VkPipeline a_pipeline, VkPipelineLayout a_layout, const VkDescriptorSet& a_ds);
+	void runCommandBuffer(VkCommandBuffer a_cmdBuff, VkQueue a_queue, VkDevice a_device);
+	void cleanup();
+
+	void run();
+
+	// VkInstance instance;
+    VkDebugReportCallbackEXT debugReportCallback;
+    // VkPhysicalDevice physicalDevice;
+    // VkDevice device;
+    VkPipeline       pipeline;
+    VkPipelineLayout pipelineLayout;
+    VkShaderModule   computeShaderModule;
+    VkCommandPool   commandPool;
+    VkCommandBuffer commandBuffer;
+    VkDescriptorPool      descriptorPool;
+    VkDescriptorSet       descriptorSet;
+    // //std::vector<VkDescriptorSet> descriptorSets;
+    VkDescriptorSetLayout descriptorSetLayout;
+    VkBuffer       bufferPixels, bufferStaging, bufferWeightsDevice;
+    VkDeviceMemory bufferMemoryPixels, bufferMemoryStaging, bufferMemoryWeightsDevice;
+    std::vector<const char *> enabledLayers;
+    VkQueue queue; 
+
+
+    struct MLP{
+      std::vector<float> w_b;
+      int num_hidden_layers;
+      int hidden_layer_size;
+    };
+	MLP mlp;
 };
+
+
 static Context _ctx;
 
-}
+// MLP mlp;
 
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL debugReportCallbackFn(
@@ -221,6 +285,15 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugReportCallbackFn(
 }
 
 void ComputeApplication::run()	{
+	_ctx.mlp.w_b = weights;
+	_ctx.mlp.num_hidden_layers = numLayers;
+	_ctx.mlp.hidden_layer_size = layerSize;
+	_ctx.run();
+}
+
+// void C
+
+void Context::run()	{
 	const int deviceId = 0;
 	std::cout << "init vulkan for device " << deviceId << " ... " << std::endl;
 	instance = vk_utils::CreateInstance(enableValidationLayers, enabledLayers);
@@ -296,9 +369,9 @@ void ComputeApplication::run()	{
 	cleanup();
 }
 
+
 	
-	
-void ComputeApplication::saveRenderedImageFromDeviceMemory(VkDevice a_device, VkDeviceMemory a_bufferMemory, size_t a_offset, int a_width, int a_height)
+void Context::saveRenderedImageFromDeviceMemory(VkDevice a_device, VkDeviceMemory a_bufferMemory, size_t a_offset, int a_width, int a_height)
 	{
 		const int a_bufferSize = a_width * sizeof(Pixel);
 		void* mappedMemory = nullptr;
@@ -328,7 +401,7 @@ void ComputeApplication::saveRenderedImageFromDeviceMemory(VkDevice a_device, Vk
 
 	
 
-void ComputeApplication::createBufferApp(VkDevice a_device, VkPhysicalDevice a_physDevice, 
+void Context::createBufferApp(VkDevice a_device, VkPhysicalDevice a_physDevice, 
 				VkDeviceSize a_size, VkBufferUsageFlags a_usage, VkMemoryPropertyFlags a_properties,
 				 VkBuffer& a_buffer, VkDeviceMemory& a_bufferMemory) {
 		VkBufferCreateInfo bufferInfo = {};
@@ -353,7 +426,7 @@ void ComputeApplication::createBufferApp(VkDevice a_device, VkPhysicalDevice a_p
 		VK_CHECK_RESULT(vkBindBufferMemory(a_device, a_buffer, a_bufferMemory, 0));
 	}
 
-void ComputeApplication::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size, VkQueue queue) {
+void Context::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size, VkQueue queue) {
 	VkCommandBufferAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
@@ -386,7 +459,7 @@ void ComputeApplication::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDe
 }
 	
 	// pixels + second buffer
-void ComputeApplication::createDescriptorSetLayout(VkDevice a_device, VkDescriptorSetLayout* a_pDSLayout)
+void Context::createDescriptorSetLayout(VkDevice a_device, VkDescriptorSetLayout* a_pDSLayout)
 	{
 		 VkDescriptorSetLayoutBinding descriptorSetLayoutBinding[2];
 		 descriptorSetLayoutBinding[0].binding		= 0;
@@ -407,7 +480,7 @@ void ComputeApplication::createDescriptorSetLayout(VkDevice a_device, VkDescript
 		 VK_CHECK_RESULT(vkCreateDescriptorSetLayout(a_device, &descriptorSetLayoutCreateInfo, NULL, a_pDSLayout));
 	}
 	
-void ComputeApplication::createDescriptorSetFor_2_Buffers(VkDevice a_device, VkBuffer a_buffer, size_t a_bufferSize,
+void Context::createDescriptorSetFor_2_Buffers(VkDevice a_device, VkBuffer a_buffer, size_t a_bufferSize,
 						VkBuffer a_secondBuffer, size_t a_secondBufferSize,
 						const VkDescriptorSetLayout* a_pDSLayout,
 						VkDescriptorPool* a_pDSPool, VkDescriptorSet* a_pDS)
@@ -463,7 +536,7 @@ void ComputeApplication::createDescriptorSetFor_2_Buffers(VkDevice a_device, VkB
 		vkUpdateDescriptorSets(a_device, 1, &writeDescriptorSet2, 0, NULL);
 	}
 	
-void ComputeApplication::createComputePipeline(VkDevice a_device, const VkDescriptorSetLayout& a_dsLayout,
+void Context::createComputePipeline(VkDevice a_device, const VkDescriptorSetLayout& a_dsLayout,
 						VkShaderModule* a_pShaderModule, VkPipeline* a_pPipeline,
 						 VkPipelineLayout* a_pPipelineLayout)
 	{
@@ -508,7 +581,7 @@ void ComputeApplication::createComputePipeline(VkDevice a_device, const VkDescri
 		VK_CHECK_RESULT(vkCreateComputePipelines(a_device, VK_NULL_HANDLE, 1, &pipelineCreateInfo, NULL, a_pPipeline));
 	}
 	
-void ComputeApplication::createCommandBuffer(VkDevice a_device, uint32_t queueFamilyIndex, VkPipeline a_pipeline, VkPipelineLayout a_layout,
+void Context::createCommandBuffer(VkDevice a_device, uint32_t queueFamilyIndex, VkPipeline a_pipeline, VkPipelineLayout a_layout,
 					VkCommandPool* a_pool, VkCommandBuffer* a_pCmdBuff)
 	{
 		VkCommandPoolCreateInfo commandPoolCreateInfo = {};
@@ -529,7 +602,7 @@ void ComputeApplication::createCommandBuffer(VkDevice a_device, uint32_t queueFa
 		VK_CHECK_RESULT(vkAllocateCommandBuffers(a_device, &commandBufferAllocateInfo, a_pCmdBuff)); 
 	}
 	
-void ComputeApplication::recordCommandsTo(VkCommandBuffer a_cmdBuff, VkPipeline a_pipeline, VkPipelineLayout a_layout, const VkDescriptorSet& a_ds)
+void Context::recordCommandsTo(VkCommandBuffer a_cmdBuff, VkPipeline a_pipeline, VkPipelineLayout a_layout, const VkDescriptorSet& a_ds)
 	{
 		VkCommandBufferBeginInfo beginInfo = {};
 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -546,7 +619,7 @@ void ComputeApplication::recordCommandsTo(VkCommandBuffer a_cmdBuff, VkPipeline 
 		VK_CHECK_RESULT(vkEndCommandBuffer(a_cmdBuff)); 
 	}
 	
-void ComputeApplication::runCommandBuffer(VkCommandBuffer a_cmdBuff, VkQueue a_queue, VkDevice a_device)
+void Context::runCommandBuffer(VkCommandBuffer a_cmdBuff, VkQueue a_queue, VkDevice a_device)
 {
 	VkSubmitInfo submitInfo = {};
 	submitInfo.sType			= VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -561,7 +634,7 @@ void ComputeApplication::runCommandBuffer(VkCommandBuffer a_cmdBuff, VkQueue a_q
 	VK_CHECK_RESULT(vkWaitForFences(a_device, 1, &fence, VK_TRUE, 100000000000));
 	vkDestroyFence(a_device, fence, NULL);
 }
-void ComputeApplication::cleanup() {
+void Context::cleanup() {
 	if (enableValidationLayers) {
 		
 		auto func = (PFN_vkDestroyDebugReportCallbackEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugReportCallbackEXT");
@@ -587,3 +660,5 @@ void ComputeApplication::cleanup() {
 	vkDestroyDevice(device, NULL);
 	vkDestroyInstance(instance, NULL);	
 	}
+
+}

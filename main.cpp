@@ -38,10 +38,10 @@ int main()
 	std::vector<float> weights = FileManager::ReadFloats(ctx.weightsPath);
 	ASSERT(weights.size() == num_parameters, "Invalid number of weights, expected {0}, got {1}", num_parameters, weights.size());
 
-	ComputeApplication app;
-	app.mlp.w_b = weights;
-	app.mlp.num_hidden_layers = ctx.numLayers;
-	app.mlp.hidden_layer_size = ctx.layerSize;
+	vkw::ComputeApplication app;
+	app.weights = weights;
+	app.numLayers = ctx.numLayers;
+	app.layerSize = ctx.layerSize;
 	try {
 		app.run();
 	} catch (const std::runtime_error& e) {
