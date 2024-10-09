@@ -6,6 +6,10 @@
 #include <vector>
 #include <filesystem>
 
+struct Pixel {
+	float r, g, b, a;
+};
+
 namespace vkw {
 
 using Flags = uint32_t;

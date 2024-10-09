@@ -7,6 +7,8 @@
 #include <cmath>
 #include <iostream>
 
+#include "ShaderCommon.h"
+
 #include "vk_utils.h"
 #include "FileManager.hpp"
 #include "ComputeApplication.hpp"
@@ -20,7 +22,7 @@
 
 const int WIDTH		= SCREEN_WIDTH;
 const int HEIGHT	 = SCREEN_HEIGHT;
-const int WORKGROUP_SIZE = 16;	
+// const int WORKGROUP_SIZE = 16;	
 constexpr int num_push_constants = 4;
 #ifdef NDEBUG
 constexpr bool enableValidationLayers = false;
@@ -28,9 +30,6 @@ constexpr bool enableValidationLayers = false;
 constexpr bool enableValidationLayers = true;
 #endif
 
-struct Pixel {
-	float r, g, b, a;
-};
 
 static const char *VK_ERROR_STRING(VkResult result);
 
@@ -174,6 +173,9 @@ struct Context
 	void CreateDevice();
 	void DestroyDevice();
 
+	void createBindlessResources();
+	void destroyBindlessResources();
+
 	// void CreateSurfaceFormats();
 
 	// void CreateSwapChain(uint32_t width, uint32_t height);
@@ -261,7 +263,7 @@ struct Context
 
 
     struct MLP{
-      std::vector<float> w_b;
+      std::vector<float> weights;
       int num_hidden_layers;
       int hidden_layer_size;
     };
@@ -291,7 +293,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugReportCallbackFn(
 void Init() {
 	_ctx.CreateInstance();
 	_ctx.CreatePhysicalDevice();
-	// _ctx.CreateDevice();
+	_ctx.CreateDevice();
 
 	// _ctx.CreateSurfaceFormats();
 	// _ctx.CreateSwapChain(width, height);
@@ -307,14 +309,14 @@ void Destroy() {
 	// _ctx.DestroySwapChain();
 
 	// _ctx.DestroyCommandBuffers();
-	// _ctx.DestroyDevice();
+	_ctx.DestroyDevice();
 	_ctx.DestroyInstance();
 }
 
 
 void ComputeApplication::run()	{
 	Init();
-	_ctx.mlp.w_b = weights;
+	_ctx.mlp.weights = weights;
 	_ctx.mlp.num_hidden_layers = numLayers;
 	_ctx.mlp.hidden_layer_size = layerSize;
 	_ctx.run();
@@ -327,16 +329,11 @@ void ComputeApplication::run()	{
 void Context::run()	{
 	const int deviceId = 0;
 	std::cout << "init vulkan for device " << deviceId << " ... " << std::endl;
-	// instance = vk_utils::CreateInstance(enableValidationLayers, enabledLayers);
-	// CreateInstance();
-	// if(enableValidationLayers)
-	// {
-	// vk_utils::InitDebugReportCallback(instance,
-	// 				&debugReportCallbackFn, &debugReportCallback);
-	// }
-	// physicalDevice = vk_utils::FindPhysicalDevice(instance, true, deviceId);
+
 	// uint32_t queueFamilyIndex = vk_utils::GetComputeQueueFamilyIndex(physicalDevice);
-	device = vk_utils::CreateLogicalDevice(queues[Queue::Compute].family, physicalDevice, enabledLayers);
+	
+	// device = vk_utils::CreateLogicalDevice(queues[Queue::Compute].family, physicalDevice, enabledLayers);
+
 	vkGetDeviceQueue(device, queues[Queue::Compute].family, 0, &queue);
 	
 	size_t bufferSize = sizeof(Pixel) * WIDTH * HEIGHT;
@@ -349,7 +346,7 @@ void Context::run()	{
 
 	
 	//Staging buffer
-	size_t weightsBufferSize = mlp.w_b.size() * sizeof(float);//////TODO		
+	size_t weightsBufferSize = mlp.weights.size() * sizeof(float);//////TODO		
 	createBufferApp(device, physicalDevice, weightsBufferSize,
 			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
@@ -364,7 +361,7 @@ void Context::run()	{
 	//copy weights
 	void* data;
 	vkMapMemory(device, bufferMemoryStaging, 0, weightsBufferSize, 0, &data);
-	memcpy(data, mlp.w_b.data(), (size_t)weightsBufferSize);
+	memcpy(data, mlp.weights.data(), (size_t)weightsBufferSize);
 	vkUnmapMemory(device, bufferMemoryStaging);
 
 	
@@ -689,7 +686,7 @@ void Context::cleanup() {
 	vkDestroyPipelineLayout(device, pipelineLayout, NULL);
 	vkDestroyPipeline(device, pipeline, NULL);
 	vkDestroyCommandPool(device, commandPool, NULL);	
-	vkDestroyDevice(device, NULL);
+	// vkDestroyDevice(device, NULL);
 	// vkDestroyInstance(instance, NULL);	
 	}
 
@@ -990,8 +987,318 @@ void Context::CreatePhysicalDevice() {
 	DEBUG_TRACE("Created physical device: {0}", physicalProperties.deviceName);
 }
 
+void Context::CreateDevice() {
+	
+	std::set<uint32_t> uniqueFamilies;
+	for (int q = 0; q < Queue::Count; q++) {
+		uniqueFamilies.emplace(queues[q].family);
+	};
+
+	// priority for each type of queue
+	float priority = 1.0f;
+	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+	for (uint32_t family : uniqueFamilies) {
+		VkDeviceQueueCreateInfo createInfo{};
+		createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+		createInfo.queueFamilyIndex = family;
+		createInfo.queueCount = 1;
+		createInfo.pQueuePriorities = &priority;
+		queueCreateInfos.push_back(createInfo);
+	}
+
+	auto supportedFeatures = physicalFeatures;
+
+	// logical device features
+	VkPhysicalDeviceFeatures2 features2 = {};
+	features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+	// features2.features.geometryShader = VK_TRUE;
+	// if (supportedFeatures.logicOp)           { features2.features.logicOp           = VK_TRUE; }
+	// if (supportedFeatures.samplerAnisotropy) { features2.features.samplerAnisotropy = VK_TRUE; }
+	// if (supportedFeatures.sampleRateShading) { features2.features.sampleRateShading = VK_TRUE; }
+	// if (supportedFeatures.fillModeNonSolid)  { features2.features.fillModeNonSolid  = VK_TRUE; }
+	// if (supportedFeatures.wideLines)         { features2.features.wideLines         = VK_TRUE; }
+	// if (supportedFeatures.depthClamp)        { features2.features.depthClamp        = VK_TRUE; }
+
+
+	// DELETE LATER (already checked in CreatePhysicalDevice)
+	auto requiredExtensions = _ctx.requiredExtensions;
+	auto allExtensions = _ctx.availableExtensions;
+	for (auto req : requiredExtensions) {
+		bool available = false;
+		for (size_t i = 0; i < allExtensions.size(); i++) {
+			if (strcmp(allExtensions[i].extensionName, req) == 0) { 
+				available = true; 
+				break;
+			}
+		}
+		if(!available) {
+			LOG_ERROR("Required extension {0} not available!", req);
+		}
+	}
+
+	// add to member and as pNext of physicalFeatures
+	// to check with vkGetPhysicalDeviceFeatures2
+	// ref: https://dev.to/gasim/implementing-bindless-design-in-vulkan-34no
+	VkPhysicalDeviceDescriptorIndexingFeatures descriptorIndexingFeatures{};
+	descriptorIndexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
+	descriptorIndexingFeatures.runtimeDescriptorArray = true;
+	descriptorIndexingFeatures.descriptorBindingPartiallyBound = true;
+	descriptorIndexingFeatures.shaderSampledImageArrayNonUniformIndexing = true;
+	descriptorIndexingFeatures.shaderUniformBufferArrayNonUniformIndexing = true;
+	descriptorIndexingFeatures.shaderStorageBufferArrayNonUniformIndexing = true;
+	descriptorIndexingFeatures.descriptorBindingSampledImageUpdateAfterBind = true;
+	descriptorIndexingFeatures.descriptorBindingStorageImageUpdateAfterBind = true;
+
+	VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddresFeatures{};
+	bufferDeviceAddresFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
+	bufferDeviceAddresFeatures.bufferDeviceAddress = VK_TRUE;
+	bufferDeviceAddresFeatures.pNext = &descriptorIndexingFeatures;
+
+	VkPhysicalDeviceSynchronization2FeaturesKHR sync2Features{};
+    sync2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR;
+    sync2Features.synchronization2 = VK_TRUE;
+    sync2Features.pNext = &bufferDeviceAddresFeatures;
+
+	// Add other features to chain here
+
+	features2.pNext = &sync2Features;
+
+	VkDeviceCreateInfo createInfo{};
+	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+	createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
+	createInfo.pQueueCreateInfos = queueCreateInfos.data();
+	createInfo.enabledExtensionCount = static_cast<uint32_t>(requiredExtensions.size());
+	createInfo.ppEnabledExtensionNames = requiredExtensions.data();
+	createInfo.pEnabledFeatures; // !Should be NULL if pNext is used
+	createInfo.pNext = &features2; // feature chain
+	// VkPhysicalDeviceFeatures deviceFeatures{}; // None just yet
+	// createInfo.pEnabledFeatures = &deviceFeatures;
+
+	// specify the required layers to the device 
+	if (_ctx.enableValidationLayers) {
+		auto& layers = activeLayersNames;
+		createInfo.enabledLayerCount = static_cast<uint32_t>(layers.size());
+		createInfo.ppEnabledLayerNames = layers.data();
+	}
+	else {
+		createInfo.enabledLayerCount = 0;
+	}
+
+	auto res = vkCreateDevice(physicalDevice, &createInfo, allocator, &device);
+	DEBUG_VK(res, "Failed to create logical device!");
+	ASSERT(res == VK_SUCCESS, "Failed to create logical device!");
+	DEBUG_TRACE("Created logical device");
+
+	VmaVulkanFunctions vulkanFunctions = {};
+	vulkanFunctions.vkGetInstanceProcAddr = &vkGetInstanceProcAddr;
+	vulkanFunctions.vkGetDeviceProcAddr = &vkGetDeviceProcAddr;
+
+	VmaAllocatorCreateInfo allocatorCreateInfo = {};
+	allocatorCreateInfo.flags = VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT | VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+	allocatorCreateInfo.vulkanApiVersion = VK_API_VERSION_1_3;
+	allocatorCreateInfo.physicalDevice = physicalDevice;
+	allocatorCreateInfo.device = device;
+	allocatorCreateInfo.instance = instance;
+	allocatorCreateInfo.pVulkanFunctions = &vulkanFunctions;
+	vmaCreateAllocator(&allocatorCreateInfo, &vmaAllocator);
+
+	for (int q = 0; q < Queue::Count; q++) {
+		vkGetDeviceQueue(device, queues[q].family, 0, &queues[q].queue);
+	}
+
+	genericSampler = CreateSampler(1.0);
+	vkSetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetDeviceProcAddr(device, "vkSetDebugUtilsObjectNameEXT");
+	// vkGetAccelerationStructureBuildSizesKHR = (PFN_vkGetAccelerationStructureBuildSizesKHR)vkGetDeviceProcAddr(device, "vkGetAccelerationStructureBuildSizesKHR");
+	// vkCreateAccelerationStructureKHR = (PFN_vkCreateAccelerationStructureKHR)vkGetDeviceProcAddr(device, "vkCreateAccelerationStructureKHR");
+	// vkCmdBuildAccelerationStructuresKHR = (PFN_vkCmdBuildAccelerationStructuresKHR)vkGetDeviceProcAddr(device, "vkCmdBuildAccelerationStructuresKHR");
+	// vkGetAccelerationStructureDeviceAddressKHR = (PFN_vkGetAccelerationStructureDeviceAddressKHR)vkGetDeviceProcAddr(device, "vkGetAccelerationStructureDeviceAddressKHR");
+	// vkDestroyAccelerationStructureKHR = (PFN_vkDestroyAccelerationStructureKHR)vkGetDeviceProcAddr(device, "vkDestroyAccelerationStructureKHR");
+
+	// VkDescriptorPoolSize imguiPoolSizes[]    = { {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000}, {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000} };
+	// VkDescriptorPoolCreateInfo imguiPoolInfo{};
+	// imguiPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	// imguiPoolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+	// imguiPoolInfo.maxSets = (uint32_t)(1024);
+	// imguiPoolInfo.poolSizeCount = sizeof(imguiPoolSizes)/sizeof(VkDescriptorPoolSize);
+	// imguiPoolInfo.pPoolSizes = imguiPoolSizes;
+
+	// VkResult result = vkCreateDescriptorPool(device, &imguiPoolInfo, allocator, &imguiDescriptorPool);
+	// DEBUG_VK(result, "Failed to create imgui descriptor pool!");
 }
 
+void Context::DestroyDevice() {
+	// dummyVertexBuffer = {};
+	currentPipeline = {};
+	// asScratchBuffer = {};
+	// vkDestroyDescriptorPool(device, imguiDescriptorPool, allocator);
+	vmaDestroyAllocator(vmaAllocator);
+	vkDestroySampler(device, genericSampler, allocator);
+	vkDestroyDevice(device, allocator);
+	DEBUG_TRACE("Destroyed logical device");
+	device = VK_NULL_HANDLE;
+}
+
+void Context::createBindlessResources(){
+	// create bindless resources
+	{
+
+		// TODO: val = min(MAX_, available)
+		const u32 MAX_STORAGE = 8192;
+        const u32 MAX_SAMPLEDIMAGES = 8192;
+        const u32 MAX_ACCELERATIONSTRUCTURE = 64;
+        const u32 MAX_STORAGE_IMAGES = 8192;
+
+		// create descriptor set pool for bindless resources
+        std::vector<VkDescriptorPoolSize> bindlessPoolSizes = { 
+            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MAX_SAMPLEDIMAGES},
+            {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, MAX_STORAGE},
+            {VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, MAX_ACCELERATIONSTRUCTURE},
+            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, MAX_STORAGE_IMAGES},
+        };
+
+		// Fill with sequential numbers
+		availableBufferRID.resize(MAX_STORAGE);
+		std::iota(availableBufferRID.begin(), availableBufferRID.end(), 0);
+		availableImageRID.resize(MAX_SAMPLEDIMAGES);
+		std::iota(availableImageRID.begin(), availableImageRID.end(), 0);
+		availableTLASRID.resize(MAX_ACCELERATIONSTRUCTURE);
+		std::iota(availableTLASRID.begin(), availableTLASRID.end(), 0);
+
+        VkDescriptorPoolCreateInfo bindlessPoolInfo{};
+        bindlessPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        bindlessPoolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
+        bindlessPoolInfo.maxSets = 1;
+        bindlessPoolInfo.poolSizeCount = bindlessPoolSizes.size();
+        bindlessPoolInfo.pPoolSizes = bindlessPoolSizes.data();
+
+        VkResult result = vkCreateDescriptorPool(device, &bindlessPoolInfo, allocator, &bindlessDescriptorPool);
+        DEBUG_VK(result, "Failed to create bindless descriptor pool!");
+		ASSERT(result == VK_SUCCESS, "Failed to create bindless descriptor pool!");
+
+		// create Descriptor Set Layout for bindless resources
+        std::vector<VkDescriptorSetLayoutBinding> bindings;
+        std::vector<VkDescriptorBindingFlags> bindingFlags;
+
+		VkDescriptorSetLayoutBinding texturesBinding{};
+        texturesBinding.binding = BINDING_TEXTURE;
+        texturesBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        texturesBinding.descriptorCount = MAX_SAMPLEDIMAGES;
+        texturesBinding.stageFlags = VK_SHADER_STAGE_ALL;
+        bindings.push_back(texturesBinding);
+        bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT });
+
+        VkDescriptorSetLayoutBinding storageBuffersBinding{};
+        storageBuffersBinding.binding = BINDING_BUFFER;
+        storageBuffersBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        storageBuffersBinding.descriptorCount = MAX_STORAGE;
+        storageBuffersBinding.stageFlags = VK_SHADER_STAGE_ALL;
+        bindings.push_back(storageBuffersBinding);
+        bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT });
+
+		VkDescriptorSetLayoutBinding accelerationStructureBinding{};
+        accelerationStructureBinding.binding = BINDING_TLAS;
+        accelerationStructureBinding.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+        accelerationStructureBinding.descriptorCount = MAX_ACCELERATIONSTRUCTURE;
+        accelerationStructureBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        bindings.push_back(accelerationStructureBinding);
+        bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT });
+
+        VkDescriptorSetLayoutBinding imageStorageBinding{};
+        imageStorageBinding.binding = BINDING_STORAGE_IMAGE;
+        imageStorageBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        imageStorageBinding.descriptorCount = MAX_STORAGE_IMAGES;
+        imageStorageBinding.stageFlags = VK_SHADER_STAGE_ALL;
+        bindings.push_back(imageStorageBinding);
+        bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT });
+
+
+		VkDescriptorSetLayoutBindingFlagsCreateInfo setLayoutBindingFlags{};
+		setLayoutBindingFlags.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
+		setLayoutBindingFlags.bindingCount = bindingFlags.size();
+		setLayoutBindingFlags.pBindingFlags = bindingFlags.data();
+
+		VkDescriptorSetLayoutCreateInfo descriptorLayoutInfo{};
+        descriptorLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        descriptorLayoutInfo.bindingCount = bindings.size();
+        descriptorLayoutInfo.pBindings = bindings.data();
+        descriptorLayoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+        descriptorLayoutInfo.pNext = &setLayoutBindingFlags;
+
+		result = vkCreateDescriptorSetLayout(device, &descriptorLayoutInfo, allocator, &bindlessDescriptorLayout);
+		DEBUG_VK(result, "Failed to create bindless descriptor set layout!");
+		
+		// create Descriptor Set for bindless resources
+		VkDescriptorSetAllocateInfo allocInfo{};
+		allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+		allocInfo.descriptorPool = bindlessDescriptorPool;
+		allocInfo.descriptorSetCount = 1;
+		allocInfo.pSetLayouts = &bindlessDescriptorLayout;
+
+		result = vkAllocateDescriptorSets(device, &allocInfo, &bindlessDescriptorSet);
+		DEBUG_VK(result, "Failed to allocate bindless descriptor set!");
+		ASSERT(result == VK_SUCCESS, "Failed to allocate bindless descriptor set!");
+	}
+
+	// asScratchBuffer = vkw::CreateBuffer(initialScratchBufferSize, vkw::BufferUsage::Address | vkw::BufferUsage::Storage, vkw::Memory::GPU);
+	// VkBufferDeviceAddressInfo scratchInfo{};
+	// scratchInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+	// scratchInfo.buffer = asScratchBuffer.resource->buffer;
+	// asScratchAddress = vkGetBufferDeviceAddress(device, &scratchInfo);
+
+	// dummyVertexBuffer = vkw::CreateBuffer(
+	// 	6 * 3 * sizeof(float),
+	// 	vkw::BufferUsage::Vertex | vkw::BufferUsage::AccelerationStructureInput,
+	// 	vkw::Memory::GPU,
+	// 	"VertexBuffer#Dummy"
+	// );
+}
+
+void Context::destroyBindlessResources(){
+	vkDestroyDescriptorPool(device, bindlessDescriptorPool, allocator);
+	vkDestroyDescriptorSetLayout(device, bindlessDescriptorLayout, allocator);
+	bindlessDescriptorSet = VK_NULL_HANDLE;
+	bindlessDescriptorPool = VK_NULL_HANDLE;
+	bindlessDescriptorLayout = VK_NULL_HANDLE;
+}
+
+
+VkSampler Context::CreateSampler(f32 maxLod) {
+    VkSamplerCreateInfo samplerInfo{};
+    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    // todo: create separate one for shadow maps
+    samplerInfo.magFilter = VK_FILTER_LINEAR;
+    samplerInfo.minFilter = VK_FILTER_LINEAR;
+    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    samplerInfo.anisotropyEnable = VK_TRUE;
+
+    samplerInfo.anisotropyEnable = false; //?
+
+    // what color to return when clamp is active in addressing mode
+    samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    samplerInfo.unnormalizedCoordinates = VK_FALSE;
+
+    // if comparison is enabled, texels will be compared to a value an the result 
+    // is used in filtering operations, can be used in PCF on shadow maps
+    samplerInfo.compareEnable = VK_FALSE;
+    samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+
+    samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    samplerInfo.mipLodBias = 0.0f;
+    samplerInfo.minLod = 0.0f;
+    samplerInfo.maxLod = maxLod;
+
+    VkSampler sampler = VK_NULL_HANDLE;
+    auto vkRes = vkCreateSampler(device, &samplerInfo, nullptr, &sampler);
+    DEBUG_VK(vkRes, "Failed to create texture sampler!");
+	ASSERT(vkRes == VK_SUCCESS, "Failed to create texture sampler!");
+
+    return sampler;
+}
+
+
+}
 static const char *VK_ERROR_STRING(VkResult result) {
 	switch ((int)result)
 	{

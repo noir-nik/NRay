@@ -1,9 +1,9 @@
-#ifdef ENGINE
-#pragma once
-struct Pixel {
-	float r, g, b, a;
-};
-#endif
+// #ifdef ENGINE
+// #pragma once
+// struct Pixel {
+// 	float r, g, b, a;
+// };
+// #endif
 
 #define BINDING_TEXTURE 0 // Sampled image
 #define BINDING_BUFFER 1
