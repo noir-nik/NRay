@@ -177,8 +177,13 @@ struct Context
 	void CreateDevice();
 	void DestroyDevice();
 
+	void createDescriptorSetLayout_for2Buffers();
+	void createDescriptorSet_for2Buffers();
+
 	void createDescriptorSetLayout();
+	void createDescriptorPool();
 	void createDescriptorSet();
+	void createDescriptorResources(); // ALL:pool+layout+set
 	void destroyDescriptorResources();
 
 	void createBindlessResources();
@@ -293,8 +298,12 @@ void Init() {
 	_ctx.CreateInstance();
 	_ctx.CreatePhysicalDevice();
 	_ctx.CreateDevice();
-	_ctx.createDescriptorSetLayout();
-	_ctx.createDescriptorSet();
+
+	// _ctx.createDescriptorSetLayout_for2Buffers();
+	// _ctx.createDescriptorSet_for2Buffers();
+
+	_ctx.createDescriptorResources();
+	// _ctx.createBindlessResources();
 
 	// _ctx.CreateSurfaceFormats();
 	// _ctx.CreateSwapChain(width, height);
@@ -308,6 +317,8 @@ void Destroy() {
 	// ImGui_ImplVulkan_Shutdown();
 	// ImGui_ImplGlfw_Shutdown();
 	// _ctx.DestroySwapChain();
+
+	// _ctx.destroyBindlessResources();
 
 	_ctx.destroyDescriptorResources();
 	_ctx.DestroyCommandBuffers();
@@ -388,9 +399,9 @@ Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, c
 		write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 		// write.dstSet          = _ctx.bindlessDescriptorSet;
 		write.dstSet          = _ctx.descriptorSet;
-		// write.dstBinding      = BINDING_BUFFER;
-		write.dstBinding      = bufferRID;
-		// write.dstArrayElement = buffer.RID();
+		write.dstBinding      = BINDING_BUFFER;
+		// write.dstBinding      = bufferRID;
+		write.dstArrayElement = buffer.RID();
 		write.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 		write.descriptorCount = 1;
 		write.pBufferInfo     = &descriptorInfo;
@@ -980,13 +991,13 @@ void Context::CreateDevice() {
 	// logical device features
 	VkPhysicalDeviceFeatures2 features2 = {};
 	features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-	// features2.features.geometryShader = VK_TRUE;
-	// if (supportedFeatures.logicOp)           { features2.features.logicOp           = VK_TRUE; }
-	// if (supportedFeatures.samplerAnisotropy) { features2.features.samplerAnisotropy = VK_TRUE; }
-	// if (supportedFeatures.sampleRateShading) { features2.features.sampleRateShading = VK_TRUE; }
-	// if (supportedFeatures.fillModeNonSolid)  { features2.features.fillModeNonSolid  = VK_TRUE; }
-	// if (supportedFeatures.wideLines)         { features2.features.wideLines         = VK_TRUE; }
-	// if (supportedFeatures.depthClamp)        { features2.features.depthClamp        = VK_TRUE; }
+	features2.features.geometryShader = VK_TRUE;
+	if (supportedFeatures.logicOp)           { features2.features.logicOp           = VK_TRUE; }
+	if (supportedFeatures.samplerAnisotropy) { features2.features.samplerAnisotropy = VK_TRUE; }
+	if (supportedFeatures.sampleRateShading) { features2.features.sampleRateShading = VK_TRUE; }
+	if (supportedFeatures.fillModeNonSolid)  { features2.features.fillModeNonSolid  = VK_TRUE; }
+	if (supportedFeatures.wideLines)         { features2.features.wideLines         = VK_TRUE; }
+	if (supportedFeatures.depthClamp)        { features2.features.depthClamp        = VK_TRUE; }
 
 
 	// DELETE LATER (already checked in CreatePhysicalDevice)
@@ -1023,14 +1034,39 @@ void Context::CreateDevice() {
 	bufferDeviceAddresFeatures.bufferDeviceAddress = VK_TRUE;
 	bufferDeviceAddresFeatures.pNext = &descriptorIndexingFeatures;
 
+    VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingPipelineFeatures{};
+    rayTracingPipelineFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
+    rayTracingPipelineFeatures.rayTracingPipeline = VK_TRUE;
+    rayTracingPipelineFeatures.pNext = &bufferDeviceAddresFeatures;
+
+    VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures{};
+    accelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+    accelerationStructureFeatures.accelerationStructure = VK_TRUE;
+    accelerationStructureFeatures.descriptorBindingAccelerationStructureUpdateAfterBind = VK_TRUE;
+    accelerationStructureFeatures.accelerationStructureCaptureReplay = VK_TRUE;
+    accelerationStructureFeatures.pNext = &rayTracingPipelineFeatures;
+
+    VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures{};
+    rayQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
+    rayQueryFeatures.rayQuery = VK_TRUE;
+    rayQueryFeatures.pNext = &accelerationStructureFeatures;
+
+    VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeatures{};
+    dynamicRenderingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
+    dynamicRenderingFeatures.dynamicRendering = VK_TRUE;
+    dynamicRenderingFeatures.pNext = &rayQueryFeatures;
+
 	VkPhysicalDeviceSynchronization2FeaturesKHR sync2Features{};
 	sync2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR;
 	sync2Features.synchronization2 = VK_TRUE;
-	sync2Features.pNext = &bufferDeviceAddresFeatures;
+    sync2Features.pNext = &dynamicRenderingFeatures;
 
-	// Add other features to chain here
+    VkPhysicalDeviceShaderAtomicFloatFeaturesEXT atomicFeatures{};
+    atomicFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT;
+    atomicFeatures.shaderBufferFloat32AtomicAdd = VK_TRUE;
+    atomicFeatures.pNext = &sync2Features;
 
-	features2.pNext = &sync2Features;
+    features2.pNext = &atomicFeatures;
 
 	VkDeviceCreateInfo createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -1107,7 +1143,7 @@ void Context::DestroyDevice() {
 	device = VK_NULL_HANDLE;
 }
 
-void Context::createDescriptorSetLayout(){
+void Context::createDescriptorSetLayout_for2Buffers(){
 	VkDescriptorSetLayoutBinding descriptorSetLayoutBinding[2];
 	descriptorSetLayoutBinding[0].binding		= 0;
 	descriptorSetLayoutBinding[0].descriptorType	 = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
@@ -1130,7 +1166,7 @@ void Context::createDescriptorSetLayout(){
 }
 
 // vkCreateDescriptorPool + vkAllocateDescriptorSets
-void Context::createDescriptorSet()
+void Context::createDescriptorSet_for2Buffers()
 {
 	VkDescriptorPoolSize descriptorPoolSize[2];
 	descriptorPoolSize[0].type		      = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
@@ -1140,6 +1176,7 @@ void Context::createDescriptorSet()
 
 	VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {};
 	descriptorPoolCreateInfo.sType	       = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	// descriptorPoolCreateInfo.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
 	descriptorPoolCreateInfo.maxSets	   = 1; 
 	descriptorPoolCreateInfo.poolSizeCount = 2;
 	descriptorPoolCreateInfo.pPoolSizes    = descriptorPoolSize;
@@ -1151,8 +1188,88 @@ void Context::createDescriptorSet()
 	descriptorSetAllocateInfo.descriptorSetCount = 1;		
 	descriptorSetAllocateInfo.pSetLayouts	     = &descriptorSetLayout;
 	result = vkAllocateDescriptorSets(device, &descriptorSetAllocateInfo, &descriptorSet);
-	
 }	
+
+
+
+const u32 MAX_STORAGE = 64;
+const u32 MAX_SAMPLEDIMAGES = 64;
+// const u32 MAX_ACCELERATIONSTRUCTURE = 64;
+// const u32 MAX_STORAGE_IMAGES = 8192;
+
+
+void Context::createDescriptorPool(){
+	// type                                     descriptorCount
+	std::vector<VkDescriptorPoolSize> poolSizes = { 
+		{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,        MAX_SAMPLEDIMAGES},
+		{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,                MAX_STORAGE},
+		// {VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, MAX_ACCELERATIONSTRUCTURE},
+		// {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,                 MAX_STORAGE_IMAGES},
+	};
+
+	VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {};
+	descriptorPoolCreateInfo.sType	       = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	// descriptorPoolCreateInfo.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;//////
+	descriptorPoolCreateInfo.maxSets	   = 1; 
+	descriptorPoolCreateInfo.poolSizeCount = poolSizes.size();
+	descriptorPoolCreateInfo.pPoolSizes    = poolSizes.data();
+	VkResult result = vkCreateDescriptorPool(device, &descriptorPoolCreateInfo, NULL, &descriptorPool);
+	DEBUG_VK(result, "Failed to create descriptor pool!");
+	ASSERT(result == VK_SUCCESS, "Failed to create descriptor pool!");
+}
+
+void Context::createDescriptorSetLayout(){
+	VkDescriptorSetLayoutBinding bindings[2]{};
+	VkDescriptorBindingFlags bindingFlags[2]{};
+
+	bindings[0].binding = BINDING_TEXTURE;
+	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	bindings[0].descriptorCount = MAX_SAMPLEDIMAGES;
+	bindings[0].stageFlags = VK_SHADER_STAGE_ALL;
+	bindingFlags[0] = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
+
+	bindings[1].binding = BINDING_BUFFER;
+	bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	bindings[1].descriptorCount = MAX_STORAGE;
+	bindings[1].stageFlags = VK_SHADER_STAGE_ALL;
+	bindingFlags[1] = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
+
+
+	// VkDescriptorSetLayoutBindingFlagsCreateInfo setLayoutBindingFlags{};
+	// setLayoutBindingFlags.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
+	// setLayoutBindingFlags.bindingCount = 2;
+	// setLayoutBindingFlags.pBindingFlags = bindingFlags;
+
+	VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {};
+	descriptorSetLayoutCreateInfo.sType	= VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	descriptorSetLayoutCreateInfo.bindingCount = 2; 
+	descriptorSetLayoutCreateInfo.pBindings	= &bindings[0];
+	// descriptorSetLayoutCreateInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+	// descriptorSetLayoutCreateInfo.pNext = &setLayoutBindingFlags;
+
+	VkResult result = vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCreateInfo, NULL, &descriptorSetLayout);
+	DEBUG_VK(result, "Failed to allocate bindless descriptor set!");
+	ASSERT(result == VK_SUCCESS, "Failed to allocate bindless descriptor set!");
+}
+
+void Context::createDescriptorSet(){
+	// Descriptor Set
+	VkDescriptorSetAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	allocInfo.descriptorPool = descriptorPool;
+	allocInfo.descriptorSetCount = 1;
+	allocInfo.pSetLayouts = &descriptorSetLayout;
+
+	VkResult result = vkAllocateDescriptorSets(device, &allocInfo, &descriptorSet);
+	DEBUG_VK(result, "Failed to allocate bindless descriptor set!");
+	ASSERT(result == VK_SUCCESS, "Failed to allocate bindless descriptor set!");
+}
+
+void Context::createDescriptorResources(){
+	createDescriptorSetLayout();
+	createDescriptorPool();
+	createDescriptorSet();
+}
 
 // vkDestroyDescriptorPool + vkDestroyDescriptorSetLayout
 void Context::destroyDescriptorResources(){

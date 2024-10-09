@@ -1,4 +1,6 @@
 #version 450
+#extension GL_GOOGLE_include_directive : enable
+#include "ShaderCommon.h"
 #extension GL_ARB_separate_shader_objects : enable
 //#define WIDTH 512
 //#define HEIGHT 512
@@ -17,35 +19,37 @@ layout (local_size_x = WORKGROUP_SIZE, local_size_y = WORKGROUP_SIZE, local_size
 
 const float W_0 = 30.0; 
 
-struct Pixel{
-  vec4 value;
-};
+// struct Pixel{
+//   vec4 value;
+// };
 
 layout(push_constant) uniform params_t
 {
-  int width;
-  int height;
-  int NHL;
-  int size;
+	int width;
+	int height;
+	int NHL;
+	int size;
+	int weightsRID;
+	int outputImageRID;
+	int pad[2];
+} ctx;
 
-} params;
+// layout(std140, binding = 0) buffer buf
+// {
+//    Pixel imageData[];
+// };
 
-layout(std140, binding = 0) buffer buf
-{
-   Pixel imageData[];
-};
-
-layout(std430, binding = 1) buffer weights
-{
-   float w_b[];
-};
+// layout(std430, binding = 1) buffer weights
+// {
+//    float w_b[];
+// };
 
 float forward(vec3 p) {
 	
 	float activations[512];
 
 	// zero out;
-	for (int i = 0; i < 2*params.size; ++i) {
+	for (int i = 0; i < 2*ctx.size; ++i) {
 		activations[i] = 0.0f;
 	}
 
@@ -56,58 +60,58 @@ float forward(vec3 p) {
 
 	// ===== Layer 0 =====
 	// z = Wx + b
-	for (int i = 0; i < params.size; ++i) {
+	for (int i = 0; i < ctx.size; ++i) {
 		for (int j = 0; j < 3; ++j) {
-			activations[params.size * ((half_part + 1)%2) + i] += w_b[i * 3 + j] * activations[params.size * ((half_part)%2) + j];
+			activations[ctx.size * ((half_part + 1)%2) + i] += w_b[i * 3 + j] * activations[ctx.size * ((half_part)%2) + j];
 		}
 	}
 	
 	// + b
-	for (int i = 0; i < params.size; ++i) {
-		activations[params.size * ((half_part + 1)%2) + i] += w_b[params.size * 3 + i];
+	for (int i = 0; i < ctx.size; ++i) {
+		activations[ctx.size * ((half_part + 1)%2) + i] += w_b[ctx.size * 3 + i];
 	}
 
 	// sin
-	for (int i = 0; i < params.size; ++i) {
-		activations[params.size * ((half_part + 1)%2) + i] = sin(W_0 * activations[params.size * ((half_part + 1)%2) + i]);
+	for (int i = 0; i < ctx.size; ++i) {
+		activations[ctx.size * ((half_part + 1)%2) + i] = sin(W_0 * activations[ctx.size * ((half_part + 1)%2) + i]);
 	}
 
 	// ===== Hidden layers =====
-	int w_b_pos = 4 * params.size;
-	for (int l = 0; l < params.NHL; ++l) {
+	int w_b_pos = 4 * ctx.size;
+	for (int l = 0; l < ctx.NHL; ++l) {
 		//zero
-		for (int i = 0; i < params.size; ++i) {
-			activations[(params.size * (half_part % 2)) + i] = 0.0f;
+		for (int i = 0; i < ctx.size; ++i) {
+			activations[(ctx.size * (half_part % 2)) + i] = 0.0f;
 		}
 		// z = Wx + b
-		for (int i = 0; i < params.size; ++i) {
-			for (int j = 0; j < params.size; ++j) {
-				activations[(params.size * (half_part % 2)) + i] += activations[(params.size * ((half_part + 1) % 2)) + j] * w_b[w_b_pos + i * params.size + j];
+		for (int i = 0; i < ctx.size; ++i) {
+			for (int j = 0; j < ctx.size; ++j) {
+				activations[(ctx.size * (half_part % 2)) + i] += activations[(ctx.size * ((half_part + 1) % 2)) + j] * w_b[w_b_pos + i * ctx.size + j];
 			}
 		}
 		// + b
-		for (int i = 0; i < params.size; ++i) {
-			activations[(params.size * (half_part % 2)) + i] += w_b[w_b_pos + params.size * params.size + i];
+		for (int i = 0; i < ctx.size; ++i) {
+			activations[(ctx.size * (half_part % 2)) + i] += w_b[w_b_pos + ctx.size * ctx.size + i];
 		}
 		// sin
-		for (int i = 0; i < params.size; ++i) {
-			activations[(params.size * (half_part % 2)) + i] = sin(W_0 * activations[(params.size * (half_part % 2)) + i]);
+		for (int i = 0; i < ctx.size; ++i) {
+			activations[(ctx.size * (half_part % 2)) + i] = sin(W_0 * activations[(ctx.size * (half_part % 2)) + i]);
 		}
-		w_b_pos += (params.size + 1) * params.size;
+		w_b_pos += (ctx.size + 1) * ctx.size;
 		half_part = (half_part + 1) % 2;
 	}
 
 	// ===== Output layer =====
 	//zero
-	activations[(params.size * (half_part % 2))] = 0.0f;
+	activations[(ctx.size * (half_part % 2))] = 0.0f;
 	// z = Wx + b
-	for (int j = 0; j < params.size; ++j) {
-		activations[params.size * (half_part % 2)] += activations[params.size*((half_part + 1) % 2) + j] * w_b[w_b_pos + j];
+	for (int j = 0; j < ctx.size; ++j) {
+		activations[ctx.size * (half_part % 2)] += activations[ctx.size*((half_part + 1) % 2) + j] * w_b[w_b_pos + j];
 	}
 	// + b
-	activations[params.size * (half_part % 2)] += w_b[w_b_pos + params.size];
+	activations[ctx.size * (half_part % 2)] += w_b[w_b_pos + ctx.size];
 	
-	return activations[params.size * (half_part % 2)];
+	return activations[ctx.size * (half_part % 2)];
 }
 
 float sdSphere(vec3 p, float s) {
@@ -213,10 +217,10 @@ float map(float value, float min1, float max1, float min2, float max2) {
   return min2 + (value - min1) * (max2 - min2) / (max1 - min1);
 }
 void main() {
-  if(gl_GlobalInvocationID.x >= params.width || gl_GlobalInvocationID.y >= params.height)
+  if(gl_GlobalInvocationID.x >= ctx.width || gl_GlobalInvocationID.y >= ctx.height)
     return;
 
-  vec2 iResolution = vec2(float(params.width), float(params.height));
+  vec2 iResolution = vec2(float(ctx.width), float(ctx.height));
 	vec2 uv = ((gl_GlobalInvocationID.xy + 0.5) - 0.5 * iResolution.xy) / iResolution.y;
 	uv.y =-uv.y;
 
@@ -241,7 +245,7 @@ void main() {
 			col = vec3(0.3, 0.0, 0.2);
 	}
 
-	uint pos = gl_GlobalInvocationID.y * params.width + gl_GlobalInvocationID.x;
+	uint pos = gl_GlobalInvocationID.y * ctx.width + gl_GlobalInvocationID.x;
 
 	vec4 color = vec4(col, 1.0);
 

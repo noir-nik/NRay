@@ -96,16 +96,18 @@ void NeuralSdfApplication::Compute() {
 		vkw::CmdCopy(ctx.weightsGPU, weights.data(), ctx.num_parameters * sizeof(float));
 		vkw::CmdBindPipeline(ctx.forwardPipeline);
 
-		// NeuralSdfConstants constants;
-		// constants.width = ctx.width;
-		// constants.height = ctx.height;
-		// constants.numLayers = ctx.numLayers;
-		// constants.layerSize = ctx.layerSize;
-		// constants.weightsRID = ctx.weightsGPU.RID();
-		// constants.outputImageRID = ctx.outputImage.RID();
+		NeuralSdfConstants constants;
+		constants.width = ctx.width;
+		constants.height = ctx.height;
+		constants.numLayers = ctx.numLayers;
+		constants.layerSize = ctx.layerSize;
+		constants.weightsRID = ctx.weightsGPU.RID();
+		constants.outputImageRID = ctx.outputImage.RID();
 
-		int pc[4] = {ctx.width, ctx.height, ctx.numLayers, ctx.layerSize};
-		vkw::CmdPushConstants(&pc, sizeof(pc));
+		// int pc[4] = {ctx.width, ctx.height, ctx.numLayers, ctx.layerSize};
+		// vkw::CmdPushConstants(&pc, sizeof(pc));
+
+		vkw::CmdPushConstants(&constants, sizeof(constants));
 
 		vkw::CmdDispatch({(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
 		vkw::CmdBarrier();

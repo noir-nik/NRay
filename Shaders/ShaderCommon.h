@@ -43,11 +43,11 @@ struct Pixel{
   vec4 value;
 };
 
-layout(set = 0, binding = BINDING_TEXTURE) uniform sampler2D textures[];
-layout(set = 0, binding = BINDING_TEXTURE) uniform samplerCube cubeTextures[];
+// layout(set = 0, binding = BINDING_TEXTURE) uniform sampler2D textures[];
+// layout(set = 0, binding = BINDING_TEXTURE) uniform samplerCube cubeTextures[];
 
 
-layout(set = 0, binding = BINDING_BUFFER) readonly buffer WeightsBuffer {
+layout(set = 0, binding = BINDING_BUFFER) buffer WeightsBuffer {
     float data[];
 } WeightsBuffers[];
 
