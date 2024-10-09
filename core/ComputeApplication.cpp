@@ -512,7 +512,8 @@ void Context::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipeline) {
 	}
 
 	std::vector<VkDescriptorSetLayout> layouts;
-	layouts.push_back(bindlessDescriptorLayout);
+	// layouts.push_back(bindlessDescriptorLayout);
+	layouts.push_back(descriptorSetLayout);
 
 	VkPushConstantRange pushConstant{};
 	pushConstant.offset = 0;
@@ -604,7 +605,8 @@ void CmdBarrier() {
 void CmdBindPipeline(Pipeline& pipeline) {
     auto& cmd = _ctx.GetCurrentCommandResources();
     vkCmdBindPipeline(cmd.buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->pipeline);
-    vkCmdBindDescriptorSets(cmd.buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->layout, 0, 1, &_ctx.bindlessDescriptorSet, 0, nullptr);
+    // vkCmdBindDescriptorSets(cmd.buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->layout, 0, 1, &_ctx.bindlessDescriptorSet, 0, nullptr);
+    vkCmdBindDescriptorSets(cmd.buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->layout, 0, 1, &_ctx.descriptorSet, 0, nullptr);
 
     _ctx.currentPipeline = pipeline.resource;
 }
@@ -724,7 +726,7 @@ void Context::run()	{
 	forwardPipeline = CreatePipeline({
         .point = vkw::PipelinePoint::Compute,
         .stages = {
-            {.stage = vkw::ShaderStage::Compute, .path = "Shaders/shader.comp"},
+            {.stage = vkw::ShaderStage::Compute, .path = "shader.comp"},
         },
         .name = "Neural Sdf Forward",
     });
@@ -855,7 +857,7 @@ void Context::cleanup() {
 	bufferWeightsDevice = {};
 
 	// vkDestroyShaderModule(device, computeShaderModule, NULL);
-
+	forwardPipeline = {};
 	vkDestroyDescriptorPool(device, descriptorPool, NULL);
 	vkDestroyDescriptorSetLayout(device, descriptorSetLayout, NULL);
 	// vkDestroyPipelineLayout(device, pipelineLayoutApp, NULL);
