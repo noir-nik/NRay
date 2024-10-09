@@ -42,6 +42,7 @@ struct Context
 
 	uint32_t apiVersion;
 	bool enableValidationLayers = true;
+	// bool enableValidationLayers = false;
 	std::vector<bool> activeLayers; // Available layers
 	std::vector<const char*> activeLayersNames;
 	std::vector<VkLayerProperties> layers;
@@ -132,9 +133,11 @@ struct Context
     // VkPresentModeKHR presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
     // VkSampleCountFlagBits numSamples  = VK_SAMPLE_COUNT_1_BIT;
 
-	// const uint32_t initialScratchBufferSize = 64*1024*1024;
-    // Buffer asScratchBuffer;
-    // VkDeviceAddress asScratchAddress;
+	const uint32_t initialScratchBufferSize = 64*1024*1024;
+    Buffer asScratchBuffer;
+    VkDeviceAddress asScratchAddress;
+	Buffer dummyVertexBuffer;
+
 
     std::map<std::string, float> timeStampTable;
 
@@ -281,27 +284,27 @@ void UnmapBuffer(Buffer& buffer) {
 }
 
 Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, const std::string& name) {
-    // if (usage & BufferUsage::Vertex) {
-    //     usage |= BufferUsage::TransferDst;
-    // }
+    if (usage & BufferUsage::Vertex) {
+        usage |= BufferUsage::TransferDst;
+    }
 
-    // if (usage & BufferUsage::Index) {
-    //     usage |= BufferUsage::TransferDst;
-    // }
+    if (usage & BufferUsage::Index) {
+        usage |= BufferUsage::TransferDst;
+    }
 
     if (usage & BufferUsage::Storage) {
         usage |= BufferUsage::Address;
         size += size % _ctx.physicalProperties.limits.minStorageBufferOffsetAlignment;
     }
 
-    // if (usage & BufferUsage::AccelerationStructureInput) {
-    //     usage |= BufferUsage::Address;
-    //     usage |= BufferUsage::TransferDst;
-    // }
+    if (usage & BufferUsage::AccelerationStructureInput) {
+        usage |= BufferUsage::Address;
+        usage |= BufferUsage::TransferDst;
+    }
 
-    // if (usage & BufferUsage::AccelerationStructure) {
-    //     usage |= BufferUsage::Address;
-    // }
+    if (usage & BufferUsage::AccelerationStructure) {
+        usage |= BufferUsage::Address;
+    }
 
     std::shared_ptr<BufferResource> res = std::make_shared<BufferResource>();
 	res->name = name;
@@ -1071,7 +1074,7 @@ void Context::CreatePhysicalDevice() {
 		// check if all required extensions are available
 		std::set<std::string> required(requiredExtensions.begin(), requiredExtensions.end());
 		for (const auto& extension : availableExtensions) {
-			auto erased = required.erase(std::string(extension.extensionName));
+			required.erase(std::string(extension.extensionName));
 		}
 		
 		LOG_INFO("Families: {0}, {1}, {2}", graphicsFamily, computeFamily, transferFamily);
@@ -1234,14 +1237,14 @@ void Context::CreateDevice() {
 		// TODO: val = min(MAX_, available)
 		const u32 MAX_STORAGE = 8192;
         const u32 MAX_SAMPLEDIMAGES = 8192;
-        // const u32 MAX_ACCELERATIONSTRUCTURE = 64;
+        const u32 MAX_ACCELERATIONSTRUCTURE = 64;
         const u32 MAX_STORAGE_IMAGES = 8192;
 
 		// create descriptor set pool for bindless resources
         std::vector<VkDescriptorPoolSize> bindlessPoolSizes = { 
             {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MAX_SAMPLEDIMAGES},
             {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, MAX_STORAGE},
-            // {VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, MAX_ACCELERATIONSTRUCTURE},
+            {VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, MAX_ACCELERATIONSTRUCTURE},
             {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, MAX_STORAGE_IMAGES},
         };
 
@@ -1250,8 +1253,8 @@ void Context::CreateDevice() {
 		std::iota(availableBufferRID.begin(), availableBufferRID.end(), 0);
 		availableImageRID.resize(MAX_SAMPLEDIMAGES);
 		std::iota(availableImageRID.begin(), availableImageRID.end(), 0);
-		// availableTLASRID.resize(MAX_ACCELERATIONSTRUCTURE);
-		// std::iota(availableTLASRID.begin(), availableTLASRID.end(), 0);
+		availableTLASRID.resize(MAX_ACCELERATIONSTRUCTURE);
+		std::iota(availableTLASRID.begin(), availableTLASRID.end(), 0);
 
         VkDescriptorPoolCreateInfo bindlessPoolInfo{};
         bindlessPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -1284,13 +1287,13 @@ void Context::CreateDevice() {
         bindings.push_back(storageBuffersBinding);
         bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT });
 
-		// VkDescriptorSetLayoutBinding accelerationStructureBinding{};
-        // accelerationStructureBinding.binding = LUZ_BINDING_TLAS;
-        // accelerationStructureBinding.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
-        // accelerationStructureBinding.descriptorCount = MAX_ACCELERATIONSTRUCTURE;
-        // accelerationStructureBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        // bindings.push_back(accelerationStructureBinding);
-        // bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT });
+		VkDescriptorSetLayoutBinding accelerationStructureBinding{};
+        accelerationStructureBinding.binding = BINDING_TLAS;
+        accelerationStructureBinding.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+        accelerationStructureBinding.descriptorCount = MAX_ACCELERATIONSTRUCTURE;
+        accelerationStructureBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        bindings.push_back(accelerationStructureBinding);
+        bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT });
 
         VkDescriptorSetLayoutBinding imageStorageBinding{};
         imageStorageBinding.binding = BINDING_STORAGE_IMAGE;
@@ -1328,24 +1331,24 @@ void Context::CreateDevice() {
 		ASSERT(result == VK_SUCCESS, "Failed to allocate bindless descriptor set!");
 	}
 
-	// asScratchBuffer = vkw::CreateBuffer(initialScratchBufferSize, vkw::BufferUsage::Address | vkw::BufferUsage::Storage, vkw::Memory::GPU);
-	// VkBufferDeviceAddressInfo scratchInfo{};
-	// scratchInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-	// scratchInfo.buffer = asScratchBuffer.resource->buffer;
-	// asScratchAddress = vkGetBufferDeviceAddress(device, &scratchInfo);
+	asScratchBuffer = vkw::CreateBuffer(initialScratchBufferSize, vkw::BufferUsage::Address | vkw::BufferUsage::Storage, vkw::Memory::GPU);
+	VkBufferDeviceAddressInfo scratchInfo{};
+	scratchInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+	scratchInfo.buffer = asScratchBuffer.resource->buffer;
+	asScratchAddress = vkGetBufferDeviceAddress(device, &scratchInfo);
 
-	// dummyVertexBuffer = vkw::CreateBuffer(
-	// 	6 * 3 * sizeof(float),
-	// 	vkw::BufferUsage::Vertex | vkw::BufferUsage::AccelerationStructureInput,
-	// 	vkw::Memory::GPU,
-	// 	"VertexBuffer#Dummy"
-	// );
+	dummyVertexBuffer = vkw::CreateBuffer(
+		6 * 3 * sizeof(float),
+		vkw::BufferUsage::Vertex | vkw::BufferUsage::AccelerationStructureInput,
+		vkw::Memory::GPU,
+		"VertexBuffer#Dummy"
+	);
 }
 
 void Context::DestroyDevice() {
-	// dummyVertexBuffer = {};
+	dummyVertexBuffer = {};
 	currentPipeline = {};
-	// asScratchBuffer = {};
+	asScratchBuffer = {};
 	// vkDestroyDescriptorPool(device, imguiDescriptorPool, allocator);
 	vkDestroyDescriptorPool(device, bindlessDescriptorPool, allocator);
 	vkDestroyDescriptorSetLayout(device, bindlessDescriptorLayout, allocator);

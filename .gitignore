@@ -6,10 +6,12 @@
 .vscode/
 .vscode/*
 
+bin/
 build/*
 build-linux/*
 logs/*
 
+*.spv
 *.so
 *.so.*
 *.dll

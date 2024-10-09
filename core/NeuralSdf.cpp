@@ -109,7 +109,8 @@ void NeuralSdfApplication::Compute() {
 		vkw::WaitQueue(vkw::Queue::Compute);
 
 		// vkw::ReadBuffer(ctx.outputImage, pixels.data(), ctx.width * ctx.height * sizeof(Pixel));
-		std::vector<unsigned char> image(ctx.width * ctx.height * 4);
+		std::vector<unsigned char> image;
+		image.reserve(ctx.width * ctx.height * 4);
 		Pixel* mappedMemory = (Pixel*)vkw::MapBuffer(ctx.outputImage);
 		for (int i = 0; i < ctx.width * ctx.height; i++) {
 			image.push_back(255.0f * mappedMemory[i].r);
@@ -118,6 +119,9 @@ void NeuralSdfApplication::Compute() {
 			image.push_back(255.0f);
 		}
 		vkw::UnmapBuffer(ctx.outputImage);
+		// for (auto i = 0; i < image.size(); ++i){
+		// 	image[i] = 130;
+		// }
 		FileManager::SaveBMP(info->outputPath.c_str(), (const uint32_t*)image.data(), ctx.width, ctx.height);
 	}
 
