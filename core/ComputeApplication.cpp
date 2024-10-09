@@ -31,9 +31,15 @@ constexpr bool enableValidationLayers = true;
 #endif
 
 
+
+
 static const char *VK_ERROR_STRING(VkResult result);
 
 namespace vkw{
+
+Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, const std::string& name);
+
+
 struct Context
 {	
 	void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset);
@@ -217,7 +223,7 @@ struct Context
 
 
 
-	void saveRenderedImageFromDeviceMemory(VkDevice a_device, VkDeviceMemory a_bufferMemory, size_t a_offset, int a_width, int a_height);    
+	// void saveRenderedImageFromDeviceMemoryApp(VkDevice a_device, VkDeviceMemory a_bufferMemory, size_t a_offset, int a_width, int a_height);    
 
 	void createBufferApp(VkDevice a_device, VkPhysicalDevice a_physDevice, 
 					VkDeviceSize a_size, VkBufferUsageFlags a_usage, VkMemoryPropertyFlags a_properties,
@@ -225,18 +231,18 @@ struct Context
 
 	void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size, VkQueue queue);
 	// pixels + second buffer
-	void createDescriptorSetLayoutApp(VkDevice a_device, VkDescriptorSetLayout* a_pDSLayout);
-	void createDescriptorSetFor_2_Buffers(VkDevice a_device, VkBuffer a_buffer, size_t a_bufferSize,
-												VkBuffer a_secondBuffer, size_t a_secondBufferSize,
-												const VkDescriptorSetLayout* a_pDSLayout,
-												VkDescriptorPool* a_pDSPool, VkDescriptorSet* a_pDS);
+	// void createDescriptorSetLayoutApp(VkDevice a_device, VkDescriptorSetLayout* a_pDSLayout);
+	// void createDescriptorSetFor_2_Buffers(VkDevice a_device, VkBuffer a_buffer, size_t a_bufferSize,
+	// 											VkBuffer a_secondBuffer, size_t a_secondBufferSize,
+	// 											const VkDescriptorSetLayout* a_pDSLayout,
+	// 											VkDescriptorPool* a_pDSPool, VkDescriptorSet* a_pDS);
 												
 	void createComputePipeline(VkDevice a_device, const VkDescriptorSetLayout& a_dsLayout,
 									VkShaderModule* a_pShaderModule, VkPipeline* a_pPipeline,
 									VkPipelineLayout* a_pPipelineLayout);
 
-	void createCommandBufferApp(VkDevice a_device, uint32_t queueFamilyIndex, VkPipeline a_pipeline, VkPipelineLayout a_layout,
-									VkCommandPool* a_pool, VkCommandBuffer* a_pCmdBuff);
+	// void createCommandBufferApp(VkDevice a_device, uint32_t queueFamilyIndex, VkPipeline a_pipeline, VkPipelineLayout a_layout,
+	// 								VkCommandPool* a_pool, VkCommandBuffer* a_pCmdBuff);
 
 	// void recordCommandsTo(VkCommandBuffer a_cmdBuff, VkPipeline a_pipeline, VkPipelineLayout a_layout, const VkDescriptorSet& a_ds);
 	void runCommandBuffer(VkCommandBuffer a_cmdBuff, VkQueue a_queue, VkDevice a_device);
@@ -257,15 +263,15 @@ struct Context
 	VkDescriptorSet       descriptorSet = VK_NULL_HANDLE;
 	// //std::vector<VkDescriptorSet> descriptorSets;
 	VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
-	VkBuffer       bufferPixelsApp,
-					bufferStagingApp,
-					bufferWeightsDeviceApp;
-	VkDeviceMemory bufferMemoryPixels, bufferMemoryStaging, bufferMemoryWeightsDevice;
+	// VkBuffer       bufferPixelsApp,
+					// bufferStagingApp,
+					// bufferWeightsDeviceApp;
+	// VkDeviceMemory bufferMemoryPixels, bufferMemoryStaging, bufferMemoryWeightsDevice;
 	std::vector<const char *> enabledLayers;
 	// VkQueue queue = VK_NULL_HANDLE; 
 
-	// Buffer bufferPixel;
-	// Buffer bufferWeightsDevice;
+	Buffer bufferPixel;
+	Buffer bufferWeightsDevice;
 
 
 	struct MLP{
@@ -370,6 +376,17 @@ void Destroy() {
 	_ctx.DestroyInstance();
 }
 
+void* MapBuffer(Buffer& buffer) {
+    ASSERT(buffer.memory & Memory::CPU, "Buffer not cpu accessible!");
+    void* data;
+    vmaMapMemory(_ctx.vmaAllocator, buffer.resource->allocation, &data);
+    return buffer.resource->allocation->GetMappedData();
+}
+
+void UnmapBuffer(Buffer& buffer) {
+    ASSERT(buffer.memory & Memory::CPU, "Buffer not cpu accessible!");
+    vmaUnmapMemory(_ctx.vmaAllocator, buffer.resource->allocation);
+}
 
 void ComputeApplication::run()	{
 	Init();
@@ -394,41 +411,46 @@ void Context::run()	{
 	// vkGetDeviceQueue(device, queues[Queue::Compute].family, 0, &queue);
 	
 	size_t bufferSize = sizeof(Pixel) * WIDTH * HEIGHT;
+	size_t weightsBufferSize = mlp.weights.size() * sizeof(float);//////TODO
+
 	std::cout << "creating resources ... " << std::endl;
-	//pixels
-	createBufferApp(device, physicalDevice, bufferSize,	
-		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,	
-		bufferPixelsApp, bufferMemoryPixels);	 
 
-	// bufferPixel = CreateBuffer(bufferSize, vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst, vkw::Memory::CPU, "Output Image");
-
-	// //Staging buffer
-	size_t weightsBufferSize = mlp.weights.size() * sizeof(float);//////TODO		
-	createBufferApp(device, physicalDevice, weightsBufferSize,
-			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-			bufferStagingApp, bufferMemoryStaging);
+	// ///////pixels
+	// createBufferApp(device, physicalDevice, bufferSize,	
+	// 	VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+	// 	VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,	
+	// 	bufferPixelsApp, bufferMemoryPixels);	 
 
 	
 
-	// //Weights buffer on device
-	createBufferApp(device, physicalDevice, weightsBufferSize,
-			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-			bufferWeightsDeviceApp, bufferMemoryWeightsDevice);
+			
+	// // //Staging buffer
+	// createBufferApp(device, physicalDevice, weightsBufferSize,
+	// 		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+	// 	VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+	// 		bufferStagingApp, bufferMemoryStaging);
 
-	// Buffer bufferWeightsDevice = CreateBuffer(weightsBufferSize, vkw::BufferUsage::Storage | vkw::BufferUsage::TransferSrc, vkw::Memory::GPU, "Weights Buffer");
+	
 
-	//copy weights
-	void* data;
-	vkMapMemory(device, bufferMemoryStaging, 0, weightsBufferSize, 0, &data);
-	memcpy(data, mlp.weights.data(), (size_t)weightsBufferSize);
-	vkUnmapMemory(device, bufferMemoryStaging);
+	// // //Weights buffer on device
+	// createBufferApp(device, physicalDevice, weightsBufferSize,
+	// 		VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+	// 	VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+	// 		bufferWeightsDeviceApp, bufferMemoryWeightsDevice);
+
+	
+
+	//////copy weights
+	// void* data;
+	// vkMapMemory(device, bufferMemoryStaging, 0, weightsBufferSize, 0, &data);
+	// memcpy(data, mlp.weights.data(), (size_t)weightsBufferSize);
+	// vkUnmapMemory(device, bufferMemoryStaging);
 
 
 	createDescriptorSetLayout();
 	createDescriptorSet();
+	bufferPixel = CreateBuffer(bufferSize, vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst, vkw::Memory::CPU, "Output Image");
+	bufferWeightsDevice = CreateBuffer(weightsBufferSize, vkw::BufferUsage::Storage | vkw::BufferUsage::TransferSrc | vkw::BufferUsage::TransferDst, vkw::Memory::GPU, "Weights Buffer");
 
 
 	// createDescriptorSetLayoutApp(device, &descriptorSetLayout);	
@@ -442,34 +464,34 @@ void Context::run()	{
 
 
 		 //pixels
-	VkDescriptorBufferInfo descriptorBufferInfo = {};
-	descriptorBufferInfo.buffer = bufferPixelsApp;
-	descriptorBufferInfo.offset = 0;
-	descriptorBufferInfo.range	= bufferSize;
+	// VkDescriptorBufferInfo descriptorBufferInfo = {};
+	// descriptorBufferInfo.buffer = bufferPixelsApp;
+	// descriptorBufferInfo.offset = 0;
+	// descriptorBufferInfo.range	= bufferSize;
 
-	VkWriteDescriptorSet writeDescriptorSet = {};
-	writeDescriptorSet.sType		 = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	writeDescriptorSet.dstSet		= descriptorSet; 
-	writeDescriptorSet.dstBinding		= 0;	
-	writeDescriptorSet.descriptorCount = 1;	
-	writeDescriptorSet.descriptorType	= VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; 
-	writeDescriptorSet.pBufferInfo	 = &descriptorBufferInfo;
-	vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, NULL);
+	// VkWriteDescriptorSet writeDescriptorSet = {};
+	// writeDescriptorSet.sType		 = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	// writeDescriptorSet.dstSet		= descriptorSet; 
+	// writeDescriptorSet.dstBinding		= 0;	
+	// writeDescriptorSet.descriptorCount = 1;	
+	// writeDescriptorSet.descriptorType	= VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; 
+	// writeDescriptorSet.pBufferInfo	 = &descriptorBufferInfo;
+	// vkUpdateDescriptorSets(device, 1, &writeDescriptorSet, 0, NULL);
 
 	//second buffer
-	VkDescriptorBufferInfo descriptorBufferInfo2 = {};
-	descriptorBufferInfo2.buffer = bufferWeightsDeviceApp;
-	descriptorBufferInfo2.offset = 0;
-	descriptorBufferInfo2.range	= weightsBufferSize;
+	// VkDescriptorBufferInfo descriptorBufferInfo2 = {};
+	// descriptorBufferInfo2.buffer = bufferWeightsDeviceApp;
+	// descriptorBufferInfo2.offset = 0;
+	// descriptorBufferInfo2.range	= weightsBufferSize;
 	
-	VkWriteDescriptorSet writeDescriptorSet2 = {};
-	writeDescriptorSet2.sType		 = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-	writeDescriptorSet2.dstSet		= descriptorSet; 
-	writeDescriptorSet2.dstBinding		= 1;	
-	writeDescriptorSet2.descriptorCount = 1;	
-	writeDescriptorSet2.descriptorType	= VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; 
-	writeDescriptorSet2.pBufferInfo	 = &descriptorBufferInfo2;
-	vkUpdateDescriptorSets(device, 1, &writeDescriptorSet2, 0, NULL);
+	// VkWriteDescriptorSet writeDescriptorSet2 = {};
+	// writeDescriptorSet2.sType		 = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+	// writeDescriptorSet2.dstSet		= descriptorSet; 
+	// writeDescriptorSet2.dstBinding		= 1;	
+	// writeDescriptorSet2.descriptorCount = 1;	
+	// writeDescriptorSet2.descriptorType	= VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; 
+	// writeDescriptorSet2.pBufferInfo	 = &descriptorBufferInfo2;
+	// vkUpdateDescriptorSets(device, 1, &writeDescriptorSet2, 0, NULL);
 
 
 	std::cout << "compiling shaders	... " << std::endl;
@@ -488,7 +510,7 @@ void Context::run()	{
 
 	// DO
 	// copy to device
-	copyBuffer(bufferStagingApp, bufferWeightsDeviceApp, weightsBufferSize, queues[Queue::Compute].queue);
+	// copyBuffer(bufferStagingApp, bufferWeightsDeviceApp, weightsBufferSize, queues[Queue::Compute].queue);
 
 
 	// recordCommandsTo(commandBuffer, pipeline, pipelineLayout, descriptorSet);
@@ -499,7 +521,7 @@ void Context::run()	{
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
 	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, &descriptorSet, 0, NULL);
 
-	// CmdCopy(bufferWeightsDevice, mlp.weights.data(), (size_t)weightsBufferSize, 0);
+	CmdCopy(bufferWeightsDevice, mlp.weights.data(), (size_t)weightsBufferSize, 0);
 
 	// push constants
 	int wh[num_push_constants] = {WIDTH, HEIGHT, mlp.num_hidden_layers, mlp.hidden_layer_size};
@@ -513,216 +535,231 @@ void Context::run()	{
 	
 	
 	std::cout << "saving image		 ... " << std::endl;
-	saveRenderedImageFromDeviceMemory(device, bufferMemoryPixels, 0, WIDTH, HEIGHT);
+	// saveRenderedImageFromDeviceMemoryApp(device, bufferMemoryPixels, 0, WIDTH, HEIGHT);
+
+	std::vector<unsigned char> image;
+	image.reserve(SCREEN_WIDTH * SCREEN_HEIGHT * 4);
+	Pixel* mappedMemory = (Pixel*)vkw::MapBuffer(bufferPixel);
+	for (int i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; i++) {
+		image.push_back(255.0f * mappedMemory[i].r);
+		image.push_back(255.0f * mappedMemory[i].g);
+		image.push_back(255.0f * mappedMemory[i].b);
+		image.push_back(255.0f);
+	}
+	vkw::UnmapBuffer(bufferPixel);
+	// for (auto i = 0; i < image.size(); ++i){
+	// 	image[i] = 130;
+	// }
+	FileManager::SaveBMP("out_gpu.bmp", (const uint32_t*)image.data(), SCREEN_WIDTH, SCREEN_HEIGHT);
 	
 	std::cout << "destroying all	 ... " << std::endl;
-	
 }
 
 
 	
-void Context::saveRenderedImageFromDeviceMemory(VkDevice a_device, VkDeviceMemory a_bufferMemory, size_t a_offset, int a_width, int a_height)
-	{
-		const int a_bufferSize = a_width * sizeof(Pixel);
-		void* mappedMemory = nullptr;
+// void Context::saveRenderedImageFromDeviceMemoryApp(VkDevice a_device, VkDeviceMemory a_bufferMemory, size_t a_offset, int a_width, int a_height)
+// {
+// 	const int a_bufferSize = a_width * sizeof(Pixel);
+// 	void* mappedMemory = nullptr;
+
+// 	std::vector<unsigned char> image;
+// 	image.reserve(a_width * a_height * 4);
+// 	for (int i = 0; i < a_height; i += 1) {
+// 		size_t offset = a_offset + i * a_width * sizeof(Pixel);
+// 		mappedMemory = nullptr;
 		
+// 		// vkMapMemory(a_device, a_bufferMemory, offset, a_bufferSize, 0, &mappedMemory);
+// 		mappedMemory = (Pixel *)MapBuffer(bufferPixel);
+
+// 		Pixel* pmappedMemory = (Pixel *)mappedMemory;
+// 		for (int j = 0; j < a_width; j += 1)
+// 		{
+// 			image.push_back((unsigned char)(255.0f * (pmappedMemory[j].r)));
+// 			image.push_back((unsigned char)(255.0f * (pmappedMemory[j].g)));
+// 			image.push_back((unsigned char)(255.0f * (pmappedMemory[j].b)));
+// 			image.push_back((unsigned char)(255.0f * (pmappedMemory[j].a)));
+// 		}
+
+// 		// vkUnmapMemory(a_device, a_bufferMemory);
+// 		UnmapBuffer(bufferPixel);
+// 	}
+// 	FileManager::SaveBMP("out_gpu.bmp", (const uint32_t*)image.data(), WIDTH, HEIGHT);
+// }
+
+// void Context::createBufferApp(VkDevice a_device, VkPhysicalDevice a_physDevice, 
+// 				VkDeviceSize a_size, VkBufferUsageFlags a_usage, VkMemoryPropertyFlags a_properties,
+// 				VkBuffer& a_buffer, VkDeviceMemory& a_bufferMemory) {
+// 		VkBufferCreateInfo bufferInfo = {};
+// 		bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+// 		bufferInfo.size = a_size;
+// 		bufferInfo.usage = a_usage;
+// 		bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+// 		VK_CHECK_RESULT(vkCreateBuffer(a_device, &bufferInfo, NULL, &a_buffer)); 
+
+// 		VkMemoryRequirements memRequirements;
+// 		vkGetBufferMemoryRequirements(a_device, a_buffer, &memRequirements);
+
+// 		VkMemoryAllocateInfo allocInfo = {};
+// 		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+// 		allocInfo.allocationSize = memRequirements.size;
+// 		allocInfo.memoryTypeIndex = vk_utils::FindMemoryType(memRequirements.memoryTypeBits, a_properties, a_physDevice);
+
+// 		VK_CHECK_RESULT(vkAllocateMemory(a_device, &allocInfo, nullptr, &a_bufferMemory));
 		
-		std::vector<unsigned char> image;
-		image.reserve(a_width * a_height * 4);
-		for (int i = 0; i < a_height; i += 1) 
-		{
-	size_t offset = a_offset + i * a_width * sizeof(Pixel);
-	mappedMemory = nullptr;
+
+// 		VK_CHECK_RESULT(vkBindBufferMemory(a_device, a_buffer, a_bufferMemory, 0));
+// 	}
+
+// void Context::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size, VkQueue queue) {
+// 	VkCommandBufferAllocateInfo allocInfo{};
+// 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+// 	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+// 	allocInfo.commandPool = commandPool;
+// 	allocInfo.commandBufferCount = 1;
+
+// 	VkCommandBuffer commandBuffer_local;
+// 	vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer_local);
+
+// 	VkCommandBufferBeginInfo beginInfo{};
+// 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+// 	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+// 	vkBeginCommandBuffer(commandBuffer_local, &beginInfo);
+// 	VkBufferCopy copyRegion{};
+// 	copyRegion.srcOffset = 0; // Optional
+// 	copyRegion.dstOffset = 0; // Optional
+// 	copyRegion.size = size;
+// 	vkCmdCopyBuffer(commandBuffer_local, srcBuffer, dstBuffer, 1, &copyRegion);
+
+// 	vkEndCommandBuffer(commandBuffer_local);
+// 	VkSubmitInfo submitInfo{};
+// 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+// 	submitInfo.commandBufferCount = 1;
+// 	submitInfo.pCommandBuffers = &commandBuffer_local;
+
+// 	vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
+// 	vkQueueWaitIdle(queue);
+// 	vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer_local);
+// }
 	
-	vkMapMemory(a_device, a_bufferMemory, offset, a_bufferSize, 0, &mappedMemory);
-	Pixel* pmappedMemory = (Pixel *)mappedMemory;
-	for (int j = 0; j < a_width; j += 1)
-	{
-		image.push_back((unsigned char)(255.0f * (pmappedMemory[j].r)));
-		image.push_back((unsigned char)(255.0f * (pmappedMemory[j].g)));
-		image.push_back((unsigned char)(255.0f * (pmappedMemory[j].b)));
-		image.push_back((unsigned char)(255.0f * (pmappedMemory[j].a)));
-	}
+// namespace {
+// // pixels + second buffer
+// void Context::createDescriptorSetLayoutApp(VkDevice a_device, VkDescriptorSetLayout* a_pDSLayout)
+// 	{
+// 		VkDescriptorSetLayoutBinding descriptorSetLayoutBinding[2];
+// 		descriptorSetLayoutBinding[0].binding		= 0;
+// 		descriptorSetLayoutBinding[0].descriptorType	 = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+// 		descriptorSetLayoutBinding[0].descriptorCount	= 1;
+// 		descriptorSetLayoutBinding[0].stageFlags	 = VK_SHADER_STAGE_COMPUTE_BIT;
+
+// 		descriptorSetLayoutBinding[1].binding		= 1;
+// 		descriptorSetLayoutBinding[1].descriptorType	 = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+// 		descriptorSetLayoutBinding[1].descriptorCount	= 1;
+// 		descriptorSetLayoutBinding[1].stageFlags	 = VK_SHADER_STAGE_COMPUTE_BIT;
+
+// 		VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {};
+// 		descriptorSetLayoutCreateInfo.sType	= VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+// 		descriptorSetLayoutCreateInfo.bindingCount = 2; 
+// 		descriptorSetLayoutCreateInfo.pBindings	= descriptorSetLayoutBinding;
+		
+// 		VK_CHECK_RESULT(vkCreateDescriptorSetLayout(a_device, &descriptorSetLayoutCreateInfo, NULL, a_pDSLayout));
+// 	}
 	
-	vkUnmapMemory(a_device, a_bufferMemory);
-		}
-		FileManager::SaveBMP("out_gpu.bmp", (const uint32_t*)image.data(), WIDTH, HEIGHT);
-	}
+// void Context::createDescriptorSetFor_2_Buffers(VkDevice a_device, VkBuffer a_buffer, size_t a_bufferSize,
+// 						VkBuffer a_secondBuffer, size_t a_secondBufferSize,
+// 						const VkDescriptorSetLayout* a_pDSLayout,
+// 						VkDescriptorPool* a_pDSPool, VkDescriptorSet* a_pDS)
+// 	{
+// 		VkDescriptorPoolSize descriptorPoolSize[2];
+// 		descriptorPoolSize[0].type		= VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+// 		descriptorPoolSize[0].descriptorCount = 1;
+// 		descriptorPoolSize[1].type		= VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+// 		descriptorPoolSize[1].descriptorCount = 1;
 
-void Context::createBufferApp(VkDevice a_device, VkPhysicalDevice a_physDevice, 
-				VkDeviceSize a_size, VkBufferUsageFlags a_usage, VkMemoryPropertyFlags a_properties,
-				VkBuffer& a_buffer, VkDeviceMemory& a_bufferMemory) {
-		VkBufferCreateInfo bufferInfo = {};
-		bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-		bufferInfo.size = a_size;
-		bufferInfo.usage = a_usage;
-		bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+// 		VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {};
+// 		descriptorPoolCreateInfo.sType	 = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+// 		descriptorPoolCreateInfo.maxSets		 = 1; 
+// 		descriptorPoolCreateInfo.poolSizeCount = 2;
+// 		descriptorPoolCreateInfo.pPoolSizes	= descriptorPoolSize;
+// 		VK_CHECK_RESULT(vkCreateDescriptorPool(a_device, &descriptorPoolCreateInfo, NULL, a_pDSPool));
 
-		VK_CHECK_RESULT(vkCreateBuffer(a_device, &bufferInfo, NULL, &a_buffer)); 
-
-		VkMemoryRequirements memRequirements;
-		vkGetBufferMemoryRequirements(a_device, a_buffer, &memRequirements);
-
-		VkMemoryAllocateInfo allocInfo = {};
-		allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-		allocInfo.allocationSize = memRequirements.size;
-		allocInfo.memoryTypeIndex = vk_utils::FindMemoryType(memRequirements.memoryTypeBits, a_properties, a_physDevice);
-
-		VK_CHECK_RESULT(vkAllocateMemory(a_device, &allocInfo, nullptr, &a_bufferMemory));
+// 		VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = {};
+// 		descriptorSetAllocateInfo.sType			= VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+// 		descriptorSetAllocateInfo.descriptorPool	 = (*a_pDSPool); 
+// 		descriptorSetAllocateInfo.descriptorSetCount = 1;		
+// 		descriptorSetAllocateInfo.pSetLayouts	= a_pDSLayout;
+// 		VK_CHECK_RESULT(vkAllocateDescriptorSets(a_device, &descriptorSetAllocateInfo, a_pDS));
 		
+// 		//pixels
+// 		VkDescriptorBufferInfo descriptorBufferInfo = {};
+// 		descriptorBufferInfo.buffer = a_buffer;
+// 		descriptorBufferInfo.offset = 0;
+// 		descriptorBufferInfo.range	= a_bufferSize;
 
-		VK_CHECK_RESULT(vkBindBufferMemory(a_device, a_buffer, a_bufferMemory, 0));
-	}
+// 		VkWriteDescriptorSet writeDescriptorSet = {};
+// 		writeDescriptorSet.sType		 = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+// 		writeDescriptorSet.dstSet		= (*a_pDS); 
+// 		writeDescriptorSet.dstBinding		= 0;	
+// 		writeDescriptorSet.descriptorCount = 1;	
+// 		writeDescriptorSet.descriptorType	= VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; 
+// 		writeDescriptorSet.pBufferInfo	 = &descriptorBufferInfo;
+// 		vkUpdateDescriptorSets(a_device, 1, &writeDescriptorSet, 0, NULL);
 
-void Context::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size, VkQueue queue) {
-	VkCommandBufferAllocateInfo allocInfo{};
-	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	allocInfo.commandPool = commandPool;
-	allocInfo.commandBufferCount = 1;
-
-	VkCommandBuffer commandBuffer_local;
-	vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer_local);
-
-	VkCommandBufferBeginInfo beginInfo{};
-	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-	vkBeginCommandBuffer(commandBuffer_local, &beginInfo);
-	VkBufferCopy copyRegion{};
-	copyRegion.srcOffset = 0; // Optional
-	copyRegion.dstOffset = 0; // Optional
-	copyRegion.size = size;
-	vkCmdCopyBuffer(commandBuffer_local, srcBuffer, dstBuffer, 1, &copyRegion);
-
-	vkEndCommandBuffer(commandBuffer_local);
-	VkSubmitInfo submitInfo{};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &commandBuffer_local;
-
-	vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
-	vkQueueWaitIdle(queue);
-	vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer_local);
-}
-	
-namespace {
-// pixels + second buffer
-void Context::createDescriptorSetLayoutApp(VkDevice a_device, VkDescriptorSetLayout* a_pDSLayout)
-	{
-		VkDescriptorSetLayoutBinding descriptorSetLayoutBinding[2];
-		descriptorSetLayoutBinding[0].binding		= 0;
-		descriptorSetLayoutBinding[0].descriptorType	 = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-		descriptorSetLayoutBinding[0].descriptorCount	= 1;
-		descriptorSetLayoutBinding[0].stageFlags	 = VK_SHADER_STAGE_COMPUTE_BIT;
-
-		descriptorSetLayoutBinding[1].binding		= 1;
-		descriptorSetLayoutBinding[1].descriptorType	 = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-		descriptorSetLayoutBinding[1].descriptorCount	= 1;
-		descriptorSetLayoutBinding[1].stageFlags	 = VK_SHADER_STAGE_COMPUTE_BIT;
-
-		VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {};
-		descriptorSetLayoutCreateInfo.sType	= VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-		descriptorSetLayoutCreateInfo.bindingCount = 2; 
-		descriptorSetLayoutCreateInfo.pBindings	= descriptorSetLayoutBinding;
+// 		//second buffer
+// 		VkDescriptorBufferInfo descriptorBufferInfo2 = {};
+// 		descriptorBufferInfo2.buffer = a_secondBuffer;
+// 		descriptorBufferInfo2.offset = 0;
+// 		descriptorBufferInfo2.range	= a_secondBufferSize;
 		
-		VK_CHECK_RESULT(vkCreateDescriptorSetLayout(a_device, &descriptorSetLayoutCreateInfo, NULL, a_pDSLayout));
-	}
-	
-void Context::createDescriptorSetFor_2_Buffers(VkDevice a_device, VkBuffer a_buffer, size_t a_bufferSize,
-						VkBuffer a_secondBuffer, size_t a_secondBufferSize,
-						const VkDescriptorSetLayout* a_pDSLayout,
-						VkDescriptorPool* a_pDSPool, VkDescriptorSet* a_pDS)
-	{
-		VkDescriptorPoolSize descriptorPoolSize[2];
-		descriptorPoolSize[0].type		= VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-		descriptorPoolSize[0].descriptorCount = 1;
-		descriptorPoolSize[1].type		= VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-		descriptorPoolSize[1].descriptorCount = 1;
-
-		VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {};
-		descriptorPoolCreateInfo.sType	 = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-		descriptorPoolCreateInfo.maxSets		 = 1; 
-		descriptorPoolCreateInfo.poolSizeCount = 2;
-		descriptorPoolCreateInfo.pPoolSizes	= descriptorPoolSize;
-		VK_CHECK_RESULT(vkCreateDescriptorPool(a_device, &descriptorPoolCreateInfo, NULL, a_pDSPool));
-
-		VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = {};
-		descriptorSetAllocateInfo.sType			= VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-		descriptorSetAllocateInfo.descriptorPool	 = (*a_pDSPool); 
-		descriptorSetAllocateInfo.descriptorSetCount = 1;		
-		descriptorSetAllocateInfo.pSetLayouts	= a_pDSLayout;
-		VK_CHECK_RESULT(vkAllocateDescriptorSets(a_device, &descriptorSetAllocateInfo, a_pDS));
-		
-		//pixels
-		VkDescriptorBufferInfo descriptorBufferInfo = {};
-		descriptorBufferInfo.buffer = a_buffer;
-		descriptorBufferInfo.offset = 0;
-		descriptorBufferInfo.range	= a_bufferSize;
-
-		VkWriteDescriptorSet writeDescriptorSet = {};
-		writeDescriptorSet.sType		 = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		writeDescriptorSet.dstSet		= (*a_pDS); 
-		writeDescriptorSet.dstBinding		= 0;	
-		writeDescriptorSet.descriptorCount = 1;	
-		writeDescriptorSet.descriptorType	= VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; 
-		writeDescriptorSet.pBufferInfo	 = &descriptorBufferInfo;
-		vkUpdateDescriptorSets(a_device, 1, &writeDescriptorSet, 0, NULL);
-
-		//second buffer
-		VkDescriptorBufferInfo descriptorBufferInfo2 = {};
-		descriptorBufferInfo2.buffer = a_secondBuffer;
-		descriptorBufferInfo2.offset = 0;
-		descriptorBufferInfo2.range	= a_secondBufferSize;
-		
-		VkWriteDescriptorSet writeDescriptorSet2 = {};
-		writeDescriptorSet2.sType		 = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		writeDescriptorSet2.dstSet		= (*a_pDS); 
-		writeDescriptorSet2.dstBinding		= 1;	
-		writeDescriptorSet2.descriptorCount = 1;	
-		writeDescriptorSet2.descriptorType	= VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; 
-		writeDescriptorSet2.pBufferInfo	 = &descriptorBufferInfo2;
-		vkUpdateDescriptorSets(a_device, 1, &writeDescriptorSet2, 0, NULL);
-	}
-void Context::createCommandBufferApp(VkDevice a_device, uint32_t queueFamilyIndex, VkPipeline a_pipeline, VkPipelineLayout a_layout,
-					VkCommandPool* a_pool, VkCommandBuffer* a_pCmdBuff)
-	{
-		VkCommandPoolCreateInfo commandPoolCreateInfo = {};
-		commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-		commandPoolCreateInfo.flags = 0;
+// 		VkWriteDescriptorSet writeDescriptorSet2 = {};
+// 		writeDescriptorSet2.sType		 = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+// 		writeDescriptorSet2.dstSet		= (*a_pDS); 
+// 		writeDescriptorSet2.dstBinding		= 1;	
+// 		writeDescriptorSet2.descriptorCount = 1;	
+// 		writeDescriptorSet2.descriptorType	= VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; 
+// 		writeDescriptorSet2.pBufferInfo	 = &descriptorBufferInfo2;
+// 		vkUpdateDescriptorSets(a_device, 1, &writeDescriptorSet2, 0, NULL);
+// 	}
+// void Context::createCommandBufferApp(VkDevice a_device, uint32_t queueFamilyIndex, VkPipeline a_pipeline, VkPipelineLayout a_layout,
+// 					VkCommandPool* a_pool, VkCommandBuffer* a_pCmdBuff)
+// 	{
+// 		VkCommandPoolCreateInfo commandPoolCreateInfo = {};
+// 		commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+// 		commandPoolCreateInfo.flags = 0;
 		
 		
-		commandPoolCreateInfo.queueFamilyIndex = queueFamilyIndex;
-		VK_CHECK_RESULT(vkCreateCommandPool(a_device, &commandPoolCreateInfo, NULL, a_pool));
-		VkCommandBufferAllocateInfo commandBufferAllocateInfo = {};
-		commandBufferAllocateInfo.sType		 = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-		commandBufferAllocateInfo.commandPool = (*a_pool); 
+// 		commandPoolCreateInfo.queueFamilyIndex = queueFamilyIndex;
+// 		VK_CHECK_RESULT(vkCreateCommandPool(a_device, &commandPoolCreateInfo, NULL, a_pool));
+// 		VkCommandBufferAllocateInfo commandBufferAllocateInfo = {};
+// 		commandBufferAllocateInfo.sType		 = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+// 		commandBufferAllocateInfo.commandPool = (*a_pool); 
 		
 		
 		
-		commandBufferAllocateInfo.level			= VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-		commandBufferAllocateInfo.commandBufferCount = 1; 
-		VK_CHECK_RESULT(vkAllocateCommandBuffers(a_device, &commandBufferAllocateInfo, a_pCmdBuff)); 
-	}
+// 		commandBufferAllocateInfo.level			= VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+// 		commandBufferAllocateInfo.commandBufferCount = 1; 
+// 		VK_CHECK_RESULT(vkAllocateCommandBuffers(a_device, &commandBufferAllocateInfo, a_pCmdBuff)); 
+// 	}
 	
 	
-void Context::recordCommandsTo(VkCommandBuffer a_cmdBuff, VkPipeline a_pipeline, VkPipelineLayout a_layout, const VkDescriptorSet& a_ds)
-	{
-		VkCommandBufferBeginInfo beginInfo = {};
-		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-		beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT; 
-		VK_CHECK_RESULT(vkBeginCommandBuffer(a_cmdBuff, &beginInfo)); 
-		vkCmdBindPipeline(a_cmdBuff, VK_PIPELINE_BIND_POINT_COMPUTE, a_pipeline);
-		vkCmdBindDescriptorSets(a_cmdBuff, VK_PIPELINE_BIND_POINT_COMPUTE, a_layout, 0, 1, &a_ds, 0, NULL);
+// void Context::recordCommandsTo(VkCommandBuffer a_cmdBuff, VkPipeline a_pipeline, VkPipelineLayout a_layout, const VkDescriptorSet& a_ds)
+// 	{
+// 		VkCommandBufferBeginInfo beginInfo = {};
+// 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+// 		beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT; 
+// 		VK_CHECK_RESULT(vkBeginCommandBuffer(a_cmdBuff, &beginInfo)); 
+// 		vkCmdBindPipeline(a_cmdBuff, VK_PIPELINE_BIND_POINT_COMPUTE, a_pipeline);
+// 		vkCmdBindDescriptorSets(a_cmdBuff, VK_PIPELINE_BIND_POINT_COMPUTE, a_layout, 0, 1, &a_ds, 0, NULL);
 
-		// push constants
-		int wh[num_push_constants] = {WIDTH, HEIGHT, mlp.num_hidden_layers, mlp.hidden_layer_size};
-		vkCmdPushConstants(a_cmdBuff, a_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(int)*num_push_constants, wh);
+// 		// push constants
+// 		int wh[num_push_constants] = {WIDTH, HEIGHT, mlp.num_hidden_layers, mlp.hidden_layer_size};
+// 		vkCmdPushConstants(a_cmdBuff, a_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(int)*num_push_constants, wh);
 
-		vkCmdDispatch(a_cmdBuff, (uint32_t)ceil(WIDTH / float(WORKGROUP_SIZE)), (uint32_t)ceil(HEIGHT / float(WORKGROUP_SIZE)), 1);
-		VK_CHECK_RESULT(vkEndCommandBuffer(a_cmdBuff)); 
-	}
-}
+// 		vkCmdDispatch(a_cmdBuff, (uint32_t)ceil(WIDTH / float(WORKGROUP_SIZE)), (uint32_t)ceil(HEIGHT / float(WORKGROUP_SIZE)), 1);
+// 		VK_CHECK_RESULT(vkEndCommandBuffer(a_cmdBuff)); 
+// 	}
+// }
 
 void Context::createComputePipeline(VkDevice a_device, const VkDescriptorSetLayout& a_dsLayout,
 						VkShaderModule* a_pShaderModule, VkPipeline* a_pPipeline,
@@ -795,13 +832,17 @@ void Context::cleanup() {
 	// 	}
 	// 	func(instance, debugReportCallback, NULL);
 	// }
-	vkFreeMemory(device, bufferMemoryPixels, NULL);
-	vkDestroyBuffer(device, bufferPixelsApp, NULL);
 
-	vkFreeMemory(device, bufferMemoryStaging, NULL);
-	vkDestroyBuffer(device, bufferStagingApp, NULL);
-	vkFreeMemory(device, bufferMemoryWeightsDevice, NULL);
-	vkDestroyBuffer(device, bufferWeightsDeviceApp, NULL);
+	// vkFreeMemory(device, bufferMemoryPixels, NULL);
+	// vkDestroyBuffer(device, bufferPixelsApp, NULL);
+
+	// vkFreeMemory(device, bufferMemoryStaging, NULL);
+	// vkDestroyBuffer(device, bufferStagingApp, NULL);
+	// vkFreeMemory(device, bufferMemoryWeightsDevice, NULL);
+	// vkDestroyBuffer(device, bufferWeightsDeviceApp, NULL);
+
+	bufferPixel = {};
+	bufferWeightsDevice = {};
 
 	vkDestroyShaderModule(device, computeShaderModule, NULL);
 	vkDestroyDescriptorPool(device, descriptorPool, NULL);
