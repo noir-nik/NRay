@@ -1,22 +1,51 @@
 #include "Pch.hpp"
-#include "VulkanBase.hpp"
+// #include "VulkanBase.hpp"
 
-#include "NeuralSdf.hpp"
+// #include "NeuralSdf.hpp"
+
+#include "ComputeApplication.hpp"
+
+#include "FileManager.hpp"
+
+struct NeuralSdfInfo
+{
+	std::string weightsPath;
+	int numLayers; // Number of hidden layers
+	int layerSize; // Size of a hidden layer
+	std::string outputPath;
+	int width;
+	int height;
+};
 
 int main()
 {
-	// print pwd
-	std::cout << std::filesystem::current_path() << std::endl;
-	Logger::Init();
-	NeuralSdfApplication app;
-	NeuralSdfInfo neuralSdfInfo = {
+	// // print pwd
+	// std::cout << std::filesystem::current_path() << std::endl;
+	// Logger::Init();
+	// NeuralSdfApplication app;
+	NeuralSdfInfo ctx = {
 		.weightsPath = "assets/sdf1_weights.bin",
 		.numLayers = 2,
 		.layerSize = 64,
-		.outputPath = "build/output.bmp",
-		.width = 512,
-		.height = 512,
+		.outputPath = "output.bmp",
+		.width = 256,
+		.height = 256,
 	};
-	app.run(&neuralSdfInfo);
-	return 0;
+	// app.run(&neuralSdfInfo);
+	// return 0;
+	int num_parameters = (3*ctx.layerSize + ctx.numLayers*ctx.layerSize*ctx.layerSize + ctx.layerSize) + (ctx.layerSize*(ctx.numLayers + 1) + 1);
+
+	std::vector<float> weights = FileManager::ReadFloats(ctx.weightsPath);
+	ASSERT(weights.size() == num_parameters, "Invalid number of weights, expected {0}, got {1}", num_parameters, weights.size());
+
+	ComputeApplication app;
+	app.mlp.w_b = weights;
+	app.mlp.num_hidden_layers = ctx.numLayers;
+	app.mlp.hidden_layer_size = ctx.layerSize;
+	try {
+		app.run();
+	} catch (const std::runtime_error& e) {
+		printf("%s\n", e.what());
+		
+	}
 }

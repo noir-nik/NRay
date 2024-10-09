@@ -6,6 +6,10 @@
 .vscode/
 .vscode/*
 
+
+
+
+*.bmp
 bin/
 build/*
 build-linux/*
