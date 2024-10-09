@@ -235,7 +235,7 @@ struct Context
 									VkShaderModule* a_pShaderModule, VkPipeline* a_pPipeline,
 									VkPipelineLayout* a_pPipelineLayout);
 
-	void createCommandBuffer(VkDevice a_device, uint32_t queueFamilyIndex, VkPipeline a_pipeline, VkPipelineLayout a_layout,
+	void createCommandBufferApp(VkDevice a_device, uint32_t queueFamilyIndex, VkPipeline a_pipeline, VkPipelineLayout a_layout,
 									VkCommandPool* a_pool, VkCommandBuffer* a_pCmdBuff);
 
 	// void recordCommandsTo(VkCommandBuffer a_cmdBuff, VkPipeline a_pipeline, VkPipelineLayout a_layout, const VkDescriptorSet& a_ds);
@@ -475,8 +475,17 @@ void Context::run()	{
 	std::cout << "compiling shaders	... " << std::endl;
 	createComputePipeline(device, descriptorSetLayout,
 			&computeShaderModule, &pipeline, &pipelineLayout);
-	createCommandBuffer(device, queues[Queue::Compute].family, pipeline, pipelineLayout,
-			&commandPool, &commandBuffer);
+
+	
+	// createCommandBufferApp(device, queues[Queue::Compute].family, pipeline, pipelineLayout,
+	// 		&commandPool, &commandBuffer);
+
+	createCommandBuffers();
+	_ctx.currentQueue = Queue::Compute;
+	_ctx.commandPool = queues[Queue::Compute].commands[0].pool;
+	commandBuffer = GetCurrentCommandResources().buffer;
+
+
 	// DO
 	// copy to device
 	copyBuffer(bufferStagingApp, bufferWeightsDeviceApp, weightsBufferSize, queues[Queue::Compute].queue);
@@ -597,7 +606,8 @@ void Context::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize si
 	vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer_local);
 }
 	
-	// pixels + second buffer
+namespace {
+// pixels + second buffer
 void Context::createDescriptorSetLayoutApp(VkDevice a_device, VkDescriptorSetLayout* a_pDSLayout)
 	{
 		VkDescriptorSetLayoutBinding descriptorSetLayoutBinding[2];
@@ -674,7 +684,46 @@ void Context::createDescriptorSetFor_2_Buffers(VkDevice a_device, VkBuffer a_buf
 		writeDescriptorSet2.pBufferInfo	 = &descriptorBufferInfo2;
 		vkUpdateDescriptorSets(a_device, 1, &writeDescriptorSet2, 0, NULL);
 	}
+void Context::createCommandBufferApp(VkDevice a_device, uint32_t queueFamilyIndex, VkPipeline a_pipeline, VkPipelineLayout a_layout,
+					VkCommandPool* a_pool, VkCommandBuffer* a_pCmdBuff)
+	{
+		VkCommandPoolCreateInfo commandPoolCreateInfo = {};
+		commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+		commandPoolCreateInfo.flags = 0;
+		
+		
+		commandPoolCreateInfo.queueFamilyIndex = queueFamilyIndex;
+		VK_CHECK_RESULT(vkCreateCommandPool(a_device, &commandPoolCreateInfo, NULL, a_pool));
+		VkCommandBufferAllocateInfo commandBufferAllocateInfo = {};
+		commandBufferAllocateInfo.sType		 = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+		commandBufferAllocateInfo.commandPool = (*a_pool); 
+		
+		
+		
+		commandBufferAllocateInfo.level			= VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+		commandBufferAllocateInfo.commandBufferCount = 1; 
+		VK_CHECK_RESULT(vkAllocateCommandBuffers(a_device, &commandBufferAllocateInfo, a_pCmdBuff)); 
+	}
 	
+	
+void Context::recordCommandsTo(VkCommandBuffer a_cmdBuff, VkPipeline a_pipeline, VkPipelineLayout a_layout, const VkDescriptorSet& a_ds)
+	{
+		VkCommandBufferBeginInfo beginInfo = {};
+		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+		beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT; 
+		VK_CHECK_RESULT(vkBeginCommandBuffer(a_cmdBuff, &beginInfo)); 
+		vkCmdBindPipeline(a_cmdBuff, VK_PIPELINE_BIND_POINT_COMPUTE, a_pipeline);
+		vkCmdBindDescriptorSets(a_cmdBuff, VK_PIPELINE_BIND_POINT_COMPUTE, a_layout, 0, 1, &a_ds, 0, NULL);
+
+		// push constants
+		int wh[num_push_constants] = {WIDTH, HEIGHT, mlp.num_hidden_layers, mlp.hidden_layer_size};
+		vkCmdPushConstants(a_cmdBuff, a_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(int)*num_push_constants, wh);
+
+		vkCmdDispatch(a_cmdBuff, (uint32_t)ceil(WIDTH / float(WORKGROUP_SIZE)), (uint32_t)ceil(HEIGHT / float(WORKGROUP_SIZE)), 1);
+		VK_CHECK_RESULT(vkEndCommandBuffer(a_cmdBuff)); 
+	}
+}
+
 void Context::createComputePipeline(VkDevice a_device, const VkDescriptorSetLayout& a_dsLayout,
 						VkShaderModule* a_pShaderModule, VkPipeline* a_pPipeline,
 						VkPipelineLayout* a_pPipelineLayout)
@@ -720,44 +769,7 @@ void Context::createComputePipeline(VkDevice a_device, const VkDescriptorSetLayo
 		VK_CHECK_RESULT(vkCreateComputePipelines(a_device, VK_NULL_HANDLE, 1, &pipelineCreateInfo, NULL, a_pPipeline));
 	}
 	
-void Context::createCommandBuffer(VkDevice a_device, uint32_t queueFamilyIndex, VkPipeline a_pipeline, VkPipelineLayout a_layout,
-					VkCommandPool* a_pool, VkCommandBuffer* a_pCmdBuff)
-	{
-		VkCommandPoolCreateInfo commandPoolCreateInfo = {};
-		commandPoolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-		commandPoolCreateInfo.flags = 0;
-		
-		
-		commandPoolCreateInfo.queueFamilyIndex = queueFamilyIndex;
-		VK_CHECK_RESULT(vkCreateCommandPool(a_device, &commandPoolCreateInfo, NULL, a_pool));
-		VkCommandBufferAllocateInfo commandBufferAllocateInfo = {};
-		commandBufferAllocateInfo.sType		 = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-		commandBufferAllocateInfo.commandPool = (*a_pool); 
-		
-		
-		
-		commandBufferAllocateInfo.level			= VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-		commandBufferAllocateInfo.commandBufferCount = 1; 
-		VK_CHECK_RESULT(vkAllocateCommandBuffers(a_device, &commandBufferAllocateInfo, a_pCmdBuff)); 
-	}
-	
-// void Context::recordCommandsTo(VkCommandBuffer a_cmdBuff, VkPipeline a_pipeline, VkPipelineLayout a_layout, const VkDescriptorSet& a_ds)
-// 	{
-// 		VkCommandBufferBeginInfo beginInfo = {};
-// 		beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-// 		beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT; 
-// 		VK_CHECK_RESULT(vkBeginCommandBuffer(a_cmdBuff, &beginInfo)); 
-// 		vkCmdBindPipeline(a_cmdBuff, VK_PIPELINE_BIND_POINT_COMPUTE, a_pipeline);
-// 		vkCmdBindDescriptorSets(a_cmdBuff, VK_PIPELINE_BIND_POINT_COMPUTE, a_layout, 0, 1, &a_ds, 0, NULL);
 
-// 		// push constants
-// 		int wh[num_push_constants] = {WIDTH, HEIGHT, mlp.num_hidden_layers, mlp.hidden_layer_size};
-// 		vkCmdPushConstants(a_cmdBuff, a_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(int)*num_push_constants, wh);
-
-// 		vkCmdDispatch(a_cmdBuff, (uint32_t)ceil(WIDTH / float(WORKGROUP_SIZE)), (uint32_t)ceil(HEIGHT / float(WORKGROUP_SIZE)), 1);
-// 		VK_CHECK_RESULT(vkEndCommandBuffer(a_cmdBuff)); 
-// 	}
-	
 void Context::runCommandBuffer(VkCommandBuffer a_cmdBuff, VkQueue a_queue, VkDevice a_device)
 {
 	VkSubmitInfo submitInfo = {};
@@ -773,6 +785,7 @@ void Context::runCommandBuffer(VkCommandBuffer a_cmdBuff, VkQueue a_queue, VkDev
 	VK_CHECK_RESULT(vkWaitForFences(a_device, 1, &fence, VK_TRUE, 100000000000));
 	vkDestroyFence(a_device, fence, NULL);
 }
+
 void Context::cleanup() {
 	// if (enableValidationLayers) {
 		
@@ -795,7 +808,14 @@ void Context::cleanup() {
 	vkDestroyDescriptorSetLayout(device, descriptorSetLayout, NULL);
 	vkDestroyPipelineLayout(device, pipelineLayout, NULL);
 	vkDestroyPipeline(device, pipeline, NULL);
-	vkDestroyCommandPool(device, commandPool, NULL);	
+
+
+
+	// vkDestroyCommandPool(device, commandPool, NULL);
+	DestroyCommandBuffers();	
+
+
+
 	// vkDestroyDevice(device, NULL);
 	// vkDestroyInstance(instance, NULL);	
 	}
