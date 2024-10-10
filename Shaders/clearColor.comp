@@ -1,0 +1,56 @@
+#version 450
+
+#extension GL_GOOGLE_include_directive : enable
+#include "ShaderCommon.h"
+//#define WIDTH 512
+//#define HEIGHT 512
+layout (local_size_x = WORKGROUP_SIZE, local_size_y = WORKGROUP_SIZE, local_size_z = 1 ) in;
+
+# define fov 90.
+# define itfov 1.0/(tan(3.141592654*fov/(180.*2.)))
+
+#define CAMERA_FOV      	1.04
+
+
+#define EPS     	0.001
+#define MAX_DIST     	10.
+#define MAX_STEPS		200	
+
+const float W_0 = 30.0; 
+
+
+// layout(push_constant) uniform params_t
+// {
+//   int width;
+//   int height;
+//   int numLayers;
+//   int layerSize;
+
+//   int 
+
+// } ctx;
+
+
+layout(push_constant) uniform Constants {
+    NeuralSdfConstants ctx;
+};
+
+// layout(std140, binding = 0) buffer buf
+// {
+//    Pixel imageData[];
+// };
+
+// layout(std430, binding = 1) buffer weights
+// {
+//    float w_b[];
+// };
+
+
+
+void main() {
+  if(gl_GlobalInvocationID.x >= ctx.width || gl_GlobalInvocationID.y >= ctx.height)
+    return;
+	uint pos = gl_GlobalInvocationID.y * ctx.width + gl_GlobalInvocationID.x;
+  	vec4 color = vec4(1.0,.5,.1,1.);
+  	imageData[pos].value = color;
+}

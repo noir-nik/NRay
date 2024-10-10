@@ -82,6 +82,6 @@ clean:
 	@echo "=== Cleaned ==="
 
 rm:
-	cmd /c del out_gpu.bmp
+	cmd /c del output.bmp
 
 # $(RM) $(OBJ_DIR)/

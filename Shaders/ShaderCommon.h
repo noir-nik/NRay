@@ -27,7 +27,8 @@ struct NeuralSdfConstants {
 
 	int weightsRID;
 	int outputImageRID;
-	int pad[2];
+	int imageGPU;
+	int pad[1];
 };
 
 
@@ -55,10 +56,17 @@ layout(set = 0, binding = BINDING_BUFFER) buffer OutImageBuffer {
     Pixel data[];
 } OutImageBuffers[];
 
+// layout(set = 0, binding = BINDING_BUFFER) buffer Parameters {
+//     Pixel data[];
+// } OutImageBuffers[];
+
 
 layout(binding = BINDING_STORAGE_IMAGE) uniform image2D images[];
 
+
+
 #define w_b WeightsBuffers[ctx.weightsRID].data
+// #define imageData OutImageBuffers[ctx.outputImageRID].data
 #define imageData OutImageBuffers[ctx.outputImageRID].data
 
 #endif

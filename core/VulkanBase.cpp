@@ -42,8 +42,13 @@ struct Context
 {	
 	void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset);
 	void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset);
+
 	void CmdCopy(Image& dst, void* data, uint32_t size);
-	void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset);
+	void CmdCopy(Image &dst, Buffer &src, uint32_t srcOffset);
+	
+	void CmdCopy(Buffer &dst, Image &src, uint32_t srcOffset);
+	void CmdCopy(Buffer &dst, Image &src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset);
+
 	void CmdBarrier(Image& img, Layout::ImageLayout layout);
 	void CmdBarrier();
 	void EndCommandBuffer(VkSubmitInfo submitInfo);
@@ -302,8 +307,8 @@ void Init() {
 	// _ctx.createDescriptorSetLayout_for2Buffers();
 	// _ctx.createDescriptorSet_for2Buffers();
 
-	_ctx.createDescriptorResources();
-	// _ctx.createBindlessResources();
+	_ctx.createBindlessResources();
+	// _ctx.createDescriptorResources();
 
 	// _ctx.CreateSurfaceFormats();
 	// _ctx.CreateSwapChain(width, height);
@@ -318,9 +323,9 @@ void Destroy() {
 	// ImGui_ImplGlfw_Shutdown();
 	// _ctx.DestroySwapChain();
 
-	// _ctx.destroyBindlessResources();
+	_ctx.destroyBindlessResources();
+	// _ctx.destroyDescriptorResources();
 
-	_ctx.destroyDescriptorResources();
 	_ctx.DestroyCommandBuffers();
 	_ctx.DestroyDevice();
 	_ctx.DestroyInstance();
@@ -337,6 +342,7 @@ void UnmapBuffer(Buffer& buffer) {
     ASSERT(buffer.memory & Memory::CPU, "Buffer not cpu accessible!");
     vmaUnmapMemory(_ctx.vmaAllocator, buffer.resource->allocation);
 }
+
 
 Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, const std::string& name) {
 	if (usage & BufferUsage::Vertex) {
@@ -397,8 +403,8 @@ Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, c
 
 		VkWriteDescriptorSet write = {};
 		write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		// write.dstSet          = _ctx.bindlessDescriptorSet;
-		write.dstSet          = _ctx.descriptorSet;
+		write.dstSet          = _ctx.bindlessDescriptorSet;
+		// write.dstSet          = _ctx.descriptorSet;
 		write.dstBinding      = BINDING_BUFFER;
 		// write.dstBinding      = bufferRID;
 		write.dstArrayElement = buffer.RID();
@@ -411,6 +417,162 @@ Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, c
 
 	return buffer;
 }
+
+Image CreateImage(const ImageDesc& desc) {
+    auto device = _ctx.device;
+    auto allocator = _ctx.allocator;
+
+    std::shared_ptr<ImageResource> res = std::make_shared<ImageResource>();
+
+    VkImageCreateInfo imageInfo{};
+    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imageInfo.imageType = VK_IMAGE_TYPE_2D;
+    imageInfo.extent.width = desc.width;
+    imageInfo.extent.height = desc.height;
+    imageInfo.extent.depth = 1;
+    imageInfo.mipLevels = 1;
+    imageInfo.arrayLayers = desc.layers;
+    imageInfo.format = (VkFormat)desc.format;
+    // tiling defines how the texels lay in memory
+    // optimal tiling is implementation dependent for more efficient memory access
+    // and linear makes the texels lay in row-major order, possibly with padding on each row
+    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    // not usable by the GPU, the first transition will discard the texels
+    imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    imageInfo.usage = (VkImageUsageFlags)desc.usage;
+    imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+    if (desc.layers == 6) {
+        imageInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+    }
+
+    VmaAllocationCreateInfo allocInfo = {};
+    allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    auto result = vmaCreateImage(_ctx.vmaAllocator, &imageInfo, &allocInfo, &res->image, &res->allocation, nullptr);
+    DEBUG_VK(result, "Failed to create image!");
+
+    AspectFlags aspect = Aspect::Color;
+    if (desc.format == Format::D24_unorm_S8_uint || desc.format == Format::D32_sfloat) {
+        aspect = Aspect::Depth;
+    }
+    if (desc.format == Format::D24_unorm_S8_uint) {
+        aspect |= Aspect::Stencil;
+    }
+
+    res->name = desc.name;
+
+    VkImageViewCreateInfo viewInfo{};
+    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    viewInfo.image = res->image;
+    if (desc.layers == 1) {
+        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    } else {
+        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
+    }
+    viewInfo.format = (VkFormat)desc.format;
+    viewInfo.subresourceRange.aspectMask = (VkImageAspectFlags)aspect;
+    viewInfo.subresourceRange.baseMipLevel = 0;
+    viewInfo.subresourceRange.levelCount = 1;
+    viewInfo.subresourceRange.baseArrayLayer = 0;
+    viewInfo.subresourceRange.layerCount = desc.layers;
+
+    result = vkCreateImageView(device, &viewInfo, allocator, &res->view);
+    DEBUG_VK(result, "Failed to create image view!");
+
+    if (desc.layers > 1) {
+        viewInfo.subresourceRange.layerCount = 1;
+        res->layersView.resize(desc.layers);
+        for (int i = 0; i < desc.layers; i++) {
+            viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+            viewInfo.subresourceRange.baseArrayLayer = i;
+            result = vkCreateImageView(device, &viewInfo, allocator, &res->layersView[i]);
+            DEBUG_VK(result, "Failed to create image view!");
+        }
+    }
+
+    Image image = {
+        .resource = res,
+        .width = desc.width,
+        .height = desc.height,
+        .usage = desc.usage,
+        .format = desc.format,
+        .layout = Layout::Undefined,
+        .aspect = aspect,
+        .layers = desc.layers,
+    };
+
+    if (desc.usage & ImageUsage::Sampled || desc.usage & ImageUsage::Storage) {
+        res->rid = _ctx.availableImageRID.back();
+        _ctx.availableImageRID.pop_back();
+    }
+
+    if (desc.usage & ImageUsage::Sampled) {
+        Layout::ImageLayout newLayout = Layout::ShaderRead;
+        if (aspect == (Aspect::Depth | Aspect::Stencil)) {
+            newLayout = Layout::DepthStencilRead;
+        } else if (aspect == Aspect::Depth) {
+            newLayout = Layout::DepthRead;
+        }
+        // res->imguiRIDs.resize(desc.layers);
+        // if (desc.layers > 1) {
+        //     for (int i = 0; i < desc.layers; i++) {
+        //         res->imguiRIDs[i] = ImGui_ImplVulkan_AddTexture(_ctx.genericSampler, res->layersView[i], (VkImageLayout)newLayout);
+        //     }
+        // } else {
+        //     res->imguiRIDs[0] = ImGui_ImplVulkan_AddTexture(_ctx.genericSampler, res->view, (VkImageLayout)newLayout);
+        // }
+
+        VkDescriptorImageInfo descriptorInfo = {
+            .sampler = _ctx.genericSampler,
+            .imageView = res->view,
+            .imageLayout = (VkImageLayout)newLayout,
+        };
+        VkWriteDescriptorSet write = {};
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.dstSet = _ctx.bindlessDescriptorSet;
+        write.dstBinding = BINDING_TEXTURE;
+        write.dstArrayElement = image.RID();
+        write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        write.descriptorCount = 1;
+        write.pImageInfo = &descriptorInfo;
+        vkUpdateDescriptorSets(_ctx.device, 1, &write, 0, nullptr);
+    }
+    if (desc.usage & ImageUsage::Storage) {
+        VkDescriptorImageInfo descriptorInfo = {
+            .sampler = _ctx.genericSampler,
+            .imageView = res->view,
+            .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+        };
+        VkWriteDescriptorSet write = {};
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.dstSet = _ctx.bindlessDescriptorSet;
+        write.dstBinding = BINDING_STORAGE_IMAGE;
+        write.dstArrayElement = image.RID();
+        write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        write.descriptorCount = 1;
+        write.pImageInfo = &descriptorInfo;
+        vkUpdateDescriptorSets(_ctx.device, 1, &write, 0, nullptr);
+    }
+
+    VkDebugUtilsObjectNameInfoEXT name = {
+    .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+    .objectType = VkObjectType::VK_OBJECT_TYPE_IMAGE,
+    .objectHandle = (uint64_t)(VkImage)res->image,
+    .pObjectName = desc.name.c_str(),
+    };
+    _ctx.vkSetDebugUtilsObjectNameEXT(_ctx.device, &name);
+    std::string strName = desc.name + "View";
+    name = {
+        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+        .objectType = VkObjectType::VK_OBJECT_TYPE_IMAGE_VIEW,
+        .objectHandle = (uint64_t)(VkImageView)res->view,
+        .pObjectName = strName.c_str(),
+    };
+    _ctx.vkSetDebugUtilsObjectNameEXT(_ctx.device, &name);
+
+    return image;
+}
+
 
 void CmdDispatch(const ivec3& groups) {
 	auto& cmd = _ctx.GetCurrentCommandResources();
@@ -493,12 +655,13 @@ void Context::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipeline) {
 	}
 
 	std::vector<VkDescriptorSetLayout> layouts;
-	// layouts.push_back(bindlessDescriptorLayout);
-	layouts.push_back(descriptorSetLayout);
+	layouts.push_back(bindlessDescriptorLayout);
+	// layouts.push_back(descriptorSetLayout);
 
 	VkPushConstantRange pushConstant{};
 	pushConstant.offset = 0;
-	pushConstant.size = 256;
+	// pushConstant.size = 256;///////TODO:fix
+	pushConstant.size = physicalProperties.limits.maxPushConstantsSize;
 	pushConstant.stageFlags = VK_SHADER_STAGE_ALL;
 
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
@@ -537,6 +700,7 @@ void Context::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipeline) {
 	}
 }
 
+
 void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset) {
     _ctx.CmdCopy(dst, data, size, dstOfsset);
 }
@@ -545,13 +709,24 @@ void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset, uint32
     _ctx.CmdCopy(dst, src, size, dstOffset, srcOffset);
 }
 
+
 void CmdCopy(Image& dst, void* data, uint32_t size) {
     _ctx.CmdCopy(dst, data, size); 
 }
 
-void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset) {
-    _ctx.CmdCopy(dst, src, size, srcOffset); 
+void CmdCopy(Image& dst, Buffer& src, uint32_t srcOffset) {
+    _ctx.CmdCopy(dst, src, srcOffset); 
 }
+
+
+void CmdCopy(Buffer& dst, Image& src, uint32_t srcOffset) {
+	_ctx.CmdCopy(dst, src, srcOffset);
+}
+
+void CmdCopy(Buffer& dst, Image& src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset){
+	_ctx.CmdCopy(dst, src, size, dstOffset, srcOffset);
+}
+
 
 void CmdBarrier(Image& img, Layout::ImageLayout layout) {
     _ctx.CmdBarrier(img, layout);
@@ -586,8 +761,8 @@ void CmdBarrier() {
 void CmdBindPipeline(Pipeline& pipeline) {
     auto& cmd = _ctx.GetCurrentCommandResources();
     vkCmdBindPipeline(cmd.buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->pipeline);
-    // vkCmdBindDescriptorSets(cmd.buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->layout, 0, 1, &_ctx.bindlessDescriptorSet, 0, nullptr);
-    vkCmdBindDescriptorSets(cmd.buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->layout, 0, 1, &_ctx.descriptorSet, 0, nullptr);
+    vkCmdBindDescriptorSets(cmd.buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->layout, 0, 1, &_ctx.bindlessDescriptorSet, 0, nullptr);
+    // vkCmdBindDescriptorSets(cmd.buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->layout, 0, 1, &_ctx.descriptorSet, 0, nullptr);
 
     _ctx.currentPipeline = pipeline.resource;
 }
@@ -1034,39 +1209,41 @@ void Context::CreateDevice() {
 	bufferDeviceAddresFeatures.bufferDeviceAddress = VK_TRUE;
 	bufferDeviceAddresFeatures.pNext = &descriptorIndexingFeatures;
 
-    VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingPipelineFeatures{};
-    rayTracingPipelineFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
-    rayTracingPipelineFeatures.rayTracingPipeline = VK_TRUE;
-    rayTracingPipelineFeatures.pNext = &bufferDeviceAddresFeatures;
+    // VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingPipelineFeatures{};
+    // rayTracingPipelineFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
+    // rayTracingPipelineFeatures.rayTracingPipeline = VK_TRUE;
+    // rayTracingPipelineFeatures.pNext = &bufferDeviceAddresFeatures;
 
-    VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures{};
-    accelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
-    accelerationStructureFeatures.accelerationStructure = VK_TRUE;
-    accelerationStructureFeatures.descriptorBindingAccelerationStructureUpdateAfterBind = VK_TRUE;
-    accelerationStructureFeatures.accelerationStructureCaptureReplay = VK_TRUE;
-    accelerationStructureFeatures.pNext = &rayTracingPipelineFeatures;
+    // VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures{};
+    // accelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+    // accelerationStructureFeatures.accelerationStructure = VK_TRUE;
+    // accelerationStructureFeatures.descriptorBindingAccelerationStructureUpdateAfterBind = VK_TRUE;
+    // accelerationStructureFeatures.accelerationStructureCaptureReplay = VK_TRUE;
+    // accelerationStructureFeatures.pNext = &rayTracingPipelineFeatures;
 
-    VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures{};
-    rayQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
-    rayQueryFeatures.rayQuery = VK_TRUE;
-    rayQueryFeatures.pNext = &accelerationStructureFeatures;
+    // VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures{};
+    // rayQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
+    // rayQueryFeatures.rayQuery = VK_TRUE;
+    // // rayQueryFeatures.pNext = &accelerationStructureFeatures;
+    // rayQueryFeatures.pNext = &bufferDeviceAddresFeatures;
 
-    VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeatures{};
-    dynamicRenderingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
-    dynamicRenderingFeatures.dynamicRendering = VK_TRUE;
-    dynamicRenderingFeatures.pNext = &rayQueryFeatures;
+    // VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeatures{};
+    // dynamicRenderingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
+    // dynamicRenderingFeatures.dynamicRendering = VK_TRUE;
+    // dynamicRenderingFeatures.pNext = &rayQueryFeatures;
 
 	VkPhysicalDeviceSynchronization2FeaturesKHR sync2Features{};
 	sync2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR;
 	sync2Features.synchronization2 = VK_TRUE;
-    sync2Features.pNext = &dynamicRenderingFeatures;
+    // sync2Features.pNext = &dynamicRenderingFeatures;
+    sync2Features.pNext = &bufferDeviceAddresFeatures;
 
-    VkPhysicalDeviceShaderAtomicFloatFeaturesEXT atomicFeatures{};
-    atomicFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT;
-    atomicFeatures.shaderBufferFloat32AtomicAdd = VK_TRUE;
-    atomicFeatures.pNext = &sync2Features;
+    // VkPhysicalDeviceShaderAtomicFloatFeaturesEXT atomicFeatures{};
+    // atomicFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT;
+    // atomicFeatures.shaderBufferFloat32AtomicAdd = VK_TRUE;
+    // atomicFeatures.pNext = &sync2Features;
 
-    features2.pNext = &atomicFeatures;
+    // features2.pNext = &atomicFeatures;
 
 	VkDeviceCreateInfo createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -1074,10 +1251,13 @@ void Context::CreateDevice() {
 	createInfo.pQueueCreateInfos = queueCreateInfos.data();
 	createInfo.enabledExtensionCount = static_cast<uint32_t>(requiredExtensions.size());
 	createInfo.ppEnabledExtensionNames = requiredExtensions.data();
-	createInfo.pEnabledFeatures; // !Should be NULL if pNext is used
-	createInfo.pNext = &features2; // feature chain
+	// createInfo.pEnabledFeatures; // !Should be NULL if pNext is used
+	// createInfo.pNext = &features2; // feature chain
 	// VkPhysicalDeviceFeatures deviceFeatures{}; // None just yet
 	// createInfo.pEnabledFeatures = &deviceFeatures;
+	createInfo.pEnabledFeatures; // !Should be NULL if pNext is used
+	createInfo.pNext = &sync2Features; // feature chain
+
 
 	// specify the required layers to the device 
 	if (_ctx.enableValidationLayers) {
@@ -1195,7 +1375,7 @@ void Context::createDescriptorSet_for2Buffers()
 const u32 MAX_STORAGE = 64;
 const u32 MAX_SAMPLEDIMAGES = 64;
 // const u32 MAX_ACCELERATIONSTRUCTURE = 64;
-// const u32 MAX_STORAGE_IMAGES = 8192;
+const u32 MAX_STORAGE_IMAGES = 8192;
 
 
 void Context::createDescriptorPool(){
@@ -1204,7 +1384,7 @@ void Context::createDescriptorPool(){
 		{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,        MAX_SAMPLEDIMAGES},
 		{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,                MAX_STORAGE},
 		// {VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, MAX_ACCELERATIONSTRUCTURE},
-		// {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,                 MAX_STORAGE_IMAGES},
+		{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,                 MAX_STORAGE_IMAGES},
 	};
 
 	VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {};
@@ -1219,20 +1399,28 @@ void Context::createDescriptorPool(){
 }
 
 void Context::createDescriptorSetLayout(){
-	VkDescriptorSetLayoutBinding bindings[2]{};
-	VkDescriptorBindingFlags bindingFlags[2]{};
+	const int bindingCount = 3;
+	std::vector<VkDescriptorSetLayoutBinding> bindings(bindingCount);
+	std::vector<VkDescriptorBindingFlags> bindingFlags(bindingCount);
 
+	VkDescriptorSetLayoutBinding texture{};
 	bindings[0].binding = BINDING_TEXTURE;
 	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 	bindings[0].descriptorCount = MAX_SAMPLEDIMAGES;
 	bindings[0].stageFlags = VK_SHADER_STAGE_ALL;
-	bindingFlags[0] = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
+	// bindings.push_back(texture);
+	// bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT });
 
 	bindings[1].binding = BINDING_BUFFER;
 	bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 	bindings[1].descriptorCount = MAX_STORAGE;
 	bindings[1].stageFlags = VK_SHADER_STAGE_ALL;
 	bindingFlags[1] = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT;
+
+	bindings[2].binding = BINDING_STORAGE_IMAGE;
+	bindings[2].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+	bindings[2].descriptorCount = MAX_STORAGE_IMAGES;
+	bindings[2].stageFlags = VK_SHADER_STAGE_ALL;
 
 
 	// VkDescriptorSetLayoutBindingFlagsCreateInfo setLayoutBindingFlags{};
@@ -1242,14 +1430,14 @@ void Context::createDescriptorSetLayout(){
 
 	VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {};
 	descriptorSetLayoutCreateInfo.sType	= VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	descriptorSetLayoutCreateInfo.bindingCount = 2; 
+	descriptorSetLayoutCreateInfo.bindingCount = bindingCount; 
 	descriptorSetLayoutCreateInfo.pBindings	= &bindings[0];
 	// descriptorSetLayoutCreateInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 	// descriptorSetLayoutCreateInfo.pNext = &setLayoutBindingFlags;
 
 	VkResult result = vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCreateInfo, NULL, &descriptorSetLayout);
-	DEBUG_VK(result, "Failed to allocate bindless descriptor set!");
-	ASSERT(result == VK_SUCCESS, "Failed to allocate bindless descriptor set!");
+	DEBUG_VK(result, "Failed to allocate descriptor set!");
+	ASSERT(result == VK_SUCCESS, "Failed to allocate descriptor set!");
 }
 
 void Context::createDescriptorSet(){
@@ -1261,8 +1449,8 @@ void Context::createDescriptorSet(){
 	allocInfo.pSetLayouts = &descriptorSetLayout;
 
 	VkResult result = vkAllocateDescriptorSets(device, &allocInfo, &descriptorSet);
-	DEBUG_VK(result, "Failed to allocate bindless descriptor set!");
-	ASSERT(result == VK_SUCCESS, "Failed to allocate bindless descriptor set!");
+	DEBUG_VK(result, "Failed to allocate descriptor set!");
+	ASSERT(result == VK_SUCCESS, "Failed to allocate descriptor set!");
 }
 
 void Context::createDescriptorResources(){
@@ -1287,24 +1475,24 @@ void Context::createBindlessResources(){
 		// TODO: val = min(MAX_, available)
 		const u32 MAX_STORAGE = 8192;
 		const u32 MAX_SAMPLEDIMAGES = 8192;
-		const u32 MAX_ACCELERATIONSTRUCTURE = 64;
+		// const u32 MAX_ACCELERATIONSTRUCTURE = 64;
 		const u32 MAX_STORAGE_IMAGES = 8192;
 
 		// create descriptor set pool for bindless resources
 		std::vector<VkDescriptorPoolSize> bindlessPoolSizes = { 
 			{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MAX_SAMPLEDIMAGES},
 			{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, MAX_STORAGE},
-			{VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, MAX_ACCELERATIONSTRUCTURE},
+			// {VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, MAX_ACCELERATIONSTRUCTURE},
 			{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, MAX_STORAGE_IMAGES},
 		};
 
 		// Fill with sequential numbers
 		availableBufferRID.resize(MAX_STORAGE);
-		std::iota(availableBufferRID.begin(), availableBufferRID.end(), 0);
+		std::iota(availableBufferRID.rbegin(), availableBufferRID.rend(), 0);
 		availableImageRID.resize(MAX_SAMPLEDIMAGES);
-		std::iota(availableImageRID.begin(), availableImageRID.end(), 0);
-		availableTLASRID.resize(MAX_ACCELERATIONSTRUCTURE);
-		std::iota(availableTLASRID.begin(), availableTLASRID.end(), 0);
+		std::iota(availableImageRID.rbegin(), availableImageRID.rend(), 0);
+		// availableTLASRID.resize(MAX_ACCELERATIONSTRUCTURE);
+		// std::iota(availableTLASRID.begin(), availableTLASRID.end(), 0);
 
 		VkDescriptorPoolCreateInfo bindlessPoolInfo{};
 		bindlessPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -1337,13 +1525,13 @@ void Context::createBindlessResources(){
 		bindings.push_back(storageBuffersBinding);
 		bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT });
 
-		VkDescriptorSetLayoutBinding accelerationStructureBinding{};
-		accelerationStructureBinding.binding = BINDING_TLAS;
-		accelerationStructureBinding.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
-		accelerationStructureBinding.descriptorCount = MAX_ACCELERATIONSTRUCTURE;
-		accelerationStructureBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-		bindings.push_back(accelerationStructureBinding);
-		bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT });
+		// VkDescriptorSetLayoutBinding accelerationStructureBinding{};
+		// accelerationStructureBinding.binding = BINDING_TLAS;
+		// accelerationStructureBinding.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+		// accelerationStructureBinding.descriptorCount = MAX_ACCELERATIONSTRUCTURE;
+		// accelerationStructureBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+		// bindings.push_back(accelerationStructureBinding);
+		// bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT });
 
 		VkDescriptorSetLayoutBinding imageStorageBinding{};
 		imageStorageBinding.binding = BINDING_STORAGE_IMAGE;
@@ -1486,6 +1674,7 @@ void Context::CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffse
     vkCmdCopyBuffer(cmd.buffer, src.resource->buffer, dst.resource->buffer, 1, &copyRegion);
 }
 
+
 void Context::CmdCopy(Image& dst, void* data, uint32_t size) {
     CommandResources& cmd = GetCurrentCommandResources();
     if (stagingBufferSize - cmd.stagingOffset < size) {
@@ -1498,7 +1687,7 @@ void Context::CmdCopy(Image& dst, void* data, uint32_t size) {
     cmd.stagingOffset += size;
 }
 
-void Context::CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset) {
+void Context::CmdCopy(Image& dst, Buffer& src, uint32_t srcOffset) {
     CommandResources& cmd = GetCurrentCommandResources();
     VkBufferImageCopy region{};
     region.bufferOffset = srcOffset;
@@ -1513,6 +1702,32 @@ void Context::CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset
     region.imageExtent = { dst.width, dst.height, 1 };
     vkCmdCopyBufferToImage(cmd.buffer, src.resource->buffer, dst.resource->image, (VkImageLayout)dst.layout, 1, &region);
 }
+
+
+void Context::CmdCopy(Buffer& dst, Image& src, uint32_t srcOffset) {
+	CommandResources& cmd = GetCurrentCommandResources();
+	VkBufferImageCopy region{};
+	region.bufferOffset = srcOffset;
+    region.bufferRowLength = 0;
+    region.bufferImageHeight = 0;
+	ASSERT(!(src.aspect & Aspect::Depth || src.aspect & Aspect::Stencil), "CmdCopy don't support depth/stencil images");
+	region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.mipLevel = 0;
+    region.imageSubresource.baseArrayLayer = 0;
+    region.imageSubresource.layerCount = 1;
+    region.imageOffset = { 0, 0, 0 };
+    region.imageExtent = {src.width, src.height, 1 };
+	vkCmdCopyImageToBuffer(cmd.buffer, src.resource->image, (VkImageLayout)src.layout, dst.resource->buffer, 1, &region);
+}
+// Vulkan 1.3
+void Context::CmdCopy(Buffer &dst, Image &src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset){
+	CommandResources& cmd = GetCurrentCommandResources();
+
+	VkCopyImageToBufferInfo2 copyInfo{};
+	copyInfo.sType = VK_STRUCTURE_TYPE_COPY_IMAGE_TO_BUFFER_INFO_2;
+	vkCmdCopyImageToBuffer2(cmd.buffer, &copyInfo);
+}
+
 
 void Context::CmdBarrier(Image& img, Layout::ImageLayout layout) {
     CommandResources& cmd = GetCurrentCommandResources();
@@ -1544,11 +1759,11 @@ void Context::CmdBarrier(Image& img, Layout::ImageLayout layout) {
 
 void Context::CmdBarrier() {
     VkMemoryBarrier2 barrier = {
-    .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-    .srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-    .srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
-    .dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-    .dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
+		.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+		.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+		.srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
+		.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+		.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
     };
     VkDependencyInfo dependency = {
         .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
@@ -1659,4 +1874,9 @@ static const char *VK_ERROR_STRING(VkResult result) {
 			return "VK_ERROR_<Unknown>";
 		return "VK_<Unknown>";
 	}
+}
+
+
+namespace vkutil {
+
 }

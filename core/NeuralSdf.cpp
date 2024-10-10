@@ -14,6 +14,9 @@ struct Context {
 	vkw::Buffer weightsGPU;
 	vkw::Buffer outputImage;
 
+	vkw::Image imageGPU;
+	vkw::Buffer bufferCPU;
+
 	int width, height;
 	int numLayers, layerSize;
 	int num_parameters;
@@ -47,6 +50,7 @@ void CreateShaders() {
     CreatePipeline(ctx.forwardPipeline, {
         .point = vkw::PipelinePoint::Compute,
         .stages = {
+            // {.stage = vkw::ShaderStage::Compute, .path = "clearColor.comp"},
             {.stage = vkw::ShaderStage::Compute, .path = "shader.comp"},
         },
         .name = "Neural Sdf Forward",
@@ -54,8 +58,19 @@ void CreateShaders() {
 }
 
 void CreateImages(uint32_t width, uint32_t height) {
-	ctx.outputImage = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst, vkw::Memory::CPU, "Output Image");
+	ctx.outputImage = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferSrc, vkw::Memory::CPU, "Output Image");
 	ctx.weightsGPU = vkw::CreateBuffer(ctx.num_parameters * sizeof(float), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst, vkw::Memory::GPU, "Neural Sdf Weights");
+	
+	ctx.imageGPU = vkw::CreateImage({
+        .width = width+10,
+        .height = height+10,
+        .format = vkw::Format::RGBA32_sfloat,
+        // .format = vkw::Format::RGBA8_unorm,
+        .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::TransferDst | vkw::ImageUsage::TransferSrc | vkw::ImageUsage::Storage,
+        .name = "imageGPU"
+    });
+
+	ctx.bufferCPU = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::TransferDst, vkw::Memory::CPU, "bufferCPU");
 }
 
 
@@ -94,9 +109,10 @@ void NeuralSdfApplication::Create() {
 void NeuralSdfApplication::Compute() {
 		vkw::BeginCommandBuffer(vkw::Queue::Compute);
 		vkw::CmdCopy(ctx.weightsGPU, weights.data(), ctx.num_parameters * sizeof(float));
+
 		vkw::CmdBindPipeline(ctx.forwardPipeline);
 
-		NeuralSdfConstants constants;
+		NeuralSdfConstants constants{};
 		constants.width = ctx.width;
 		constants.height = ctx.height;
 		constants.numLayers = ctx.numLayers;
@@ -104,27 +120,33 @@ void NeuralSdfApplication::Compute() {
 		constants.weightsRID = ctx.weightsGPU.RID();
 		constants.outputImageRID = ctx.outputImage.RID();
 
-		// int pc[4] = {ctx.width, ctx.height, ctx.numLayers, ctx.layerSize};
-		// vkw::CmdPushConstants(&pc, sizeof(pc));
-
 		vkw::CmdPushConstants(&constants, sizeof(constants));
 
 		vkw::CmdDispatch({(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
 		vkw::CmdBarrier();
+
+		vkw::CmdBarrier(ctx.imageGPU, vkw::Layout::General);
+		vkw::CmdCopy(ctx.imageGPU, ctx.outputImage, ctx.width*ctx.height*sizeof(Pixel));
+		vkw::CmdBarrier();
+		vkw::CmdCopy(ctx.bufferCPU, ctx.imageGPU, ctx.width*ctx.height*sizeof(Pixel));
+
+		// vkw::CmdCopy(ctx.bufferCPU, ctx.outputImage, ctx.width * ctx.height);
+
 		vkw::EndCommandBuffer();
 		vkw::WaitQueue(vkw::Queue::Compute);
 
 		// vkw::ReadBuffer(ctx.outputImage, pixels.data(), ctx.width * ctx.height * sizeof(Pixel));
 		std::vector<unsigned char> image;
 		image.reserve(ctx.width * ctx.height * 4);
-		Pixel* mappedMemory = (Pixel*)vkw::MapBuffer(ctx.outputImage);
+		Pixel* mappedMemory = (Pixel*)vkw::MapBuffer(ctx.bufferCPU);
 		for (int i = 0; i < ctx.width * ctx.height; i++) {
 			image.push_back(255.0f * mappedMemory[i].r);
 			image.push_back(255.0f * mappedMemory[i].g);
 			image.push_back(255.0f * mappedMemory[i].b);
 			image.push_back(255.0f);
 		}
-		vkw::UnmapBuffer(ctx.outputImage);
+		vkw::UnmapBuffer(ctx.bufferCPU);
+
 		// for (auto i = 0; i < image.size(); ++i){
 		// 	image[i] = 130;
 		// }

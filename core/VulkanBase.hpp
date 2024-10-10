@@ -206,8 +206,13 @@ void UnmapBuffer(Buffer& buffer);
 
 void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset = 0);
 void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset = 0, uint32_t srcOffset = 0);
+
 void CmdCopy(Image& dst, void* data, uint32_t size);
-void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset = 0);
+void CmdCopy(Image& dst, Buffer& src, uint32_t srcOffset = 0);
+
+void CmdCopy(Buffer& dst, Image& src, uint32_t srcOffset = 0);
+void CmdCopy(Buffer& dst, Image& src, uint32_t size, uint32_t dstOffset = 0, uint32_t srcOffset = 0);
+
 void CmdBarrier(Image& img, Layout::ImageLayout layout);
 void CmdBarrier();
 void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach = {}, uint32_t layerCount = 1);

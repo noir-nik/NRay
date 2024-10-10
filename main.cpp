@@ -66,8 +66,8 @@ int main()
 		.numLayers = 2,
 		.layerSize = 64,
 		.outputPath = "output.bmp",
-		.width = 512,
-		.height = 512,
+		.width = 256,
+		.height = 256,
 	};
 	app.run(&neuralSdfInfo);
 	return 0;
