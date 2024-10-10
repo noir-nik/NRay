@@ -208,10 +208,10 @@ void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset = 0);
 void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset = 0, uint32_t srcOffset = 0);
 
 void CmdCopy(Image& dst, void* data, uint32_t size);
-void CmdCopy(Image& dst, Buffer& src, uint32_t srcOffset = 0);
+void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset = 0); // size is a No OP
 
-void CmdCopy(Buffer& dst, Image& src, uint32_t srcOffset = 0);
-void CmdCopy(Buffer& dst, Image& src, uint32_t size, uint32_t dstOffset = 0, uint32_t srcOffset = 0);
+void CmdCopy(Buffer& dst, Image& src, uint32_t size, uint32_t srcOffset = 0); // size is a No OP
+void CmdCopy(Buffer& dst, Image& src, uint32_t size, uint32_t dstOffset, ivec2 imageOffset, ivec2 imageExtent); // size is a No OP
 
 void CmdBarrier(Image& img, Layout::ImageLayout layout);
 void CmdBarrier();
@@ -227,7 +227,7 @@ void CmdDrawMesh(Buffer& vertexBuffer, Buffer& indexBuffer, uint32_t indexCount)
 void CmdDrawLineStrip(const Buffer& pointsBuffer, uint32_t firstPoint, uint32_t pointCount, float thickness = 1.0f);
 void CmdDrawPassThrough();
 // void CmdDrawImGui(ImDrawData* data);
-void CmdDispatch(const ivec3& groups);
+void CmdDispatch(const uvec3& groups);
 
 int CmdBeginTimeStamp(const std::string& name);
 void CmdEndTimeStamp(int timeStampIndex);

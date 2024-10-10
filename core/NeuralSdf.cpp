@@ -62,8 +62,8 @@ void CreateImages(uint32_t width, uint32_t height) {
 	ctx.weightsGPU = vkw::CreateBuffer(ctx.num_parameters * sizeof(float), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst, vkw::Memory::GPU, "Neural Sdf Weights");
 	
 	ctx.imageGPU = vkw::CreateImage({
-        .width = width+10,
-        .height = height+10,
+        .width = width,
+        .height = height,
         .format = vkw::Format::RGBA32_sfloat,
         // .format = vkw::Format::RGBA8_unorm,
         .usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::TransferDst | vkw::ImageUsage::TransferSrc | vkw::ImageUsage::Storage,
@@ -128,7 +128,9 @@ void NeuralSdfApplication::Compute() {
 		vkw::CmdBarrier(ctx.imageGPU, vkw::Layout::General);
 		vkw::CmdCopy(ctx.imageGPU, ctx.outputImage, ctx.width*ctx.height*sizeof(Pixel));
 		vkw::CmdBarrier();
-		vkw::CmdCopy(ctx.bufferCPU, ctx.imageGPU, ctx.width*ctx.height*sizeof(Pixel));
+		vkw::CmdCopy(ctx.bufferCPU, ctx.imageGPU, ctx.width*ctx.height*sizeof(Pixel), 0, {0, ctx.height/2}, {ctx.width, ctx.height/2});
+		vkw::CmdBarrier();
+		vkw::CmdCopy(ctx.bufferCPU, ctx.imageGPU, ctx.width*ctx.height*sizeof(Pixel), ctx.width*ctx.height*sizeof(Pixel)/2, {0, 0}, {ctx.width, ctx.height/2});
 
 		// vkw::CmdCopy(ctx.bufferCPU, ctx.outputImage, ctx.width * ctx.height);
 

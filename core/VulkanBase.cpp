@@ -47,7 +47,7 @@ struct Context
 	void CmdCopy(Image &dst, Buffer &src, uint32_t srcOffset);
 	
 	void CmdCopy(Buffer &dst, Image &src, uint32_t srcOffset);
-	void CmdCopy(Buffer &dst, Image &src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset);
+	void CmdCopy(Buffer &dst, Image &src, uint32_t size, uint32_t dstOffset, ivec2 imageOffset, ivec2 imageExtent);
 
 	void CmdBarrier(Image& img, Layout::ImageLayout layout);
 	void CmdBarrier();
@@ -574,7 +574,7 @@ Image CreateImage(const ImageDesc& desc) {
 }
 
 
-void CmdDispatch(const ivec3& groups) {
+void CmdDispatch(const uvec3& groups) {
 	auto& cmd = _ctx.GetCurrentCommandResources();
 	vkCmdDispatch(cmd.buffer, groups.x, groups.y, groups.z);
 }
@@ -714,17 +714,17 @@ void CmdCopy(Image& dst, void* data, uint32_t size) {
     _ctx.CmdCopy(dst, data, size); 
 }
 
-void CmdCopy(Image& dst, Buffer& src, uint32_t srcOffset) {
+void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset) {
     _ctx.CmdCopy(dst, src, srcOffset); 
 }
 
 
-void CmdCopy(Buffer& dst, Image& src, uint32_t srcOffset) {
+void CmdCopy(Buffer& dst, Image& src, uint32_t size, uint32_t srcOffset) {
 	_ctx.CmdCopy(dst, src, srcOffset);
 }
 
-void CmdCopy(Buffer& dst, Image& src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset){
-	_ctx.CmdCopy(dst, src, size, dstOffset, srcOffset);
+void CmdCopy(Buffer &dst, Image &src, uint32_t size, uint32_t dstOffset, ivec2 imageOffset, ivec2 imageExtent){
+	_ctx.CmdCopy(dst, src, size, dstOffset, imageOffset, imageExtent);
 }
 
 
@@ -1683,7 +1683,7 @@ void Context::CmdCopy(Image& dst, void* data, uint32_t size) {
         return;
     }
     memcpy(cmd.stagingCpu + cmd.stagingOffset, data, size);
-    CmdCopy(dst, cmd.staging, size, cmd.stagingOffset);
+    CmdCopy(dst, cmd.staging, cmd.stagingOffset);
     cmd.stagingOffset += size;
 }
 
@@ -1704,10 +1704,10 @@ void Context::CmdCopy(Image& dst, Buffer& src, uint32_t srcOffset) {
 }
 
 
-void Context::CmdCopy(Buffer& dst, Image& src, uint32_t srcOffset) {
+void Context::CmdCopy(Buffer& dst, Image& src, uint32_t dstOffset) {
 	CommandResources& cmd = GetCurrentCommandResources();
 	VkBufferImageCopy region{};
-	region.bufferOffset = srcOffset;
+	region.bufferOffset = dstOffset;
     region.bufferRowLength = 0;
     region.bufferImageHeight = 0;
 	ASSERT(!(src.aspect & Aspect::Depth || src.aspect & Aspect::Stencil), "CmdCopy don't support depth/stencil images");
@@ -1719,12 +1719,30 @@ void Context::CmdCopy(Buffer& dst, Image& src, uint32_t srcOffset) {
     region.imageExtent = {src.width, src.height, 1 };
 	vkCmdCopyImageToBuffer(cmd.buffer, src.resource->image, (VkImageLayout)src.layout, dst.resource->buffer, 1, &region);
 }
-// Vulkan 1.3
-void Context::CmdCopy(Buffer &dst, Image &src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset){
+// Vulkan 1.3 // 
+void Context::CmdCopy(Buffer &dst, Image &src, uint32_t size, uint32_t dstOffset, ivec2 imageOffset, ivec2 imageExtent) {
+// void Context::CmdCopy(Buffer &dst, Image &src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset){
 	CommandResources& cmd = GetCurrentCommandResources();
+	VkBufferImageCopy2 region{};
+	region.sType = VK_STRUCTURE_TYPE_BUFFER_IMAGE_COPY_2;
+	region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	region.imageSubresource.mipLevel = 0;
+	region.imageSubresource.baseArrayLayer = 0;
+	region.imageSubresource.layerCount = 1;
+	region.imageOffset = {imageOffset[0], imageOffset[1], 0};
+	region.imageExtent = {(uint32_t)imageExtent[0], (uint32_t)imageExtent[1], 1 };
+	// region.imageExtent = {sizeX, sizeY, 1 };
+	region.bufferOffset = dstOffset;
+	region.bufferRowLength = 0;
+	region.bufferImageHeight = 0;
 
 	VkCopyImageToBufferInfo2 copyInfo{};
 	copyInfo.sType = VK_STRUCTURE_TYPE_COPY_IMAGE_TO_BUFFER_INFO_2;
+	copyInfo.srcImage = src.resource->image;
+	copyInfo.srcImageLayout = (VkImageLayout)src.layout;
+	copyInfo.dstBuffer = dst.resource->buffer;
+	copyInfo.regionCount = 1;
+	copyInfo.pRegions = &region;
 	vkCmdCopyImageToBuffer2(cmd.buffer, &copyInfo);
 }
 
