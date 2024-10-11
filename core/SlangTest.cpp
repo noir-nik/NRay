@@ -62,9 +62,6 @@ void SlangTestApplication::run(SlangTestInfo* pSlangTestInfo) {
 	Setup();
 	Create();
 	Compute();
-	Compute();
-	Compute();
-	Compute();
 	Finish();
 }
 
@@ -74,37 +71,37 @@ void SlangTestApplication::Setup() {
 }
 
 void SlangTestApplication::Create() {
-		vkw::Init();
-		ctx.CreateImages(ctx.width, ctx.height);
-		ctx.CreateShaders();
+	vkw::Init();
+	ctx.CreateImages(ctx.width, ctx.height);
+	ctx.CreateShaders();
 }
 
 
 void SlangTestApplication::Compute() {
-		Timer timer;
-		vkw::BeginCommandBuffer(vkw::Queue::Compute);
+	Timer timer;
+	vkw::BeginCommandBuffer(vkw::Queue::Compute);
 
-		vkw::CmdBindPipeline(ctx.pipeline);
+	vkw::CmdBindPipeline(ctx.pipeline);
 
-		SlangTestConstants constants{};
-		constants.width = ctx.width;
-		constants.height = ctx.height;
-		constants.outputImageRID = ctx.ImageOpt.RID();
+	SlangTestConstants constants{};
+	constants.width = ctx.width;
+	constants.height = ctx.height;
+	constants.outputImageRID = ctx.ImageOpt.RID();
 
-		vkw::CmdPushConstants(&constants, sizeof(constants));
+	vkw::CmdPushConstants(&constants, sizeof(constants));
 
-		vkw::CmdDispatch({(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
-		vkw::CmdBarrier();
-		vkw::CmdCopy(ctx.bufferCPU, ctx.ImageOpt, ctx.width * ctx.height * sizeof(Pixel));
+	vkw::CmdDispatch({(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
+	vkw::CmdBarrier();
+	vkw::CmdCopy(ctx.bufferCPU, ctx.ImageOpt, ctx.width * ctx.height * sizeof(Pixel));
 
-		timer.Start();
-		vkw::EndCommandBuffer();
-		vkw::WaitQueue(vkw::Queue::Compute);
-		printf("Compute time: %fs\n", timer.Elapsed());
-		timer.Start();
-		saveBuffer("output.bmp", ctx.bufferCPU, ctx.width, ctx.height);
-		printf("Save time: %fs\n", timer.Elapsed());
-	}
+	timer.Start();
+	vkw::EndCommandBuffer();
+	vkw::WaitQueue(vkw::Queue::Compute);
+	printf("Compute time: %fs\n", timer.Elapsed());
+	timer.Start();
+	saveBuffer("output.bmp", ctx.bufferCPU, ctx.width, ctx.height);
+	printf("Save time: %fs\n", timer.Elapsed());
+}
 
 void SlangTestApplication::Finish() {
 	ctx = {};

@@ -28,7 +28,7 @@ struct Context
 	void EndCommandBuffer(VkSubmitInfo submitInfo);
 
 	void LoadShaders(Pipeline& pipeline);
-	std::vector<char> CompileShader(const std::filesystem::path& path);
+	std::vector<char> CompileShader(const std::filesystem::path& path, const char* entryPoint);
 	void CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipeline);
 
 	VkInstance instance = VK_NULL_HANDLE;
@@ -560,24 +560,39 @@ void Context::LoadShaders(Pipeline& pipeline) {
     pipeline.stageBytes.clear();
     for (auto& stage : pipeline.stages) {
 		std::filesystem::path binPath = "bin/" + stage.path.filename().string() + ".spv";
-		// check if compiled to .spv
-		if (std::filesystem::exists(binPath)) {
-			pipeline.stageBytes.push_back(std::move(ReadBinaryFile("bin/" + stage.path.filename().string() + ".spv")));
+		std::filesystem::path shaderPath = "Shaders/" + stage.path.string();
+		bool compilationRequired = false;
+		// check if already compiled to .spv
+		if (std::filesystem::exists(binPath) && std::filesystem::exists(shaderPath)) {
+			auto lastSpvUpdate = std::filesystem::last_write_time(binPath);
+			auto lastShaderUpdate = std::filesystem::last_write_time(shaderPath);
+			if (lastShaderUpdate > lastSpvUpdate) {
+				compilationRequired = true;
+			}
 		} else {
-			// compile to .spv
-			pipeline.stageBytes.push_back(CompileShader(stage.path));
+			compilationRequired = true;
+		}	
+		if (compilationRequired) {
+			pipeline.stageBytes.push_back(std::move(CompileShader(stage.path, stage.entryPoint.c_str())));
+		} else {
+			pipeline.stageBytes.push_back(std::move(ReadBinaryFile(binPath.string())));
 		}
     }
 }
 // TODO: change for slang and check if compiled fresh spv exists
-std::vector<char> Context::CompileShader(const std::filesystem::path& path) {
+std::vector<char> Context::CompileShader(const std::filesystem::path& path, const char* entryPoint) {
     char compile_string[1024];
     char inpath[256];
     char outpath[256];
     std::string cwd = std::filesystem::current_path().string();
     sprintf(inpath, "%s/Shaders/%s", cwd.c_str(), path.string().c_str());
     sprintf(outpath, "%s/bin/%s.spv", cwd.c_str(), path.filename().string().c_str());
-    sprintf(compile_string, "%s -V %s -o %s --target-env spirv1.4", GLSL_VALIDATOR, inpath, outpath);
+	if (path.extension() == ".slang"){
+		sprintf(compile_string, "%s %s -profile glsl_450 -target spirv -o %s -entry %s", SLANGC, inpath, outpath, entryPoint);
+	} else{
+		sprintf(compile_string, "%s -V %s -o %s --target-env spirv1.4", GLSL_VALIDATOR, inpath, outpath);
+	}
+
     DEBUG_TRACE("[ShaderCompiler] Command: {}", compile_string);
     DEBUG_TRACE("[ShaderCompiler] Output:");
     while(system(compile_string)) {
@@ -1125,7 +1140,7 @@ void Context::CreatePhysicalDevice() {
 			required.erase(std::string(extension.extensionName));
 		}
 		
-		LOG_INFO("Families: {0}, {1}, {2}", graphicsFamily, computeFamily, transferFamily);
+		// LOG_INFO("Families: {0}, {1}, {2}", graphicsFamily, computeFamily, transferFamily);
 		// check if all required queues are supported
 		bool suitable = required.empty();
 		if (!suitable) LOG_ERROR("Required extensions not available: {0}", required.begin()->c_str());
