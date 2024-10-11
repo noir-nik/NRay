@@ -10,7 +10,7 @@
 #define MAX_DIST 10.
 #define MAX_STEPS 200
 
-uniform const float W_0 = 30.0;
+static const float W_0 = 30.0;
 
 [[vk::push_constant]]
 NeuralSdfConstants ctx;
@@ -211,7 +211,7 @@ void main(uint3 tid: SV_DispatchThreadID) {
 			if (dist < tNearAndFar.y) {
 				col = getLight(ro + rd * dist, rd, float3(0.951, 0.9686, 1.0));
 			} else
-				col = float3(0.3, 0.0, 0.2);
+				col = float3(0.49, 0.73, 0.03);
 		}
 
 		uint pos = tid.y * ctx.width + tid.x;

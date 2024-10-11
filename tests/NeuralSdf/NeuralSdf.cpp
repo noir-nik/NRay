@@ -52,8 +52,8 @@ void CreateShaders() {
 	CreatePipeline(ctx.forwardPipeline, {
 		.point = vkw::PipelinePoint::Compute,
 		.stages = {
-			// {.stage = vkw::ShaderStage::Compute, .path = "clearColor.comp"},
-			{.stage = vkw::ShaderStage::Compute, .path = "neuralSDF.comp"},
+			// {.stage = vkw::ShaderStage::Compute, .path = "clearColor.slang"},
+			{.stage = vkw::ShaderStage::Compute, .path = "neuralSDF.slang"},
 		},
 		.name = "Neural Sdf Forward",
 	});
@@ -137,14 +137,6 @@ void NeuralSdfApplication::Compute() {
 
 	vkw::CmdDispatch({(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
 	vkw::CmdBarrier();
-
-	// vkw::CmdBarrier(ctx.imageGPU, vkw::Layout::General);
-	// vkw::CmdCopy(ctx.imageGPU, ctx.outputImage, ctx.width*ctx.height*sizeof(Pixel));
-	// vkw::CmdBarrier();
-	// vkw::CmdCopy(ctx.bufferCPU, ctx.imageGPU, ctx.width*ctx.height*sizeof(Pixel), 0, {0, ctx.height/2}, {ctx.width, ctx.height/2});
-	// vkw::CmdBarrier();
-	// vkw::CmdCopy(ctx.bufferCPU, ctx.imageGPU, ctx.width*ctx.height*sizeof(Pixel), ctx.width*ctx.height*sizeof(Pixel)/2, {0, 0}, {ctx.width, ctx.height/2});
-
 	vkw::CmdCopy(ctx.bufferCPU, ctx.outputImage, ctx.width * ctx.height * sizeof(Pixel));
 	timer.Start();
 	vkw::EndCommandBuffer();

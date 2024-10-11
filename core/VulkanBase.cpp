@@ -4,7 +4,7 @@
 #include "ShaderCommon.h"
 #include "FileManager.hpp"
 
-
+#define SHADER_ALWAYS_COMPILE 1
 
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
@@ -561,7 +561,7 @@ void Context::LoadShaders(Pipeline& pipeline) {
     for (auto& stage : pipeline.stages) {
 		std::filesystem::path binPath = "bin/" + stage.path.filename().string() + ".spv";
 		std::filesystem::path shaderPath = "Shaders/" + stage.path.string();
-		bool compilationRequired = false;
+		bool compilationRequired = SHADER_ALWAYS_COMPILE;
 		// check if already compiled to .spv
 		if (std::filesystem::exists(binPath) && std::filesystem::exists(shaderPath)) {
 			auto lastSpvUpdate = std::filesystem::last_write_time(binPath);

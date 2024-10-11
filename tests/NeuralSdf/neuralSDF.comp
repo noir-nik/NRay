@@ -18,20 +18,20 @@ layout (local_size_x = WORKGROUP_SIZE, local_size_y = WORKGROUP_SIZE, local_size
 
 const float W_0 = 30.0; 
 
-// struct Pixel{
-//   vec4 value;
-// };
+// layout(push_constant) uniform params_t
+// {
+// 	int width;
+// 	int height;
+// 	int NHL;
+// 	int layerSize;
+// 	int weightsRID;
+// 	int outputImageRID;
+// 	int pad[2];
+// } ctx;
 
-layout(push_constant) uniform params_t
-{
-	int width;
-	int height;
-	int NHL;
-	int size;
-	int weightsRID;
-	int outputImageRID;
-	int pad[2];
-} ctx;
+layout(push_constant) uniform Constants {
+    NeuralSdfConstants ctx;
+};
 
 // layout(std140, binding = 0) buffer buf
 // {
@@ -48,7 +48,7 @@ float forward(vec3 p) {
 	float activations[512];
 
 	// zero out;
-	for (int i = 0; i < 2*ctx.size; ++i) {
+	for (int i = 0; i < 2*ctx.layerSize; ++i) {
 		activations[i] = 0.0f;
 	}
 
@@ -59,58 +59,58 @@ float forward(vec3 p) {
 
 	// ===== Layer 0 =====
 	// z = Wx + b
-	for (int i = 0; i < ctx.size; ++i) {
+	for (int i = 0; i < ctx.layerSize; ++i) {
 		for (int j = 0; j < 3; ++j) {
-			activations[ctx.size * ((half_part + 1)%2) + i] += w_b[i * 3 + j] * activations[ctx.size * ((half_part)%2) + j];
+			activations[ctx.layerSize * ((half_part + 1)%2) + i] += w_b[i * 3 + j] * activations[ctx.layerSize * ((half_part)%2) + j];
 		}
 	}
 	
 	// + b
-	for (int i = 0; i < ctx.size; ++i) {
-		activations[ctx.size * ((half_part + 1)%2) + i] += w_b[ctx.size * 3 + i];
+	for (int i = 0; i < ctx.layerSize; ++i) {
+		activations[ctx.layerSize * ((half_part + 1)%2) + i] += w_b[ctx.layerSize * 3 + i];
 	}
 
 	// sin
-	for (int i = 0; i < ctx.size; ++i) {
-		activations[ctx.size * ((half_part + 1)%2) + i] = sin(W_0 * activations[ctx.size * ((half_part + 1)%2) + i]);
+	for (int i = 0; i < ctx.layerSize; ++i) {
+		activations[ctx.layerSize * ((half_part + 1)%2) + i] = sin(W_0 * activations[ctx.layerSize * ((half_part + 1)%2) + i]);
 	}
 
 	// ===== Hidden layers =====
-	int w_b_pos = 4 * ctx.size;
-	for (int l = 0; l < ctx.NHL; ++l) {
+	int w_b_pos = 4 * ctx.layerSize;
+	for (int l = 0; l < ctx.numLayers; ++l) {
 		//zero
-		for (int i = 0; i < ctx.size; ++i) {
-			activations[(ctx.size * (half_part % 2)) + i] = 0.0f;
+		for (int i = 0; i < ctx.layerSize; ++i) {
+			activations[(ctx.layerSize * (half_part % 2)) + i] = 0.0f;
 		}
 		// z = Wx + b
-		for (int i = 0; i < ctx.size; ++i) {
-			for (int j = 0; j < ctx.size; ++j) {
-				activations[(ctx.size * (half_part % 2)) + i] += activations[(ctx.size * ((half_part + 1) % 2)) + j] * w_b[w_b_pos + i * ctx.size + j];
+		for (int i = 0; i < ctx.layerSize; ++i) {
+			for (int j = 0; j < ctx.layerSize; ++j) {
+				activations[(ctx.layerSize * (half_part % 2)) + i] += activations[(ctx.layerSize * ((half_part + 1) % 2)) + j] * w_b[w_b_pos + i * ctx.layerSize + j];
 			}
 		}
 		// + b
-		for (int i = 0; i < ctx.size; ++i) {
-			activations[(ctx.size * (half_part % 2)) + i] += w_b[w_b_pos + ctx.size * ctx.size + i];
+		for (int i = 0; i < ctx.layerSize; ++i) {
+			activations[(ctx.layerSize * (half_part % 2)) + i] += w_b[w_b_pos + ctx.layerSize * ctx.layerSize + i];
 		}
 		// sin
-		for (int i = 0; i < ctx.size; ++i) {
-			activations[(ctx.size * (half_part % 2)) + i] = sin(W_0 * activations[(ctx.size * (half_part % 2)) + i]);
+		for (int i = 0; i < ctx.layerSize; ++i) {
+			activations[(ctx.layerSize * (half_part % 2)) + i] = sin(W_0 * activations[(ctx.layerSize * (half_part % 2)) + i]);
 		}
-		w_b_pos += (ctx.size + 1) * ctx.size;
+		w_b_pos += (ctx.layerSize + 1) * ctx.layerSize;
 		half_part = (half_part + 1) % 2;
 	}
 
 	// ===== Output layer =====
 	//zero
-	activations[(ctx.size * (half_part % 2))] = 0.0f;
+	activations[(ctx.layerSize * (half_part % 2))] = 0.0f;
 	// z = Wx + b
-	for (int j = 0; j < ctx.size; ++j) {
-		activations[ctx.size * (half_part % 2)] += activations[ctx.size*((half_part + 1) % 2) + j] * w_b[w_b_pos + j];
+	for (int j = 0; j < ctx.layerSize; ++j) {
+		activations[ctx.layerSize * (half_part % 2)] += activations[ctx.layerSize*((half_part + 1) % 2) + j] * w_b[w_b_pos + j];
 	}
 	// + b
-	activations[ctx.size * (half_part % 2)] += w_b[w_b_pos + ctx.size];
+	activations[ctx.layerSize * (half_part % 2)] += w_b[w_b_pos + ctx.layerSize];
 	
-	return activations[ctx.size * (half_part % 2)];
+	return activations[ctx.layerSize * (half_part % 2)];
 }
 
 float sdSphere(vec3 p, float s) {

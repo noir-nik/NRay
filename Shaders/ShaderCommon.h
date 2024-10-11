@@ -71,9 +71,9 @@ struct Pixel {
 };
 
 [[vk::binding(BINDING_BUFFER, 0)]]
-StructuredBuffer<float> WeightsBuffers[]:  register(tBINDING_BUFFER);
+RWStructuredBuffer<Pixel> OutImageBuffers[]: register(uBINDING_BUFFER);
 [[vk::binding(BINDING_BUFFER, 0)]]
-RWStructuredBuffer<Pixel> OutImageBuffers[]:  register(uBINDING_BUFFER);
+RWStructuredBuffer<float> WeightsBuffers[]: register(tBINDING_BUFFER);
 [[vk::binding(BINDING_STORAGE_IMAGE, 0)]]
 RWTexture2D<float4> images[]: register(uBINDING_STORAGE_IMAGE);
 
