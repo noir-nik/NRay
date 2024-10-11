@@ -12,21 +12,13 @@
 #include <filesystem>
 
 int main(int argc, char* argv[])
-{	
-	int numLayers, layerSize;
-	// print pwd
-	std::cout << std::filesystem::current_path() << std::endl;
-	if (argc != 3) return 1;
-
-	numLayers = atoi(argv[1]);
-	layerSize = atoi(argv[2]);
-
+{
 	Logger::Init();
 	NeuralSdfApplication app;
 	NeuralSdfInfo neuralSdfInfo = {
-		.weightsPath = "assets/my_weights"+std::to_string(numLayers)+"_"+std::to_string(layerSize)+".bin",
-		.numLayers = numLayers,
-		.layerSize = layerSize,
+		.weightsPath = "assets/sdf1_weights.bin",
+		.numLayers = 2,
+		.layerSize = 64,
 		.outputPath = "output.bmp",
 		.width = 256,
 		.height = 256,

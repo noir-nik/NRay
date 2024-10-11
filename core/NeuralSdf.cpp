@@ -51,7 +51,7 @@ void CreateShaders() {
 		.point = vkw::PipelinePoint::Compute,
 		.stages = {
 			// {.stage = vkw::ShaderStage::Compute, .path = "clearColor.comp"},
-			{.stage = vkw::ShaderStage::Compute, .path = "shader.comp"},
+			{.stage = vkw::ShaderStage::Compute, .path = "neuralSDF.comp"},
 		},
 		.name = "Neural Sdf Forward",
 	});

@@ -1,42 +1,16 @@
 #include "Pch.hpp"
 
-#include <vector>
-#include <string.h>
-#include <assert.h>
-#include <stdexcept>
-#include <cmath>
-#include <iostream>
-
-#include "ShaderCommon.h"
-
-#include "vk_utils.h"
-#include "FileManager.hpp"
 #include "VulkanBase.hpp"
+#include "ShaderCommon.h"
+#include "FileManager.hpp"
+
 
 
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
 
-#define SCREEN_WIDTH 128
-#define SCREEN_HEIGHT 128
-
-const int WIDTH		= SCREEN_WIDTH;
-const int HEIGHT	 = SCREEN_HEIGHT;
-// const int WORKGROUP_SIZE = 16;	
-constexpr int num_push_constants = 4;
-#ifdef NDEBUG
-constexpr bool enableValidationLayers = false;
-#else
-constexpr bool enableValidationLayers = true;
-#endif
-
-
-
-
 static const char *VK_ERROR_STRING(VkResult result);
-
-namespace vkw{
-
+namespace vkw {
 
 struct Context
 {	
@@ -44,10 +18,10 @@ struct Context
 	void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset);
 
 	void CmdCopy(Image& dst, void* data, uint32_t size);
-	void CmdCopy(Image &dst, Buffer &src, uint32_t srcOffset);
+	void CmdCopy(Image& dst, Buffer& src, uint32_t srcOffset);
 	
-	void CmdCopy(Buffer &dst, Image &src, uint32_t srcOffset);
-	void CmdCopy(Buffer &dst, Image &src, uint32_t size, uint32_t dstOffset, ivec2 imageOffset, ivec2 imageExtent);
+	void CmdCopy(Buffer& dst, Image& src, uint32_t srcOffset);
+	void CmdCopy(Buffer& dst, Image& src, uint32_t size, uint32_t dstOffset, ivec2 imageOffset, ivec2 imageExtent);
 
 	void CmdBarrier(Image& img, Layout::ImageLayout layout);
 	void CmdBarrier();
@@ -79,8 +53,8 @@ struct Context
 	std::vector<bool> activeLayers; // Available layers
 	std::vector<const char*> activeLayersNames;
 	std::vector<VkLayerProperties> layers;
-	std::vector<bool> activeExtensions;			// Instance Extensions
-	std::vector<const char*> activeExtensionsNames;	// Instance Extensions
+	std::vector<bool> activeExtensions;                    // Instance Extensions
+	std::vector<const char*> activeExtensionsNames;	       // Instance Extensions
 	std::vector<VkExtensionProperties> instanceExtensions; // Instance Extensions
 
 
@@ -162,9 +136,9 @@ struct Context
 
 	// // preferred, warn if not available
 	// VkFormat colorFormat = VK_FORMAT_B8G8R8A8_UNORM;
-	// VkColorSpaceKHR colorSpace	= VK_COLORSPACE_SRGB_NONLINEAR_KHR;
+	// VkColorSpaceKHR colorSpace  = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
 	// VkPresentModeKHR presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
-	// VkSampleCountFlagBits numSamples	= VK_SAMPLE_COUNT_1_BIT;
+    // VkSampleCountFlagBits numSamples  = VK_SAMPLE_COUNT_1_BIT;
 
 	// const uint32_t initialScratchBufferSize = 64*1024*1024;
 	// Buffer asScratchBuffer;
@@ -181,9 +155,6 @@ struct Context
 
 	void CreateDevice();
 	void DestroyDevice();
-
-	void createDescriptorSetLayout_for2Buffers();
-	void createDescriptorSet_for2Buffers();
 
 	void createDescriptorSetLayout();
 	void createDescriptorPool();
@@ -304,9 +275,6 @@ void Init() {
 	_ctx.CreatePhysicalDevice();
 	_ctx.CreateDevice();
 
-	// _ctx.createDescriptorSetLayout_for2Buffers();
-	// _ctx.createDescriptorSet_for2Buffers();
-
 	_ctx.createBindlessResources();
 	// _ctx.createDescriptorResources();
 
@@ -390,11 +358,9 @@ Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, c
 		.memory = memory,
 	};
 
-	static int bufferRID = 0;
-	if (usage & BufferUsage::Storage) {
-		// res->rid = _ctx.availableBufferRID.back(); // TODO test: give RID starting from 0, not from end
-		// _ctx.availableBufferRID.pop_back();
-		res->rid = bufferRID;
+		if (usage & BufferUsage::Storage) {
+        res->rid = _ctx.availableBufferRID.back(); // TODO test: give RID starting from 0, not from end
+        _ctx.availableBufferRID.pop_back();
 
 		VkDescriptorBufferInfo descriptorInfo = {};
 		descriptorInfo.buffer = res->buffer;
@@ -406,13 +372,11 @@ Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, c
 		write.dstSet          = _ctx.bindlessDescriptorSet;
 		// write.dstSet          = _ctx.descriptorSet;
 		write.dstBinding      = BINDING_BUFFER;
-		// write.dstBinding      = bufferRID;
 		write.dstArrayElement = buffer.RID();
 		write.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 		write.descriptorCount = 1;
 		write.pBufferInfo     = &descriptorInfo;
 		vkUpdateDescriptorSets(_ctx.device, 1, &write, 0, nullptr);
-		bufferRID++;
 	}
 
 	return buffer;
@@ -478,6 +442,7 @@ Image CreateImage(const ImageDesc& desc) {
 
     result = vkCreateImageView(device, &viewInfo, allocator, &res->view);
     DEBUG_VK(result, "Failed to create image view!");
+	ASSERT(result == VK_SUCCESS, "Failed to create image view!");
 
     if (desc.layers > 1) {
         viewInfo.subresourceRange.layerCount = 1;
@@ -487,6 +452,7 @@ Image CreateImage(const ImageDesc& desc) {
             viewInfo.subresourceRange.baseArrayLayer = i;
             result = vkCreateImageView(device, &viewInfo, allocator, &res->layersView[i]);
             DEBUG_VK(result, "Failed to create image view!");
+			ASSERT(result == VK_SUCCESS, "Failed to create image view!");
         }
     }
 
@@ -660,7 +626,6 @@ void Context::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipeline) {
 
 	VkPushConstantRange pushConstant{};
 	pushConstant.offset = 0;
-	// pushConstant.size = 256;///////TODO:fix
 	pushConstant.size = physicalProperties.limits.maxPushConstantsSize;
 	pushConstant.stageFlags = VK_SHADER_STAGE_ALL;
 
@@ -844,6 +809,37 @@ void WaitIdle() {
 
 
 
+namespace{ // utils
+// https://github.com/charles-lunarg/vk-bootstrap/blob/main/src/VkBootstrap.cpp
+bool check_extension_supported(std::vector<VkExtensionProperties> const& available_extensions, const char* extension_name) {
+	if (!extension_name) return false;
+	for (const auto& extension_properties : available_extensions) {
+		if (strcmp(extension_name, extension_properties.extensionName) == 0) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool check_extensions_supported(
+	std::vector<VkExtensionProperties> const& available_extensions, std::vector<const char*> const& extension_names) {
+	bool all_found = true;
+	for (const auto& extension_name : extension_names) {
+		bool found = check_extension_supported(available_extensions, extension_name);
+		if (!found) all_found = false;
+	}
+	return all_found;
+}
+
+template <typename T> void setup_pNext_chain(T& structure, std::vector<VkBaseOutStructure*> const& structs) {
+    structure.pNext = nullptr;
+    if (structs.size() <= 0) return;
+    for (size_t i = 0; i < structs.size() - 1; i++) {
+        structs.at(i)->pNext = structs.at(i + 1);
+    }
+    structure.pNext = structs.at(0);
+}
+}
 
 namespace { // vulkan debug callbacks
 VkResult CreateDebugUtilsMessengerEXT (
@@ -1166,13 +1162,13 @@ void Context::CreateDevice() {
 	// logical device features
 	VkPhysicalDeviceFeatures2 features2 = {};
 	features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-	features2.features.geometryShader = VK_TRUE;
-	if (supportedFeatures.logicOp)           { features2.features.logicOp           = VK_TRUE; }
-	if (supportedFeatures.samplerAnisotropy) { features2.features.samplerAnisotropy = VK_TRUE; }
-	if (supportedFeatures.sampleRateShading) { features2.features.sampleRateShading = VK_TRUE; }
-	if (supportedFeatures.fillModeNonSolid)  { features2.features.fillModeNonSolid  = VK_TRUE; }
-	if (supportedFeatures.wideLines)         { features2.features.wideLines         = VK_TRUE; }
-	if (supportedFeatures.depthClamp)        { features2.features.depthClamp        = VK_TRUE; }
+	// features2.features.geometryShader = VK_TRUE;
+	// if (supportedFeatures.logicOp)           { features2.features.logicOp           = VK_TRUE; }
+	// if (supportedFeatures.samplerAnisotropy) { features2.features.samplerAnisotropy = VK_TRUE; }
+	// if (supportedFeatures.sampleRateShading) { features2.features.sampleRateShading = VK_TRUE; }
+	// if (supportedFeatures.fillModeNonSolid)  { features2.features.fillModeNonSolid  = VK_TRUE; }
+	// if (supportedFeatures.wideLines)         { features2.features.wideLines         = VK_TRUE; }
+	// if (supportedFeatures.depthClamp)        { features2.features.depthClamp        = VK_TRUE; }
 
 
 	// DELETE LATER (already checked in CreatePhysicalDevice)
@@ -1235,7 +1231,6 @@ void Context::CreateDevice() {
 	VkPhysicalDeviceSynchronization2FeaturesKHR sync2Features{};
 	sync2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR;
 	sync2Features.synchronization2 = VK_TRUE;
-    // sync2Features.pNext = &dynamicRenderingFeatures;
     sync2Features.pNext = &bufferDeviceAddresFeatures;
 
     // VkPhysicalDeviceShaderAtomicFloatFeaturesEXT atomicFeatures{};
@@ -1253,8 +1248,6 @@ void Context::CreateDevice() {
 	createInfo.ppEnabledExtensionNames = requiredExtensions.data();
 	// createInfo.pEnabledFeatures; // !Should be NULL if pNext is used
 	// createInfo.pNext = &features2; // feature chain
-	// VkPhysicalDeviceFeatures deviceFeatures{}; // None just yet
-	// createInfo.pEnabledFeatures = &deviceFeatures;
 	createInfo.pEnabledFeatures; // !Should be NULL if pNext is used
 	createInfo.pNext = &sync2Features; // feature chain
 
@@ -1322,54 +1315,6 @@ void Context::DestroyDevice() {
 	DEBUG_TRACE("Destroyed logical device");
 	device = VK_NULL_HANDLE;
 }
-
-void Context::createDescriptorSetLayout_for2Buffers(){
-	VkDescriptorSetLayoutBinding descriptorSetLayoutBinding[2];
-	descriptorSetLayoutBinding[0].binding		= 0;
-	descriptorSetLayoutBinding[0].descriptorType	 = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-	descriptorSetLayoutBinding[0].descriptorCount	= 1;
-	descriptorSetLayoutBinding[0].stageFlags	 = VK_SHADER_STAGE_COMPUTE_BIT;
-
-	descriptorSetLayoutBinding[1].binding		= 1;
-	descriptorSetLayoutBinding[1].descriptorType	 = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-	descriptorSetLayoutBinding[1].descriptorCount	= 1;
-	descriptorSetLayoutBinding[1].stageFlags	 = VK_SHADER_STAGE_COMPUTE_BIT;
-
-	VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {};
-	descriptorSetLayoutCreateInfo.sType	= VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	descriptorSetLayoutCreateInfo.bindingCount = 2; 
-	descriptorSetLayoutCreateInfo.pBindings	= descriptorSetLayoutBinding;
-
-	VkResult result = vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCreateInfo, NULL, &descriptorSetLayout);
-	DEBUG_VK(result, "Failed to allocate bindless descriptor set!");
-	ASSERT(result == VK_SUCCESS, "Failed to allocate bindless descriptor set!");
-}
-
-// vkCreateDescriptorPool + vkAllocateDescriptorSets
-void Context::createDescriptorSet_for2Buffers()
-{
-	VkDescriptorPoolSize descriptorPoolSize[2];
-	descriptorPoolSize[0].type		      = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-	descriptorPoolSize[0].descriptorCount = 1;
-	descriptorPoolSize[1].type		      = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-	descriptorPoolSize[1].descriptorCount = 1;
-
-	VkDescriptorPoolCreateInfo descriptorPoolCreateInfo = {};
-	descriptorPoolCreateInfo.sType	       = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-	// descriptorPoolCreateInfo.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
-	descriptorPoolCreateInfo.maxSets	   = 1; 
-	descriptorPoolCreateInfo.poolSizeCount = 2;
-	descriptorPoolCreateInfo.pPoolSizes    = descriptorPoolSize;
-	VkResult result = vkCreateDescriptorPool(device, &descriptorPoolCreateInfo, NULL, &descriptorPool);
-
-	VkDescriptorSetAllocateInfo descriptorSetAllocateInfo = {};
-	descriptorSetAllocateInfo.sType			     = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-	descriptorSetAllocateInfo.descriptorPool	 = descriptorPool; 
-	descriptorSetAllocateInfo.descriptorSetCount = 1;		
-	descriptorSetAllocateInfo.pSetLayouts	     = &descriptorSetLayout;
-	result = vkAllocateDescriptorSets(device, &descriptorSetAllocateInfo, &descriptorSet);
-}	
-
 
 
 const u32 MAX_STORAGE = 64;
