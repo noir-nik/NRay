@@ -11,8 +11,8 @@
 my*
 *.bmp
 bin/
-build/*
-build-linux/*
+build/
+build-linux/
 logs/*
 
 *.spv
