@@ -588,9 +588,9 @@ std::vector<char> Context::CompileShader(const std::filesystem::path& path, cons
     sprintf(inpath, "%s/Shaders/%s", cwd.c_str(), path.string().c_str());
     sprintf(outpath, "%s/bin/%s.spv", cwd.c_str(), path.filename().string().c_str());
 	if (path.extension() == ".slang"){
-		sprintf(compile_string, "%s %s -profile glsl_450 -target spirv -o %s -entry %s", SLANGC, inpath, outpath, entryPoint);
+		sprintf(compile_string, "%s %s -o %s -entry %s -DSLANG -Wno-39001", SLANGC, inpath, outpath, entryPoint);
 	} else{
-		sprintf(compile_string, "%s -V %s -o %s --target-env spirv1.4", GLSL_VALIDATOR, inpath, outpath);
+		sprintf(compile_string, "%s -V %s -o %s --target-env spirv1.4 -DGLSL", GLSL_VALIDATOR, inpath, outpath);
 	}
 
     DEBUG_TRACE("[ShaderCompiler] Command: {}", compile_string);
@@ -949,7 +949,7 @@ void Context::CreateInstance(){
 		// active default khronos validation layer
 		const char* validation_layer_name = "VK_LAYER_KHRONOS_validation";
 		bool khronosAvailable = false;
-		for (size_t i = 0; i < layers.size(); i++) {
+		for (size_t i = 0; i < layerCount; i++) {
 			activeLayers[i] = false;
 			if (strcmp(validation_layer_name, layers[i].layerName) == 0) {
 				activeLayers[i] = true;
@@ -959,7 +959,7 @@ void Context::CreateInstance(){
 		}
 		if (!khronosAvailable) {LOG_ERROR("Default validation layer not available!");}
 
-		for (size_t i = 0; i < layers.size(); i++) { 
+		for (size_t i = 0; i < layerCount; i++) { 
 			if (activeLayers[i]) {
 				activeLayersNames.push_back(layers[i].layerName);
 			}
@@ -978,36 +978,62 @@ void Context::CreateInstance(){
 		requiredInstanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 	}
 
-	// if (!requiredInstanceExtensions.empty()) {
-		// get all available extensions
-		uint32_t extensionCount = 0;
-		vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, 0);
-		instanceExtensions.resize(extensionCount);
-		activeExtensions.resize(extensionCount);
-		vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, instanceExtensions.data());
+	// get all available extensions
+	uint32_t extensionCount = 0;
+	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, 0);
+	instanceExtensions.resize(extensionCount);
+	activeExtensions.resize(extensionCount);
+	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, instanceExtensions.data());
 
-		// set to active all extensions that we enabled
-		for (size_t i = 0; i < requiredInstanceExtensions.size(); i++) {
-			for (size_t j = 0; j < instanceExtensions.size(); j++) {
-				if (strcmp(requiredInstanceExtensions[i], instanceExtensions[j].extensionName) == 0) {
-					activeExtensions[j] = true;
-					break;
-				}
+	// set to active all extensions that we enabled //TODO: Rewrite loop
+	for (size_t i = 0; i < requiredInstanceExtensions.size(); i++) {
+		for (size_t j = 0; j < extensionCount; j++) {
+			if (strcmp(requiredInstanceExtensions[i], instanceExtensions[j].extensionName) == 0) {
+				activeExtensions[j] = true;
+				break;
 			}
 		}
-		
-		// get the name of all extensions that we enabled
-		activeExtensionsNames.clear();
-		for (size_t i = 0; i < instanceExtensions.size(); i++) {
-			if (activeExtensions[i]) {
-				activeExtensionsNames.push_back(instanceExtensions[i].extensionName);
+	}
+
+	// Enable validation features if available
+	bool validation_features = false;
+	if (enableValidationLayers){
+		for (size_t i = 0; i < extensionCount; i++) {
+			if (strcmp(VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME, instanceExtensions[i].extensionName) == 0) {
+				validation_features = true;
+				activeExtensions[i] = true;
+				LOG_INFO("{} is available, enabling it", VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME);
+				break;
 			}
 		}
-	// }
+	}
+
+	VkValidationFeaturesEXT validation_features_info = {VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT};
+	if (validation_features)
+	{
+		static const VkValidationFeatureEnableEXT enable_features[2] = {
+			VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
+			VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
+		};
+		validation_features_info.enabledValidationFeatureCount = 2;
+		validation_features_info.pEnabledValidationFeatures    = enable_features;
+		validation_features_info.pNext                         = createInfo.pNext;
+		createInfo.pNext                                       = &validation_features_info;
+	}
+
+	// get the name of all extensions that we enabled
+	activeExtensionsNames.clear();
+	for (size_t i = 0; i < extensionCount; i++) {
+		if (activeExtensions[i]) {
+			activeExtensionsNames.push_back(instanceExtensions[i].extensionName);
+		}
+	}
 
 	// get and set all required extensions
 	createInfo.enabledExtensionCount = static_cast<uint32_t>(activeExtensionsNames.size());
 	createInfo.ppEnabledExtensionNames = activeExtensionsNames.data();
+
+	
 
 	// which validation layers we need
 	VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo;

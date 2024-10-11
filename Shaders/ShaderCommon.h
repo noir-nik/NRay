@@ -32,9 +32,7 @@ struct SlangTestConstants{
 };
 
 
-
-// for shaders only
-#ifndef ENGINE
+#ifdef GLSL
 
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_EXT_nonuniform_qualifier : enable
@@ -56,16 +54,24 @@ layout(set = 0, binding = BINDING_BUFFER) buffer OutImageBuffer {
     Pixel data[];
 } OutImageBuffers[];
 
-// layout(set = 0, binding = BINDING_BUFFER) buffer Parameters {
-//     Pixel data[];
-// } OutImageBuffers[];
-
-
 layout(binding = BINDING_STORAGE_IMAGE) uniform image2D images[];
-
 
 // Neural SDF
 #define w_b WeightsBuffers[ctx.weightsRID].data
 #define outputImage OutImageBuffers[ctx.outputImageRID].data
+
+#endif
+
+
+#ifdef SLANG
+
+struct Pixel {
+    float4 value;
+};
+
+[[vk::binding(BINDING_BUFFER, 0)]]
+StructuredBuffer<float> WeightsBuffers[]:  register(t0);
+[[vk::binding(BINDING_BUFFER, 0)]]
+RWStructuredBuffer<Pixel> OutImageBuffers[]:  register(u0);
 
 #endif
