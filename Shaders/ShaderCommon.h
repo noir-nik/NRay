@@ -1,10 +1,3 @@
-// #ifdef ENGINE
-// #pragma once
-// struct Pixel {
-// 	float r, g, b, a;
-// };
-// #endif
-
 #define BINDING_TEXTURE 0 // Sampled image
 #define BINDING_BUFFER 1
 #define BINDING_TLAS 2
@@ -29,6 +22,11 @@ struct NeuralSdfConstants {
 	int outputImageRID;
 	int imageGPU;
 	int pad[1];
+};
+
+struct SlangTestConstants{
+	int width;
+	int height;
 };
 
 

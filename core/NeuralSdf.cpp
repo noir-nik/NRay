@@ -8,6 +8,8 @@
 
 #include "Timer.hpp"
 
+using Pixel = vec4;
+
 struct Context {
 	vkw::Pipeline forwardPipeline;
 
@@ -74,18 +76,18 @@ void CreateImages(uint32_t width, uint32_t height) {
 
 
 
-void saveBufferCPU(const char *fname, vkw::Buffer& buffer, uint32_t width, uint32_t height) {
+void saveBuffer(const char *fname, vkw::Buffer& buffer, uint32_t width, uint32_t height) {
 	std::vector<unsigned char> image;
-		image.reserve(width * height * 4);
-		Pixel* mappedMemory = (Pixel*)vkw::MapBuffer(buffer);
-		for (int i = 0; i < width * height; i++) {
-			image.push_back(255.0f * mappedMemory[i].r);
-			image.push_back(255.0f * mappedMemory[i].g);
-			image.push_back(255.0f * mappedMemory[i].b);
-			image.push_back(255.0f);
-		}
-		vkw::UnmapBuffer(buffer);
-		FileManager::SaveBMP(fname, (const uint32_t*)image.data(), width, height);
+	image.reserve(width * height * 4);
+	Pixel* mappedMemory = (Pixel*)vkw::MapBuffer(buffer);
+	for (int i = 0; i < width * height; i++) {
+		image.push_back(255.0f * mappedMemory[i].r);
+		image.push_back(255.0f * mappedMemory[i].g);
+		image.push_back(255.0f * mappedMemory[i].b);
+		image.push_back(255.0f);
+	}
+	vkw::UnmapBuffer(buffer);
+	FileManager::SaveBMP(fname, (const uint32_t*)image.data(), width, height);
 }
 
 void NeuralSdfApplication::run(NeuralSdfInfo* pNeuralSdfInfo) {
@@ -149,11 +151,8 @@ void NeuralSdfApplication::Compute() {
 		vkw::WaitQueue(vkw::Queue::Compute);
 		printf("Compute time: %fs\n", timer.Elapsed());
 		timer.Start();
-		saveBufferCPU("output.bmp", ctx.bufferCPU, ctx.width, ctx.height);
+		saveBuffer("output.bmp", ctx.bufferCPU, ctx.width, ctx.height);
 		printf("Save time: %fs\n", timer.Elapsed());
-	}
-
-void NeuralSdfApplication::MainLoop() {
 	}
 
 void NeuralSdfApplication::Finish() {

@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <vector>
 
-struct NeuralSdfInfo
+struct SlangTestInfo
 {
 	std::string weightsPath;
 	int numLayers; // Number of hidden layers
@@ -15,15 +15,16 @@ struct NeuralSdfInfo
 };
 
 
-class NeuralSdfApplication {
+class SlangTestApplication {
 public:
-	void run(NeuralSdfInfo* pNeuralSdfInfo);
+	void run(SlangTestInfo* pSlangTestInfo);
 private:
 	void Setup();
 	void Create();
 	void Compute();
+	void MainLoop();
 	void Finish();
 
-	NeuralSdfInfo* info;
+	SlangTestInfo* info;
 	std::vector<float> weights;
 };

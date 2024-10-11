@@ -1,4 +1,39 @@
+#pragma once
 typedef unsigned int uint;
+
+typedef struct ivec4
+{
+	inline ivec4() : x(0), y(0), z(0), w(0) {}
+	inline ivec4(int x, int y, int z, int w) : x(x), y(y), z(z), w(w) {}
+	inline explicit ivec4(int val) : x(val), y(val), z(val), w(val) {}
+	inline explicit ivec4(const int a[4]) : x(a[0]), y(a[1]), z(a[2]), w(a[3]) {}
+	
+	inline int& operator[](int i)       { return M[i]; }
+	inline int  operator[](int i) const { return M[i]; }
+	union
+	{
+		struct { int x, y, z, w; };
+		struct { int r, g, b, a; };
+		int M[4];
+	};
+} int4;
+
+typedef struct uvec4
+{
+	inline uvec4() : x(0), y(0), z(0), w(0) {}
+	inline uvec4(uint x, uint y, uint z, uint w) : x(x), y(y), z(z), w(w) {}
+	inline explicit uvec4(uint val) : x(val), y(val), z(val), w(val) {}
+	inline explicit uvec4(const uint a[4]) : x(a[0]), y(a[1]), z(a[2]), w(a[3]) {}
+	
+	inline uint& operator[](int i)       { return M[i]; }
+	inline uint  operator[](int i) const { return M[i]; }
+	union
+	{
+		struct { uint x, y, z, w; };
+		struct { uint r, g, b, a; };
+		uint M[4];
+	};
+} uint4;
 
 typedef struct ivec3
 {
@@ -80,6 +115,27 @@ typedef struct uvec2
 	};
 } uint2;
 
+typedef struct vec4
+{
+	inline vec4() : x(0.0f), y(0.0f), z(0.0f), w(0.0f) {}
+	inline vec4(float x, float y, float z, float w) : x(x), y(y), z(z), w(w) {}
+	inline explicit vec4(float val) : x(val), y(val), z(val), w(val) {}
+	inline explicit vec4(const float a[4]) : x(a[0]), y(a[1]), z(a[2]), w(a[3]) {}
+
+	inline float& operator[](int i)       { return M[i]; }
+	inline float  operator[](int i) const { return M[i]; }
+
+	union
+	{
+	struct { float x, y, z, w; };
+	struct { float r, g, b, a; };
+	#ifdef LAYOUT_STD140
+	float M[4];
+	#else
+	float M[3];
+	#endif
+	};
+} float4;
 
 typedef struct vec3
 {
