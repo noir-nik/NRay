@@ -27,3 +27,20 @@ private:
 	NeuralSdfInfo* info;
 	std::vector<float> weights;
 };
+
+// Example
+// int main(int argc, char* argv[])
+// {
+// 	Logger::Init();
+// 	NeuralSdfApplication app;
+// 	NeuralSdfInfo neuralSdfInfo = {
+// 		.weightsPath = "assets/sdf1_weights.bin",
+// 		.numLayers = 2,
+// 		.layerSize = 64,
+// 		.outputPath = "output.bmp",
+// 		.width = 512,
+// 		.height = 512,
+// 	};
+// 	app.run(&neuralSdfInfo);
+// 	return 0;
+// }

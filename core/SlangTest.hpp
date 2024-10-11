@@ -6,10 +6,6 @@
 
 struct SlangTestInfo
 {
-	std::string weightsPath;
-	int numLayers; // Number of hidden layers
-	int layerSize; // Size of a hidden layer
-	std::string outputPath;
 	int width;
 	int height;
 };
@@ -26,5 +22,4 @@ private:
 	void Finish();
 
 	SlangTestInfo* info;
-	std::vector<float> weights;
 };

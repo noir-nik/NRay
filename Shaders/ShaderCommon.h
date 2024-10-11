@@ -27,6 +27,8 @@ struct NeuralSdfConstants {
 struct SlangTestConstants{
 	int width;
 	int height;
+	int outputImageRID;
+	int pad[2];
 };
 
 
@@ -62,9 +64,8 @@ layout(set = 0, binding = BINDING_BUFFER) buffer OutImageBuffer {
 layout(binding = BINDING_STORAGE_IMAGE) uniform image2D images[];
 
 
-
+// Neural SDF
 #define w_b WeightsBuffers[ctx.weightsRID].data
-// #define imageData OutImageBuffers[ctx.outputImageRID].data
-#define imageData OutImageBuffers[ctx.outputImageRID].data
+#define outputImage OutImageBuffers[ctx.outputImageRID].data
 
 #endif

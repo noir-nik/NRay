@@ -559,8 +559,9 @@ std::vector<char> ReadBinaryFile(const std::string& path) {
 void Context::LoadShaders(Pipeline& pipeline) {
     pipeline.stageBytes.clear();
     for (auto& stage : pipeline.stages) {
+		std::filesystem::path binPath = "bin/" + stage.path.filename().string() + ".spv";
 		// check if compiled to .spv
-		if (std::filesystem::exists("bin/" + stage.path.filename().string() + ".spv")) {
+		if (std::filesystem::exists(binPath)) {
 			pipeline.stageBytes.push_back(std::move(ReadBinaryFile("bin/" + stage.path.filename().string() + ".spv")));
 		} else {
 			// compile to .spv

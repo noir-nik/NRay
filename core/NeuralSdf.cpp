@@ -9,7 +9,7 @@
 #include "Timer.hpp"
 
 using Pixel = vec4;
-
+namespace{
 struct Context {
 	vkw::Pipeline forwardPipeline;
 
@@ -26,8 +26,8 @@ struct Context {
 	int zs_size;
 
 };
-Context ctx;
-
+static Context ctx;
+}
 void CreatePipeline(vkw::Pipeline& pipeline, const vkw::PipelineDesc& desc) {
 	bool should_update = false;
 	for (auto& stage : desc.stages) {
@@ -76,7 +76,7 @@ void CreateImages(uint32_t width, uint32_t height) {
 
 
 
-void saveBuffer(const char *fname, vkw::Buffer& buffer, uint32_t width, uint32_t height) {
+static void saveBuffer(const char *fname, vkw::Buffer& buffer, uint32_t width, uint32_t height) {
 	std::vector<unsigned char> image;
 	image.reserve(width * height * 4);
 	Pixel* mappedMemory = (Pixel*)vkw::MapBuffer(buffer);
@@ -112,51 +112,51 @@ void NeuralSdfApplication::Setup() {
 }
 
 void NeuralSdfApplication::Create() {
-		// TODO: vkw::requestCompute();
-		vkw::Init();
-		CreateImages(ctx.width, ctx.height);
-		CreateShaders();
-	}
+	// TODO: vkw::requestCompute();
+	vkw::Init();
+	CreateImages(ctx.width, ctx.height);
+	CreateShaders();
+}
 
 void NeuralSdfApplication::Compute() {
-		Timer timer;
-		vkw::BeginCommandBuffer(vkw::Queue::Compute);
-		vkw::CmdCopy(ctx.weightsGPU, weights.data(), ctx.num_parameters * sizeof(float));
+	Timer timer;
+	vkw::BeginCommandBuffer(vkw::Queue::Compute);
+	vkw::CmdCopy(ctx.weightsGPU, weights.data(), ctx.num_parameters * sizeof(float));
 
-		vkw::CmdBindPipeline(ctx.forwardPipeline);
+	vkw::CmdBindPipeline(ctx.forwardPipeline);
 
-		NeuralSdfConstants constants{};
-		constants.width = ctx.width;
-		constants.height = ctx.height;
-		constants.numLayers = ctx.numLayers;
-		constants.layerSize = ctx.layerSize;
-		constants.weightsRID = ctx.weightsGPU.RID();
-		constants.outputImageRID = ctx.outputImage.RID();
+	NeuralSdfConstants constants{};
+	constants.width = ctx.width;
+	constants.height = ctx.height;
+	constants.numLayers = ctx.numLayers;
+	constants.layerSize = ctx.layerSize;
+	constants.weightsRID = ctx.weightsGPU.RID();
+	constants.outputImageRID = ctx.outputImage.RID();
 
-		vkw::CmdPushConstants(&constants, sizeof(constants));
+	vkw::CmdPushConstants(&constants, sizeof(constants));
 
-		vkw::CmdDispatch({(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
-		vkw::CmdBarrier();
+	vkw::CmdDispatch({(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
+	vkw::CmdBarrier();
 
-		// vkw::CmdBarrier(ctx.imageGPU, vkw::Layout::General);
-		// vkw::CmdCopy(ctx.imageGPU, ctx.outputImage, ctx.width*ctx.height*sizeof(Pixel));
-		// vkw::CmdBarrier();
-		// vkw::CmdCopy(ctx.bufferCPU, ctx.imageGPU, ctx.width*ctx.height*sizeof(Pixel), 0, {0, ctx.height/2}, {ctx.width, ctx.height/2});
-		// vkw::CmdBarrier();
-		// vkw::CmdCopy(ctx.bufferCPU, ctx.imageGPU, ctx.width*ctx.height*sizeof(Pixel), ctx.width*ctx.height*sizeof(Pixel)/2, {0, 0}, {ctx.width, ctx.height/2});
+	// vkw::CmdBarrier(ctx.imageGPU, vkw::Layout::General);
+	// vkw::CmdCopy(ctx.imageGPU, ctx.outputImage, ctx.width*ctx.height*sizeof(Pixel));
+	// vkw::CmdBarrier();
+	// vkw::CmdCopy(ctx.bufferCPU, ctx.imageGPU, ctx.width*ctx.height*sizeof(Pixel), 0, {0, ctx.height/2}, {ctx.width, ctx.height/2});
+	// vkw::CmdBarrier();
+	// vkw::CmdCopy(ctx.bufferCPU, ctx.imageGPU, ctx.width*ctx.height*sizeof(Pixel), ctx.width*ctx.height*sizeof(Pixel)/2, {0, 0}, {ctx.width, ctx.height/2});
 
-		vkw::CmdCopy(ctx.bufferCPU, ctx.outputImage, ctx.width * ctx.height * sizeof(Pixel));
-		timer.Start();
-		vkw::EndCommandBuffer();
-		vkw::WaitQueue(vkw::Queue::Compute);
-		printf("Compute time: %fs\n", timer.Elapsed());
-		timer.Start();
-		saveBuffer("output.bmp", ctx.bufferCPU, ctx.width, ctx.height);
-		printf("Save time: %fs\n", timer.Elapsed());
-	}
+	vkw::CmdCopy(ctx.bufferCPU, ctx.outputImage, ctx.width * ctx.height * sizeof(Pixel));
+	timer.Start();
+	vkw::EndCommandBuffer();
+	vkw::WaitQueue(vkw::Queue::Compute);
+	printf("Compute time: %fs\n", timer.Elapsed());
+	timer.Start();
+	saveBuffer("output.bmp", ctx.bufferCPU, ctx.width, ctx.height);
+	printf("Save time: %fs\n", timer.Elapsed());
+}
 
 void NeuralSdfApplication::Finish() {
-		ctx = {};
-		weights.clear();
-		vkw::Destroy();
-	}
+	ctx = {};
+	weights.clear();
+	vkw::Destroy();
+}

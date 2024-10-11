@@ -250,5 +250,5 @@ void main() {
 	vec4 color = vec4(col, 1.0);
 
   	color = clamp(color, 0.0, 1.0);
-  	imageData[pos].value = color;
+  	outputImage[pos].value = color;
 }

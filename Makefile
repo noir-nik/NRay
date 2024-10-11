@@ -1,7 +1,7 @@
 CC := g++
 TARGET := app
 
-OPT_LEVEL := g
+OPT_LEVEL := 0
 
 INCLUDES := -Iinclude -IDeps -ICore -IBase -IShaders 
 CXXFLAGS := -MMD -MP $(INCLUDES) -O$(OPT_LEVEL) -DENGINE

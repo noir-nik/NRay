@@ -5,7 +5,8 @@
 
 #include "VulkanBase.hpp"
 
-#include "NeuralSdf.hpp"
+// #include "NeuralSdf.hpp"
+#include "SlangTest.hpp"
 
 #include "FileManager.hpp"
 
@@ -14,15 +15,11 @@
 int main(int argc, char* argv[])
 {
 	Logger::Init();
-	NeuralSdfApplication app;
-	NeuralSdfInfo neuralSdfInfo = {
-		.weightsPath = "assets/sdf1_weights.bin",
-		.numLayers = 2,
-		.layerSize = 64,
-		.outputPath = "output.bmp",
+	SlangTestApplication app;
+	SlangTestInfo SlangTestInfo = {
 		.width = 512,
 		.height = 512,
 	};
-	app.run(&neuralSdfInfo);
+	app.run(&SlangTestInfo);
 	return 0;
 }
