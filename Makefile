@@ -82,6 +82,6 @@ clean:
 	@echo "=== Cleaned ==="
 
 rm:
-	cmd /c del output.bmp
+	cmd /c del $(wildcard *.bmp)
 
 # $(RM) $(OBJ_DIR)/
