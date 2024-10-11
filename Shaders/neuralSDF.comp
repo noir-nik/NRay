@@ -2,9 +2,8 @@
 #extension GL_GOOGLE_include_directive : enable
 #include "ShaderCommon.h"
 #extension GL_ARB_separate_shader_objects : enable
-//#define WIDTH 512
-//#define HEIGHT 512
-#define WORKGROUP_SIZE 16
+
+
 layout (local_size_x = WORKGROUP_SIZE, local_size_y = WORKGROUP_SIZE, local_size_z = 1 ) in;
 
 # define fov 90.

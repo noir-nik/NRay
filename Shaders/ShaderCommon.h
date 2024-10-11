@@ -32,6 +32,7 @@ struct SlangTestConstants{
 };
 
 
+
 #ifdef GLSL
 
 #extension GL_ARB_separate_shader_objects : enable
@@ -70,8 +71,20 @@ struct Pixel {
 };
 
 [[vk::binding(BINDING_BUFFER, 0)]]
-StructuredBuffer<float> WeightsBuffers[]:  register(t0);
+StructuredBuffer<float> WeightsBuffers[]:  register(tBINDING_BUFFER);
 [[vk::binding(BINDING_BUFFER, 0)]]
-RWStructuredBuffer<Pixel> OutImageBuffers[]:  register(u0);
+RWStructuredBuffer<Pixel> OutImageBuffers[]:  register(uBINDING_BUFFER);
+[[vk::binding(BINDING_STORAGE_IMAGE, 0)]]
+RWTexture2D<float4> images[]: register(uBINDING_STORAGE_IMAGE);
+
+#define w_b WeightsBuffers[ctx.weightsRID]
+#define outputImage OutImageBuffers[ctx.outputImageRID]
+
+#endif
+
+
+#ifndef ENGINE
+
+
 
 #endif

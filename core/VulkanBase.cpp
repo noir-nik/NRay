@@ -588,7 +588,7 @@ std::vector<char> Context::CompileShader(const std::filesystem::path& path, cons
     sprintf(inpath, "%s/Shaders/%s", cwd.c_str(), path.string().c_str());
     sprintf(outpath, "%s/bin/%s.spv", cwd.c_str(), path.filename().string().c_str());
 	if (path.extension() == ".slang"){
-		sprintf(compile_string, "%s %s -o %s -entry %s -DSLANG -Wno-39001", SLANGC, inpath, outpath, entryPoint);
+		sprintf(compile_string, "%s %s -o %s -entry %s -Wno-39001", SLANGC, inpath, outpath, entryPoint);
 	} else{
 		sprintf(compile_string, "%s -V %s -o %s --target-env spirv1.4 -DGLSL", GLSL_VALIDATOR, inpath, outpath);
 	}
