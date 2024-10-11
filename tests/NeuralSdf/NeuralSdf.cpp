@@ -31,7 +31,7 @@ static Context ctx;
 void CreatePipeline(vkw::Pipeline& pipeline, const vkw::PipelineDesc& desc) {
 	bool should_update = false;
 	for (auto& stage : desc.stages) {
-		auto path = "Shaders/" + stage.path.string();
+		auto path = stage.path.string();
 		auto it = ctx.shaderVersions.find(path);
 		auto version = FileManager::GetFileVersion(path);
 		// TODO: Check for -1 (file not found)~
@@ -53,7 +53,7 @@ void CreateShaders() {
 		.point = vkw::PipelinePoint::Compute,
 		.stages = {
 			// {.stage = vkw::ShaderStage::Compute, .path = "clearColor.slang"},
-			{.stage = vkw::ShaderStage::Compute, .path = "neuralSDF.slang"},
+			{.stage = vkw::ShaderStage::Compute, .path = "tests/NeuralSdf/neuralSDF.slang"},
 		},
 		.name = "Neural Sdf Forward",
 	});

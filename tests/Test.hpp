@@ -1,7 +1,8 @@
 #pragma once
 namespace Test {
 enum TestName {
-	NeuralSdf
+	NeuralSdf,
+	Slang
 };
 
 void Test(TestName testName);

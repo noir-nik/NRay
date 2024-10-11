@@ -1,5 +1,5 @@
 #define SLANG
-#include "ShaderCommon.h"
+#include "../../source/Shaders/ShaderCommon.h"
 
 #define fov 90.
 #define itfov 1.0 / (tan(3.141592654 * fov / (180. * 2.)))

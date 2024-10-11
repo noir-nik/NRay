@@ -29,7 +29,7 @@ void Context::CreateShaders() {
 	pipeline = vkw::CreatePipeline({
 		.point = vkw::PipelinePoint::Compute,
 		.stages = {
-			{.stage = vkw::ShaderStage::Compute, .path = "clearColor.slang"},
+			{.stage = vkw::ShaderStage::Compute, .path = "tests/SlangTest/clearColor.slang"},
 		},
 		.name = "Slang Test",
 	});

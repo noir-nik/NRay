@@ -559,8 +559,8 @@ std::vector<char> ReadBinaryFile(const std::string& path) {
 void Context::LoadShaders(Pipeline& pipeline) {
     pipeline.stageBytes.clear();
     for (auto& stage : pipeline.stages) {
-		std::filesystem::path binPath = "bin/" + stage.path.filename().string() + ".spv";
-		std::filesystem::path shaderPath = "Shaders/" + stage.path.string();
+		std::filesystem::path binPath = stage.path.string() + ".spv";
+		std::filesystem::path& shaderPath = stage.path;
 		bool compilationRequired = SHADER_ALWAYS_COMPILE;
 		// check if already compiled to .spv
 		if (std::filesystem::exists(binPath) && std::filesystem::exists(shaderPath)) {
@@ -585,12 +585,12 @@ std::vector<char> Context::CompileShader(const std::filesystem::path& path, cons
     char inpath[256];
     char outpath[256];
     std::string cwd = std::filesystem::current_path().string();
-    sprintf(inpath, "%s/Shaders/%s", cwd.c_str(), path.string().c_str());
-    sprintf(outpath, "%s/bin/%s.spv", cwd.c_str(), path.filename().string().c_str());
+    sprintf(inpath, "%s", path.string().c_str());
+    sprintf(outpath, "%s.spv", path.filename().string().c_str());
 	if (path.extension() == ".slang"){
-		sprintf(compile_string, "%s %s -o %s -entry %s -Wno-39001", SLANGC, inpath, outpath, entryPoint);
+		sprintf(compile_string, "%s %s -o %s -entry %s -Wno-39001 -Isource/Shaders", SLANGC, inpath, outpath, entryPoint);
 	} else{
-		sprintf(compile_string, "%s -V %s -o %s --target-env spirv1.4 -DGLSL", GLSL_VALIDATOR, inpath, outpath);
+		sprintf(compile_string, "%s -V %s -o %s --target-env spirv1.4 -DGLSL -Isource/Shaders", GLSL_VALIDATOR, inpath, outpath);
 	}
 
     DEBUG_TRACE("[ShaderCompiler] Command: {}", compile_string);

@@ -3,7 +3,7 @@ TARGET := app
 
 OPT_LEVEL := 0
 
-INCLUDES := -Iinclude -IDeps -ICore -IBase -IShaders 
+INCLUDES := -Isource/Core -Isource/Base -Isource/Shaders 
 CXXFLAGS := -MMD -MP $(INCLUDES) -O$(OPT_LEVEL) -DENGINE
 # -Wno-narrowing
 
@@ -28,13 +28,21 @@ endif
 
 # Folders
 SRC_MAIN := .
-SRC_CORE := core
-SRC_BASE := base
+SRC_CORE := source/core
+SRC_BASE := source/base
+SRC_TEST := tests
+# Tests
+TST_NEURALSFD := tests/NeuralSdf
+TST_SLANG := tests/SlangTest
 
 OBJS := \
 	$(patsubst $(SRC_MAIN)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(SRC_MAIN)/*.cpp)) \
 	$(patsubst $(SRC_CORE)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(SRC_CORE)/*.cpp)) \
-	$(patsubst $(SRC_BASE)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(SRC_BASE)/*.cpp))
+	$(patsubst $(SRC_BASE)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(SRC_BASE)/*.cpp)) \
+	$(patsubst $(SRC_TEST)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(SRC_TEST)/*.cpp)) \
+	$(patsubst $(TST_NEURALSFD)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(TST_NEURALSFD)/*.cpp)) \
+	$(patsubst $(TST_SLANG)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(TST_SLANG)/*.cpp)) \
+	
 
 DEPS = $(OBJS:.o=.d)
 
@@ -65,7 +73,20 @@ $(OBJ_DIR)/%.o: $(SRC_CORE)/%.cpp # core/
 $(OBJ_DIR)/%.o: $(SRC_BASE)/%.cpp # base/
 	@echo "Compiling $<"
 	@$(CC) $(CXXFLAGS) -c $< -o $@
+$(OBJ_DIR)/%.o: $(SRC_TEST)/%.cpp # test/
+	@echo "Compiling $<"
+	@$(CC) $(CXXFLAGS) -c $< -o $@
 
+# Tests
+$(OBJ_DIR)/%.o: $(TST_NEURALSFD)/%.cpp # test/NeuralSdf
+	@echo "Compiling $<"
+	@$(CC) $(CXXFLAGS) -c $< -o $@
+$(OBJ_DIR)/%.o: $(TST_SLANG)/%.cpp # test/SlangTest
+	@echo "Compiling $<"
+	@$(CC) $(CXXFLAGS) -c $< -o $@
+
+
+# Run
 run:
 	@./$(BUILD_DIR)/$(TARGET)
 

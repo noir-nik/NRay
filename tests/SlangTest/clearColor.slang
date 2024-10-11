@@ -1,8 +1,8 @@
 #define SLANG
-#include "ShaderCommon.h"
+#include "../../source/Shaders/ShaderCommon.h"
 
 [[vk::push_constant]]
-NeuralSdfConstants ctx;
+SlangTestConstants ctx;
 
 [shader("compute")]
 [numthreads(WORKGROUP_SIZE, WORKGROUP_SIZE, 1)]
