@@ -20,8 +20,8 @@ int main(int argc, char* argv[])
 		.numLayers = 2,
 		.layerSize = 64,
 		.outputPath = "output.bmp",
-		.width = 256,
-		.height = 256,
+		.width = 512,
+		.height = 512,
 	};
 	app.run(&neuralSdfInfo);
 	return 0;

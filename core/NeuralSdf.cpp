@@ -148,9 +148,9 @@ void NeuralSdfApplication::Compute() {
 		vkw::EndCommandBuffer();
 		vkw::WaitQueue(vkw::Queue::Compute);
 		printf("Compute time: %fs\n", timer.Elapsed());
+		timer.Start();
 		saveBufferCPU("output.bmp", ctx.bufferCPU, ctx.width, ctx.height);
-
-		
+		printf("Save time: %fs\n", timer.Elapsed());
 	}
 
 void NeuralSdfApplication::MainLoop() {

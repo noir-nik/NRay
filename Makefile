@@ -1,11 +1,13 @@
 CC := g++
 TARGET := app
 
+OPT_LEVEL := g
+
 INCLUDES := -Iinclude -IDeps -ICore -IBase -IShaders 
-CXXFLAGS := -MMD -MP $(INCLUDES) -O0 -DENGINE
+CXXFLAGS := -MMD -MP $(INCLUDES) -O$(OPT_LEVEL) -DENGINE
 # -Wno-narrowing
 
-LDFLAGS := -lspdlog
+LDFLAGS := -lspdlog -O$(OPT_LEVEL)
 
 ifeq ($(OS),Windows_NT)
 	LDFLAGS := $(LDFLAGS) -lvulkan-1

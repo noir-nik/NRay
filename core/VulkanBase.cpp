@@ -545,13 +545,27 @@ void CmdDispatch(const uvec3& groups) {
 	vkCmdDispatch(cmd.buffer, groups.x, groups.y, groups.z);
 }
 
+std::vector<char> ReadBinaryFile(const std::string& path) {
+	std::ifstream file(path, std::ios::ate | std::ios::binary);
+	ASSERT(file.is_open(), "Failed to open file!");
+	size_t fileSize = (size_t)file.tellg();
+	std::vector<char> buffer(fileSize);
+	file.seekg(0);
+	file.read(buffer.data(), fileSize);
+	file.close();
+	return buffer;
+}
 
 void Context::LoadShaders(Pipeline& pipeline) {
     pipeline.stageBytes.clear();
     for (auto& stage : pipeline.stages) {
-		// TODO: check std::move
-		// pipeline.stageBytes.push_back(std::move(CompileShader(stage.path)));
-        pipeline.stageBytes.push_back(CompileShader(stage.path));
+		// check if compiled to .spv
+		if (std::filesystem::exists("bin/" + stage.path.filename().string() + ".spv")) {
+			pipeline.stageBytes.push_back(std::move(ReadBinaryFile("bin/" + stage.path.filename().string() + ".spv")));
+		} else {
+			// compile to .spv
+			pipeline.stageBytes.push_back(CompileShader(stage.path));
+		}
     }
 }
 // TODO: change for slang and check if compiled fresh spv exists
@@ -570,19 +584,7 @@ std::vector<char> Context::CompileShader(const std::filesystem::path& path) {
         std::cin.get();
     }
 
-    // 'ate' specify to start reading at the end of the file
-    // then we can use the read position to determine the size of the file
-    std::ifstream file(outpath, std::ios::ate | std::ios::binary);
-    if (!file.is_open()) {
-        LOG_CRITICAL("Failed to open file: '{}'", outpath);
-    }
-    size_t fileSize = (size_t)file.tellg();
-    std::vector<char> buffer(fileSize);
-    file.seekg(0);
-    file.read(buffer.data(), fileSize);
-    file.close();
-
-    return buffer;
+    return ReadBinaryFile(outpath);
 }
 
 Pipeline CreatePipeline(const PipelineDesc& desc) {// External handle
