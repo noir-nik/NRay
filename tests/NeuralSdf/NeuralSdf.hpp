@@ -1,3 +1,4 @@
+#if (!defined SLANG) && (!defined GLSL)
 #pragma once
 
 #include <string>
@@ -13,7 +14,6 @@ struct NeuralSdfInfo
 	int height;
 };
 
-
 class NeuralSdfApplication {
 public:
 	void run(NeuralSdfInfo* pNeuralSdfInfo);
@@ -26,20 +26,17 @@ private:
 	NeuralSdfInfo* info;
 	std::vector<float> weights;
 };
+#endif
 
-// Example
-// int main(int argc, char* argv[])
-// {
-// 	Logger::Init();
-// 	NeuralSdfApplication app;
-// 	NeuralSdfInfo neuralSdfInfo = {
-// 		.weightsPath = "assets/sdf1_weights.bin",
-// 		.numLayers = 2,
-// 		.layerSize = 64,
-// 		.outputPath = "output.bmp",
-// 		.width = 512,
-// 		.height = 512,
-// 	};
-// 	app.run(&neuralSdfInfo);
-// 	return 0;
-// }
+
+struct NeuralSdfConstants {
+	int width;
+	int height;
+	int numLayers;
+	int layerSize;
+
+	int weightsRID;
+	int outputImageRID;
+	int imageGPU;
+	int pad[1];
+};

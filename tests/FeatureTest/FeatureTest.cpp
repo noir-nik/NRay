@@ -4,7 +4,7 @@
 #include "ShaderCommon.h"
 #include "FileManager.hpp"
 
-#include "ImageOptimization.hpp"
+#include "FeatureTest.hpp"
 #include "../TestCommon.hpp"
 #include "Timer.hpp"
 
@@ -14,8 +14,6 @@ struct Context {
 	vkw::Pipeline pipeline;
 
 	int width, height;
-	float learningRate;
-	int numIterations;
 
 	vkw::Buffer BufferGT;
 	vkw::Buffer BufferOpt;
@@ -34,7 +32,7 @@ void Context::CreateShaders() {
 	pipeline = vkw::CreatePipeline({
 		.point = vkw::PipelinePoint::Compute,
 		.stages = {
-			{.stage = vkw::ShaderStage::Compute, .path = "tests/ImageOptimization/ImageOptimization.slang"},
+			{.stage = vkw::ShaderStage::Compute, .path = "tests/FeatureTest/FeatureTest.slang"},
 		},
 		.name = "Slang Test",
 	});
@@ -54,41 +52,33 @@ void Context::CreateImages(uint32_t width, uint32_t height) {
 	});
 }
 
-void ImageOptimizationApplication::run(ImageOptimizationInfo* pImageOptimizationInfo) {
-	info = pImageOptimizationInfo;
+void FeatureTestApplication::run(FeatureTestInfo* pFeatureTestInfo) {
+	info = pFeatureTestInfo;
 	Setup();
 	Create();
 	Compute();
 	Finish();
 }
 
-void ImageOptimizationApplication::Setup() {
+void FeatureTestApplication::Setup() {
 	ctx.width = info->width; 
 	ctx.height = info->height;
-	ctx.learningRate = info->learningRate;
-	ctx.numIterations = info->numIterations;
 }
 
-void ImageOptimizationApplication::Create() {
+void FeatureTestApplication::Create() {
 	vkw::Init();
 	ctx.CreateImages(ctx.width, ctx.height);
 	ctx.CreateShaders();
 }
 
-void ImageOptimizationApplication::CmdOptimizationStep(){
-
-}
-
-void ImageOptimizationApplication::Compute() {
+void FeatureTestApplication::Compute() {
 	Timer timer;
-	ImageOptConstants constants{};
+	FeatureTestConstants constants{};
 	constants.width = ctx.width;
 	constants.height = ctx.height;
 	constants.imageOptRID = ctx.BufferOpt.RID();
 	constants.imageGTRID = ctx.BufferGT.RID();
 	constants.gradRID = ctx.grad.RID();
-	constants.learningRate = ctx.learningRate;
-	constants.numIterations = ctx.numIterations;
 
 	std::vector<float4> imageUV(ctx.width * ctx.height);
 	fillUV(imageUV.data(), ctx.width, ctx.height);
@@ -118,7 +108,7 @@ void ImageOptimizationApplication::Compute() {
 	printf("Save time: %fs\n", timer.Elapsed());
 }
 
-void ImageOptimizationApplication::Finish() {
+void FeatureTestApplication::Finish() {
 	ctx = {};
 	vkw::Destroy();
 }

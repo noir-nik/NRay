@@ -35,6 +35,7 @@ SRC_TEST := tests
 TST_NEURALSFD := tests/NeuralSdf
 TST_IMAGEOPT := tests/ImageOptimization
 TST_SLANG := tests/SlangTest
+TST_FEATURE := tests/FeatureTest
 
 OBJS := \
 	$(patsubst $(SRC_MAIN)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(SRC_MAIN)/*.cpp)) \
@@ -44,6 +45,7 @@ OBJS := \
 	$(patsubst $(TST_NEURALSFD)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(TST_NEURALSFD)/*.cpp)) \
 	$(patsubst $(TST_SLANG)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(TST_SLANG)/*.cpp)) \
 	$(patsubst $(TST_IMAGEOPT)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(TST_IMAGEOPT)/*.cpp)) \
+	$(patsubst $(TST_FEATURE)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(TST_FEATURE)/*.cpp)) \
 
 DEPS = $(OBJS:.o=.d)
 
@@ -86,6 +88,9 @@ $(OBJ_DIR)/%.o: $(TST_IMAGEOPT)/%.cpp # test/ImageOptimization
 	@echo "Compiling $<"
 	@$(CC) $(CXXFLAGS) -c $< -o $@
 $(OBJ_DIR)/%.o: $(TST_SLANG)/%.cpp # test/SlangTest
+	@echo "Compiling $<"
+	@$(CC) $(CXXFLAGS) -c $< -o $@
+$(OBJ_DIR)/%.o: $(TST_FEATURE)/%.cpp # test/FeatureTest
 	@echo "Compiling $<"
 	@$(CC) $(CXXFLAGS) -c $< -o $@
 

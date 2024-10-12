@@ -2,7 +2,8 @@
 namespace Test {
 enum TestName {
 	NeuralSdf,
-	Slang
+	Slang,
+	Feature
 };
 
 void Test(TestName testName);

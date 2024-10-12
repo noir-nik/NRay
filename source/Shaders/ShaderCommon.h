@@ -5,17 +5,6 @@
 
 #define WORKGROUP_SIZE 16
 
-struct NeuralSdfConstants {
-	int width;
-	int height;
-	int numLayers;
-	int layerSize;
-
-	int weightsRID;
-	int outputImageRID;
-	int imageGPU;
-	int pad[1];
-};
 
 struct SlangTestConstants{
 	int width;

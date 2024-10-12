@@ -4,31 +4,29 @@
 #include <cstdint>
 #include <vector>
 
-struct ImageOptimizationInfo
+struct FeatureTestInfo
 {
 	int width;
 	int height;
-	float learningRate;
-	int numIterations;
 };
 
-class ImageOptimizationApplication {
+class FeatureTestApplication {
 public:
-	void run(ImageOptimizationInfo* pImageOptimizationInfo);
+	void run(FeatureTestInfo* pFeatureTestInfo);
 private:
 	void Setup();
 	void Create();
 	void Compute();
-	void CmdOptimizationStep();
+	void MainLoop();
 	void Finish();
 
-	ImageOptimizationInfo* info;
+	FeatureTestInfo* info;
 };
 #endif
 
 
 
-struct ImageOptConstants {
+struct FeatureTestConstants {
 	int width;
 	int height;
 	int imageOptRID;
