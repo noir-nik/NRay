@@ -203,21 +203,22 @@ void UnmapBuffer(Buffer& buffer);
 
 void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset = 0);
 void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset = 0, uint32_t srcOffset = 0);
-
 void CmdCopy(Image& dst, void* data, uint32_t size);
 void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset = 0); // size is a No OP
-
-void CmdCopy(Buffer& dst, Image& src, uint32_t size, uint32_t srcOffset = 0); // size is a No OP
+void CmdCopy(Buffer& dst, Image& src, uint32_t size = 0, uint32_t srcOffset = 0); // size is a No OP
 void CmdCopy(Buffer& dst, Image& src, uint32_t size, uint32_t dstOffset, ivec2 imageOffset, ivec2 imageExtent); // size is a No OP
-
 void CmdBarrier(Image& img, Layout::ImageLayout layout);
 void CmdBarrier();
+
+void CmdClearColorImage(Image &image, float4 color);
+
 void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach = {}, uint32_t layerCount = 1);
 void CmdEndRendering();
 void CmdBeginPresent();
 void CmdEndPresent();
 void CmdBindPipeline(Pipeline& pipeline);
 void CmdPushConstants(void* data, uint32_t size);
+
 // void CmdBuildBLAS(BLAS& blas);
 // void CmdBuildTLAS(TLAS& tlas, const std::vector<BLASInstance>& instances);
 void CmdDrawMesh(Buffer& vertexBuffer, Buffer& indexBuffer, uint32_t indexCount);

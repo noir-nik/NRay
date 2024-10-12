@@ -14,13 +14,15 @@ struct Context {
 	vkw::Pipeline pipeline;
 
 	int width, height;
-	int learningRate;
+	float learningRate;
 
 	vkw::Buffer ImageGT;
 	vkw::Buffer ImageOpt;
 	vkw::Buffer grad;
 
 	vkw::Buffer bufferCPU;
+	
+	vkw::Image imageCPU;
 
 	void CreateImages(uint32_t width, uint32_t height);
 	void CreateShaders();
@@ -42,6 +44,13 @@ void Context::CreateImages(uint32_t width, uint32_t height) {
 	ctx.ImageOpt = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferSrc, vkw::Memory::GPU, "Optimized Image");
 	ctx.grad = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage, vkw::Memory::GPU, "Gradient Image");
 	ctx.bufferCPU = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst, vkw::Memory::CPU, "Output Image");
+	ctx.imageCPU = vkw::CreateImage({
+		.width = width,
+		.height = height,
+		.format = vkw::Format::RGBA32_sfloat,
+		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::TransferSrc | vkw::ImageUsage::TransferDst,
+		.name = "Output Image",
+	});
 }
 
 static void fillRGB(float4* image, int width, int height){
@@ -93,11 +102,6 @@ void SlangTestApplication::Create() {
 
 void SlangTestApplication::Compute() {
 	Timer timer;
-	std::vector<float4> imageUV(ctx.width * ctx.height);
-	fillRGB(imageUV.data(), ctx.width, ctx.height);
-	vkw::BeginCommandBuffer(vkw::Queue::Compute);
-	vkw::CmdBindPipeline(ctx.pipeline);
-
 	ImageOptConstants constants{};
 	constants.width = ctx.width;
 	constants.height = ctx.height;
@@ -106,11 +110,22 @@ void SlangTestApplication::Compute() {
 	constants.gradRID = ctx.grad.RID();
 	constants.learningRate = ctx.learningRate;
 
-	vkw::CmdPushConstants(&constants, sizeof(constants));
+	std::vector<float4> imageUV(ctx.width * ctx.height);
+	fillRGB(imageUV.data(), ctx.width, ctx.height);
 
-	vkw::CmdDispatch({(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
-	vkw::CmdBarrier();
-	vkw::CmdCopy(ctx.bufferCPU, ctx.ImageOpt, ctx.width * ctx.height * sizeof(Pixel));
+	vkw::BeginCommandBuffer(vkw::Queue::Compute);
+
+	// vkw::CmdCopy(ctx.ImageGT, imageUV.data(), ctx.width * ctx.height * sizeof(Pixel));
+	vkw::CmdBarrier(ctx.imageCPU, vkw::Layout::General);
+	vkw::CmdClearColorImage(ctx.imageCPU, {0.8f, 0.0f, 0.5f, 0.0f});
+	vkw::CmdBarrier(ctx.imageCPU, vkw::Layout::TransferSrc);
+	vkw::CmdCopy(ctx.bufferCPU, ctx.imageCPU);
+	// vkw::CmdBindPipeline(ctx.pipeline);
+	// vkw::CmdPushConstants(&constants, sizeof(constants));
+
+	// vkw::CmdDispatch({(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
+	// vkw::CmdBarrier();
+	// vkw::CmdCopy(ctx.bufferCPU, ctx.ImageOpt, ctx.width * ctx.height * sizeof(Pixel));
 
 	timer.Start();
 	vkw::EndCommandBuffer();

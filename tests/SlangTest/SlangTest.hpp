@@ -8,7 +8,7 @@ struct SlangTestInfo
 {
 	int width;
 	int height;
-	int learningRate;
+	float learningRate;
 };
 
 

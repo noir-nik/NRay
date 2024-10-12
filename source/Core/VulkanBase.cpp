@@ -16,15 +16,14 @@ struct Context
 {	
 	void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset);
 	void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset);
-
 	void CmdCopy(Image& dst, void* data, uint32_t size);
 	void CmdCopy(Image& dst, Buffer& src, uint32_t srcOffset);
-	
 	void CmdCopy(Buffer& dst, Image& src, uint32_t srcOffset);
 	void CmdCopy(Buffer& dst, Image& src, uint32_t size, uint32_t dstOffset, ivec2 imageOffset, ivec2 imageExtent);
-
 	void CmdBarrier(Image& img, Layout::ImageLayout layout);
 	void CmdBarrier();
+	void CmdClearColorImage(Image& image, float4& color);
+
 	void EndCommandBuffer(VkSubmitInfo submitInfo);
 
 	void LoadShaders(Pipeline& pipeline);
@@ -142,7 +141,7 @@ struct Context
 	// VkFormat colorFormat = VK_FORMAT_B8G8R8A8_UNORM;
 	// VkColorSpaceKHR colorSpace  = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
 	// VkPresentModeKHR presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
-    // VkSampleCountFlagBits numSamples  = VK_SAMPLE_COUNT_1_BIT;
+	// VkSampleCountFlagBits numSamples  = VK_SAMPLE_COUNT_1_BIT;
 
 	// const uint32_t initialScratchBufferSize = 64*1024*1024;
 	// Buffer asScratchBuffer;
@@ -176,6 +175,7 @@ struct Context
 
 	void createCommandBuffers();
 	void DestroyCommandBuffers();
+
 
 	uint32_t FindMemoryType(uint32_t type, VkMemoryPropertyFlags properties);
 	bool SupportFormat(VkFormat format, VkImageTiling tiling, VkFormatFeatureFlags features);
@@ -308,15 +308,15 @@ void Destroy() {
 }
 
 void* MapBuffer(Buffer& buffer) {
-    ASSERT(buffer.memory & Memory::CPU, "Buffer not cpu accessible!");
-    void* data;
-    vmaMapMemory(_ctx.vmaAllocator, buffer.resource->allocation, &data);
-    return buffer.resource->allocation->GetMappedData();
+	ASSERT(buffer.memory & Memory::CPU, "Buffer not cpu accessible!");
+	void* data;
+	vmaMapMemory(_ctx.vmaAllocator, buffer.resource->allocation, &data);
+	return buffer.resource->allocation->GetMappedData();
 }
 
 void UnmapBuffer(Buffer& buffer) {
-    ASSERT(buffer.memory & Memory::CPU, "Buffer not cpu accessible!");
-    vmaUnmapMemory(_ctx.vmaAllocator, buffer.resource->allocation);
+	ASSERT(buffer.memory & Memory::CPU, "Buffer not cpu accessible!");
+	vmaUnmapMemory(_ctx.vmaAllocator, buffer.resource->allocation);
 }
 
 
@@ -367,8 +367,8 @@ Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, c
 	};
 
 		if (usage & BufferUsage::Storage) {
-        res->rid = _ctx.availableBufferRID.back(); // TODO test: give RID starting from 0, not from end
-        _ctx.availableBufferRID.pop_back();
+		res->rid = _ctx.availableBufferRID.back(); // TODO test: give RID starting from 0, not from end
+		_ctx.availableBufferRID.pop_back();
 
 		VkDescriptorBufferInfo descriptorInfo = {};
 		descriptorInfo.buffer = res->buffer;
@@ -391,160 +391,161 @@ Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, c
 }
 
 Image CreateImage(const ImageDesc& desc) {
-    auto device = _ctx.device;
-    auto allocator = _ctx.allocator;
+	auto device = _ctx.device;
+	auto allocator = _ctx.allocator;
 
-    std::shared_ptr<ImageResource> res = std::make_shared<ImageResource>();
+	std::shared_ptr<ImageResource> res = std::make_shared<ImageResource>();
 
-    VkImageCreateInfo imageInfo{};
-    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    imageInfo.imageType = VK_IMAGE_TYPE_2D;
-    imageInfo.extent.width = desc.width;
-    imageInfo.extent.height = desc.height;
-    imageInfo.extent.depth = 1;
-    imageInfo.mipLevels = 1;
-    imageInfo.arrayLayers = desc.layers;
-    imageInfo.format = (VkFormat)desc.format;
-    // tiling defines how the texels lay in memory
-    // optimal tiling is implementation dependent for more efficient memory access
-    // and linear makes the texels lay in row-major order, possibly with padding on each row
-    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-    // not usable by the GPU, the first transition will discard the texels
-    imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    imageInfo.usage = (VkImageUsageFlags)desc.usage;
-    imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-    if (desc.layers == 6) {
-        imageInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
-    }
+	VkImageCreateInfo imageInfo{};
+	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	imageInfo.imageType = VK_IMAGE_TYPE_2D;
+	imageInfo.extent.width = desc.width;
+	imageInfo.extent.height = desc.height;
+	imageInfo.extent.depth = 1;
+	imageInfo.mipLevels = 1;
+	imageInfo.arrayLayers = desc.layers;
+	imageInfo.format = (VkFormat)desc.format;
+	// tiling defines how the texels lay in memory
+	// optimal tiling is implementation dependent for more efficient memory access
+	// and linear makes the texels lay in row-major order, possibly with padding on each row
+	imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+	// not usable by the GPU, the first transition will discard the texels
+	imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	imageInfo.usage = (VkImageUsageFlags)desc.usage;
+	imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+	if (desc.layers == 6) {
+		imageInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+	}
 
-    VmaAllocationCreateInfo allocInfo = {};
-    allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-    auto result = vmaCreateImage(_ctx.vmaAllocator, &imageInfo, &allocInfo, &res->image, &res->allocation, nullptr);
-    DEBUG_VK(result, "Failed to create image!");
+	VmaAllocationCreateInfo allocInfo = {};
+	allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+	auto result = vmaCreateImage(_ctx.vmaAllocator, &imageInfo, &allocInfo, &res->image, &res->allocation, nullptr);
+	DEBUG_VK(result, "Failed to create image!");
 
-    AspectFlags aspect = Aspect::Color;
-    if (desc.format == Format::D24_unorm_S8_uint || desc.format == Format::D32_sfloat) {
-        aspect = Aspect::Depth;
-    }
-    if (desc.format == Format::D24_unorm_S8_uint) {
-        aspect |= Aspect::Stencil;
-    }
+	AspectFlags aspect = Aspect::Color;
+	if (desc.format == Format::D24_unorm_S8_uint || desc.format == Format::D32_sfloat) {
+		aspect = Aspect::Depth;
+	}
+	if (desc.format == Format::D24_unorm_S8_uint) {
+		aspect |= Aspect::Stencil;
+	}
 
-    res->name = desc.name;
+	res->name = desc.name;
 
-    VkImageViewCreateInfo viewInfo{};
-    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    viewInfo.image = res->image;
-    if (desc.layers == 1) {
-        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    } else {
-        viewInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
-    }
-    viewInfo.format = (VkFormat)desc.format;
-    viewInfo.subresourceRange.aspectMask = (VkImageAspectFlags)aspect;
-    viewInfo.subresourceRange.baseMipLevel = 0;
-    viewInfo.subresourceRange.levelCount = 1;
-    viewInfo.subresourceRange.baseArrayLayer = 0;
-    viewInfo.subresourceRange.layerCount = desc.layers;
+	VkImageViewCreateInfo viewInfo{};
+	viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+	viewInfo.image = res->image;
+	if (desc.layers == 1) {
+		viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+	} else {
+		viewInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
+	}
+	viewInfo.format = (VkFormat)desc.format;
+	viewInfo.subresourceRange.aspectMask = (VkImageAspectFlags)aspect;
+	viewInfo.subresourceRange.baseMipLevel = 0;
+	viewInfo.subresourceRange.levelCount = 1;
+	viewInfo.subresourceRange.baseArrayLayer = 0;
+	viewInfo.subresourceRange.layerCount = desc.layers;
 
-    result = vkCreateImageView(device, &viewInfo, allocator, &res->view);
-    DEBUG_VK(result, "Failed to create image view!");
+	// TODO: Create image view only if usage if Sampled or Storage or other fitting
+	result = vkCreateImageView(device, &viewInfo, allocator, &res->view);
+	DEBUG_VK(result, "Failed to create image view!");
 	ASSERT(result == VK_SUCCESS, "Failed to create image view!");
 
-    if (desc.layers > 1) {
-        viewInfo.subresourceRange.layerCount = 1;
-        res->layersView.resize(desc.layers);
-        for (int i = 0; i < desc.layers; i++) {
-            viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-            viewInfo.subresourceRange.baseArrayLayer = i;
-            result = vkCreateImageView(device, &viewInfo, allocator, &res->layersView[i]);
-            DEBUG_VK(result, "Failed to create image view!");
+	if (desc.layers > 1) {
+		viewInfo.subresourceRange.layerCount = 1;
+		res->layersView.resize(desc.layers);
+		for (int i = 0; i < desc.layers; i++) {
+			viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+			viewInfo.subresourceRange.baseArrayLayer = i;
+			result = vkCreateImageView(device, &viewInfo, allocator, &res->layersView[i]);
+			DEBUG_VK(result, "Failed to create image view!");
 			ASSERT(result == VK_SUCCESS, "Failed to create image view!");
-        }
-    }
+		}
+	}
 
-    Image image = {
-        .resource = res,
-        .width = desc.width,
-        .height = desc.height,
-        .usage = desc.usage,
-        .format = desc.format,
-        .layout = Layout::Undefined,
-        .aspect = aspect,
-        .layers = desc.layers,
-    };
+	Image image = {
+		.resource = res,
+		.width = desc.width,
+		.height = desc.height,
+		.usage = desc.usage,
+		.format = desc.format,
+		.layout = Layout::Undefined,
+		.aspect = aspect,
+		.layers = desc.layers,
+	};
 
-    if (desc.usage & ImageUsage::Sampled || desc.usage & ImageUsage::Storage) {
-        res->rid = _ctx.availableImageRID.back();
-        _ctx.availableImageRID.pop_back();
-    }
+	if (desc.usage & ImageUsage::Sampled || desc.usage & ImageUsage::Storage) {
+		res->rid = _ctx.availableImageRID.back();
+		_ctx.availableImageRID.pop_back();
+	}
 
-    if (desc.usage & ImageUsage::Sampled) {
-        Layout::ImageLayout newLayout = Layout::ShaderRead;
-        if (aspect == (Aspect::Depth | Aspect::Stencil)) {
-            newLayout = Layout::DepthStencilRead;
-        } else if (aspect == Aspect::Depth) {
-            newLayout = Layout::DepthRead;
-        }
-        // res->imguiRIDs.resize(desc.layers);
-        // if (desc.layers > 1) {
-        //     for (int i = 0; i < desc.layers; i++) {
-        //         res->imguiRIDs[i] = ImGui_ImplVulkan_AddTexture(_ctx.genericSampler, res->layersView[i], (VkImageLayout)newLayout);
-        //     }
-        // } else {
-        //     res->imguiRIDs[0] = ImGui_ImplVulkan_AddTexture(_ctx.genericSampler, res->view, (VkImageLayout)newLayout);
-        // }
+	if (desc.usage & ImageUsage::Sampled) {
+		Layout::ImageLayout newLayout = Layout::ShaderRead;
+		if (aspect == (Aspect::Depth | Aspect::Stencil)) {
+			newLayout = Layout::DepthStencilRead;
+		} else if (aspect == Aspect::Depth) {
+			newLayout = Layout::DepthRead;
+		}
+		// res->imguiRIDs.resize(desc.layers);
+		// if (desc.layers > 1) {
+		//     for (int i = 0; i < desc.layers; i++) {
+		//         res->imguiRIDs[i] = ImGui_ImplVulkan_AddTexture(_ctx.genericSampler, res->layersView[i], (VkImageLayout)newLayout);
+		//     }
+		// } else {
+		//     res->imguiRIDs[0] = ImGui_ImplVulkan_AddTexture(_ctx.genericSampler, res->view, (VkImageLayout)newLayout);
+		// }
 
-        VkDescriptorImageInfo descriptorInfo = {
-            .sampler = _ctx.genericSampler,
-            .imageView = res->view,
-            .imageLayout = (VkImageLayout)newLayout,
-        };
-        VkWriteDescriptorSet write = {};
-        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        write.dstSet = _ctx.bindlessDescriptorSet;
-        write.dstBinding = BINDING_TEXTURE;
-        write.dstArrayElement = image.RID();
-        write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        write.descriptorCount = 1;
-        write.pImageInfo = &descriptorInfo;
-        vkUpdateDescriptorSets(_ctx.device, 1, &write, 0, nullptr);
-    }
-    if (desc.usage & ImageUsage::Storage) {
-        VkDescriptorImageInfo descriptorInfo = {
-            .sampler = _ctx.genericSampler,
-            .imageView = res->view,
-            .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-        };
-        VkWriteDescriptorSet write = {};
-        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        write.dstSet = _ctx.bindlessDescriptorSet;
-        write.dstBinding = BINDING_STORAGE_IMAGE;
-        write.dstArrayElement = image.RID();
-        write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-        write.descriptorCount = 1;
-        write.pImageInfo = &descriptorInfo;
-        vkUpdateDescriptorSets(_ctx.device, 1, &write, 0, nullptr);
-    }
+		VkDescriptorImageInfo descriptorInfo = {
+			.sampler = _ctx.genericSampler,
+			.imageView = res->view,
+			.imageLayout = (VkImageLayout)newLayout,
+		};
+		VkWriteDescriptorSet write = {};
+		write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		write.dstSet = _ctx.bindlessDescriptorSet;
+		write.dstBinding = BINDING_TEXTURE;
+		write.dstArrayElement = image.RID();
+		write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+		write.descriptorCount = 1;
+		write.pImageInfo = &descriptorInfo;
+		vkUpdateDescriptorSets(_ctx.device, 1, &write, 0, nullptr);
+	}
+	if (desc.usage & ImageUsage::Storage) {
+		VkDescriptorImageInfo descriptorInfo = {
+			.sampler = _ctx.genericSampler,
+			.imageView = res->view,
+			.imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+		};
+		VkWriteDescriptorSet write = {};
+		write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		write.dstSet = _ctx.bindlessDescriptorSet;
+		write.dstBinding = BINDING_STORAGE_IMAGE;
+		write.dstArrayElement = image.RID();
+		write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+		write.descriptorCount = 1;
+		write.pImageInfo = &descriptorInfo;
+		vkUpdateDescriptorSets(_ctx.device, 1, &write, 0, nullptr);
+	}
 
-    VkDebugUtilsObjectNameInfoEXT name = {
-    .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-    .objectType = VkObjectType::VK_OBJECT_TYPE_IMAGE,
-    .objectHandle = (uint64_t)(VkImage)res->image,
-    .pObjectName = desc.name.c_str(),
-    };
-    _ctx.vkSetDebugUtilsObjectNameEXT(_ctx.device, &name);
-    std::string strName = desc.name + "View";
-    name = {
-        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-        .objectType = VkObjectType::VK_OBJECT_TYPE_IMAGE_VIEW,
-        .objectHandle = (uint64_t)(VkImageView)res->view,
-        .pObjectName = strName.c_str(),
-    };
-    _ctx.vkSetDebugUtilsObjectNameEXT(_ctx.device, &name);
+	VkDebugUtilsObjectNameInfoEXT name = {
+	.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+	.objectType = VkObjectType::VK_OBJECT_TYPE_IMAGE,
+	.objectHandle = (uint64_t)(VkImage)res->image,
+	.pObjectName = desc.name.c_str(),
+	};
+	_ctx.vkSetDebugUtilsObjectNameEXT(_ctx.device, &name);
+	std::string strName = desc.name + "View";
+	name = {
+		.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+		.objectType = VkObjectType::VK_OBJECT_TYPE_IMAGE_VIEW,
+		.objectHandle = (uint64_t)(VkImageView)res->view,
+		.pObjectName = strName.c_str(),
+	};
+	_ctx.vkSetDebugUtilsObjectNameEXT(_ctx.device, &name);
 
-    return image;
+	return image;
 }
 
 
@@ -566,8 +567,8 @@ std::vector<char> ReadBinaryFile(const std::string& path) {
 }
 
 void Context::LoadShaders(Pipeline& pipeline) {
-    pipeline.stageBytes.clear();
-    for (auto& stage : pipeline.stages) {
+	pipeline.stageBytes.clear();
+	for (auto& stage : pipeline.stages) {
 		std::filesystem::path binPath = "bin/" + stage.path.filename().string() + ".spv";
 		// LOG_DEBUG("Loading shader: " + binPath.string());
 		std::filesystem::path& shaderPath = stage.path;
@@ -587,39 +588,39 @@ void Context::LoadShaders(Pipeline& pipeline) {
 		} else {
 			pipeline.stageBytes.push_back(std::move(ReadBinaryFile(binPath.string())));
 		}
-    }
+	}
 }
 // TODO: change for slang and check if compiled fresh spv exists
 std::vector<char> Context::CompileShader(const std::filesystem::path& path, const char* entryPoint) {
-    char compile_string[1024];
-    char inpath[256];
-    char outpath[256];
-    std::string cwd = std::filesystem::current_path().string();
-    sprintf(inpath, "%s", path.string().c_str());
-    sprintf(outpath, "bin/%s.spv", path.filename().string().c_str()); //TODO: add hash (time) to spv filename
+	char compile_string[1024];
+	char inpath[256];
+	char outpath[256];
+	std::string cwd = std::filesystem::current_path().string();
+	sprintf(inpath, "%s", path.string().c_str());
+	sprintf(outpath, "bin/%s.spv", path.filename().string().c_str()); //TODO: add hash (time) to spv filename
 	if (path.extension() == ".slang"){
 		sprintf(compile_string, "%s %s -o %s -entry %s -Wno-39001 -Isource/Shaders", SLANGC, inpath, outpath, entryPoint);
 	} else{
 		sprintf(compile_string, "%s -V %s -o %s --target-env spirv1.4 -DGLSL -Isource/Shaders", GLSL_VALIDATOR, inpath, outpath);
 	}
 
-    DEBUG_TRACE("[ShaderCompiler] Command: {}", compile_string);
-    DEBUG_TRACE("[ShaderCompiler] Output: {}", outpath);
-    while(system(compile_string)) {
-        LOG_WARN("[ShaderCompiler] Error! Press something to Compile Again");
-        std::cin.get();
-    }
+	DEBUG_TRACE("[ShaderCompiler] Command: {}", compile_string);
+	DEBUG_TRACE("[ShaderCompiler] Output: {}", outpath);
+	while(system(compile_string)) {
+		LOG_WARN("[ShaderCompiler] Error! Press something to Compile Again");
+		std::cin.get();
+	}
 
-    return ReadBinaryFile(outpath);
+	return ReadBinaryFile(outpath);
 }
 
 Pipeline CreatePipeline(const PipelineDesc& desc) {// External handle
-    Pipeline pipeline;
-    pipeline.resource = std::make_shared<PipelineResource>();
-    pipeline.stages = desc.stages;
-    _ctx.LoadShaders(pipeline); // load into pipeline
-    _ctx.CreatePipelineImpl(desc, pipeline);
-    return pipeline;
+	Pipeline pipeline;
+	pipeline.resource = std::make_shared<PipelineResource>();
+	pipeline.stages = desc.stages;
+	_ctx.LoadShaders(pipeline); // load into pipeline
+	_ctx.CreatePipelineImpl(desc, pipeline);
+	return pipeline;
 }
 
 void Context::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipeline) {
@@ -696,20 +697,20 @@ void Context::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipeline) {
 
 
 void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset) {
-    _ctx.CmdCopy(dst, data, size, dstOfsset);
+	_ctx.CmdCopy(dst, data, size, dstOfsset);
 }
 
 void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset) {
-    _ctx.CmdCopy(dst, src, size, dstOffset, srcOffset);
+	_ctx.CmdCopy(dst, src, size, dstOffset, srcOffset);
 }
 
 
 void CmdCopy(Image& dst, void* data, uint32_t size) {
-    _ctx.CmdCopy(dst, data, size); 
+	_ctx.CmdCopy(dst, data, size); 
 }
 
 void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset) {
-    _ctx.CmdCopy(dst, src, srcOffset); 
+	_ctx.CmdCopy(dst, src, srcOffset); 
 }
 
 
@@ -723,12 +724,18 @@ void CmdCopy(Buffer &dst, Image &src, uint32_t size, uint32_t dstOffset, ivec2 i
 
 
 void CmdBarrier(Image& img, Layout::ImageLayout layout) {
-    _ctx.CmdBarrier(img, layout);
+	_ctx.CmdBarrier(img, layout);
 }
 
 void CmdBarrier() {
-    _ctx.CmdBarrier();
+	_ctx.CmdBarrier();
 }
+
+
+void CmdClearColorImage(Image& image, float4 color){
+	_ctx.CmdClearColorImage(image, color);
+}
+
 
 // int CmdBeginTimeStamp(const std::string& name) {
 //     DEBUG_ASSERT(_ctx.currentQueue != Queue::Transfer, "Time Stamp not supported in Transfer queue");
@@ -753,19 +760,19 @@ void CmdBarrier() {
 // }
 
 void CmdBindPipeline(Pipeline& pipeline) {
-    auto& cmd = _ctx.GetCurrentCommandResources();
-    vkCmdBindPipeline(cmd.buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->pipeline);
+	auto& cmd = _ctx.GetCurrentCommandResources();
+	vkCmdBindPipeline(cmd.buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->pipeline);
 	// TODO: bind only if not compatible for used descriptor sets or push constant range
 	// ref: https://registry.khronos.org/vulkan/specs/1.2-extensions/html/vkspec.html#descriptorsets-compatibility
-    vkCmdBindDescriptorSets(cmd.buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->layout, 0, 1, &_ctx.bindlessDescriptorSet, 0, nullptr);
-    // vkCmdBindDescriptorSets(cmd.buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->layout, 0, 1, &_ctx.descriptorSet, 0, nullptr);
+	vkCmdBindDescriptorSets(cmd.buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->layout, 0, 1, &_ctx.bindlessDescriptorSet, 0, nullptr);
+	// vkCmdBindDescriptorSets(cmd.buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->layout, 0, 1, &_ctx.descriptorSet, 0, nullptr);
 
-    _ctx.currentPipeline = pipeline.resource;
+	_ctx.currentPipeline = pipeline.resource;
 }
 
 void CmdPushConstants(void* data, uint32_t size) {
-    auto& cmd = _ctx.GetCurrentCommandResources();
-    vkCmdPushConstants(cmd.buffer, _ctx.currentPipeline->layout, VK_SHADER_STAGE_ALL, 0, size, data);
+	auto& cmd = _ctx.GetCurrentCommandResources();
+	vkCmdPushConstants(cmd.buffer, _ctx.currentPipeline->layout, VK_SHADER_STAGE_ALL, 0, size, data);
 }
 
 // void BeginImGui() {
@@ -776,66 +783,66 @@ void CmdPushConstants(void* data, uint32_t size) {
 // vkWaitForFences + vkResetFences +
 // vkResetCommandPool + vkBeginCommandBuffer
 void BeginCommandBuffer(Queue queue) {
-    ASSERT(_ctx.currentQueue == Queue::Count, "Already recording a command buffer");
-    _ctx.currentQueue = queue;
-    auto& cmd = _ctx.GetCurrentCommandResources();
-    vkWaitForFences(_ctx.device, 1, &cmd.fence, VK_TRUE, UINT64_MAX);
-    vkResetFences(_ctx.device, 1, &cmd.fence);
+	ASSERT(_ctx.currentQueue == Queue::Count, "Already recording a command buffer");
+	_ctx.currentQueue = queue;
+	auto& cmd = _ctx.GetCurrentCommandResources();
+	vkWaitForFences(_ctx.device, 1, &cmd.fence, VK_TRUE, UINT64_MAX);
+	vkResetFences(_ctx.device, 1, &cmd.fence);
 
-    // if (cmd.timeStamps.size() > 0) {
-    //     vkGetQueryPoolResults(_ctx.device, cmd.queryPool, 0, cmd.timeStamps.size(), cmd.timeStamps.size() * sizeof(uint64_t), cmd.timeStamps.data(), sizeof(uint64_t), VK_QUERY_RESULT_64_BIT);
-    //     for (int i = 0; i < cmd.timeStampNames.size(); i++) {
-    //         const uint64_t begin = cmd.timeStamps[2 * i];
-    //         const uint64_t end = cmd.timeStamps[2 * i + 1];
-    //         _ctx.timeStampTable[cmd.timeStampNames[i]] = float(end - begin) * _ctx.physicalProperties.limits.timestampPeriod / 1000000.0f;
-    //     }
-    //     cmd.timeStamps.clear();
-    //     cmd.timeStampNames.clear();
-    // }
+	// if (cmd.timeStamps.size() > 0) {
+	//     vkGetQueryPoolResults(_ctx.device, cmd.queryPool, 0, cmd.timeStamps.size(), cmd.timeStamps.size() * sizeof(uint64_t), cmd.timeStamps.data(), sizeof(uint64_t), VK_QUERY_RESULT_64_BIT);
+	//     for (int i = 0; i < cmd.timeStampNames.size(); i++) {
+	//         const uint64_t begin = cmd.timeStamps[2 * i];
+	//         const uint64_t end = cmd.timeStamps[2 * i + 1];
+	//         _ctx.timeStampTable[cmd.timeStampNames[i]] = float(end - begin) * _ctx.physicalProperties.limits.timestampPeriod / 1000000.0f;
+	//     }
+	//     cmd.timeStamps.clear();
+	//     cmd.timeStampNames.clear();
+	// }
 
-    Context::InternalQueue& iqueue = _ctx.queues[queue];
+	Context::InternalQueue& iqueue = _ctx.queues[queue];
 	// ?VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT
-    vkResetCommandPool(_ctx.device, cmd.pool, 0); // TODO: check if this is needed
-    cmd.stagingOffset = 0;
-    VkCommandBufferBeginInfo beginInfo{};
-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    vkBeginCommandBuffer(cmd.buffer, &beginInfo);
+	vkResetCommandPool(_ctx.device, cmd.pool, 0); // TODO: check if this is needed
+	cmd.stagingOffset = 0;
+	VkCommandBufferBeginInfo beginInfo{};
+	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+	vkBeginCommandBuffer(cmd.buffer, &beginInfo);
 
-    // if (queue != Queue::Transfer) {
-    //     vkCmdResetQueryPool(cmd.buffer, cmd.queryPool, 0, _ctx.timeStampPerPool);
-    // }
+	// if (queue != Queue::Transfer) {
+	//     vkCmdResetQueryPool(cmd.buffer, cmd.queryPool, 0, _ctx.timeStampPerPool);
+	// }
 }
 
 void Context::EndCommandBuffer(VkSubmitInfo submitInfo) {
-    auto& cmd = GetCurrentCommandResources();
+	auto& cmd = GetCurrentCommandResources();
 
-    vkEndCommandBuffer(cmd.buffer);
+	vkEndCommandBuffer(cmd.buffer);
 
-    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &cmd.buffer;
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &cmd.buffer;
 
-    auto res = vkQueueSubmit(queues[currentQueue].queue, 1, &submitInfo, cmd.fence);
-    DEBUG_VK(res, "Failed to submit command buffer");
+	auto res = vkQueueSubmit(queues[currentQueue].queue, 1, &submitInfo, cmd.fence);
+	DEBUG_VK(res, "Failed to submit command buffer");
 }
 
 // vkEndCommandBuffer + vkQueueSubmit
 void EndCommandBuffer() {
-    _ctx.EndCommandBuffer({});
-    _ctx.currentQueue = vkw::Queue::Count;
-    _ctx.currentPipeline = {};
+	_ctx.EndCommandBuffer({});
+	_ctx.currentQueue = vkw::Queue::Count;
+	_ctx.currentPipeline = {};
 }
 
 void WaitQueue(Queue queue) {
-    // todo: wait on fence
-    auto res = vkQueueWaitIdle(_ctx.queues[queue].queue);
-    DEBUG_VK(res, "Failed to wait idle command buffer");
+	// todo: wait on fence
+	auto res = vkQueueWaitIdle(_ctx.queues[queue].queue);
+	DEBUG_VK(res, "Failed to wait idle command buffer");
 }
 
 void WaitIdle() {
-    auto res = vkDeviceWaitIdle(_ctx.device);
-    DEBUG_VK(res, "Failed to wait idle command buffer");
+	auto res = vkDeviceWaitIdle(_ctx.device);
+	DEBUG_VK(res, "Failed to wait idle command buffer");
 }
 
 
@@ -863,12 +870,12 @@ bool check_extensions_supported(
 }
 
 template <typename T> void setup_pNext_chain(T& structure, std::vector<VkBaseOutStructure*> const& structs) {
-    structure.pNext = nullptr;
-    if (structs.size() <= 0) return;
-    for (size_t i = 0; i < structs.size() - 1; i++) {
-        structs.at(i)->pNext = structs.at(i + 1);
-    }
-    structure.pNext = structs.at(0);
+	structure.pNext = nullptr;
+	if (structs.size() <= 0) return;
+	for (size_t i = 0; i < structs.size() - 1; i++) {
+		structs.at(i)->pNext = structs.at(i + 1);
+	}
+	structure.pNext = structs.at(0);
 }
 }
 
@@ -1265,40 +1272,40 @@ void Context::CreateDevice() {
 	addresFeatures.bufferDeviceAddress = bufferDeviceAddressFeatures.bufferDeviceAddress;
 	addresFeatures.pNext = &descriptorIndexingFeatures;
 
-    // VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingPipelineFeatures{};
-    // rayTracingPipelineFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
-    // rayTracingPipelineFeatures.rayTracingPipeline = VK_TRUE;
-    // rayTracingPipelineFeatures.pNext = &addresFeatures;
+	// VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingPipelineFeatures{};
+	// rayTracingPipelineFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
+	// rayTracingPipelineFeatures.rayTracingPipeline = VK_TRUE;
+	// rayTracingPipelineFeatures.pNext = &addresFeatures;
 
-    // VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures{};
-    // accelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
-    // accelerationStructureFeatures.accelerationStructure = VK_TRUE;
-    // accelerationStructureFeatures.descriptorBindingAccelerationStructureUpdateAfterBind = VK_TRUE;
-    // accelerationStructureFeatures.accelerationStructureCaptureReplay = VK_TRUE;
-    // accelerationStructureFeatures.pNext = &rayTracingPipelineFeatures;
+	// VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures{};
+	// accelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+	// accelerationStructureFeatures.accelerationStructure = VK_TRUE;
+	// accelerationStructureFeatures.descriptorBindingAccelerationStructureUpdateAfterBind = VK_TRUE;
+	// accelerationStructureFeatures.accelerationStructureCaptureReplay = VK_TRUE;
+	// accelerationStructureFeatures.pNext = &rayTracingPipelineFeatures;
 
-    // VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures{};
-    // rayQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
-    // rayQueryFeatures.rayQuery = VK_TRUE;
-    // // rayQueryFeatures.pNext = &accelerationStructureFeatures;
-    // rayQueryFeatures.pNext = &addresFeatures;
+	// VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures{};
+	// rayQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
+	// rayQueryFeatures.rayQuery = VK_TRUE;
+	// // rayQueryFeatures.pNext = &accelerationStructureFeatures;
+	// rayQueryFeatures.pNext = &addresFeatures;
 
-    // VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeatures{};
-    // dynamicRenderingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
-    // dynamicRenderingFeatures.dynamicRendering = VK_TRUE;
-    // dynamicRenderingFeatures.pNext = &rayQueryFeatures;
+	// VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeatures{};
+	// dynamicRenderingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
+	// dynamicRenderingFeatures.dynamicRendering = VK_TRUE;
+	// dynamicRenderingFeatures.pNext = &rayQueryFeatures;
 
 	VkPhysicalDeviceSynchronization2FeaturesKHR sync2Features{};
 	sync2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR;
 	sync2Features.synchronization2 = VK_TRUE;
-    sync2Features.pNext = &addresFeatures;
+	sync2Features.pNext = &addresFeatures;
 
-    // VkPhysicalDeviceShaderAtomicFloatFeaturesEXT atomicFeatures{};
-    // atomicFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT;
-    // atomicFeatures.shaderBufferFloat32AtomicAdd = VK_TRUE;
-    // atomicFeatures.pNext = &sync2Features;
+	// VkPhysicalDeviceShaderAtomicFloatFeaturesEXT atomicFeatures{};
+	// atomicFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT;
+	// atomicFeatures.shaderBufferFloat32AtomicAdd = VK_TRUE;
+	// atomicFeatures.pNext = &sync2Features;
 
-    // features2.pNext = &atomicFeatures;
+	// features2.pNext = &atomicFeatures;
 
 	VkDeviceCreateInfo createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -1647,65 +1654,82 @@ void Context::DestroyCommandBuffers() {
 	for (int q = 0; q < Queue::Count; q++) {
 		for (int i = 0; i < framesInFlight; i++) {
 			// vkFreeCommandBuffers(device, queues[q].commands[i].pool, 1, &queues[q].commands[i].buffer); // No OP
-            vkDestroyCommandPool(device, queues[q].commands[i].pool, allocator);
-            queues[q].commands[i].staging = {};
-            queues[q].commands[i].stagingCpu = nullptr;
-            vkDestroyFence(device, queues[q].commands[i].fence, allocator);
-            // vkDestroyQueryPool(device, queues[q].commands[i].queryPool, allocator);
-        }
+			vkDestroyCommandPool(device, queues[q].commands[i].pool, allocator);
+			queues[q].commands[i].staging = {};
+			queues[q].commands[i].stagingCpu = nullptr;
+			vkDestroyFence(device, queues[q].commands[i].fence, allocator);
+			// vkDestroyQueryPool(device, queues[q].commands[i].queryPool, allocator);
+		}
 	}
 }
 
 
+void Context::CmdClearColorImage(Image& img, float4& color) {
+	CommandResources& cmd = GetCurrentCommandResources();
+	VkClearColorValue clearColor{};
+	clearColor.float32[0] = color.r;
+	clearColor.float32[1] = color.g;
+	clearColor.float32[2] = color.b;
+	clearColor.float32[3] = color.a;
+	VkImageSubresourceRange range = {};
+	range.aspectMask = (VkImageAspectFlags)img.aspect;
+	range.baseMipLevel = 0;
+	range.levelCount = VK_REMAINING_MIP_LEVELS;
+	range.baseArrayLayer = 0;
+	range.layerCount = VK_REMAINING_ARRAY_LAYERS;
+
+	vkCmdClearColorImage(cmd.buffer, img.resource->image, (VkImageLayout)img.layout, &clearColor, 1, &range);
+}
+
 
 void Context::CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset) {
-    CommandResources& cmd = GetCurrentCommandResources();
-    if (stagingBufferSize - cmd.stagingOffset < size) {
-        LOG_ERROR("not enough size in staging buffer to copy");
-        // todo: allocate additional buffer
-        return;
-    }
-    memcpy(cmd.stagingCpu + cmd.stagingOffset, data, size);
-    CmdCopy(dst, cmd.staging, size, dstOfsset, cmd.stagingOffset);
-    cmd.stagingOffset += size;
+	CommandResources& cmd = GetCurrentCommandResources();
+	if (stagingBufferSize - cmd.stagingOffset < size) {
+		LOG_ERROR("not enough size in staging buffer to copy");
+		// todo: allocate additional buffer
+		return;
+	}
+	memcpy(cmd.stagingCpu + cmd.stagingOffset, data, size);
+	CmdCopy(dst, cmd.staging, size, dstOfsset, cmd.stagingOffset);
+	cmd.stagingOffset += size;
 }
 
 void Context::CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset) {
-    CommandResources& cmd = GetCurrentCommandResources();
-    VkBufferCopy copyRegion{};
-    copyRegion.srcOffset = srcOffset;
-    copyRegion.dstOffset = dstOffset;
-    copyRegion.size = size;
-    vkCmdCopyBuffer(cmd.buffer, src.resource->buffer, dst.resource->buffer, 1, &copyRegion);
+	CommandResources& cmd = GetCurrentCommandResources();
+	VkBufferCopy copyRegion{};
+	copyRegion.srcOffset = srcOffset;
+	copyRegion.dstOffset = dstOffset;
+	copyRegion.size = size;
+	vkCmdCopyBuffer(cmd.buffer, src.resource->buffer, dst.resource->buffer, 1, &copyRegion);
 }
 
 
 void Context::CmdCopy(Image& dst, void* data, uint32_t size) {
-    CommandResources& cmd = GetCurrentCommandResources();
-    if (stagingBufferSize - cmd.stagingOffset < size) {
-        LOG_ERROR("not enough size in staging buffer to copy");
-        // todo: allocate additional buffer
-        return;
-    }
-    memcpy(cmd.stagingCpu + cmd.stagingOffset, data, size);
-    CmdCopy(dst, cmd.staging, cmd.stagingOffset);
-    cmd.stagingOffset += size;
+	CommandResources& cmd = GetCurrentCommandResources();
+	if (stagingBufferSize - cmd.stagingOffset < size) {
+		LOG_ERROR("not enough size in staging buffer to copy");
+		// todo: allocate additional buffer
+		return;
+	}
+	memcpy(cmd.stagingCpu + cmd.stagingOffset, data, size);
+	CmdCopy(dst, cmd.staging, cmd.stagingOffset);
+	cmd.stagingOffset += size;
 }
 
 void Context::CmdCopy(Image& dst, Buffer& src, uint32_t srcOffset) {
-    CommandResources& cmd = GetCurrentCommandResources();
-    VkBufferImageCopy region{};
-    region.bufferOffset = srcOffset;
-    region.bufferRowLength = 0;
-    region.bufferImageHeight = 0;
-    ASSERT(!(dst.aspect & Aspect::Depth || dst.aspect & Aspect::Stencil), "CmdCopy don't support depth/stencil images");
-    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    region.imageSubresource.mipLevel = 0;
-    region.imageSubresource.baseArrayLayer = 0;
-    region.imageSubresource.layerCount = 1;
-    region.imageOffset = { 0, 0, 0 };
-    region.imageExtent = { dst.width, dst.height, 1 };
-    vkCmdCopyBufferToImage(cmd.buffer, src.resource->buffer, dst.resource->image, (VkImageLayout)dst.layout, 1, &region);
+	CommandResources& cmd = GetCurrentCommandResources();
+	VkBufferImageCopy region{};
+	region.bufferOffset = srcOffset;
+	region.bufferRowLength = 0;
+	region.bufferImageHeight = 0;
+	ASSERT(!(dst.aspect & Aspect::Depth || dst.aspect & Aspect::Stencil), "CmdCopy don't support depth/stencil images");
+	region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	region.imageSubresource.mipLevel = 0;
+	region.imageSubresource.baseArrayLayer = 0;
+	region.imageSubresource.layerCount = 1;
+	region.imageOffset = { 0, 0, 0 };
+	region.imageExtent = { dst.width, dst.height, 1 };
+	vkCmdCopyBufferToImage(cmd.buffer, src.resource->buffer, dst.resource->image, (VkImageLayout)dst.layout, 1, &region);
 }
 
 
@@ -1713,15 +1737,15 @@ void Context::CmdCopy(Buffer& dst, Image& src, uint32_t dstOffset) {
 	CommandResources& cmd = GetCurrentCommandResources();
 	VkBufferImageCopy region{};
 	region.bufferOffset = dstOffset;
-    region.bufferRowLength = 0;
-    region.bufferImageHeight = 0;
+	region.bufferRowLength = 0;
+	region.bufferImageHeight = 0;
 	ASSERT(!(src.aspect & Aspect::Depth || src.aspect & Aspect::Stencil), "CmdCopy don't support depth/stencil images");
 	region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    region.imageSubresource.mipLevel = 0;
-    region.imageSubresource.baseArrayLayer = 0;
-    region.imageSubresource.layerCount = 1;
-    region.imageOffset = { 0, 0, 0 };
-    region.imageExtent = {src.width, src.height, 1 };
+	region.imageSubresource.mipLevel = 0;
+	region.imageSubresource.baseArrayLayer = 0;
+	region.imageSubresource.layerCount = 1;
+	region.imageOffset = { 0, 0, 0 };
+	region.imageExtent = {src.width, src.height, 1 };
 	vkCmdCopyImageToBuffer(cmd.buffer, src.resource->image, (VkImageLayout)src.layout, dst.resource->buffer, 1, &region);
 }
 // Vulkan 1.3 // 
@@ -1753,47 +1777,47 @@ void Context::CmdCopy(Buffer &dst, Image &src, uint32_t size, uint32_t dstOffset
 
 
 void Context::CmdBarrier(Image& img, Layout::ImageLayout layout) {
-    CommandResources& cmd = GetCurrentCommandResources();
-    VkImageSubresourceRange range = {};
-    range.aspectMask = (VkImageAspectFlags)img.aspect;
-    range.baseMipLevel = 0;
-    range.levelCount = VK_REMAINING_MIP_LEVELS;
-    range.baseArrayLayer = 0;
-    range.layerCount = VK_REMAINING_ARRAY_LAYERS;;
+	CommandResources& cmd = GetCurrentCommandResources();
+	VkImageSubresourceRange range = {};
+	range.aspectMask = (VkImageAspectFlags)img.aspect;
+	range.baseMipLevel = 0;
+	range.levelCount = VK_REMAINING_MIP_LEVELS;
+	range.baseArrayLayer = 0;
+	range.layerCount = VK_REMAINING_ARRAY_LAYERS;
 
-    VkAccessFlags srcAccess = VK_ACCESS_SHADER_WRITE_BIT;
-    VkAccessFlags dstAccess = VK_ACCESS_SHADER_READ_BIT;
-    VkPipelineStageFlags srcStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
-    VkPipelineStageFlags dstStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+	VkAccessFlags srcAccess = VK_ACCESS_SHADER_WRITE_BIT;
+	VkAccessFlags dstAccess = VK_ACCESS_SHADER_READ_BIT;
+	VkPipelineStageFlags srcStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+	VkPipelineStageFlags dstStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 
-    VkImageMemoryBarrier barrier{};
-    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.srcAccessMask = srcAccess;
-    barrier.dstAccessMask = dstAccess;
-    barrier.oldLayout = (VkImageLayout)img.layout;
-    barrier.newLayout = (VkImageLayout)layout;
-    barrier.image = img.resource->image;
-    barrier.subresourceRange = range;
-    vkCmdPipelineBarrier(cmd.buffer, srcStage, dstStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
-    img.layout = layout;
+	VkImageMemoryBarrier barrier{};
+	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	barrier.srcAccessMask = srcAccess;
+	barrier.dstAccessMask = dstAccess;
+	barrier.oldLayout = (VkImageLayout)img.layout;
+	barrier.newLayout = (VkImageLayout)layout;
+	barrier.image = img.resource->image;
+	barrier.subresourceRange = range;
+	vkCmdPipelineBarrier(cmd.buffer, srcStage, dstStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+	img.layout = layout;
 }
 
 void Context::CmdBarrier() {
-    VkMemoryBarrier2 barrier = {
+	VkMemoryBarrier2 barrier = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
 		.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
 		.srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
 		.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
 		.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
-    };
-    VkDependencyInfo dependency = {
-        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-        .memoryBarrierCount = 1,
-        .pMemoryBarriers = &barrier,
-    };
-    vkCmdPipelineBarrier2(GetCurrentCommandResources().buffer, &dependency);
+	};
+	VkDependencyInfo dependency = {
+		.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+		.memoryBarrierCount = 1,
+		.pMemoryBarriers = &barrier,
+	};
+	vkCmdPipelineBarrier2(GetCurrentCommandResources().buffer, &dependency);
 }
 
 VkSampler Context::CreateSampler(f32 maxLod) {
