@@ -219,6 +219,6 @@ void main(uint3 tid: SV_DispatchThreadID) {
 		float4 color = float4(col, 1.0);
 
 		color = clamp(color, 0.0, 1.0);
-		outputImage[pos].value = color;
+		outputImage[pos] = color;
     }
 }

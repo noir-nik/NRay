@@ -40,6 +40,7 @@ static void slangTest() {
 	SlangTestInfo SlangTestInfo = {
 		.width = 512,
 		.height = 512,
+		.learningRate = 0.05f
 	};
 	app.run(&SlangTestInfo);
 }

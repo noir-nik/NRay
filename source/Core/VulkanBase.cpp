@@ -652,6 +652,7 @@ void Context::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipeline) {
 	layouts.push_back(bindlessDescriptorLayout);
 	// layouts.push_back(descriptorSetLayout);
 
+	// TODO: opt, specify each time, but keep compatible(same) for all pipeline layouts
 	VkPushConstantRange pushConstant{};
 	pushConstant.offset = 0;
 	pushConstant.size = physicalProperties.limits.maxPushConstantsSize;
@@ -754,6 +755,8 @@ void CmdBarrier() {
 void CmdBindPipeline(Pipeline& pipeline) {
     auto& cmd = _ctx.GetCurrentCommandResources();
     vkCmdBindPipeline(cmd.buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->pipeline);
+	// TODO: bind only if not compatible for used descriptor sets or push constant range
+	// ref: https://registry.khronos.org/vulkan/specs/1.2-extensions/html/vkspec.html#descriptorsets-compatibility
     vkCmdBindDescriptorSets(cmd.buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->layout, 0, 1, &_ctx.bindlessDescriptorSet, 0, nullptr);
     // vkCmdBindDescriptorSets(cmd.buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->layout, 0, 1, &_ctx.descriptorSet, 0, nullptr);
 
@@ -1542,7 +1545,7 @@ void Context::createBindlessResources(){
 		imageStorageBinding.stageFlags = VK_SHADER_STAGE_ALL;
 		bindings.push_back(imageStorageBinding);
 		bindingFlags.push_back({ VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT });
-
+		// TODO: try VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT for last binding ONLY
 
 		VkDescriptorSetLayoutBindingFlagsCreateInfo setLayoutBindingFlags{};
 		setLayoutBindingFlags.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;

@@ -176,3 +176,9 @@ typedef struct vec2
 	float M[2];
 	};
 } float2;
+
+
+typedef struct uchar4
+{
+	unsigned char r, g, b, a;
+} uchar4;

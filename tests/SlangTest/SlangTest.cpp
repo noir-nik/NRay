@@ -14,9 +14,11 @@ struct Context {
 	vkw::Pipeline pipeline;
 
 	int width, height;
+	int learningRate;
 
 	vkw::Buffer ImageGT;
 	vkw::Buffer ImageOpt;
+	vkw::Buffer grad;
 
 	vkw::Buffer bufferCPU;
 
@@ -36,12 +38,23 @@ void Context::CreateShaders() {
 }
 
 void Context::CreateImages(uint32_t width, uint32_t height) {
-	ctx.ImageGT = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst, vkw::Memory::GPU, "Output Image");
-	ctx.ImageOpt = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferSrc, vkw::Memory::GPU, "Output Image");
-
+	ctx.ImageGT = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst, vkw::Memory::GPU, "Ground Truth Image");
+	ctx.ImageOpt = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferSrc, vkw::Memory::GPU, "Optimized Image");
+	ctx.grad = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage, vkw::Memory::GPU, "Gradient Image");
 	ctx.bufferCPU = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst, vkw::Memory::CPU, "Output Image");
 }
 
+static void fillRGB(float4* image, int width, int height){
+	for (auto i = 0; i < height; i++) {
+		for (auto j = 0; j < width; j++) {
+			int idx = i * width + j;
+			image[idx].r = i / (float)height;
+			image[idx].g = j / (float)width;
+			image[idx].b = 0.0f;
+			image[idx].a = 1.0f;
+		}
+	}
+}
 
 static void saveBuffer(const char *fname, vkw::Buffer& buffer, uint32_t width, uint32_t height) {
 	std::vector<unsigned char> image;
@@ -68,6 +81,7 @@ void SlangTestApplication::run(SlangTestInfo* pSlangTestInfo) {
 void SlangTestApplication::Setup() {
 	ctx.width = info->width; 
 	ctx.height = info->height;
+	ctx.learningRate = info->learningRate;
 }
 
 void SlangTestApplication::Create() {
@@ -79,14 +93,18 @@ void SlangTestApplication::Create() {
 
 void SlangTestApplication::Compute() {
 	Timer timer;
+	std::vector<float4> imageUV(ctx.width * ctx.height);
+	fillRGB(imageUV.data(), ctx.width, ctx.height);
 	vkw::BeginCommandBuffer(vkw::Queue::Compute);
-
 	vkw::CmdBindPipeline(ctx.pipeline);
 
-	SlangTestConstants constants{};
+	ImageOptConstants constants{};
 	constants.width = ctx.width;
 	constants.height = ctx.height;
-	constants.outputImageRID = ctx.ImageOpt.RID();
+	constants.imageOptRID = ctx.ImageOpt.RID();
+	constants.imageGTRID = ctx.ImageGT.RID();
+	constants.gradRID = ctx.grad.RID();
+	constants.learningRate = ctx.learningRate;
 
 	vkw::CmdPushConstants(&constants, sizeof(constants));
 

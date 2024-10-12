@@ -5,13 +5,6 @@
 
 #define WORKGROUP_SIZE 16
 
-struct imageOptConstants {
-	int width;
-	int height;
-	int factor; //test
-	int pad[1];
-};
-
 struct NeuralSdfConstants {
 	int width;
 	int height;
@@ -28,6 +21,17 @@ struct SlangTestConstants{
 	int width;
 	int height;
 	int outputImageRID;
+	int pad[1];
+};
+
+struct ImageOptConstants {
+	int width;
+	int height;
+	int imageOptRID;
+	int imageGTRID;
+
+	int gradRID;
+	float learningRate;
 	int pad[2];
 };
 
@@ -66,19 +70,16 @@ layout(binding = BINDING_STORAGE_IMAGE) uniform image2D images[];
 
 #ifdef SLANG
 
-struct Pixel {
-    float4 value;
-};
+// struct Pixel {
+//     float4 value;
+// };
 
-[[vk::binding(BINDING_BUFFER, 0)]]
-RWStructuredBuffer<Pixel> OutImageBuffers[]: register(uBINDING_BUFFER);
-[[vk::binding(BINDING_BUFFER, 0)]]
-RWStructuredBuffer<float> WeightsBuffers[]: register(tBINDING_BUFFER);
-[[vk::binding(BINDING_STORAGE_IMAGE, 0)]]
-RWTexture2D<float4> images[]: register(uBINDING_STORAGE_IMAGE);
+[[vk::binding(BINDING_BUFFER, 0)]] RWStructuredBuffer<float4> float4Buffers[];
+[[vk::binding(BINDING_BUFFER, 0)]] RWStructuredBuffer<float> floatBuffers[];
+[[vk::binding(BINDING_STORAGE_IMAGE, 0)]] RWTexture2D<float4> images[];
 
-#define w_b WeightsBuffers[ctx.weightsRID]
-#define outputImage OutImageBuffers[ctx.outputImageRID]
+#define w_b floatBuffers[ctx.weightsRID]
+#define outputImage float4Buffers[ctx.outputImageRID]
 
 #endif
 
