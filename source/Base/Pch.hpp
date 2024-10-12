@@ -11,3 +11,6 @@
 
 #include "Log.hpp"
 #include "Base.h"
+
+#define BIN_PATH "bin"
+#define IMG_PATH "img"

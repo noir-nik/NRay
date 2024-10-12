@@ -14,7 +14,7 @@ void Test(TestName testName) {
 	switch (testName)
 	{
 	case NeuralSdf: NeuralSdfTest(); break;
-	case Slang: ImageOptimizationTest(); break;
+	case ImageOptimization: ImageOptimizationTest(); break;
 	case Feature: FeatureTest(); break;
 	default:
 		break;
@@ -47,8 +47,8 @@ static void ImageOptimizationTest() {
 static void FeatureTest() {
 	FeatureTestApplication app;
 	FeatureTestInfo FeatureTestInfo = {
-		.width = 512,
-		.height = 512,
+		.width = 64,
+		.height = 64,
 	};
 	app.run(&FeatureTestInfo);
 }

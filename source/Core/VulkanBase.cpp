@@ -597,7 +597,7 @@ std::vector<char> Context::CompileShader(const std::filesystem::path& path, cons
 	char outpath[256];
 	std::string cwd = std::filesystem::current_path().string();
 	sprintf(inpath, "%s", path.string().c_str());
-	sprintf(outpath, "bin/%s.spv", path.filename().string().c_str()); //TODO: add hash (time) to spv filename
+	sprintf(outpath, BIN_PATH"/%s.spv", path.filename().string().c_str()); //TODO: add hash (time) to spv filename
 	if (path.extension() == ".slang"){
 		sprintf(compile_string, "%s %s -o %s -entry %s -Wno-39001 -Isource/Shaders", SLANGC, inpath, outpath, entryPoint);
 	} else{

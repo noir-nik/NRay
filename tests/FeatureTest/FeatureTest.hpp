@@ -35,5 +35,5 @@ struct FeatureTestConstants {
 	int gradRID;
 	float learningRate;
 	int numIterations;
-	int pad[1];
+	int outputImageRID;
 };

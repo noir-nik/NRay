@@ -5,14 +5,6 @@
 
 #define WORKGROUP_SIZE 16
 
-
-struct SlangTestConstants{
-	int width;
-	int height;
-	int outputImageRID;
-	int pad[1];
-};
-
 #ifdef GLSL
 
 #extension GL_ARB_separate_shader_objects : enable
@@ -26,29 +18,24 @@ struct Pixel{
 // layout(set = 0, binding = BINDING_TEXTURE) uniform sampler2D textures[];
 // layout(set = 0, binding = BINDING_TEXTURE) uniform samplerCube cubeTextures[];
 
-
 layout(set = 0, binding = BINDING_BUFFER) buffer WeightsBuffer {
     float data[];
-} WeightsBuffers[];
+} floatBuffers[];
 
 layout(set = 0, binding = BINDING_BUFFER) buffer OutImageBuffer {
     Pixel data[];
-} OutImageBuffers[];
+} float4Buffers[];
 
 layout(binding = BINDING_STORAGE_IMAGE) uniform image2D images[];
 
 // Neural SDF
-#define w_b WeightsBuffers[ctx.weightsRID].data
-#define outputImage OutImageBuffers[ctx.outputImageRID].data
+#define w_b floatBuffers[ctx.weightsRID].data
+#define outputImage float4Buffers[ctx.outputImageRID].data
 
 #endif
 
 
 #ifdef SLANG
-
-// struct Pixel {
-//     float4 value;
-// };
 
 [[vk::binding(BINDING_BUFFER, 0)]] RWStructuredBuffer<float4> float4Buffers[];
 [[vk::binding(BINDING_BUFFER, 0)]] RWStructuredBuffer<float> floatBuffers[];
