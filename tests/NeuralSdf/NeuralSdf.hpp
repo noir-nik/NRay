@@ -9,7 +9,6 @@ struct NeuralSdfInfo
 	std::string weightsPath;
 	int numLayers; // Number of hidden layers
 	int layerSize; // Size of a hidden layer
-	std::string outputPath;
 	int width;
 	int height;
 };

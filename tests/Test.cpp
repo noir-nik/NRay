@@ -29,7 +29,6 @@ static void neuralSdfTest() {
 		.weightsPath = "tests/NeuralSdf/sdf1_weights.bin",
 		.numLayers = 2,
 		.layerSize = 64,
-		.outputPath = "tests/NeuralSdf/output.bmp",
 		.width = 512,
 		.height = 512,
 	};

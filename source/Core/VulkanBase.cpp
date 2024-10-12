@@ -71,7 +71,11 @@ struct Context
 	// VkSampleCountFlagBits maxSamples = VK_SAMPLE_COUNT_1_BIT;
 	// VkSampleCountFlags sampleCounts;
 
-	VkPhysicalDeviceFeatures physicalFeatures{};
+	bool descriptorIndexingAvailable = false;
+	
+	VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddressFeatures;
+	VkPhysicalDeviceDescriptorIndexingFeatures indexingFeatures;
+	VkPhysicalDeviceFeatures2 physicalFeatures2{};
 	// VkSurfaceCapabilitiesKHR surfaceCapabilities{};
 	VkPhysicalDeviceProperties physicalProperties{};
 	
@@ -213,6 +217,10 @@ struct BufferResource : Resource {
 
 	virtual ~BufferResource() {
 		vmaDestroyBuffer(_ctx.vmaAllocator, buffer, allocation);
+		if (rid >= 0) {
+			_ctx.availableBufferRID.push_back(rid);
+			rid = -1;
+		}
 	}
 };
 
@@ -547,7 +555,8 @@ void CmdDispatch(const uvec3& groups) {
 
 std::vector<char> ReadBinaryFile(const std::string& path) {
 	std::ifstream file(path, std::ios::ate | std::ios::binary);
-	ASSERT(file.is_open(), "Failed to open file!");
+	// LOG_DEBUG("Reading binary file: " + path);
+	ASSERT(file.is_open(), "Failed to open file! " + path);
 	size_t fileSize = (size_t)file.tellg();
 	std::vector<char> buffer(fileSize);
 	file.seekg(0);
@@ -559,7 +568,8 @@ std::vector<char> ReadBinaryFile(const std::string& path) {
 void Context::LoadShaders(Pipeline& pipeline) {
     pipeline.stageBytes.clear();
     for (auto& stage : pipeline.stages) {
-		std::filesystem::path binPath = stage.path.string() + ".spv";
+		std::filesystem::path binPath = "bin/" + stage.path.filename().string() + ".spv";
+		// LOG_DEBUG("Loading shader: " + binPath.string());
 		std::filesystem::path& shaderPath = stage.path;
 		bool compilationRequired = SHADER_ALWAYS_COMPILE;
 		// check if already compiled to .spv
@@ -586,7 +596,7 @@ std::vector<char> Context::CompileShader(const std::filesystem::path& path, cons
     char outpath[256];
     std::string cwd = std::filesystem::current_path().string();
     sprintf(inpath, "%s", path.string().c_str());
-    sprintf(outpath, "%s.spv", path.filename().string().c_str());
+    sprintf(outpath, "bin/%s.spv", path.filename().string().c_str()); //TODO: add hash (time) to spv filename
 	if (path.extension() == ".slang"){
 		sprintf(compile_string, "%s %s -o %s -entry %s -Wno-39001 -Isource/Shaders", SLANGC, inpath, outpath, entryPoint);
 	} else{
@@ -594,7 +604,7 @@ std::vector<char> Context::CompileShader(const std::filesystem::path& path, cons
 	}
 
     DEBUG_TRACE("[ShaderCompiler] Command: {}", compile_string);
-    DEBUG_TRACE("[ShaderCompiler] Output:");
+    DEBUG_TRACE("[ShaderCompiler] Output: {}", outpath);
     while(system(compile_string)) {
         LOG_WARN("[ShaderCompiler] Error! Press something to Compile Again");
         std::cin.get();
@@ -1143,15 +1153,19 @@ void Context::CreatePhysicalDevice() {
 		queues[Queue::Compute].family = computeFamily == -1 ? graphicsFamily : computeFamily;
 		queues[Queue::Transfer].family = transferFamily == -1 ? graphicsFamily : transferFamily;
 
-		// get max number of samples
-		// TODO: replace with vkGetPhysicalDeviceFeatures2
-		vkGetPhysicalDeviceFeatures(device, &physicalFeatures);
+		bufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
+		indexingFeatures.sType	= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT;
+		indexingFeatures.pNext = &bufferDeviceAddressFeatures;
+		physicalFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+		physicalFeatures2.pNext = &indexingFeatures;	
+		vkGetPhysicalDeviceFeatures2(device, &physicalFeatures2);
 		vkGetPhysicalDeviceProperties(device, &physicalProperties);
 		vkGetPhysicalDeviceMemoryProperties(device, &memoryProperties);
 
 		// VkSampleCountFlags counts = physicalProperties.limits.framebufferColorSampleCounts;
 		// counts &= physicalProperties.limits.framebufferDepthSampleCounts;
 
+		// get max number of samples
 		// maxSamples = VK_SAMPLE_COUNT_1_BIT;
 		// if (counts & VK_SAMPLE_COUNT_64_BIT) { maxSamples = VK_SAMPLE_COUNT_64_BIT; }
 		// else if (counts & VK_SAMPLE_COUNT_32_BIT) { maxSamples = VK_SAMPLE_COUNT_32_BIT; }
@@ -1201,8 +1215,8 @@ void Context::CreateDevice() {
 		queueCreateInfos.push_back(createInfo);
 	}
 
-	auto supportedFeatures = physicalFeatures;
-
+	auto supportedFeatures = physicalFeatures2.features;
+	
 	// logical device features
 	VkPhysicalDeviceFeatures2 features2 = {};
 	features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
@@ -1231,28 +1245,27 @@ void Context::CreateDevice() {
 		}
 	}
 
-	// add to member and as pNext of physicalFeatures
-	// to check with vkGetPhysicalDeviceFeatures2
+	// ask for features if available
 	// ref: https://dev.to/gasim/implementing-bindless-design-in-vulkan-34no
 	VkPhysicalDeviceDescriptorIndexingFeatures descriptorIndexingFeatures{};
 	descriptorIndexingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES;
-	descriptorIndexingFeatures.runtimeDescriptorArray = true;
-	descriptorIndexingFeatures.descriptorBindingPartiallyBound = true;
-	descriptorIndexingFeatures.shaderSampledImageArrayNonUniformIndexing = true;
-	descriptorIndexingFeatures.shaderUniformBufferArrayNonUniformIndexing = true;
-	descriptorIndexingFeatures.shaderStorageBufferArrayNonUniformIndexing = true;
-	descriptorIndexingFeatures.descriptorBindingSampledImageUpdateAfterBind = true;
-	descriptorIndexingFeatures.descriptorBindingStorageImageUpdateAfterBind = true;
+	descriptorIndexingFeatures.runtimeDescriptorArray = indexingFeatures.runtimeDescriptorArray;
+	descriptorIndexingFeatures.descriptorBindingPartiallyBound = indexingFeatures.descriptorBindingPartiallyBound;
+	descriptorIndexingFeatures.shaderSampledImageArrayNonUniformIndexing = indexingFeatures.shaderSampledImageArrayNonUniformIndexing;
+	descriptorIndexingFeatures.shaderUniformBufferArrayNonUniformIndexing = indexingFeatures.shaderUniformBufferArrayNonUniformIndexing;
+	descriptorIndexingFeatures.shaderStorageBufferArrayNonUniformIndexing = indexingFeatures.shaderStorageBufferArrayNonUniformIndexing;
+	descriptorIndexingFeatures.descriptorBindingSampledImageUpdateAfterBind = indexingFeatures.descriptorBindingSampledImageUpdateAfterBind;
+	descriptorIndexingFeatures.descriptorBindingStorageImageUpdateAfterBind = indexingFeatures.descriptorBindingStorageImageUpdateAfterBind;
 
-	VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddresFeatures{};
-	bufferDeviceAddresFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
-	bufferDeviceAddresFeatures.bufferDeviceAddress = VK_TRUE;
-	bufferDeviceAddresFeatures.pNext = &descriptorIndexingFeatures;
+	VkPhysicalDeviceBufferDeviceAddressFeatures addresFeatures{};
+	addresFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
+	addresFeatures.bufferDeviceAddress = bufferDeviceAddressFeatures.bufferDeviceAddress;
+	addresFeatures.pNext = &descriptorIndexingFeatures;
 
     // VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingPipelineFeatures{};
     // rayTracingPipelineFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
     // rayTracingPipelineFeatures.rayTracingPipeline = VK_TRUE;
-    // rayTracingPipelineFeatures.pNext = &bufferDeviceAddresFeatures;
+    // rayTracingPipelineFeatures.pNext = &addresFeatures;
 
     // VkPhysicalDeviceAccelerationStructureFeaturesKHR accelerationStructureFeatures{};
     // accelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
@@ -1265,7 +1278,7 @@ void Context::CreateDevice() {
     // rayQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
     // rayQueryFeatures.rayQuery = VK_TRUE;
     // // rayQueryFeatures.pNext = &accelerationStructureFeatures;
-    // rayQueryFeatures.pNext = &bufferDeviceAddresFeatures;
+    // rayQueryFeatures.pNext = &addresFeatures;
 
     // VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeatures{};
     // dynamicRenderingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
@@ -1275,7 +1288,7 @@ void Context::CreateDevice() {
 	VkPhysicalDeviceSynchronization2FeaturesKHR sync2Features{};
 	sync2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR;
 	sync2Features.synchronization2 = VK_TRUE;
-    sync2Features.pNext = &bufferDeviceAddresFeatures;
+    sync2Features.pNext = &addresFeatures;
 
     // VkPhysicalDeviceShaderAtomicFloatFeaturesEXT atomicFeatures{};
     // atomicFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT;

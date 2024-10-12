@@ -11,13 +11,15 @@
 using Pixel = vec4;
 namespace{
 struct Context {
-	vkw::Pipeline forwardPipeline;
+	vkw::Pipeline glslPipeline;
+	vkw::Pipeline slangPipeline;
 
 	std::unordered_map<std::string, int> shaderVersions;
 	vkw::Buffer weightsGPU;
 	vkw::Buffer outputImage;
 
-	vkw::Buffer bufferCPU;
+	vkw::Buffer bufferCPUglsl;
+	vkw::Buffer bufferCPUslang;
 
 	int width, height;
 	int numLayers, layerSize;
@@ -49,14 +51,24 @@ void CreatePipeline(vkw::Pipeline& pipeline, const vkw::PipelineDesc& desc) {
 }
 
 void CreateShaders() {
-	CreatePipeline(ctx.forwardPipeline, {
+	CreatePipeline(ctx.glslPipeline, {
+		.point = vkw::PipelinePoint::Compute,
+		.stages = {
+			// {.stage = vkw::ShaderStage::Compute, .path = "clearColor.slang"},
+			{.stage = vkw::ShaderStage::Compute, .path = "tests/NeuralSdf/neuralSDF.comp"},
+		},
+		.name = "Neural Sdf Glsl",
+	});
+
+	CreatePipeline(ctx.slangPipeline, {
 		.point = vkw::PipelinePoint::Compute,
 		.stages = {
 			// {.stage = vkw::ShaderStage::Compute, .path = "clearColor.slang"},
 			{.stage = vkw::ShaderStage::Compute, .path = "tests/NeuralSdf/neuralSDF.slang"},
 		},
-		.name = "Neural Sdf Forward",
+		.name = "Neural Sdf Slang",
 	});
+		
 }
 
 void CreateImages(uint32_t width, uint32_t height) {
@@ -71,7 +83,8 @@ void CreateImages(uint32_t width, uint32_t height) {
 	// 	.name = "imageGPU"
 	// });
 
-	ctx.bufferCPU = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::TransferDst, vkw::Memory::CPU, "bufferCPU");
+	ctx.bufferCPUglsl = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst, vkw::Memory::CPU, "bufferCPUglsl");
+	ctx.bufferCPUslang = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst, vkw::Memory::CPU, "bufferCPUslang");
 }
 
 
@@ -120,11 +133,6 @@ void NeuralSdfApplication::Create() {
 
 void NeuralSdfApplication::Compute() {
 	Timer timer;
-	vkw::BeginCommandBuffer(vkw::Queue::Compute);
-	vkw::CmdCopy(ctx.weightsGPU, weights.data(), ctx.num_parameters * sizeof(float));
-
-	vkw::CmdBindPipeline(ctx.forwardPipeline);
-
 	NeuralSdfConstants constants{};
 	constants.width = ctx.width;
 	constants.height = ctx.height;
@@ -133,17 +141,30 @@ void NeuralSdfApplication::Compute() {
 	constants.weightsRID = ctx.weightsGPU.RID();
 	constants.outputImageRID = ctx.outputImage.RID();
 
+	vkw::BeginCommandBuffer(vkw::Queue::Compute);
+	vkw::CmdCopy(ctx.weightsGPU, weights.data(), ctx.num_parameters * sizeof(float));
+	// Glsl shader
+	vkw::CmdBindPipeline(ctx.glslPipeline);
+	constants.outputImageRID = ctx.bufferCPUglsl.RID();
 	vkw::CmdPushConstants(&constants, sizeof(constants));
-
 	vkw::CmdDispatch({(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
 	vkw::CmdBarrier();
-	vkw::CmdCopy(ctx.bufferCPU, ctx.outputImage, ctx.width * ctx.height * sizeof(Pixel));
+	// vkw::CmdCopy(ctx.bufferCPUglsl, ctx.outputImage, ctx.width * ctx.height * sizeof(Pixel));
+	// vkw::CmdBarrier();
+	// Slang shader
+	vkw::CmdBindPipeline(ctx.slangPipeline);
+	constants.outputImageRID = ctx.bufferCPUslang.RID();
+	vkw::CmdPushConstants(&constants, sizeof(constants));
+	vkw::CmdDispatch({(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
+	// vkw::CmdBarrier();
+	// vkw::CmdCopy(ctx.bufferCPUslang, ctx.outputImage, ctx.width * ctx.height * sizeof(Pixel));
 	timer.Start();
 	vkw::EndCommandBuffer();
 	vkw::WaitQueue(vkw::Queue::Compute);
 	printf("Compute time: %fs\n", timer.Elapsed());
 	timer.Start();
-	saveBuffer("output.bmp", ctx.bufferCPU, ctx.width, ctx.height);
+	saveBuffer("neuralSdfglsl.bmp", ctx.bufferCPUglsl, ctx.width, ctx.height);
+	saveBuffer("neuralSdslang.bmp", ctx.bufferCPUslang, ctx.width, ctx.height);
 	printf("Save time: %fs\n", timer.Elapsed());
 }
 

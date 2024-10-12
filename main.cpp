@@ -15,6 +15,7 @@
 int main(int argc, char* argv[])
 {
 	Logger::Init();
+	Test::Test(Test::NeuralSdf);
 	Test::Test(Test::Slang);
 	return 0;
 }
