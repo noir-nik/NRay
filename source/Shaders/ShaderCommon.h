@@ -24,19 +24,6 @@ struct SlangTestConstants{
 	int pad[1];
 };
 
-struct ImageOptConstants {
-	int width;
-	int height;
-	int imageOptRID;
-	int imageGTRID;
-
-	int gradRID;
-	float learningRate;
-	int pad[2];
-};
-
-
-
 #ifdef GLSL
 
 #extension GL_ARB_separate_shader_objects : enable
