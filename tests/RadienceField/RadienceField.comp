@@ -5,6 +5,12 @@
 
 layout (local_size_x = WORKGROUP_SIZE, local_size_y = WORKGROUP_SIZE, local_size_z = 1 ) in;
 
+layout(set = 0, binding = BINDING_BUFFER) buffer CellsBuffer {
+    Cell data[];
+} CellBuffers[];
+
+#define cells CellBuffers[ctx.gridRID].data
+
 layout(push_constant) uniform Constants {
     RadienceFieldConstants ctx;
 };

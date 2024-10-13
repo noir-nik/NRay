@@ -30,11 +30,11 @@ struct Pixel{
 // layout(set = 0, binding = BINDING_TEXTURE) uniform sampler2D textures[];
 // layout(set = 0, binding = BINDING_TEXTURE) uniform samplerCube cubeTextures[];
 
-layout(set = 0, binding = BINDING_BUFFER) buffer WeightsBuffer {
+layout(set = 0, binding = BINDING_BUFFER) buffer floatBuffer {
     float data[];
 } floatBuffers[];
 
-layout(set = 0, binding = BINDING_BUFFER) buffer OutImageBuffer {
+layout(set = 0, binding = BINDING_BUFFER) buffer float4Buffer {
     vec4 data[];
 } float4Buffers[];
 
@@ -49,8 +49,8 @@ layout(binding = BINDING_STORAGE_IMAGE) uniform image2D images[];
 
 #ifdef SLANG
 
-[[vk::binding(BINDING_BUFFER, 0)]] RWStructuredBuffer<float4> float4Buffers[];
 [[vk::binding(BINDING_BUFFER, 0)]] RWStructuredBuffer<float> floatBuffers[];
+[[vk::binding(BINDING_BUFFER, 0)]] RWStructuredBuffer<float4> float4Buffers[];
 [[vk::binding(BINDING_STORAGE_IMAGE, 0)]] RWTexture2D<float4> images[];
 
 #define w_b floatBuffers[ctx.weightsRID]

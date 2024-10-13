@@ -5,6 +5,9 @@
 #include <vector>
 
 #include "Lmath.hpp"
+using float3 = Lmath::float3;
+using float4x4 = Lmath::float4x4;
+
 
 struct RadienceFieldInfo
 {
@@ -28,14 +31,14 @@ private:
 };
 #endif
 
-const int SH_WIDTH = 9;
+#define _SH_WIDTH 9
 
 struct Cell
 {
 	float density;
-	float sh_r[SH_WIDTH];
-	float sh_g[SH_WIDTH];
-	float sh_b[SH_WIDTH];
+	float sh_r[_SH_WIDTH];
+	float sh_g[_SH_WIDTH];
+	float sh_b[_SH_WIDTH];
 };
 
 struct RadienceFieldConstants {
@@ -55,18 +58,3 @@ struct RadienceFieldConstants {
 	float4x4 worldViewInv;
 	float4x4 worldViewProjInv;
 };
-
-#ifdef GLSL
-
-layout(set = 0, binding = BINDING_BUFFER) buffer CellsBuffer {
-    Cell data[];
-} CellBuffers[];
-
-
-#endif
-
-#ifndef ENGINE
-
-#define cells CellBuffers[ctx.gridRID].data
-
-#endif
