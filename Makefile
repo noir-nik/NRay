@@ -1,4 +1,5 @@
-CC := g++
+# CC := g++
+CC := ccache g++
 TARGET := app
 
 OPT_LEVEL := 0
@@ -10,14 +11,14 @@ CXXFLAGS := -MMD -MP $(INCLUDES) -O$(OPT_LEVEL) -DENGINE
 LDFLAGS := -lspdlog -O$(OPT_LEVEL)
 
 ifeq ($(OS),Windows_NT)
-	LDFLAGS := $(LDFLAGS) -lvulkan-1
+	LDFLAGS := $(LDFLAGS) -lvulkan-1 -lglfw3 -lgdi32
 	OBJ_DIR := build
 	BUILD_DIR := build
 	MKDIR := cmd /c if not exist $(BUILD_DIR) mkdir
 	CLEAN_BUILD := cmd /c del /Q $(BUILD_DIR)
 	CLEAN_OBJ := cmd /c del /Q $(OBJ_DIR)
 else
-	LDFLAGS := $(LDFLAGS) -lvulkan -lfmt
+	LDFLAGS := $(LDFLAGS) -lvulkan -lfmt -lglfw -lGL -lm
 	OBJ_DIR := build-linux
 	BUILD_DIR := build-linux
 	MKDIR:= mkdir -p
@@ -37,17 +38,24 @@ TST_IMAGEOPT := tests/ImageOptimization
 TST_SLANG := tests/SlangTest
 TST_FEATURE := tests/FeatureTest
 TST_RADIENCE := tests/RadienceField
-
+# TST_ALL := $(TST_NEURALSFD) $(TST_IMAGEOPT) $(TST_SLANG) $(TST_FEATURE) $(TST_RADIENCE)
+tst_dirs := $(wildcard tests/*)
+files := $(foreach dir,$(tst_dirs),$(wildcard $(dir)/*.cpp))
+# TST_CPP := $(filter %.cpp, $(files) $(tst_dirs))
+# TST_CPP_RAW := $(notdir $(TST_CPP))
+TST_CPP_RAW := $(notdir $(files))
 OBJS := \
 	$(patsubst $(SRC_MAIN)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(SRC_MAIN)/*.cpp)) \
 	$(patsubst $(SRC_CORE)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(SRC_CORE)/*.cpp)) \
 	$(patsubst $(SRC_BASE)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(SRC_BASE)/*.cpp)) \
 	$(patsubst $(SRC_TEST)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(SRC_TEST)/*.cpp)) \
-	$(patsubst $(TST_NEURALSFD)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(TST_NEURALSFD)/*.cpp)) \
-	$(patsubst $(TST_SLANG)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(TST_SLANG)/*.cpp)) \
-	$(patsubst $(TST_IMAGEOPT)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(TST_IMAGEOPT)/*.cpp)) \
-	$(patsubst $(TST_FEATURE)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(TST_FEATURE)/*.cpp)) \
-	$(patsubst $(TST_RADIENCE)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(TST_RADIENCE)/*.cpp))
+	$(patsubst %.cpp, $(OBJ_DIR)/%.o, $(TST_CPP_RAW)) \
+
+# $(patsubst $(TST_NEURALSFD)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(TST_NEURALSFD)/*.cpp)) \
+# $(patsubst $(TST_SLANG)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(TST_SLANG)/*.cpp)) \
+# $(patsubst $(TST_IMAGEOPT)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(TST_IMAGEOPT)/*.cpp)) \
+# $(patsubst $(TST_FEATURE)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(TST_FEATURE)/*.cpp)) \
+# $(patsubst $(TST_RADIENCE)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(TST_RADIENCE)/*.cpp)) \
 
 DEPS = $(OBJS:.o=.d)
 
@@ -106,7 +114,7 @@ run:
 
 # VLGRND_OUTPUT := --log-file="mem"
 VLGRND_OUTPUT := 
-VLGRND_FULL := --leak-check=full --show-leak-kinds=all
+# VLGRND_FULL := --leak-check=full --show-leak-kinds=all
 VLGRND_FULL :=
 
 runv:

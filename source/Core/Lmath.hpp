@@ -221,6 +221,8 @@ typedef struct float2
 	};
 } vec2;
 
+static inline float2 operator+(const float2 a, const float2 b) { return float2{a.x + b.x, a.y + b.y}; }
+static inline float2 operator-(const float2 a, const float2 b) { return float2{a.x - b.x, a.y - b.y}; }
 
 typedef struct uchar4
 {
