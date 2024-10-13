@@ -1,9 +1,9 @@
 #include "Test.hpp"
 
 #include "NeuralSdf/NeuralSdf.hpp"
-// #include "SlangTest/SlangTest.hpp"
 #include "ImageOptimization/ImageOptimization.hpp"
 #include "FeatureTest/FeatureTest.hpp"
+#include "RadienceField/RadienceField.hpp"
 
 namespace Test {
 static void NeuralSdfTest();
@@ -51,6 +51,17 @@ static void FeatureTest() {
 		.height = 64,
 	};
 	app.run(&FeatureTestInfo);
+}
+
+static void RadienceFieldTest() {
+	RadienceFieldApplication app;
+	RadienceFieldInfo RadienceFieldInfo = {
+		.width = 256,
+		.height = 256,
+		.gridPath = "bin/model.dat",
+		.gridSize = 128,
+	};
+	app.run(&RadienceFieldInfo);
 }
 
 

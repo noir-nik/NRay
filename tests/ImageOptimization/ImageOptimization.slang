@@ -19,15 +19,23 @@ float4 d_mse(const float4 param, const float4 gt) {
 // }
 
 [BackwardDifferentiable]
-void msePerPixel(const float4 a, no_diff float4 b, out float res) {
-    res = ((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y) + (a.z - b.z) * (a.z - b.z));
+float msePerPixel(const float4 a, no_diff float4 b) {
+    float res = ((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y) + (a.z - b.z) * (a.z - b.z));
+    return res;
 }
+
+// void with out float res
+// [BackwardDifferentiable]
+// void msePerPixel(const float4 a, no_diff float4 b, out float res) {
+//     res = ((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y) + (a.z - b.z) * (a.z - b.z));
+// }
 
 [BackwardDifferentiable]
 void msePerPixelAdd(const float4 a, no_diff float4 b, out float res) {
     res += ((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y) + (a.z - b.z) * (a.z - b.z));
 }
 
+// ? How to use this?
 [BackwardDifferentiable]
 void mse(no_diff int width, no_diff int height, out float res) {
     float sum = 0.0;
@@ -76,4 +84,4 @@ void main(uint3 tid: SV_DispatchThreadID) {
 	}
 }
 
-// slangc.exe .\tests\ImageOptimization\ImageOptimization.slang -entry main -o ImgOpt.glsl -Wno-39001 -line-directive-mode none
+// slangc.exe .\tests\ImageOptimization\ImageOptimization.slang -entry main -Wno-39001 -line-directive-mode none -o ImgOptMse.glsl

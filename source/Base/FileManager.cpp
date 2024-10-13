@@ -16,18 +16,16 @@ std::vector<char> FileManager::ReadRawBytes(const std::string& filename) {
 	return buffer;
 }
 
-std::vector<float> FileManager::ReadFloats(const std::string& filename) {
+void FileManager::ReadFloats(const std::string& filename, std::vector<float> &buffer) {
 	std::ifstream file(filename, std::ios::ate | std::ios::binary);
 	if (!file.is_open()) {
 		LOG_CRITICAL("Failed to open file: '{}'", filename);
 	}
 	size_t fileSize = (size_t)file.tellg();
-	std::vector<float> buffer(fileSize / sizeof(float));
+	buffer.resize(fileSize / sizeof(float));
 	file.seekg(0);
 	file.read((char*)buffer.data(), fileSize);
 	file.close();
-
-	return buffer;
 }
 
 /// @return Last write time of a file in seconds since epoch

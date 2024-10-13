@@ -1,0 +1,21 @@
+#version 450
+#extension GL_GOOGLE_include_directive : enable
+#include "ShaderCommon.h"
+#include "RadienceField.hpp"
+
+layout (local_size_x = WORKGROUP_SIZE, local_size_y = WORKGROUP_SIZE, local_size_z = 1 ) in;
+
+layout(push_constant) uniform Constants {
+    RadienceFieldConstants ctx;
+};
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+void main()
+{
+	if(gl_GlobalInvocationID.x < ctx.width && gl_GlobalInvocationID.y < ctx.height)
+    {
+		uint index = gl_GlobalInvocationID.y * ctx.width + gl_GlobalInvocationID.x;
+
+	}
+}
+
