@@ -21,7 +21,7 @@ vec4 d_mse(const vec4 param, const vec4 gt) {
     return vec4((param.x - gt.x), (param.y - gt.y), (param.z - gt.z), 0.0f) ;
 }
 
-layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+layout(local_size_x = WORKGROUP_SIZE, local_size_y = WORKGROUP_SIZE, local_size_z = 1) in;
 void main()
 {
 	if(gl_GlobalInvocationID.x < ctx.width && gl_GlobalInvocationID.y < ctx.height)

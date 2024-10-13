@@ -10,6 +10,10 @@
 
 namespace vkw {
 
+using float4 = Lmath::float4;
+using uvec3 = Lmath::uvec3;
+using ivec2 = Lmath::ivec2;
+
 using Flags = uint32_t;
 
 enum Memory {

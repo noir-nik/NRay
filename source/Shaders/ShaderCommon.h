@@ -1,3 +1,11 @@
+#ifdef ENGINE
+#pragma once
+using vec4 = Lmath::vec4;
+
+using float3 = Lmath::float3;
+using float4x4 = Lmath::float4x4;
+#endif
+
 #define BINDING_TEXTURE 0 // Sampled image
 #define BINDING_BUFFER 1
 #define BINDING_TLAS 2
@@ -6,6 +14,8 @@
 #define WORKGROUP_SIZE 16
 
 #ifdef GLSL
+
+#define float4x4 mat4
 
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_EXT_nonuniform_qualifier : enable
@@ -43,12 +53,5 @@ layout(binding = BINDING_STORAGE_IMAGE) uniform image2D images[];
 
 #define w_b floatBuffers[ctx.weightsRID]
 #define outputImage float4Buffers[ctx.outputImageRID]
-
-#endif
-
-
-#ifndef ENGINE
-
-
 
 #endif

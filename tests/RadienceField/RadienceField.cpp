@@ -8,6 +8,9 @@
 #include "../TestCommon.hpp"
 #include "Timer.hpp"
 
+#include "Lmath.hpp"
+using namespace Lmath;
+
 using Pixel = vec4;
 namespace {
 struct Context {
@@ -17,8 +20,11 @@ struct Context {
 	const char *gridPath;
 	int gridSize;
 	int numCells;
-
 	std::vector<Cell> grid;
+	
+	float4x4 viewMat;
+	float4x4 worldViewInv;
+	float4x4 worldViewProjInv;
 
 	vkw::Buffer BufferGrid;
 	vkw::Buffer outputImage;
@@ -32,15 +38,15 @@ void Context::CreateShaders() {
 	pipeline = vkw::CreatePipeline({
 		.point = vkw::PipelinePoint::Compute,
 		.stages = {
-			{.stage = vkw::ShaderStage::Compute, .path = "tests/RadienceField/RadienceField.slang"},
-			// {.stage = vkw::ShaderStage::Compute, .path = "tests/RadienceField/RadienceField.comp"},
+			// {.stage = vkw::ShaderStage::Compute, .path = "tests/RadienceField/RadienceField.slang"},
+			{.stage = vkw::ShaderStage::Compute, .path = "tests/RadienceField/RadienceField.comp"},
 		},
 		.name = "Slang Test",
 	});
 }
 
 void Context::CreateImages(uint32_t width, uint32_t height) {
-	ctx.BufferGrid = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst, vkw::Memory::GPU, "Grid");
+	ctx.BufferGrid = vkw::CreateBuffer(ctx.numCells * sizeof(Cell), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst, vkw::Memory::GPU, "Grid");
 	ctx.outputImage = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage, vkw::Memory::CPU, "Output Image");
 }
 
@@ -66,6 +72,12 @@ void RadienceFieldApplication::Setup() {
 	fin.read((char*)ctx.grid.data(), ctx.numCells * sizeof(Cell));
 	ASSERT(!fin.fail(), "Failed to read grid file");
 	fin.close();
+
+	int k = 0;
+	float3 pos = float3(0.0, 0.0, 1.3);
+	ctx.viewMat = lookAt(pos, float3(0.0, 0.0, 0.0), float3(0.0, 1.0, 0.0)) * rotate4x4Y(-float(360.0 / 7 * k) * DEG_TO_RAD) * translate4x4(float3(-0.5, -0.5, -0.5));
+	ctx.worldViewInv = inverse4x4(ctx.viewMat);
+	ctx.worldViewProjInv = inverse4x4(perspectiveMatrix(45, 1, 0.1, 100));
 }
 
 void RadienceFieldApplication::Create() {
@@ -87,28 +99,25 @@ void RadienceFieldApplication::Compute() {
 	constants.gridRID = ctx.BufferGrid.RID();
 	constants.gridSize = ctx.gridSize;
 
+	constants.worldViewInv = ctx.worldViewInv;
+	constants.worldViewProjInv = ctx.worldViewProjInv;
+
 	vkw::BeginCommandBuffer(vkw::Queue::Compute);
 	// Prepare BufferGT and BufferOpt
-	vkw::CmdCopy(ctx.BufferGT, imageUV.data(), ctx.width * ctx.height * sizeof(Pixel));
-	vkw::CmdBarrier(ctx.imageCPU, vkw::Layout::General);
-	vkw::CmdClearColorImage(ctx.imageCPU, {0.0f, 0.0f, 0.5f, 0.0f});
-	vkw::CmdBarrier(ctx.imageCPU, vkw::Layout::TransferSrc);
-	vkw::CmdCopy(ctx.BufferOpt, ctx.imageCPU);
+	vkw::CmdCopy(ctx.BufferGrid, ctx.grid.data(), ctx.numCells * sizeof(Cell));
 	vkw::CmdBarrier();
 
 	vkw::CmdBindPipeline(ctx.pipeline);
 	vkw::CmdPushConstants(&constants, sizeof(constants));
 
 	vkw::CmdDispatch({(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
-	vkw::CmdBarrier();
-	vkw::CmdCopy(ctx.bufferCPU, ctx.BufferOpt, ctx.width * ctx.height * sizeof(Pixel));
 
 	timer.Start();
 	vkw::EndCommandBuffer();
 	vkw::WaitQueue(vkw::Queue::Compute);
 	printf("Compute time: %fs\n", timer.Elapsed());
 	timer.Start();
-	saveBuffer("imageOpt.bmp", &ctx.bufferCPU, ctx.width, ctx.height);
+	saveBuffer("RadienceField.bmp", &ctx.outputImage, ctx.width, ctx.height);
 	printf("Save time: %fs\n", timer.Elapsed());
 }
 

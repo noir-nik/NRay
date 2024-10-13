@@ -51,4 +51,7 @@ struct RadienceFieldConstants {
 
 	int gridSize;
 	int pad[3];
+
+	float4x4 worldViewInv;
+	float4x4 worldViewProjInv;
 };
