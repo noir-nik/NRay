@@ -8,6 +8,7 @@
 namespace Test {
 static void NeuralSdfTest();
 static void ImageOptimizationTest();
+static void RadienceFieldTest();
 static void FeatureTest();
 
 void Test(TestName testName) {
@@ -16,6 +17,7 @@ void Test(TestName testName) {
 	case NeuralSdf: NeuralSdfTest(); break;
 	case ImageOptimization: ImageOptimizationTest(); break;
 	case Feature: FeatureTest(); break;
+	case RadienceField: RadienceFieldTest(); break;
 	default:
 		break;
 	}

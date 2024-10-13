@@ -4,9 +4,9 @@
 #include "FileManager.hpp"
 #include "VulkanBase.hpp"
 
-using Pixel = vec4;
+using Pixel = Lmath::float4;
 
-void fillUV(float4* image, int width, int height){
+void fillUV(Lmath::float4* image, int width, int height){
 	for (auto i = 0; i < height; i++) {
 		for (auto j = 0; j < width; j++) {
 			int idx = i * width + j;

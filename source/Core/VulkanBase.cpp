@@ -104,7 +104,7 @@ struct Context
 	Queue currentQueue = Queue::Count;
 	std::shared_ptr<PipelineResource> currentPipeline;
 	// const uint32_t stagingBufferSize = 256 * 1024 * 1024;
-	const uint32_t stagingBufferSize = 32 * 1024 * 1024;
+	const uint32_t stagingBufferSize = 312 * 1024 * 1024;
 
 	VkPhysicalDeviceMemoryProperties memoryProperties;
 

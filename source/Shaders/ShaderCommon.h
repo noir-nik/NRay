@@ -3,6 +3,7 @@
 using vec4 = Lmath::vec4;
 
 using float3 = Lmath::float3;
+using float4 = Lmath::float4;
 using float4x4 = Lmath::float4x4;
 #endif
 
@@ -15,6 +16,7 @@ using float4x4 = Lmath::float4x4;
 
 #ifdef GLSL
 
+#define float3 vec3
 #define float4x4 mat4
 
 #extension GL_ARB_separate_shader_objects : enable

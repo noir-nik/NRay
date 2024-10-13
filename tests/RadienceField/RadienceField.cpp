@@ -8,7 +8,6 @@
 #include "../TestCommon.hpp"
 #include "Timer.hpp"
 
-#include "Lmath.hpp"
 using namespace Lmath;
 
 using Pixel = vec4;
@@ -98,6 +97,9 @@ void RadienceFieldApplication::Compute() {
 	constants.outputImageRID = ctx.outputImage.RID();
 	constants.gridRID = ctx.BufferGrid.RID();
 	constants.gridSize = ctx.gridSize;
+
+	constants.bBoxMin = {0.0, 0.0, 0.0};
+	constants.bBoxMax = {1.0, 1.0, 1.0};
 
 	constants.worldViewInv = ctx.worldViewInv;
 	constants.worldViewProjInv = ctx.worldViewProjInv;

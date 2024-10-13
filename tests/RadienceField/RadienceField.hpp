@@ -1,8 +1,10 @@
-#if (!defined SLANG) && (!defined GLSL)
+#if defined(ENGINE)
 #pragma once
 #include <string>
 #include <cstdint>
 #include <vector>
+
+#include "Lmath.hpp"
 
 struct RadienceFieldInfo
 {
@@ -26,8 +28,7 @@ private:
 };
 #endif
 
-
-const size_t SH_WIDTH = 9;
+const int SH_WIDTH = 9;
 
 struct Cell
 {
@@ -37,21 +38,35 @@ struct Cell
 	float sh_b[SH_WIDTH];
 };
 
-struct BoundingBox
-{
-	float3 min;
-	float3 max;
-};
-
 struct RadienceFieldConstants {
 	int width;
 	int height;
 	int outputImageRID;
 	int gridRID;
 
+	float3 bBoxMin;
 	int gridSize;
-	int pad[3];
+
+	float3 bBoxMax;
+	int pad1[1];
+
+	int pad[4];
 
 	float4x4 worldViewInv;
 	float4x4 worldViewProjInv;
 };
+
+#ifdef GLSL
+
+layout(set = 0, binding = BINDING_BUFFER) buffer CellsBuffer {
+    Cell data[];
+} CellBuffers[];
+
+
+#endif
+
+#ifndef ENGINE
+
+#define cells CellBuffers[ctx.gridRID].data
+
+#endif

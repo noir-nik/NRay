@@ -120,7 +120,7 @@ void NeuralSdfApplication::Setup() {
 	ctx.width = info->width; 
 	ctx.height = info->height;
 	// Read Weights
-	weights = FileManager::ReadFloats(info->weightsPath);
+	FileManager::ReadFloats(info->weightsPath, weights);
 	ASSERT(weights.size() == ctx.num_parameters, "Invalid number of weights, expected {0}, got {1}", ctx.num_parameters, weights.size());
 }
 
