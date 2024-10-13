@@ -36,9 +36,9 @@ static void NeuralSdfTest() {
 static void ImageOptimizationTest() {
 	ImageOptimizationApplication app;
 	ImageOptimizationInfo imageOptimizationInfo = {
-		.width = 512,
-		.height = 512,
-		.learningRate = 0.5f,
+		.width = 256,
+		.height = 256,
+		.learningRate = 0.2f,
 		.numIterations = 1,
 	};
 	app.run(&imageOptimizationInfo);

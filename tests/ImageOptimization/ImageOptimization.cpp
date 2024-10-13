@@ -35,6 +35,7 @@ void Context::CreateShaders() {
 		.point = vkw::PipelinePoint::Compute,
 		.stages = {
 			{.stage = vkw::ShaderStage::Compute, .path = "tests/ImageOptimization/ImageOptimization.slang"},
+			// {.stage = vkw::ShaderStage::Compute, .path = "tests/ImageOptimization/ImageOptimization.comp"},
 		},
 		.name = "Slang Test",
 	});

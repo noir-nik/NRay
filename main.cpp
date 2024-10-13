@@ -16,7 +16,7 @@ int main(int argc, char* argv[])
 {
 	Logger::Init();
 	// Test::Test(Test::NeuralSdf);
-	// Test::Test(Test::Slang);
-	Test::Test(Test::Feature);
+	Test::Test(Test::ImageOptimization);
+	// Test::Test(Test::Feature);
 	return 0;
 }

@@ -23,7 +23,7 @@ layout(set = 0, binding = BINDING_BUFFER) buffer WeightsBuffer {
 } floatBuffers[];
 
 layout(set = 0, binding = BINDING_BUFFER) buffer OutImageBuffer {
-    Pixel data[];
+    vec4 data[];
 } float4Buffers[];
 
 layout(binding = BINDING_STORAGE_IMAGE) uniform image2D images[];
