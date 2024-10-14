@@ -873,7 +873,6 @@ void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset, uint32
 	_ctx.CmdCopy(dst, src, size, dstOffset, srcOffset);
 }
 
-
 void CmdCopy(Image& dst, void* data, uint32_t size) {
 	_ctx.CmdCopy(dst, data, size); 
 }
@@ -881,7 +880,6 @@ void CmdCopy(Image& dst, void* data, uint32_t size) {
 void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset) {
 	_ctx.CmdCopy(dst, src, srcOffset); 
 }
-
 
 void CmdCopy(Buffer& dst, Image& src, uint32_t size, uint32_t srcOffset) {
 	_ctx.CmdCopy(dst, src, srcOffset);
@@ -891,7 +889,6 @@ void CmdCopy(Buffer &dst, Image &src, uint32_t size, uint32_t dstOffset, ivec2 i
 	_ctx.CmdCopy(dst, src, size, dstOffset, imageOffset, imageExtent);
 }
 
-
 void CmdBarrier(Image& img, Layout::ImageLayout layout) {
 	_ctx.CmdBarrier(img, layout);
 }
@@ -900,10 +897,120 @@ void CmdBarrier() {
 	_ctx.CmdBarrier();
 }
 
-
 void CmdClearColorImage(Image& image, float4 color){
 	_ctx.CmdClearColorImage(image, color);
 }
+
+void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach, uint32_t layerCount) {
+    auto& cmd = _ctx.GetCurrentCommandResources();
+
+    ivec2 offset(0, 0);
+    ivec2 extent(0, 0);
+    if (colorAttachs.size() > 0) {
+        extent.x = colorAttachs[0].width;
+        extent.y = colorAttachs[0].height;
+    } else if (depthAttach.resource) {
+        extent.x = depthAttach.width;
+        extent.y = depthAttach.height;
+    }
+
+    VkRenderingInfoKHR renderingInfo{};
+    renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+    renderingInfo.viewMask = 0;
+    renderingInfo.layerCount = layerCount;
+    renderingInfo.renderArea.extent = { uint32_t(extent.x), uint32_t(extent.y) };
+    renderingInfo.renderArea.offset = { offset.x, offset.y };
+    renderingInfo.flags = 0;
+
+    std::vector<VkRenderingAttachmentInfoKHR> colorAttachInfos(colorAttachs.size());
+    VkRenderingAttachmentInfoKHR depthAttachInfo;
+    for (int i = 0; i < colorAttachs.size(); i++) {
+        colorAttachInfos[i] = {};
+        colorAttachInfos[i].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+        colorAttachInfos[i].imageView = colorAttachs[i].resource->view;
+        colorAttachInfos[i].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        colorAttachInfos[i].resolveMode = VK_RESOLVE_MODE_NONE;
+        colorAttachInfos[i].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        colorAttachInfos[i].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        colorAttachInfos[i].clearValue.color = { 0, 0, 0, 0 };
+    }
+
+    renderingInfo.colorAttachmentCount = colorAttachInfos.size();
+    renderingInfo.pColorAttachments = colorAttachInfos.data();
+    renderingInfo.pDepthAttachment = nullptr;
+    renderingInfo.pStencilAttachment = nullptr;
+
+    if (depthAttach.resource) {
+        depthAttachInfo = {};
+        depthAttachInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+        depthAttachInfo.imageView = depthAttach.resource->view;
+        depthAttachInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        depthAttachInfo.resolveMode = VK_RESOLVE_MODE_NONE;
+        depthAttachInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        depthAttachInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        depthAttachInfo.clearValue.depthStencil = { 1.0f, 0 };
+        renderingInfo.pDepthAttachment = &depthAttachInfo;
+    }
+
+    VkViewport viewport = {};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = static_cast<float>(extent.x);
+    viewport.height = static_cast<float>(extent.y);
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    VkRect2D scissor = {};
+    scissor.offset = { offset.x, offset.y };
+    scissor.extent.width = extent.x;
+    scissor.extent.height = extent.y;
+    vkCmdSetViewport(cmd.buffer, 0, 1, &viewport);
+    vkCmdSetScissor(cmd.buffer, 0, 1, &scissor);
+
+    vkCmdBeginRendering(cmd.buffer, &renderingInfo);
+}
+
+void CmdEndRendering() {
+    auto& cmd = _ctx.GetCurrentCommandResources();
+    vkCmdEndRendering(cmd.buffer);
+}
+
+void CmdBeginPresent() {
+    vkw::AcquireImage();
+    vkw::CmdBarrier(_ctx.GetCurrentSwapChainImage(), vkw::Layout::ColorAttachment);
+    vkw::CmdBeginRendering({ _ctx.GetCurrentSwapChainImage() }, {});
+}
+
+void CmdEndPresent() {
+    vkw::CmdEndRendering();
+    vkw::CmdBarrier(_ctx.GetCurrentSwapChainImage(), vkw::Layout::Present);
+}
+
+void CmdDrawMesh(Buffer& vertexBuffer, Buffer& indexBuffer, uint32_t indexCount) {
+    auto& cmd = _ctx.GetCurrentCommandResources();
+    VkDeviceSize offsets[] = { 0 };
+    vkCmdBindVertexBuffers(cmd.buffer, 0, 1, &vertexBuffer.resource->buffer, offsets);
+    vkCmdBindIndexBuffer(cmd.buffer, indexBuffer.resource->buffer, 0, VK_INDEX_TYPE_UINT32);
+    vkCmdDrawIndexed(cmd.buffer, indexCount, 1, 0, 0, 0);
+}
+
+void CmdDrawLineStrip(const Buffer& pointsBuffer, uint32_t firstPoint, uint32_t pointCount, float thickness) {
+    auto& cmd = _ctx.GetCurrentCommandResources();
+    VkDeviceSize offsets[] = { 0 };
+    vkCmdSetLineWidth(cmd.buffer, thickness);
+    vkCmdBindVertexBuffers(cmd.buffer, 0, 1, &pointsBuffer.resource->buffer, offsets);
+    vkCmdDraw(cmd.buffer, pointCount, 1, firstPoint, 0);
+}
+
+// void CmdDrawPassThrough() {
+//     auto& cmd = _ctx.GetCurrentCommandResources();
+//     VkDeviceSize offsets[] = { 0 };
+//     vkCmdBindVertexBuffers(cmd.buffer, 0, 1, &_ctx.dummyVertexBuffer.resource->buffer, offsets);
+//     vkCmdDraw(cmd.buffer, 6, 1, 0, 0);
+// }
+
+// void CmdDrawImGui(ImDrawData* data) {
+//     ImGui_ImplVulkan_RenderDrawData(data, _ctx.GetCurrentCommandResources().buffer);
+// }
 
 
 // int CmdBeginTimeStamp(const std::string& name) {
@@ -1463,15 +1570,15 @@ void Context::CreateDevice() {
 	// // rayQueryFeatures.pNext = &accelerationStructureFeatures;
 	// rayQueryFeatures.pNext = &addresFeatures;
 
-	// VkPhysicalDeviceDynamicRenderingFeaturesKHR dynamicRenderingFeatures{};
-	// dynamicRenderingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
-	// dynamicRenderingFeatures.dynamicRendering = VK_TRUE;
-	// dynamicRenderingFeatures.pNext = &rayQueryFeatures;
+	VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures{};
+	dynamicRenderingFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR;
+	dynamicRenderingFeatures.dynamicRendering = VK_TRUE;
+	dynamicRenderingFeatures.pNext = &addresFeatures;
 
 	VkPhysicalDeviceSynchronization2FeaturesKHR sync2Features{};
 	sync2Features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR;
 	sync2Features.synchronization2 = VK_TRUE;
-	sync2Features.pNext = &addresFeatures;
+	sync2Features.pNext = &dynamicRenderingFeatures;
 
 	// VkPhysicalDeviceShaderAtomicFloatFeaturesEXT atomicFeatures{};
 	// atomicFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT;

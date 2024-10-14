@@ -30,6 +30,7 @@ struct Context {
 };
 static Context ctx;
 }
+
 void Context::CreateShaders() {
 	pipeline = vkw::CreatePipeline({
 		.point = vkw::PipelinePoint::Compute,
@@ -37,7 +38,7 @@ void Context::CreateShaders() {
 			{.stage = vkw::ShaderStage::Compute, .path = "tests/ImageOptimization/ImageOptimization.slang"},
 			// {.stage = vkw::ShaderStage::Compute, .path = "tests/ImageOptimization/ImageOptimization.comp"},
 		},
-		.name = "Slang Test",
+		.name = "Image Optimization Test",
 	});
 }
 
