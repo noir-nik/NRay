@@ -4,12 +4,14 @@
 #include "ImageOptimization/ImageOptimization.hpp"
 #include "FeatureTest/FeatureTest.hpp"
 #include "RadienceField/RadienceField.hpp"
+#include "HelloTriangle/HelloTriangle.hpp"
 
 namespace Test {
 static void NeuralSdfTest();
 static void ImageOptimizationTest();
 static void RadienceFieldTest();
 static void FeatureTest();
+static void HelloTriangleTest();
 
 void Test(TestName testName) {
 	switch (testName)
@@ -18,6 +20,7 @@ void Test(TestName testName) {
 	case ImageOptimization: ImageOptimizationTest(); break;
 	case Feature: FeatureTest(); break;
 	case RadienceField: RadienceFieldTest(); break;
+	case HelloTriangle: HelloTriangleTest(); break;
 	default:
 		break;
 	}
@@ -66,5 +69,13 @@ static void RadienceFieldTest() {
 	app.run(&RadienceFieldInfo);
 }
 
+static void HelloTriangleTest() {
+	HelloTriangleApplication app;
+	HelloTriangleInfo HelloTriangleInfo = {
+		.width = 256,
+		.height = 256,
+	};
+	app.run(&HelloTriangleInfo);
+}
 
 }

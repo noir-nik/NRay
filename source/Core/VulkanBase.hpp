@@ -8,6 +8,8 @@
 #include <vector>
 #include <filesystem>
 
+struct GLFWwindow;
+
 namespace vkw {
 
 using float4 = Lmath::float4;
@@ -241,7 +243,8 @@ void WaitIdle();
 // void BeginImGui();
 
 void Init();
-// void OnSurfaceUpdate(uint32_t width, uint32_t height);
+void Init(GLFWwindow* window, uint32_t width, uint32_t height);
+void OnSurfaceUpdate(uint32_t width, uint32_t height);
 void Destroy();
 
 // template<typename T>

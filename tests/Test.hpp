@@ -4,7 +4,8 @@ enum TestName {
 	NeuralSdf,
 	ImageOptimization,
 	Feature,
-	RadienceField
+	RadienceField,
+	HelloTriangle
 };
 
 void Test(TestName testName);
