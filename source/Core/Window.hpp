@@ -13,9 +13,9 @@ class Window {
 private:
     static inline GLFWwindow*   window             = nullptr;
     static inline GLFWmonitor** monitors           = nullptr;
-    static inline const char*   name               = "Luz Engine";
-    static inline int           width              = 1280;
-    static inline int           height             = 720;
+    static inline const char*   name               = "Engine";
+    static inline int           width              = 640;
+    static inline int           height             = 480;
     static inline int           posX               = 0;
     static inline int           posY               = 30;
     static inline int           monitorIndex       = 0;
@@ -38,7 +38,7 @@ private:
     static inline bool dirty     = true;
     static inline bool resizable = true;
     static inline bool decorated = true;
-    static inline bool maximized = true;
+    static inline bool maximized = false;
 
     static void ScrollCallback(GLFWwindow* window, double x, double y);
     static void FramebufferResizeCallback(GLFWwindow* window, int width, int height);

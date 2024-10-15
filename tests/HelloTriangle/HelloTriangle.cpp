@@ -26,6 +26,8 @@ struct Context {
 	vkw::Buffer outputImage;
 	vkw::Buffer vertexBuffer;
 
+	vkw::Image imageCPU;
+
 	void CreateImages(uint32_t width, uint32_t height);
 	void CreateShaders();
 };
@@ -44,25 +46,33 @@ const std::vector<Vertex> vertices = {
 };
 
 void Context::CreateShaders() {
-	pipeline = vkw::CreatePipeline({
-        .point = vkw::PipelinePoint::Graphics,
-        .stages = {
-            {.stage = vkw::ShaderStage::Vertex, .path = "tests/HelloTriangle/HelloTriangle.vert"},
-            {.stage = vkw::ShaderStage::Fragment, .path = "tests/HelloTriangle/HelloTriangle.frag"},
-        },
-        .name = "Opaque Pipeline",
-        // .vertexAttributes = {vkw::Format::RGB32_sfloat, vkw::Format::RGB32_sfloat, vkw::Format::RGBA32_sfloat, vkw::Format::RG32_sfloat},
-		// pos2 + color3
-        .vertexAttributes = {vkw::Format::RG32_sfloat, vkw::Format::RGB32_sfloat},
-        // .colorFormats = {ctx.albedo.format, ctx.normal.format, ctx.material.format, ctx.emission.format},
-        .useDepth = false,
-        // .depthFormat = {ctx.depth.format}
-    });
+	// pipeline = vkw::CreatePipeline({
+    //     .point = vkw::PipelinePoint::Graphics,
+    //     .stages = {
+    //         {.stage = vkw::ShaderStage::Vertex, .path = "tests/HelloTriangle/HelloTriangle.vert"},
+    //         {.stage = vkw::ShaderStage::Fragment, .path = "tests/HelloTriangle/HelloTriangle.frag"},
+    //     },
+    //     .name = "Opaque Pipeline",
+    //     // .vertexAttributes = {vkw::Format::RGB32_sfloat, vkw::Format::RGB32_sfloat, vkw::Format::RGBA32_sfloat, vkw::Format::RG32_sfloat},
+	// 	// pos2 + color3
+    //     .vertexAttributes = {vkw::Format::RG32_sfloat, vkw::Format::RGB32_sfloat},
+    //     // .colorFormats = {ctx.albedo.format, ctx.normal.format, ctx.material.format, ctx.emission.format},
+    //     .useDepth = false,
+    //     // .depthFormat = {ctx.depth.format}
+    // });
 }
 
 void Context::CreateImages(uint32_t width, uint32_t height) {
 	ctx.outputImage = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage, vkw::Memory::CPU, "Output Image");
 	ctx.vertexBuffer = vkw::CreateBuffer(vertices.size() * sizeof(Vertex), vkw::BufferUsage::Vertex, vkw::Memory::GPU, "Vertex Buffer");
+
+	ctx.imageCPU = vkw::CreateImage({
+		.width = width,
+		.height = height,
+		.format = vkw::Format::RGBA32_sfloat,
+		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::TransferSrc | vkw::ImageUsage::TransferDst,
+		.name = "Output Image",
+	});
 }
 
 void HelloTriangleApplication::run(HelloTriangleInfo* pHelloTriangleInfo) {
@@ -95,14 +105,13 @@ void HelloTriangleApplication::Draw() {
 
 	vkw::BeginCommandBuffer(vkw::Queue::Graphics);
 	// vkw::CmdBeginRendering(attachs, ctx.depth);
-	vkw::CmdBindPipeline(ctx.pipeline);
-	vkw::CmdPushConstants(&constants, sizeof(constants));
-
-	vkw::CmdDispatch({(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
-
+	// vkw::CmdBindPipeline(ctx.pipeline);
+	// vkw::CmdPushConstants(&constants, sizeof(constants));
+	vkw::CmdBarrier(ctx.imageCPU, vkw::Layout::General);
+	vkw::CmdClearColorImage(ctx.imageCPU, {0.7f, 0.0f, 0.4f, 1.0f});
 	timer.Start();
 	vkw::EndCommandBuffer();
-	vkw::WaitQueue(vkw::Queue::Compute);
+	vkw::WaitQueue(vkw::Queue::Graphics);
 	printf("Compute time: %fs\n", timer.Elapsed());
 	timer.Start();
 	saveBuffer("HelloTriangle.bmp", &ctx.outputImage, ctx.width, ctx.height);
@@ -112,4 +121,5 @@ void HelloTriangleApplication::Draw() {
 void HelloTriangleApplication::Finish() {
 	ctx = {};
 	vkw::Destroy();
+	Window::Destroy();
 }

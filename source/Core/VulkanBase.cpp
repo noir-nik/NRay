@@ -15,6 +15,8 @@
 static const char *VK_ERROR_STRING(VkResult result);
 namespace vkw {
 
+void AcquireImage();
+
 struct Context
 {	
 	void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset);
@@ -62,7 +64,7 @@ struct Context
 
 
 	std::vector<const char*> requiredExtensions = { // Physical Device Extensions
-		// VK_KHR_SWAPCHAIN_EXTENSION_NAME, 
+		VK_KHR_SWAPCHAIN_EXTENSION_NAME, 
 		// VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
 		// VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
 		// VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
@@ -318,7 +320,9 @@ void OnSurfaceUpdate(uint32_t width, uint32_t height) {
 void Destroy() {
 	// ImGui_ImplVulkan_Shutdown();
 	// ImGui_ImplGlfw_Shutdown();
-	// _ctx.DestroySwapChain();
+	if (_ctx.swapChain != VK_NULL_HANDLE) {
+		_ctx.DestroySwapChain();
+	}
 
 	_ctx.destroyBindlessResources();
 	// _ctx.destroyDescriptorResources();
@@ -1262,12 +1266,14 @@ void Context::CreateInstance(GLFWwindow* glfwWindow){
 		}
 	}
 	
-	// get all extensions required by glfw
-	// uint32_t glfwExtensionCount = 0;
-	// const char** glfwExtensions;
-	// glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-	// auto requiredInstanceExtensions = std::vector<const char*>(glfwExtensions, glfwExtensions + glfwExtensionCount);
-	auto requiredInstanceExtensions = std::vector<const char*>(); // Only compute
+	std::vector<const char*> requiredInstanceExtensions;
+	uint32_t glfwExtensionCount = 0;
+	if (graphicsEnabled) {
+		// get all extensions required by glfw
+		const char** glfwExtensions;
+		glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+		requiredInstanceExtensions.assign(glfwExtensions, glfwExtensions + glfwExtensionCount);
+	}
 
 	// Extensions
 	if (enableValidationLayers) {
@@ -1465,6 +1471,7 @@ void Context::CreatePhysicalDevice() {
 		// else if (counts & VK_SAMPLE_COUNT_2_BIT) { maxSamples = VK_SAMPLE_COUNT_2_BIT; }
 
 		// check if all required extensions are available
+		// todo: string_view
 		std::set<std::string> required(requiredExtensions.begin(), requiredExtensions.end());
 		for (const auto& extension : availableExtensions) {
 			required.erase(std::string(extension.extensionName));
@@ -1595,7 +1602,6 @@ void Context::CreateDevice() {
 	createInfo.ppEnabledExtensionNames = requiredExtensions.data();
 	// createInfo.pEnabledFeatures; // !Should be NULL if pNext is used
 	// createInfo.pNext = &features2; // feature chain
-	createInfo.pEnabledFeatures; // !Should be NULL if pNext is used
 	createInfo.pNext = &sync2Features; // feature chain
 
 
