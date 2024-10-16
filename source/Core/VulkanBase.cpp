@@ -65,7 +65,7 @@ struct Context
 
 
 	std::vector<const char*> requiredExtensions = { // Physical Device Extensions
-		VK_KHR_SWAPCHAIN_EXTENSION_NAME, 
+		// VK_KHR_SWAPCHAIN_EXTENSION_NAME, 
 		// VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
 		// VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
 		// VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
@@ -308,6 +308,7 @@ void Init() {
 
 void Init(GLFWwindow* window, uint32_t width, uint32_t height) {
 	_ctx.graphicsEnabled = true;
+	_ctx.framesInFlight = 2;
 	InitImpl(window, width, height);
 }
 
@@ -986,7 +987,7 @@ void CmdBeginPresent() {
 }
 
 void CmdEndPresent() {
-    vkw::CmdEndRendering();
+    // vkw::CmdEndRendering();
     vkw::CmdBarrier(_ctx.GetCurrentSwapChainImage(), vkw::Layout::Present);
 }
 
@@ -1473,6 +1474,7 @@ void Context::CreatePhysicalDevice() {
 
 		// check if all required extensions are available
 		// todo: string_view
+		if (graphicsEnabled) requiredExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 		std::set<std::string> required(requiredExtensions.begin(), requiredExtensions.end());
 		for (const auto& extension : availableExtensions) {
 			required.erase(std::string(extension.extensionName));
@@ -1729,7 +1731,7 @@ void Context::CreateSwapChain(uint32_t width, uint32_t height) {
 
 		// prevent exceeding the max image count
 		if (capabilities.maxImageCount > 0 && imageCount > capabilities.maxImageCount) {
-			LOG_WARN("Querying more images than supported. imageCoun set to maxImageCount.");
+			LOG_WARN("Querying more images than supported. imageCount set to maxImageCount.");
 			imageCount = capabilities.maxImageCount;
 		}
 
@@ -1745,7 +1747,8 @@ void Context::CreateSwapChain(uint32_t width, uint32_t height) {
 		createInfo.imageArrayLayers = 1;
 		// if we want to render to a separate image first to perform post-processing
 		// we should change this image usage
-		createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+		createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | 
+		                        VK_IMAGE_USAGE_TRANSFER_DST_BIT;// TODO: remove transfer dst if not drawing to swapchain image
 
 		// don't support different graphics and present family
 		createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -1763,7 +1766,7 @@ void Context::CreateSwapChain(uint32_t width, uint32_t height) {
 
 		// here we specify a handle to when the swapchain become invalid
 		// possible causes are changing settings or resizing window
-		createInfo.oldSwapchain = VK_NULL_HANDLE;
+		createInfo.oldSwapchain = VK_NULL_HANDLE; // TODO: Pass current swapchain
 
 		auto res = vkCreateSwapchainKHR(device, &createInfo, nullptr, &swapChain);
 		DEBUG_VK(res, "Failed to create swap chain!");
@@ -2484,6 +2487,11 @@ VkSampler Context::CreateSampler(f32 maxLod) {
 	ASSERT(vkRes == VK_SUCCESS, "Failed to create texture sampler!");
 
 	return sampler;
+}
+
+
+Image& GetCurrentSwapchainImage() {
+	return _ctx.GetCurrentSwapChainImage();
 }
 
 

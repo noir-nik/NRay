@@ -15,6 +15,6 @@
 int main(int argc, char* argv[])
 {
 	Logger::Init();
-	Test::Test(Test::HelloTriangle);
+	Test::Test(Test::RadienceField);
 	return 0;
 }

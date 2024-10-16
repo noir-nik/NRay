@@ -1,6 +1,6 @@
-# CC := g++
+CC := g++
 # CC := ccache clang++
-CC := clang++
+# CC := clang++
 # CC := ccache g++
 TARGET := app
 
@@ -16,15 +16,17 @@ ifeq ($(OS),Windows_NT)
 	OBJ_DIR := build
 	BUILD_DIR := build
 	MKDIR := cmd /c if not exist $(BUILD_DIR) mkdir
-	CLEAN_BUILD := cmd /c del /Q $(BUILD_DIR)
-	CLEAN_OBJ := cmd /c del /Q $(OBJ_DIR)
+	RM := cmd /c del /Q
+	CLEAN_BUILD := $(RM) $(BUILD_DIR)
+	CLEAN_OBJ := $(RM) $(OBJ_DIR)
 else
 	LIBS := $(LIBS) vulkan fmt glfw GL m
 	OBJ_DIR := build-linux
 	BUILD_DIR := build-linux
 	MKDIR:= mkdir -p
-	CLEAN_BUILD := rm -f $(BUILD_DIR)/*
-	CLEAN_OBJ := rm -f $(OBJ_DIR)/*
+	RM := rm -rf
+	CLEAN_BUILD := $(BUILD_DIR)/*
+	CLEAN_OBJ := $(OBJ_DIR)/*
 endif
 
 LDFLAGS += $(foreach lib,$(LIBS),-l$(lib))
@@ -137,12 +139,7 @@ clean:
 	@echo "=== Cleaned ==="
 
 rm:
-	cmd /c del $(wildcard *.bmp)
+	$(RM) $(wildcard *.bmp)
 
-
-# LDFLAGS := $(foreach lib,$(LDFLAGS),-l$(lib))
-ff :=$(findstring find,in)
-e:
-	@echo "$(ff)"
 
 # $(RM) $(OBJ_DIR)/

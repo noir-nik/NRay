@@ -248,6 +248,9 @@ void Init(GLFWwindow* window, uint32_t width, uint32_t height);
 void OnSurfaceUpdate(uint32_t width, uint32_t height);
 void Destroy();
 
+
+Image& GetCurrentSwapchainImage();
+
 // template<typename T>
 // void CmdTimeStamp(const std::string& name, T callback) {
 //     int id = CmdBeginTimeStamp(name);
