@@ -2,7 +2,6 @@
 
 #include "VulkanBase.hpp"
 #include "ShaderCommon.h"
-#include "FileManager.hpp"
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
@@ -28,6 +27,8 @@ struct Context
 	void CmdBarrier(Image& img, Layout::ImageLayout layout);
 	void CmdBarrier();
 	void CmdClearColorImage(Image& image, float4& color);
+
+	void CmdBlit(Image& dst, Image& src, uvec2 dstSize, uvec2 srcSize);
 
 	void EndCommandBuffer(VkSubmitInfo submitInfo);
 
@@ -909,7 +910,7 @@ void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach
     auto& cmd = _ctx.GetCurrentCommandResources();
 
     ivec2 offset(0, 0);
-    ivec2 extent(0, 0);
+    uvec2 extent(0, 0);
     if (colorAttachs.size() > 0) {
         extent.x = colorAttachs[0].width;
         extent.y = colorAttachs[0].height;
@@ -975,13 +976,13 @@ void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach
 
 void CmdEndRendering() {
     auto& cmd = _ctx.GetCurrentCommandResources();
-    vkCmdEndRendering(cmd.buffer);
+    // vkCmdEndRendering(cmd.buffer);
 }
 
 void CmdBeginPresent() {
     vkw::AcquireImage();
     vkw::CmdBarrier(_ctx.GetCurrentSwapChainImage(), vkw::Layout::ColorAttachment);
-    vkw::CmdBeginRendering({ _ctx.GetCurrentSwapChainImage() }, {});
+    // vkw::CmdBeginRendering({ _ctx.GetCurrentSwapChainImage() }, {});
 }
 
 void CmdEndPresent() {
@@ -1874,6 +1875,45 @@ bool GetSwapChainDirty() {
 	return _ctx.swapChainDirty;
 }
 
+void SubmitAndPresent() {
+    auto& cmd = _ctx.GetCurrentCommandResources();
+
+    VkPipelineStageFlags waitStages = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.waitSemaphoreCount = 1;
+    submitInfo.pWaitSemaphores = &_ctx.imageAvailableSemaphores[_ctx.swapChainCurrentFrame];
+    submitInfo.pWaitDstStageMask = &waitStages;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &(cmd.buffer);
+    submitInfo.signalSemaphoreCount = 1;
+    submitInfo.pSignalSemaphores = &_ctx.renderFinishedSemaphores[_ctx.swapChainCurrentFrame];
+
+    VkPresentInfoKHR presentInfo{};
+    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    presentInfo.waitSemaphoreCount = 1;
+    presentInfo.pWaitSemaphores = submitInfo.pSignalSemaphores;
+    presentInfo.swapchainCount = 1;
+    presentInfo.pSwapchains = &_ctx.swapChain;
+    presentInfo.pImageIndices = &_ctx.currentImageIndex;
+    presentInfo.pResults = nullptr;
+
+    _ctx.EndCommandBuffer(submitInfo);
+
+    auto res = vkQueuePresentKHR(_ctx.queues[_ctx.currentQueue].queue, &presentInfo);
+    _ctx.currentQueue = Queue::Count;
+
+    if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR) {
+        _ctx.swapChainDirty = true;
+        return;
+    }
+    else if (res != VK_SUCCESS) {
+        DEBUG_VK(res, "Failed to present swap chain image!");
+    }
+
+    _ctx.swapChainCurrentFrame = (_ctx.swapChainCurrentFrame + 1) % _ctx.framesInFlight;
+}
+
 
 const u32 MAX_STORAGE = 64;
 const u32 MAX_SAMPLEDIMAGES = 64;
@@ -2374,6 +2414,41 @@ void Context::CmdClearColorImage(Image& img, float4& color) {
 	range.layerCount = VK_REMAINING_ARRAY_LAYERS;
 
 	vkCmdClearColorImage(cmd.buffer, img.resource->image, (VkImageLayout)img.layout, &clearColor, 1, &range);
+}
+
+void Context::CmdBlit(Image& dst, Image& src, uvec2 dstSize, uvec2 srcSize) {	
+	auto& cmd = GetCurrentCommandResources();
+
+	VkImageBlit2 blitRegion{ .sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2, .pNext = nullptr };
+
+	blitRegion.srcOffsets[1].x = srcSize.x;
+	blitRegion.srcOffsets[1].y = srcSize.y;
+	blitRegion.srcOffsets[1].z = 1;
+
+	blitRegion.dstOffsets[1].x = dstSize.x;
+	blitRegion.dstOffsets[1].y = dstSize.y;
+	blitRegion.dstOffsets[1].z = 1;
+
+	blitRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	blitRegion.srcSubresource.baseArrayLayer = 0;
+	blitRegion.srcSubresource.layerCount = 1;
+	blitRegion.srcSubresource.mipLevel = 0;
+
+	blitRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+	blitRegion.dstSubresource.baseArrayLayer = 0;
+	blitRegion.dstSubresource.layerCount = 1;
+	blitRegion.dstSubresource.mipLevel = 0;
+
+	VkBlitImageInfo2 blitInfo{ .sType = VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2, .pNext = nullptr };
+	blitInfo.dstImage = dst.resource->image;
+	blitInfo.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL; // TODO: change
+	blitInfo.srcImage = src.resource->image;
+	blitInfo.srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL; // TODO: change
+	blitInfo.filter = VK_FILTER_LINEAR;
+	blitInfo.regionCount = 1;
+	blitInfo.pRegions = &blitRegion;
+
+	vkCmdBlitImage2(cmd.buffer, &blitInfo);
 }
 
 VkSampler Context::CreateSampler(f32 maxLod) {

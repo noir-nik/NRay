@@ -1,5 +1,7 @@
 #ifdef ENGINE
 #pragma once
+
+#include "Lmath.hpp"
 using vec4 = Lmath::vec4;
 
 using float3 = Lmath::float3;

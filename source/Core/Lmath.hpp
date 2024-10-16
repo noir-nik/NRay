@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include <cstring>
 
 #if defined(_MSC_VER)
 #define CVEX_ALIGNED(x) __declspec(align(x))

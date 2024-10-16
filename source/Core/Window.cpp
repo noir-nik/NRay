@@ -27,6 +27,9 @@ void Window::WindowDropCallback(GLFWwindow* window, int count, const char* paths
 	for (int i = 0; i < count; i++) {
 		pathsDrop.push_back(paths[i]);
 	}
+	for (int i = 0; i < count; i++) {
+		printf("%s\n", paths[i]);
+	}
 }
 
 void Window::Create() {
@@ -35,7 +38,6 @@ void Window::Create() {
 
 	// glfw uses OpenGL context by default
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	glfwWindowHint(GLFW_windo
 	
 	monitors = glfwGetMonitors(&monitorCount);
 
@@ -43,7 +45,7 @@ void Window::Create() {
 	videoModeIndex -= 1;
 
 	window = glfwCreateWindow(width, height, name, nullptr, nullptr);
-	glfwSetWindowPos(window, posX, posY);
+	// glfwSetWindowPos(window, posX, posY);
 
 	glfwSetFramebufferSizeCallback(window, Window::FramebufferResizeCallback);
 	glfwSetScrollCallback(window, Window::ScrollCallback);

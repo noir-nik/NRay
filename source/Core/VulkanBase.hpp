@@ -15,6 +15,7 @@ namespace vkw {
 using float4 = Lmath::float4;
 using uvec3 = Lmath::uvec3;
 using ivec2 = Lmath::ivec2;
+using uvec2 = Lmath::uvec2;
 
 using Flags = uint32_t;
 
@@ -202,8 +203,8 @@ Pipeline CreatePipeline(const PipelineDesc& desc);
 void* MapBuffer(Buffer& buffer);
 void UnmapBuffer(Buffer& buffer);
 
-// void SubmitAndPresent();
-// bool GetSwapChainDirty();
+void SubmitAndPresent();
+bool GetSwapChainDirty();
 
 // void GetTimeStamps(std::map<std::string, float>& timeTable);
 
@@ -217,7 +218,7 @@ void CmdBarrier(Image& img, Layout::ImageLayout layout);
 void CmdBarrier();
 
 void CmdClearColorImage(Image &image, float4 color);
-
+void AcquireImage();
 void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach = {}, uint32_t layerCount = 1);
 void CmdEndRendering();
 void CmdBeginPresent();

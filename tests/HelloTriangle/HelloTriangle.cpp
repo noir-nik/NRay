@@ -10,6 +10,8 @@
 
 #include "Window.hpp"
 
+#include <unistd.h>
+
 using namespace Lmath;
 
 using Pixel = vec4;
@@ -107,15 +109,19 @@ void HelloTriangleApplication::Draw() {
 	// vkw::CmdBeginRendering(attachs, ctx.depth);
 	// vkw::CmdBindPipeline(ctx.pipeline);
 	// vkw::CmdPushConstants(&constants, sizeof(constants));
+	vkw::CmdBeginPresent();
 	vkw::CmdBarrier(ctx.imageCPU, vkw::Layout::General);
 	vkw::CmdClearColorImage(ctx.imageCPU, {0.7f, 0.0f, 0.4f, 1.0f});
+	vkw::CmdEndPresent();
 	timer.Start();
 	vkw::EndCommandBuffer();
+	vkw::SubmitAndPresent();
 	vkw::WaitQueue(vkw::Queue::Graphics);
 	printf("Compute time: %fs\n", timer.Elapsed());
-	timer.Start();
-	saveBuffer("HelloTriangle.bmp", &ctx.outputImage, ctx.width, ctx.height);
-	printf("Save time: %fs\n", timer.Elapsed());
+	sleep(3);
+	// timer.Start();
+	// saveBuffer("HelloTriangle.bmp", &ctx.outputImage, ctx.width, ctx.height);
+	// printf("Save time: %fs\n", timer.Elapsed());
 }
 
 void HelloTriangleApplication::Finish() {

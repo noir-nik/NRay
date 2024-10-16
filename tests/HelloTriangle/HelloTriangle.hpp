@@ -1,8 +1,5 @@
 #if defined(ENGINE)
 #pragma once
-#include <string>
-#include <cstdint>
-#include <vector>
 
 #include "Lmath.hpp"
 using float3 = Lmath::float3;
