@@ -112,7 +112,7 @@ void HelloTriangleApplication::Draw() {
 	// vkw::CmdBindPipeline(ctx.pipeline);
 	// vkw::CmdPushConstants(&constants, sizeof(constants));
 	vkw::CmdBeginPresent();
-	vkw::CmdBarrier(img, vkw::Layout::General);
+	vkw::CmdBarrier(img, vkw::Layout::TransferDst);
 	vkw::CmdClearColorImage(img, {0.7f, 0.0f, 0.4f, 1.0f});
 	vkw::CmdEndPresent();
 	timer.Start();

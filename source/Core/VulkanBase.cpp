@@ -105,8 +105,11 @@ struct Context
 	struct InternalQueue {
 		VkQueue queue = VK_NULL_HANDLE;
 		int family = -1;
+		uint32_t indexInFamily = 0;
 		std::vector<CommandResources> commands;
 	};
+	// <queueFamilyIndex, queueCount>
+	std::unordered_map<uint32_t, uint32_t> activeQueues;
 	InternalQueue queues[Queue::Count];
 	Queue currentQueue = Queue::Count;
 	std::shared_ptr<PipelineResource> currentPipeline;
@@ -193,7 +196,7 @@ struct Context
 	}
 
 	inline CommandResources& GetCurrentCommandResources() {
-	return queues[currentQueue].commands[swapChainCurrentFrame];
+		return queues[currentQueue].commands[swapChainCurrentFrame];
 	}
 
 	VkExtent2D ChooseExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32_t width, uint32_t height);
@@ -1159,6 +1162,7 @@ template <typename T> void setup_pNext_chain(T& structure, std::vector<VkBaseOut
 	}
 	structure.pNext = structs.at(0);
 }
+
 }
 
 namespace { // vulkan debug callbacks
@@ -1419,37 +1423,29 @@ void Context::CreatePhysicalDevice() {
 		availableFamilies.resize(familyCount);
 		vkGetPhysicalDeviceQueueFamilyProperties(device, &familyCount, availableFamilies.data());
 
-		int computeFamily = -1; // TODO: change to uint32_t
-		int transferFamily = -1; // and use VK_QUEUE_FAMILY_IGNORED ?
-		int graphicsFamily = -1;
+		bool graphicsAvailable = false; // TODO: if (graphicsEnabled)
+		bool computeAvailable = false;
+		bool transferAvailable = false;
+		VkBool32 presentAvailable = false;
 
 		// select the family for each type of queue that we want
 		for (int i = 0; i < familyCount; i++) {
 			auto& family = availableFamilies[i];
-			if (family.queueFlags & VK_QUEUE_GRAPHICS_BIT && graphicsFamily == -1) {
-				// VkBool32 present = false;
-				// vkGetPhysicalDeviceSurfaceSupportKHR(device, i, this->surface, &present);
-				// if (present) {
-					graphicsFamily = i;
-				// }
-				continue;
-			}
-
-			if (family.queueFlags & VK_QUEUE_COMPUTE_BIT && computeFamily == -1) {
-				computeFamily = i;
-				continue;
-			}
-
-			if (family.queueFlags & VK_QUEUE_TRANSFER_BIT && transferFamily == -1) {
-				transferFamily = i;
-				continue;
+			if (family.queueFlags & VK_QUEUE_GRAPHICS_BIT) graphicsAvailable = true;
+			if (family.queueFlags & VK_QUEUE_COMPUTE_BIT) computeAvailable = true;
+			if (family.queueFlags & VK_QUEUE_TRANSFER_BIT) transferAvailable = true;
+			
+			if (presentAvailable == false){
+				VkBool32 present = false;
+				vkGetPhysicalDeviceSurfaceSupportKHR(device, i, this->surface, &present);
+				if (present) presentAvailable = true;
 			}
 		}
 
-		// TODO: change logic
-		queues[Queue::Graphics].family = graphicsFamily;
-		queues[Queue::Compute].family = computeFamily == -1 ? graphicsFamily : computeFamily;
-		queues[Queue::Transfer].family = transferFamily == -1 ? graphicsFamily : transferFamily;
+		// // TODO: change logic
+		// queues[Queue::Graphics].family = graphicsFamily;
+		// queues[Queue::Compute].family = computeFamily == -1 ? graphicsFamily : computeFamily;
+		// queues[Queue::Transfer].family = transferFamily == -1 ? graphicsFamily : transferFamily;
 
 		bufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
 		indexingFeatures.sType	= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT;
@@ -1484,8 +1480,8 @@ void Context::CreatePhysicalDevice() {
 		// check if all required queues are supported
 		bool suitable = required.empty();
 		if (!suitable) LOG_ERROR("Required extensions not available: {0}", required.begin()->c_str());
-		suitable &= graphicsFamily != -1;
-		if (!suitable) LOG_ERROR("Required compute queue not available");
+		suitable &= (graphicsAvailable && computeAvailable && transferAvailable && presentAvailable);
+		if (!suitable) LOG_ERROR("Required queue not available");
 		// suitable &= graphicsFamily != -1;
 		if (suitable) {
 			physicalDevice = device;
@@ -1497,23 +1493,65 @@ void Context::CreatePhysicalDevice() {
 }
 
 void Context::CreateDevice() {
+	// std::vector<uint32_t> activeQueues(familyCount, 0);
+	uint32_t familyCount = availableFamilies.size();
 	
-	std::set<uint32_t> uniqueFamilies;
-	for (int q = 0; q < Queue::Count; q++) {
-		uniqueFamilies.emplace(queues[q].family);
+	activeQueues.reserve(familyCount);
+	uint32_t queueNotFound = (~0U);
+	auto find_first = [&](VkQueueFlags desired_flags) {
+		for (uint32_t i = 0; i < familyCount; i++) {
+            auto& family = availableFamilies[i];
+			if (activeQueues.find(i) != activeQueues.end() && family.queueCount <= activeQueues[i]) continue;
+			if (family.queueCount <= activeQueues[i]) continue;
+			if ((family.queueFlags & desired_flags) == desired_flags){
+				if (desired_flags & VK_QUEUE_GRAPHICS_BIT) { // TODO: move to separate function and split queues
+					VkBool32 present = false;
+					vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, this->surface, &present);
+					if (!present) continue;
+				}
+				// Each family has at least one queue
+				if (activeQueues[i] == uint32_t{}){
+					activeQueues[i] = 1;
+				};
+				return i;
+			}
+		}
+		LOG_ERROR("No queue with flags {0} found", desired_flags);
+		DEBUG_ASSERT(false, "No queue found"); //todo:remove after debugging
+		return queueNotFound;
 	};
+
+	// if (graphicsEnabled)
+	queues[Queue::Graphics].family = find_first(VK_QUEUE_GRAPHICS_BIT);
+	queues[Queue::Compute].family = find_first(VK_QUEUE_COMPUTE_BIT);
+	queues[Queue::Transfer].family = find_first(VK_QUEUE_TRANSFER_BIT);
+
+	// std::set<uint32_t> uniqueFamilies;
+	// for (int q = 0; q < Queue::Count; q++) {
+	// 	uniqueFamilies.emplace(queues[q].family);
+	// };
 
 	// priority for each type of queue
 	float priority = 1.0f;
 	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-	for (uint32_t family : uniqueFamilies) {
+	// for (uint32_t family : uniqueFamilies) {
+	for (auto family: activeQueues) {
+		if (family.second == uint32_t{}) continue;
 		VkDeviceQueueCreateInfo createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-		createInfo.queueFamilyIndex = family;
-		createInfo.queueCount = 1;
+		createInfo.queueFamilyIndex = family.first;
+		createInfo.queueCount = family.second;
 		createInfo.pQueuePriorities = &priority;
 		queueCreateInfos.push_back(createInfo);
 	}
+
+
+	DEBUG_TRACE("Queue[Graphics]: [{0}][{1}]", queues[Queue::Graphics].family, queues[Queue::Graphics].indexInFamily);
+	DEBUG_TRACE("Queue[Compute ]: [{0}][{1}]", queues[Queue::Compute ].family, queues[Queue::Compute ].indexInFamily);
+	DEBUG_TRACE("Queue[Transfer]: [{0}][{1}]", queues[Queue::Transfer].family, queues[Queue::Transfer].indexInFamily);
+	DEBUG_TRACE("activeQueues size: {0}", activeQueues.size());
+
+	
 
 	auto supportedFeatures = physicalFeatures2.features;
 	
@@ -1637,7 +1675,7 @@ void Context::CreateDevice() {
 	vmaCreateAllocator(&allocatorCreateInfo, &vmaAllocator);
 
 	for (int q = 0; q < Queue::Count; q++) {
-		vkGetDeviceQueue(device, queues[q].family, 0, &queues[q].queue);
+		vkGetDeviceQueue(device, queues[q].family, queues[q].indexInFamily, &queues[q].queue);
 	}
 
 	genericSampler = CreateSampler(1.0);
@@ -1903,7 +1941,7 @@ void SubmitAndPresent() {
 
     _ctx.EndCommandBuffer(submitInfo);
 
-    auto res = vkQueuePresentKHR(_ctx.queues[_ctx.currentQueue].queue, &presentInfo);
+    auto res = vkQueuePresentKHR(_ctx.queues[_ctx.currentQueue].queue, &presentInfo); // TODO: use present queue
     _ctx.currentQueue = Queue::Count;
 
     if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR) {
@@ -2148,11 +2186,12 @@ void Context::createCommandBuffers(){
 	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 	allocInfo.commandBufferCount = 1;
 
+	// for (int q = 0; q < Queue::Count; q++) {
 	for (int q = 0; q < Queue::Count; q++) {
 		InternalQueue& queue = queues[q];
-		if (queue.family == -1) { //TODO:
-			ASSERT(0, "Queue family = -1, fix in CreatePhysicalDevice()");
-		}
+		DEBUG_TRACE("Queue[{}]: [{}][{}], commands.size = {}", q, queue.family, queue.indexInFamily, queue.commands.size());
+		DEBUG_ASSERT(queue.family != -1, "Queue family = -1, fix in CreatePhysicalDevice()");
+
 		poolInfo.queueFamilyIndex = queue.family;
 		queue.commands.resize(framesInFlight);
 		for (int i = 0; i < framesInFlight; i++) {

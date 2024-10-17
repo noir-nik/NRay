@@ -1,7 +1,7 @@
-CC := g++
-# CC := ccache clang++
-# CC := clang++
+# CC := g++
 # CC := ccache g++
+CC := clang++
+# CC := ccache clang++
 TARGET := app
 
 OPT_LEVEL := 0
@@ -32,7 +32,7 @@ endif
 LDFLAGS += $(foreach lib,$(LIBS),-l$(lib))
 
 
-ifeq ($(findstring clang++,$(CC)),clang++)
+ifeq ($(findstring clang,$(CC)),clang)
 	CXXFLAGS += -target x86_64-w64-mingw32
 	LDFLAGS += -target x86_64-w64-mingw32 -fuse-ld=lld -pthread
 endif
