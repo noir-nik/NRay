@@ -103,14 +103,17 @@ struct Context
 		std::vector<uint64_t> timeStamps;
 	};
 	struct InternalQueue {
-		VkQueue queue = VK_NULL_HANDLE;
 		int family = -1;
 		uint32_t indexInFamily = 0;
-		std::vector<CommandResources> commands;
+		VkQueue queue = VK_NULL_HANDLE;
+		CommandResources* commands = nullptr; // Size = framesInFlight
 	};
-	// <queueFamilyIndex, queueCount>
-	std::unordered_map<uint32_t, uint32_t> activeQueues;
-	InternalQueue queues[Queue::Count];
+
+	
+	// std::vector<InternalQueue> uniqueQueues;
+	std::unordered_map<uint32_t, InternalQueue> uniqueQueues;
+	std::vector<CommandResources> commandResources; // Owns all command resources
+	InternalQueue* queues[Queue::Count]; // Pointers to uniqueQueues
 	Queue currentQueue = Queue::Count;
 	std::shared_ptr<PipelineResource> currentPipeline;
 	// const uint32_t stagingBufferSize = 256 * 1024 * 1024;
@@ -196,7 +199,7 @@ struct Context
 	}
 
 	inline CommandResources& GetCurrentCommandResources() {
-		return queues[currentQueue].commands[swapChainCurrentFrame];
+		return queues[currentQueue]->commands[swapChainCurrentFrame];
 	}
 
 	VkExtent2D ChooseExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32_t width, uint32_t height);
@@ -1085,7 +1088,6 @@ void BeginCommandBuffer(Queue queue) {
 	//     cmd.timeStampNames.clear();
 	// }
 
-	Context::InternalQueue& iqueue = _ctx.queues[queue];
 	// ?VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT
 	vkResetCommandPool(_ctx.device, cmd.pool, 0); // TODO: check if this is needed
 	cmd.stagingOffset = 0;
@@ -1108,7 +1110,7 @@ void Context::EndCommandBuffer(VkSubmitInfo submitInfo) {
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = &cmd.buffer;
 
-	auto res = vkQueueSubmit(queues[currentQueue].queue, 1, &submitInfo, cmd.fence);
+	auto res = vkQueueSubmit(queues[currentQueue]->queue, 1, &submitInfo, cmd.fence);
 	DEBUG_VK(res, "Failed to submit command buffer");
 }
 
@@ -1121,7 +1123,7 @@ void EndCommandBuffer() {
 
 void WaitQueue(Queue queue) {
 	// todo: wait on fence
-	auto res = vkQueueWaitIdle(_ctx.queues[queue].queue);
+	auto res = vkQueueWaitIdle(_ctx.queues[queue]->queue);
 	DEBUG_VK(res, "Failed to wait idle command buffer");
 }
 
@@ -1493,63 +1495,135 @@ void Context::CreatePhysicalDevice() {
 }
 
 void Context::CreateDevice() {
-	// std::vector<uint32_t> activeQueues(familyCount, 0);
+	// std::vector<uint32_t> numActiveQueuesInFamilies(familyCount, 0);
 	uint32_t familyCount = availableFamilies.size();
-	
-	activeQueues.reserve(familyCount);
+	uint32_t maxQueuesInFamily = 0;
+	for (uint32_t i = 0; i < familyCount; i++) {
+		if (availableFamilies[i].queueCount > maxQueuesInFamily) maxQueuesInFamily = availableFamilies[i].queueCount;
+	}
+	std::unordered_map<uint32_t, uint32_t> numActiveQueuesInFamilies; // <queueFamilyIndex, queueCount>
+	numActiveQueuesInFamilies.reserve(familyCount);
 	uint32_t queueNotFound = (~0U);
-	auto find_first = [&](VkQueueFlags desired_flags) {
+	auto find_first = [&](VkQueueFlags desired_flags) -> std::pair<uint32_t, uint32_t> {
 		for (uint32_t i = 0; i < familyCount; i++) {
-            auto& family = availableFamilies[i];
-			if (activeQueues.find(i) != activeQueues.end() && family.queueCount <= activeQueues[i]) continue;
-			if (family.queueCount <= activeQueues[i]) continue;
+			auto& family = availableFamilies[i];
 			if ((family.queueFlags & desired_flags) == desired_flags){
 				if (desired_flags & VK_QUEUE_GRAPHICS_BIT) { // TODO: move to separate function and split queues
 					VkBool32 present = false;
 					vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, this->surface, &present);
 					if (!present) continue;
 				}
-				// Each family has at least one queue
-				if (activeQueues[i] == uint32_t{}){
-					activeQueues[i] = 1;
+				// Set active queue count in this family to at least 1
+				if (numActiveQueuesInFamilies[i] < 1){
+					numActiveQueuesInFamilies[i] = 1;
 				};
-				return i;
+				// Each family has at least one queue
+				return {i, 0}; // queue in family i with index 0
 			}
 		}
 		LOG_ERROR("No queue with flags {0} found", desired_flags);
 		DEBUG_ASSERT(false, "No queue found"); //todo:remove after debugging
-		return queueNotFound;
+		return {queueNotFound, 0};
 	};
 
+	auto find_separate = [&](VkQueueFlags desired_flags) -> std::tuple<uint32_t, uint32_t, bool> {
+		for (uint32_t i = 0; i < familyCount; i++) {
+			auto& family = availableFamilies[i];
+			// Check if all queues in family are taken
+			if (numActiveQueuesInFamilies[i] >= family.queueCount) continue;
+			if ((family.queueFlags & desired_flags) == desired_flags){
+				return {i, numActiveQueuesInFamilies[i]++, true};
+			}
+		}
+		LOG_WARN("Separate queue with flags {0} not found", desired_flags);
+		auto [familyIndex, indexInFamily] = find_first(desired_flags);
+		return {familyIndex, indexInFamily, false};
+	};
+
+	// uniqueQueues.resize(1);
+	// for (auto q = 0; q < Queue::Count; q++) {
+		// queues[q] = &uniqueQueues[0];
+	// }
 	// if (graphicsEnabled)
-	queues[Queue::Graphics].family = find_first(VK_QUEUE_GRAPHICS_BIT);
-	queues[Queue::Compute].family = find_first(VK_QUEUE_COMPUTE_BIT);
-	queues[Queue::Transfer].family = find_first(VK_QUEUE_TRANSFER_BIT);
+	// std::tie(queues[Queue::Graphics]->family, queues[Queue::Graphics]->indexInFamily) = find_first(VK_QUEUE_GRAPHICS_BIT);
+	auto [graphicsFamily, graphicsIndex] = find_first(VK_QUEUE_GRAPHICS_BIT);
+	uniqueQueues[graphicsFamily*maxQueuesInFamily + graphicsIndex].family = graphicsFamily;
+	uniqueQueues[graphicsFamily*maxQueuesInFamily + graphicsIndex].indexInFamily = graphicsIndex;
+	queues[Queue::Graphics] = &uniqueQueues[graphicsFamily*maxQueuesInFamily + graphicsIndex];
+	// std::tie(queues[Queue::Compute]->family, queues[Queue::Compute]->indexInFamily) = find_first(VK_QUEUE_COMPUTE_BIT);
+	// bool requestSeparateComputeQueue = true;
+	// if (requestSeparateComputeQueue){	
+	// 	auto [familyIndex, indexInFamily, separate] = find_separate(VK_QUEUE_COMPUTE_BIT);
+	// 	InternalQueue q;
+	// 	q.family = familyIndex;
+	// 	q.indexInFamily = indexInFamily;
+	// 	if (separate) {
+	// 		// uniqueQueues.push_back(q);
+	// 		// queues[Queue::Compute] = &uniqueQueues.back();
+	// 	} else {
+	// 	}
+	// }
+	auto [computeFamily, computeIndex] = find_first(VK_QUEUE_COMPUTE_BIT);
+	uniqueQueues[computeFamily*maxQueuesInFamily + computeIndex].family = computeFamily;
+	uniqueQueues[computeFamily*maxQueuesInFamily + computeIndex].indexInFamily = computeIndex;
+	queues[Queue::Compute] = &uniqueQueues[computeFamily*maxQueuesInFamily + computeIndex];
+
+	// std::tie(queues[Queue::Transfer]->family, queues[Queue::Transfer]->indexInFamily) = find_first(VK_QUEUE_TRANSFER_BIT);
+	auto [transferFamily, transferIndex] = find_first(VK_QUEUE_TRANSFER_BIT);
+	uniqueQueues[transferFamily*maxQueuesInFamily + transferIndex].family = transferFamily;
+	uniqueQueues[transferFamily*maxQueuesInFamily + transferIndex].indexInFamily = transferIndex;
+	queues[Queue::Transfer] = &uniqueQueues[transferFamily*maxQueuesInFamily + transferIndex];
+	
+
+	// for (auto family: numActiveQueuesInFamilies) {
+	// 	InternalQueue q;
+	// 	q.family = family.first;
+	// 	q.indexInFamily = family.second;
+	// 	uniqueQueues.emplace_back(family.first, family.second);
+	// }
 
 	// std::set<uint32_t> uniqueFamilies;
 	// for (int q = 0; q < Queue::Count; q++) {
 	// 	uniqueFamilies.emplace(queues[q].family);
 	// };
 
-	// priority for each type of queue
-	float priority = 1.0f;
+	// priority for each type of queue (1.0f)
+	// std::vector<float> priorities(uniqueQueues.size(), 1.0f);
+	// std::vector<float> priorities(100, 1.0f);
+	float priorities[100];
+	for (int i = 0; i < 100; i++) {
+		priorities[i] = 1.0f;
+	}
 	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
 	// for (uint32_t family : uniqueFamilies) {
-	for (auto family: activeQueues) {
+	for (auto family: numActiveQueuesInFamilies) {
 		if (family.second == uint32_t{}) continue;
 		VkDeviceQueueCreateInfo createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
 		createInfo.queueFamilyIndex = family.first;
 		createInfo.queueCount = family.second;
-		createInfo.pQueuePriorities = &priority;
+		createInfo.pQueuePriorities = &priorities[0];
 		queueCreateInfos.push_back(createInfo);
 	}
 
+	// // VkDeviceQueueCreateInfo queueCreateInfo;
+	// // for (uint32_t family : uniqueFamilies) {
+	// // for (int i = 0; i < 2; i++) {
+	// 	// auto& family = numActiveQueuesInFamilies[0];
+	// 	// if (family.second == uint32_t{}) continue;
+	// 	VkDeviceQueueCreateInfo queueCreateInfo{};
+	// 	queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+	// 	queueCreateInfo.queueFamilyIndex = 0;
+	// 	queueCreateInfo.queueCount = 2;
+	// 	queueCreateInfo.pQueuePriorities = &priorities[0];
+	// // }
 
-	DEBUG_TRACE("Queue[Graphics]: [{0}][{1}]", queues[Queue::Graphics].family, queues[Queue::Graphics].indexInFamily);
-	DEBUG_TRACE("Queue[Compute ]: [{0}][{1}]", queues[Queue::Compute ].family, queues[Queue::Compute ].indexInFamily);
-	DEBUG_TRACE("Queue[Transfer]: [{0}][{1}]", queues[Queue::Transfer].family, queues[Queue::Transfer].indexInFamily);
-	DEBUG_TRACE("activeQueues size: {0}", activeQueues.size());
+
+	DEBUG_TRACE("Queue[Graphics]: [{0}][{1}]", queues[Queue::Graphics]->family, queues[Queue::Graphics]->indexInFamily);
+	DEBUG_TRACE("Queue[Compute ]: [{0}][{1}]", queues[Queue::Compute ]->family, queues[Queue::Compute ]->indexInFamily);
+	DEBUG_TRACE("Queue[Transfer]: [{0}][{1}]", queues[Queue::Transfer]->family, queues[Queue::Transfer]->indexInFamily);
+	DEBUG_TRACE("numActiveQueuesInFamilies size: {0}", numActiveQueuesInFamilies.size());
+	DEBUG_TRACE("queues in family[0]: {0}", numActiveQueuesInFamilies[0]);
 
 	
 
@@ -1639,6 +1713,8 @@ void Context::CreateDevice() {
 	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 	createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
 	createInfo.pQueueCreateInfos = queueCreateInfos.data();
+	// createInfo.queueCreateInfoCount = 1;
+	// createInfo.pQueueCreateInfos = &queueCreateInfo;
 	createInfo.enabledExtensionCount = static_cast<uint32_t>(requiredExtensions.size());
 	createInfo.ppEnabledExtensionNames = requiredExtensions.data();
 	// createInfo.pEnabledFeatures; // !Should be NULL if pNext is used
@@ -1674,8 +1750,14 @@ void Context::CreateDevice() {
 	allocatorCreateInfo.pVulkanFunctions = &vulkanFunctions;
 	vmaCreateAllocator(&allocatorCreateInfo, &vmaAllocator);
 
-	for (int q = 0; q < Queue::Count; q++) {
-		vkGetDeviceQueue(device, queues[q].family, queues[q].indexInFamily, &queues[q].queue);
+	// for (int q = 0; q < Queue::Count; q++) {
+	// 	vkGetDeviceQueue(device, queues[q].family, queues[q].indexInFamily, &queues[q].queue);
+	// }
+	// for (int q = 0; q < uniqueQueues.size(); q++) {
+	// 	vkGetDeviceQueue(device, uniqueQueues[q].family, uniqueQueues[q].indexInFamily, &uniqueQueues[q].queue);
+	// }
+	for (auto& [key, q]: uniqueQueues) {
+		vkGetDeviceQueue(device, q.family, q.indexInFamily, &q.queue);
 	}
 
 	genericSampler = CreateSampler(1.0);
@@ -1941,7 +2023,7 @@ void SubmitAndPresent() {
 
     _ctx.EndCommandBuffer(submitInfo);
 
-    auto res = vkQueuePresentKHR(_ctx.queues[_ctx.currentQueue].queue, &presentInfo); // TODO: use present queue
+    auto res = vkQueuePresentKHR(_ctx.queues[_ctx.currentQueue]->queue, &presentInfo); // TODO: use present queue
     _ctx.currentQueue = Queue::Count;
 
     if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR) {
@@ -2186,15 +2268,28 @@ void Context::createCommandBuffers(){
 	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 	allocInfo.commandBufferCount = 1;
 
-	// for (int q = 0; q < Queue::Count; q++) {
-	for (int q = 0; q < Queue::Count; q++) {
-		InternalQueue& queue = queues[q];
-		DEBUG_TRACE("Queue[{}]: [{}][{}], commands.size = {}", q, queue.family, queue.indexInFamily, queue.commands.size());
-		DEBUG_ASSERT(queue.family != -1, "Queue family = -1, fix in CreatePhysicalDevice()");
+	commandResources.resize(uniqueQueues.size() * framesInFlight);
+	DEBUG_TRACE("commandResources.size = {}", commandResources.size());
+	// for (int q = 0; q < uniqueQueues.size(); q++) {
+	// 	queues[q]->commands = commandResources.data() + q * framesInFlight;
+	// }
+	uint32_t command_counter = 0;
+	for (auto& [key, q]: uniqueQueues) {
+		q.commands = commandResources.data() + command_counter * framesInFlight;
+		command_counter++;
+	}
 
+		// DEBUG_TRACE("Queue[{}]: [{}][{}], commands.size = {}", q, queue.family, queue.indexInFamily, queue.commands.size());
+		// DEBUG_ASSERT(queue.family != -1, "Queue family = -1, fix in CreatePhysicalDevice()");
+		
+	// for (int q = 0; q < Queue::Count; q++) {
+	// for (int q = 0; q < uniqueQueues.size(); q++) {
+	for (auto& [key, queue]: uniqueQueues) {
+		// InternalQueue& queue = uniqueQueues[q];
+		DEBUG_TRACE("Queue[{}]: [{}][{}]", key, queue.family, queue.indexInFamily);
 		poolInfo.queueFamilyIndex = queue.family;
-		queue.commands.resize(framesInFlight);
 		for (int i = 0; i < framesInFlight; i++) {
+			DEBUG_TRACE("  Frame[{}]: [{}][{}]", i, queue.family, queue.indexInFamily);
 			auto res = vkCreateCommandPool(device, &poolInfo, allocator, &queue.commands[i].pool);
 			DEBUG_VK(res, "Failed to create command pool!");
 
@@ -2202,8 +2297,8 @@ void Context::createCommandBuffers(){
 			res = vkAllocateCommandBuffers(device, &allocInfo, &queue.commands[i].buffer);
 			DEBUG_VK(res, "Failed to allocate command buffer!");
 
-			queue.commands[i].staging = CreateBuffer(stagingBufferSize, BufferUsage::TransferSrc, Memory::CPU, "StagingBuffer" + std::to_string(q) + "_" + std::to_string(i));
-			queue.commands[i].stagingCpu = (u8*)queue.commands[i].staging.resource->allocation->GetMappedData();
+			// queue.commands[i].staging = CreateBuffer(stagingBufferSize, BufferUsage::TransferSrc, Memory::CPU, "StagingBuffer" + std::to_string(q) + "_" + std::to_string(i));
+			// queue.commands[i].stagingCpu = (u8*)queue.commands[i].staging.resource->allocation->GetMappedData();
 
 			VkFenceCreateInfo fenceInfo{};
 			fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
@@ -2220,18 +2315,21 @@ void Context::createCommandBuffers(){
 			// queue.commands[i].timeStamps.clear();
 			// queue.commands[i].timeStampNames.clear();
 		}
+		DEBUG_TRACE("Queue[{}]: [{}][{}] created", key, queue.family, queue.indexInFamily);
 	}
+	DEBUG_TRACE("Created {} command buffers", commandResources.size());
 }
 
 void Context::DestroyCommandBuffers() {
-	for (int q = 0; q < Queue::Count; q++) {
+	// for (int q = 0; q < Queue::Count; q++) {
+	for (int q = 0; q < uniqueQueues.size(); q++) {
 		for (int i = 0; i < framesInFlight; i++) {
-			// vkFreeCommandBuffers(device, queues[q].commands[i].pool, 1, &queues[q].commands[i].buffer); // No OP
-			vkDestroyCommandPool(device, queues[q].commands[i].pool, allocator);
-			queues[q].commands[i].staging = {};
-			queues[q].commands[i].stagingCpu = nullptr;
-			vkDestroyFence(device, queues[q].commands[i].fence, allocator);
-			// vkDestroyQueryPool(device, queues[q].commands[i].queryPool, allocator);
+			// vkFreeCommandBuffers(device, queues[q]->commands[i].pool, 1, &queues[q]->commands[i].buffer); // No OP
+			vkDestroyCommandPool(device, queues[q]->commands[i].pool, allocator);
+			queues[q]->commands[i].staging = {};
+			queues[q]->commands[i].stagingCpu = nullptr;
+			vkDestroyFence(device, queues[q]->commands[i].fence, allocator);
+			// vkDestroyQueryPool(device, queues[q]->commands[i].queryPool, allocator);
 		}
 	}
 }

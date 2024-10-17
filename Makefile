@@ -20,6 +20,7 @@ ifeq ($(OS),Windows_NT)
 	CLEAN_BUILD := $(RM) $(BUILD_DIR)
 	CLEAN_OBJ := $(RM) $(OBJ_DIR)
 else
+	CC := g++
 	LIBS := $(LIBS) vulkan fmt glfw GL m
 	OBJ_DIR := build-linux
 	BUILD_DIR := build-linux
