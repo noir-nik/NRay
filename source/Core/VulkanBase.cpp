@@ -110,7 +110,7 @@ struct Context
 	};
 
 	
-	// std::vector<InternalQueue> uniqueQueues;
+	bool requestSeparate[Queue::Count] = {false};
 	std::unordered_map<uint32_t, InternalQueue> uniqueQueues;
 	std::vector<CommandResources> commandResources; // Owns all command resources
 	InternalQueue* queues[Queue::Count]; // Pointers to uniqueQueues
@@ -1497,10 +1497,7 @@ void Context::CreatePhysicalDevice() {
 void Context::CreateDevice() {
 	// std::vector<uint32_t> numActiveQueuesInFamilies(familyCount, 0);
 	uint32_t familyCount = availableFamilies.size();
-	uint32_t maxQueuesInFamily = 0;
-	for (uint32_t i = 0; i < familyCount; i++) {
-		if (availableFamilies[i].queueCount > maxQueuesInFamily) maxQueuesInFamily = availableFamilies[i].queueCount;
-	}
+
 	std::unordered_map<uint32_t, uint32_t> numActiveQueuesInFamilies; // <queueFamilyIndex, queueCount>
 	numActiveQueuesInFamilies.reserve(familyCount);
 	uint32_t queueNotFound = (~0U);
@@ -1540,62 +1537,38 @@ void Context::CreateDevice() {
 		return {familyIndex, indexInFamily, false};
 	};
 
-	// uniqueQueues.resize(1);
-	// for (auto q = 0; q < Queue::Count; q++) {
-		// queues[q] = &uniqueQueues[0];
+	// uint32_t maxQueuesInFamily = 0;
+	// for (uint32_t i = 0; i < familyCount; i++) {
+	// 	if (availableFamilies[i].queueCount > maxQueuesInFamily) maxQueuesInFamily = availableFamilies[i].queueCount;
 	// }
-	// if (graphicsEnabled)
-	// std::tie(queues[Queue::Graphics]->family, queues[Queue::Graphics]->indexInFamily) = find_first(VK_QUEUE_GRAPHICS_BIT);
-	auto [graphicsFamily, graphicsIndex] = find_first(VK_QUEUE_GRAPHICS_BIT);
-	uniqueQueues[graphicsFamily*maxQueuesInFamily + graphicsIndex].family = graphicsFamily;
-	uniqueQueues[graphicsFamily*maxQueuesInFamily + graphicsIndex].indexInFamily = graphicsIndex;
-	queues[Queue::Graphics] = &uniqueQueues[graphicsFamily*maxQueuesInFamily + graphicsIndex];
-	// std::tie(queues[Queue::Compute]->family, queues[Queue::Compute]->indexInFamily) = find_first(VK_QUEUE_COMPUTE_BIT);
-	// bool requestSeparateComputeQueue = true;
-	// if (requestSeparateComputeQueue){	
-	// 	auto [familyIndex, indexInFamily, separate] = find_separate(VK_QUEUE_COMPUTE_BIT);
-	// 	InternalQueue q;
-	// 	q.family = familyIndex;
-	// 	q.indexInFamily = indexInFamily;
-	// 	if (separate) {
-	// 		// uniqueQueues.push_back(q);
-	// 		// queues[Queue::Compute] = &uniqueQueues.back();
-	// 	} else {
-	// 	}
-	// }
-	auto [computeFamily, computeIndex] = find_first(VK_QUEUE_COMPUTE_BIT);
-	uniqueQueues[computeFamily*maxQueuesInFamily + computeIndex].family = computeFamily;
-	uniqueQueues[computeFamily*maxQueuesInFamily + computeIndex].indexInFamily = computeIndex;
-	queues[Queue::Compute] = &uniqueQueues[computeFamily*maxQueuesInFamily + computeIndex];
 
-	// std::tie(queues[Queue::Transfer]->family, queues[Queue::Transfer]->indexInFamily) = find_first(VK_QUEUE_TRANSFER_BIT);
-	auto [transferFamily, transferIndex] = find_first(VK_QUEUE_TRANSFER_BIT);
-	uniqueQueues[transferFamily*maxQueuesInFamily + transferIndex].family = transferFamily;
-	uniqueQueues[transferFamily*maxQueuesInFamily + transferIndex].indexInFamily = transferIndex;
-	queues[Queue::Transfer] = &uniqueQueues[transferFamily*maxQueuesInFamily + transferIndex];
+	uint32_t maxQueuesInFamily = std::max_element(availableFamilies.begin(), availableFamilies.end(), [](const auto& a, const auto& b) {
+		return a.queueCount < b.queueCount;
+	}).base()->queueCount;
 	
+	auto queueKey = [&maxQueuesInFamily](uint32_t family, uint32_t index) -> uint32_t {
+		return family*maxQueuesInFamily + index;
+	};
 
-	// for (auto family: numActiveQueuesInFamilies) {
-	// 	InternalQueue q;
-	// 	q.family = family.first;
-	// 	q.indexInFamily = family.second;
-	// 	uniqueQueues.emplace_back(family.first, family.second);
-	// }
+	// requestSeparate[Queue::Transfer] = true;
 
-	// std::set<uint32_t> uniqueFamilies;
-	// for (int q = 0; q < Queue::Count; q++) {
-	// 	uniqueFamilies.emplace(queues[q].family);
-	// };
-
-	// priority for each type of queue (1.0f)
-	// std::vector<float> priorities(uniqueQueues.size(), 1.0f);
-	// std::vector<float> priorities(100, 1.0f);
-	float priorities[100];
-	for (int i = 0; i < 100; i++) {
-		priorities[i] = 1.0f;
+	for (uint32_t i = 0; i < Queue::Count; i++) {
+		uint32_t queueFamily, indexInFamily, key;
+		bool is_separate;
+		if (requestSeparate[i]) {
+			std::tie(queueFamily, indexInFamily, is_separate) = find_separate((VkQueueFlagBits)i);
+		} else {
+			std::tie(queueFamily, indexInFamily) = find_first((VkQueueFlagBits)i);
+		}
+		key = queueKey(queueFamily, indexInFamily);
+		uniqueQueues[key].family = queueFamily;
+		uniqueQueues[key].indexInFamily = indexInFamily;
+		queues[i] = &uniqueQueues[key];
 	}
+	
+	// priority for each type of queue (1.0f for all)
+	std::vector<float> priorities(uniqueQueues.size(), 1.0f);
 	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-	// for (uint32_t family : uniqueFamilies) {
 	for (auto family: numActiveQueuesInFamilies) {
 		if (family.second == uint32_t{}) continue;
 		VkDeviceQueueCreateInfo createInfo{};
@@ -1606,26 +1579,11 @@ void Context::CreateDevice() {
 		queueCreateInfos.push_back(createInfo);
 	}
 
-	// // VkDeviceQueueCreateInfo queueCreateInfo;
-	// // for (uint32_t family : uniqueFamilies) {
-	// // for (int i = 0; i < 2; i++) {
-	// 	// auto& family = numActiveQueuesInFamilies[0];
-	// 	// if (family.second == uint32_t{}) continue;
-	// 	VkDeviceQueueCreateInfo queueCreateInfo{};
-	// 	queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-	// 	queueCreateInfo.queueFamilyIndex = 0;
-	// 	queueCreateInfo.queueCount = 2;
-	// 	queueCreateInfo.pQueuePriorities = &priorities[0];
-	// // }
-
-
 	DEBUG_TRACE("Queue[Graphics]: [{0}][{1}]", queues[Queue::Graphics]->family, queues[Queue::Graphics]->indexInFamily);
 	DEBUG_TRACE("Queue[Compute ]: [{0}][{1}]", queues[Queue::Compute ]->family, queues[Queue::Compute ]->indexInFamily);
 	DEBUG_TRACE("Queue[Transfer]: [{0}][{1}]", queues[Queue::Transfer]->family, queues[Queue::Transfer]->indexInFamily);
 	DEBUG_TRACE("numActiveQueuesInFamilies size: {0}", numActiveQueuesInFamilies.size());
 	DEBUG_TRACE("queues in family[0]: {0}", numActiveQueuesInFamilies[0]);
-
-	
 
 	auto supportedFeatures = physicalFeatures2.features;
 	
@@ -2297,8 +2255,8 @@ void Context::createCommandBuffers(){
 			res = vkAllocateCommandBuffers(device, &allocInfo, &queue.commands[i].buffer);
 			DEBUG_VK(res, "Failed to allocate command buffer!");
 
-			// queue.commands[i].staging = CreateBuffer(stagingBufferSize, BufferUsage::TransferSrc, Memory::CPU, "StagingBuffer" + std::to_string(q) + "_" + std::to_string(i));
-			// queue.commands[i].stagingCpu = (u8*)queue.commands[i].staging.resource->allocation->GetMappedData();
+			queue.commands[i].staging = CreateBuffer(stagingBufferSize, BufferUsage::TransferSrc, Memory::CPU, "StagingBuffer[" + std::to_string(queue.family) + "][" + std::to_string(queue.indexInFamily) + "_" + std::to_string(i));
+			queue.commands[i].stagingCpu = (u8*)queue.commands[i].staging.resource->allocation->GetMappedData();
 
 			VkFenceCreateInfo fenceInfo{};
 			fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
