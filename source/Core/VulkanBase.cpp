@@ -40,6 +40,7 @@ struct Context
 	VkSurfaceKHR surface = VK_NULL_HANDLE;
 	VkAllocationCallbacks* allocator = VK_NULL_HANDLE;
 	VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
+	VkDebugReportCallbackEXT debugReport = VK_NULL_HANDLE;
 	std::string applicationName = "Vulkan Slang Compute";
 	std::string engineName = "Vulkan Compute";
 	VmaAllocator vmaAllocator;
@@ -84,6 +85,8 @@ struct Context
 	VkPhysicalDeviceFeatures2 physicalFeatures2{};
 	VkSurfaceCapabilitiesKHR surfaceCapabilities{};
 	VkPhysicalDeviceProperties physicalProperties{};
+	// VkPhysicalDeviceImageFormatInfo2 imageFormatInfo2{};
+	// VkImageFormatProperties2 imageFormatProperties2{};
 	
 	std::vector<VkPresentModeKHR> availablePresentModes;
 	std::vector<VkSurfaceFormatKHR> availableSurfaceFormats;
@@ -152,6 +155,7 @@ struct Context
 
 	// // preferred, warn if not available
 	VkFormat colorFormat = VK_FORMAT_B8G8R8A8_UNORM;
+	// VkFormat colorFormat = VK_FORMAT_B8G8R8A8_SRGB;
 	VkColorSpaceKHR colorSpace  = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
 	VkPresentModeKHR presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
 	VkSampleCountFlagBits numSamples  = VK_SAMPLE_COUNT_1_BIT;
@@ -1220,7 +1224,7 @@ void DestroyDebugUtilsMessengerEXT (
 	}
 }
 
-static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback (
+static VKAPI_ATTR VkBool32 VKAPI_CALL DebugUtilsCallback (
 	VkDebugUtilsMessageSeverityFlagBitsEXT      messageSeverity,
 	VkDebugUtilsMessageTypeFlagsEXT             messageType,
 	const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
@@ -1231,6 +1235,55 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback (
 	if (messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
 		LOG_ERROR("[Validation Layer] {0}", pCallbackData->pMessage);
 	}
+	return VK_FALSE;	
+}
+
+VkResult CreateDebugReportCallbackEXT (
+	VkInstance                                instance,
+	const VkDebugReportCallbackCreateInfoEXT* pCreateInfo,
+	const VkAllocationCallbacks*              pAllocator,
+	VkDebugReportCallbackEXT*                 pDebugReport) {
+	// search for the requested function and return null if cannot find
+	auto func = (PFN_vkCreateDebugReportCallbackEXT) vkGetInstanceProcAddr (
+		instance, 
+		"vkCreateDebugReportCallbackEXT"
+	);
+	if (func != nullptr) {
+		return func(instance, pCreateInfo, pAllocator, pDebugReport);
+	}
+	else {
+		return VK_ERROR_EXTENSION_NOT_PRESENT;
+	}
+}
+
+void DestroyDebugReportCallbackEXT (
+	VkInstance                   instance,
+	VkDebugReportCallbackEXT     debugMessenger,
+	const VkAllocationCallbacks* pAllocator) {
+	// search for the requested function and return null if cannot find
+	auto func = (PFN_vkDestroyDebugReportCallbackEXT)vkGetInstanceProcAddr (
+		instance,
+		"vkDestroyDebugReportCallbackEXT"
+	);
+	if (func != nullptr) {
+		func(instance, debugMessenger, pAllocator);
+	}
+}
+
+static VKAPI_ATTR VkBool32 VKAPI_CALL DebugReportCallback(VkDebugReportFlagsEXT flags,
+	VkDebugReportObjectTypeEXT objectType,
+	uint64_t object, 
+	size_t location, 
+	int32_t messageCode,
+	const char* pLayerPrefix,
+	const char* pMessage, 
+	void* pUserData)
+{
+	// if(flags & VK_DEBUG_REPORT_ERROR_BIT_EXT)
+	{
+		printf("debugPrintfEXT: %s", pMessage);
+	}
+
 	return VK_FALSE;
 }
 
@@ -1243,7 +1296,7 @@ void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& create
 	createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT;
 	createInfo.messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
 	createInfo.messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-	createInfo.pfnUserCallback = DebugCallback;
+	createInfo.pfnUserCallback = DebugUtilsCallback;
 	createInfo.pUserData = nullptr;
 }
 }
@@ -1306,6 +1359,7 @@ void Context::CreateInstance(GLFWwindow* glfwWindow){
 	// Extensions
 	if (enableValidationLayers) {
 		requiredInstanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+		requiredInstanceExtensions.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
 	}
 
 	// get all available extensions
@@ -1341,11 +1395,12 @@ void Context::CreateInstance(GLFWwindow* glfwWindow){
 	VkValidationFeaturesEXT validation_features_info = {VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT};
 	if (validation_features)
 	{
-		static const VkValidationFeatureEnableEXT enable_features[2] = {
+		static const VkValidationFeatureEnableEXT enable_features[3] = {
 			VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
 			VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
+			VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT,
 		};
-		validation_features_info.enabledValidationFeatureCount = 2;
+		validation_features_info.enabledValidationFeatureCount = 3;
 		validation_features_info.pEnabledValidationFeatures    = enable_features;
 		validation_features_info.pNext                         = createInfo.pNext;
 		createInfo.pNext                                       = &validation_features_info;
@@ -1374,7 +1429,8 @@ void Context::CreateInstance(GLFWwindow* glfwWindow){
 		// we need to set up a separate logger just for the instance creation/destruction
 		// because our "default" logger is created after
 		PopulateDebugMessengerCreateInfo(debugCreateInfo);
-		// createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&debugCreateInfo;
+		// debugCreateInfo.pNext = createInfo.pNext;
+		// createInfo.pNext      = &debugCreateInfo;
 	} else {
 		createInfo.enabledLayerCount = 0;
 		createInfo.pNext = nullptr;
@@ -1389,12 +1445,27 @@ void Context::CreateInstance(GLFWwindow* glfwWindow){
 	DEBUG_VK(res, "Failed to create Vulkan instance!");
 	DEBUG_TRACE("Created instance.");
 	
+	// Debug Utils
 	if (enableValidationLayers) {
 		VkDebugUtilsMessengerCreateInfoEXT messengerInfo;
 		PopulateDebugMessengerCreateInfo(messengerInfo);
 		res = CreateDebugUtilsMessengerEXT(instance, &messengerInfo, allocator, &debugMessenger);
 		DEBUG_VK(res, "Failed to set up debug messenger!");
-		DEBUG_TRACE("Created debug messenger.");
+		DEBUG_TRACE("Created debug messenger., res = {}", (uint64_t)debugMessenger);
+	}
+
+	// Debug Report
+	if (enableValidationLayers) {
+		VkDebugReportCallbackCreateInfoEXT debugReportInfo = {};
+		debugReportInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
+		debugReportInfo.pfnCallback = DebugReportCallback;
+		debugReportInfo.flags = VK_DEBUG_REPORT_INFORMATION_BIT_EXT;
+		debugReportInfo.pUserData = nullptr;
+
+		// Create the callback handle
+		res = CreateDebugReportCallbackEXT(instance, &debugReportInfo, nullptr, &debugReport);
+		// DEBUG_VK(res, "Failed to set up debug report callback!");
+		DEBUG_TRACE("Created debug report callback., res = {}", (uint64_t)debugReport);
 	}
 
 	if (_ctx.graphicsEnabled){
@@ -1412,6 +1483,11 @@ void Context::DestroyInstance() {
 		DestroyDebugUtilsMessengerEXT(instance, debugMessenger, allocator);
 		DEBUG_TRACE("Destroyed debug messenger.");
 		debugMessenger = nullptr;
+	}
+	if (debugReport) {
+		DestroyDebugReportCallbackEXT(instance, debugReport, allocator);
+		DEBUG_TRACE("Destroyed debug report callback.");
+		debugReport = nullptr;
 	}
 	if (_ctx.graphicsEnabled){
 		vkDestroySurfaceKHR(instance, surface, allocator);
@@ -1463,15 +1539,18 @@ void Context::CreatePhysicalDevice() {
 				if (present) presentAvailable = true;
 			}
 		}
-
+		
 		bufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
 		indexingFeatures.sType	= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT;
 		indexingFeatures.pNext = &bufferDeviceAddressFeatures;
 		physicalFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-		physicalFeatures2.pNext = &indexingFeatures;	
+		physicalFeatures2.pNext = &indexingFeatures;
 		vkGetPhysicalDeviceFeatures2(device, &physicalFeatures2);
 		vkGetPhysicalDeviceProperties(device, &physicalProperties);
 		vkGetPhysicalDeviceMemoryProperties(device, &memoryProperties);
+		// imageFormatProperties2.sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2;
+		// imageFormatInfo2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2;
+		// vkGetPhysicalDeviceImageFormatProperties2(device, &imageFormatInfo2, &imageFormatProperties2);
 
 		VkSampleCountFlags counts = physicalProperties.limits.framebufferColorSampleCounts;
 		counts &= physicalProperties.limits.framebufferDepthSampleCounts;
