@@ -48,20 +48,21 @@ const std::vector<Vertex> vertices = {
 };
 
 void Context::CreateShaders() {
-	// pipeline = vkw::CreatePipeline({
-    //     .point = vkw::PipelinePoint::Graphics,
-    //     .stages = {
-    //         {.stage = vkw::ShaderStage::Vertex, .path = "tests/HelloTriangle/HelloTriangle.vert"},
-    //         {.stage = vkw::ShaderStage::Fragment, .path = "tests/HelloTriangle/HelloTriangle.frag"},
-    //     },
-    //     .name = "Opaque Pipeline",
-    //     // .vertexAttributes = {vkw::Format::RGB32_sfloat, vkw::Format::RGB32_sfloat, vkw::Format::RGBA32_sfloat, vkw::Format::RG32_sfloat},
-	// 	// pos2 + color3
-    //     .vertexAttributes = {vkw::Format::RG32_sfloat, vkw::Format::RGB32_sfloat},
-    //     // .colorFormats = {ctx.albedo.format, ctx.normal.format, ctx.material.format, ctx.emission.format},
-    //     .useDepth = false,
-    //     // .depthFormat = {ctx.depth.format}
-    // });
+	pipeline = vkw::CreatePipeline({
+        .point = vkw::PipelinePoint::Graphics,
+        .stages = {
+            {.stage = vkw::ShaderStage::Vertex, .path = "tests/HelloTriangle/HelloTriangle.vert"},
+            {.stage = vkw::ShaderStage::Fragment, .path = "tests/HelloTriangle/HelloTriangle.frag"},
+        },
+        .name = "Hello triangle pipeline",
+        // .vertexAttributes = {vkw::Format::RGB32_sfloat, vkw::Format::RGB32_sfloat, vkw::Format::RGBA32_sfloat, vkw::Format::RG32_sfloat},
+		// pos2 + color3
+        // .vertexAttributes = {vkw::Format::RG32_sfloat, vkw::Format::RGB32_sfloat},
+        // .colorFormats = {ctx.albedo.format, ctx.normal.format, ctx.material.format, ctx.emission.format},
+        .colorFormats = {vkw::Format::BGRA8_unorm},
+        .useDepth = false,
+        // .depthFormat = {ctx.depth.format}
+    });
 }
 
 void Context::CreateImages(uint32_t width, uint32_t height) {
@@ -133,33 +134,30 @@ void HelloTriangleApplication::Draw() {
 	constants.outputImageRID = ctx.outputImage.RID();
 	
 	vkw::BeginCommandBuffer(vkw::Queue::Graphics);
-	// vkw::CmdBeginRendering(attachs, ctx.depth);
-	// vkw::CmdBindPipeline(ctx.pipeline);
 	// vkw::CmdPushConstants(&constants, sizeof(constants));
+
+	// vkw::CmdBeginPresent();
 	vkw::AcquireImage();
 	vkw::Image& img = vkw::GetCurrentSwapchainImage();
+
 	vkw::CmdBarrier(img, vkw::Layout::TransferDst);
 	vkw::CmdClearColorImage(img, {0.7f, 0.0f, 0.4f, 1.0f});
-	vkw::CmdEndPresent();
+
+	vkw::CmdBarrier(img, vkw::Layout::ColorAttachment);
+	vkw::CmdBeginRendering({img});
+
+	vkw::CmdBindPipeline(ctx.pipeline);
+
+	vkw::CmdDraw(3, 1, 0, 0);
+
+	// vkw::CmdEndPresent();
+	vkw::CmdEndRendering();
+	vkw::CmdBarrier(img, vkw::Layout::Present);
+
 	// vkw::EndCommandBuffer();
 	vkw::SubmitAndPresent();
 	vkw::WaitQueue(vkw::Queue::Graphics);
 	sleep(3);
-
-	vkw::BeginCommandBuffer(vkw::Queue::Graphics);
-	// vkw::CmdBeginRendering(attachs, ctx.depth);
-	// vkw::CmdBindPipeline(ctx.pipeline);
-	// vkw::CmdPushConstants(&constants, sizeof(constants));
-	vkw::CmdBeginPresent();
-	img = vkw::GetCurrentSwapchainImage();
-	vkw::CmdBarrier(img, vkw::Layout::TransferDst);
-	vkw::CmdClearColorImage(img, {0.0f, 0.7f, 0.4f, 1.0f});
-	vkw::CmdEndPresent();
-	// vkw::EndCommandBuffer();
-	vkw::SubmitAndPresent();
-	vkw::WaitQueue(vkw::Queue::Graphics);
-	sleep(3);
-
 	// timer.Start();
 }
 

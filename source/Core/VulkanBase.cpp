@@ -139,7 +139,7 @@ struct Context
 
 	uint32_t additionalImages = 0;
 	uint32_t framesInFlight = 1;
-	VkFormat depthFormat;
+	// VkFormat depthFormat;
 	VkExtent2D swapChainExtent;
 	uint32_t swapChainCurrentFrame = 0; // 0 For compute
 	bool swapChainDirty = true;
@@ -783,11 +783,11 @@ void Context::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipeline) {
 
 		VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
 		vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-		vertexInputInfo.vertexBindingDescriptionCount = 1;
-		vertexInputInfo.vertexAttributeDescriptionCount = (uint32_t)(attributeDescs.size());
-		// these points to an array of structs that describe how to load the vertex data
-		vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-		vertexInputInfo.pVertexAttributeDescriptions = attributeDescs.data();
+		// vertexInputInfo.vertexBindingDescriptionCount = 1;
+		// vertexInputInfo.vertexAttributeDescriptionCount = (uint32_t)(attributeDescs.size());
+		// // these points to an array of structs that describe how to load the vertex data
+		// vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+		// vertexInputInfo.pVertexAttributeDescriptions = attributeDescs.data();
 
 		std::vector<VkDynamicState> dynamicStates;
 		dynamicStates.push_back(VK_DYNAMIC_STATE_VIEWPORT);
@@ -945,7 +945,8 @@ void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach
         colorAttachInfos[i].imageView = colorAttachs[i].resource->view;
         colorAttachInfos[i].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         colorAttachInfos[i].resolveMode = VK_RESOLVE_MODE_NONE;
-        colorAttachInfos[i].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        // colorAttachInfos[i].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        colorAttachInfos[i].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
         colorAttachInfos[i].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
         colorAttachInfos[i].clearValue.color = { 0, 0, 0, 0 };
     }
@@ -986,18 +987,23 @@ void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach
 
 void CmdEndRendering() {
     auto& cmd = _ctx.GetCurrentCommandResources();
-    // vkCmdEndRendering(cmd.buffer);
+    vkCmdEndRendering(cmd.buffer);
 }
-
+// Acquire + CmdBarrier + CmdBeginRendering
 void CmdBeginPresent() {
     vkw::AcquireImage();
-    // vkw::CmdBarrier(_ctx.GetCurrentSwapChainImage(), vkw::Layout::ColorAttachment);
-    // vkw::CmdBeginRendering({ _ctx.GetCurrentSwapChainImage() }, {});
+    vkw::CmdBarrier(_ctx.GetCurrentSwapChainImage(), vkw::Layout::ColorAttachment);
+    vkw::CmdBeginRendering({ _ctx.GetCurrentSwapChainImage() }, {});
+}
+// CmdEndRendering + CmdBarrier
+void CmdEndPresent() {
+    vkw::CmdEndRendering();
+    vkw::CmdBarrier(_ctx.GetCurrentSwapChainImage(), vkw::Layout::Present);
 }
 
-void CmdEndPresent() {
-    // vkw::CmdEndRendering();
-    vkw::CmdBarrier(_ctx.GetCurrentSwapChainImage(), vkw::Layout::Present);
+void CmdDraw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance) {
+	auto& cmd = _ctx.GetCurrentCommandResources();
+	vkCmdDraw(cmd.buffer, vertexCount, instanceCount, firstVertex, firstInstance);
 }
 
 void CmdDrawMesh(Buffer& vertexBuffer, Buffer& indexBuffer, uint32_t indexCount) {
@@ -1949,7 +1955,7 @@ void AcquireImage() {
 bool GetSwapChainDirty() {
 	return _ctx.swapChainDirty;
 }
-
+// EndCommandBuffer + vkQueuePresentKHR
 void SubmitAndPresent() {
     auto& cmd = _ctx.GetCurrentCommandResources();
 

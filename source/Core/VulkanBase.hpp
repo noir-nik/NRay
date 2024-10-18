@@ -231,6 +231,8 @@ void CmdPushConstants(void* data, uint32_t size);
 
 // void CmdBuildBLAS(BLAS& blas);
 // void CmdBuildTLAS(TLAS& tlas, const std::vector<BLASInstance>& instances);
+
+void CmdDraw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance);
 void CmdDrawMesh(Buffer& vertexBuffer, Buffer& indexBuffer, uint32_t indexCount);
 void CmdDrawLineStrip(const Buffer& pointsBuffer, uint32_t firstPoint, uint32_t pointCount, float thickness = 1.0f);
 void CmdDrawPassThrough();
