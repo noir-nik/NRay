@@ -82,6 +82,7 @@ void HelloTriangleApplication::run(HelloTriangleInfo* pHelloTriangleInfo) {
 	Setup();
 	Create();
 	Draw();
+	// MainLoop();
 	Finish();
 }
 
@@ -97,6 +98,32 @@ void HelloTriangleApplication::Create() {
 	ctx.CreateShaders();
 }
 
+void HelloTriangleApplication::MainLoop() {
+	Timer timer;
+	for (int i = 0; i < 5000; i++) {
+		auto r = sinf(0.5f * i+ 1);
+		auto g = cosf(0.9f * i);
+		vkw::BeginCommandBuffer(vkw::Queue::Graphics);
+		// vkw::CmdBeginRendering(attachs, ctx.depth);
+		// vkw::CmdBindPipeline(ctx.pipeline);
+		// vkw::CmdPushConstants(&constants, sizeof(constants));
+		vkw::AcquireImage();
+		vkw::Image& img = vkw::GetCurrentSwapchainImage();
+		vkw::CmdBarrier(img, vkw::Layout::TransferDst);
+		vkw::CmdClearColorImage(img, {std::abs(r), 0.5f, 0.0f, 1.0f});
+		vkw::CmdEndPresent();
+		// vkw::EndCommandBuffer();
+		timer.Start();
+		vkw::SubmitAndPresent();
+		// vkw::WaitQueue(vkw::Queue::Graphics);
+		printf("%d, Render time: %f\n", i, timer.Elapsed());
+		// usleep(100 * 1000);
+		// glfwWaitEvents();
+	}
+	LOG_INFO("Waiting for 1 second...");
+	vkw::WaitQueue(vkw::Queue::Graphics);
+	usleep(1000 * 1000);
+}
 
 void HelloTriangleApplication::Draw() {
 	Timer timer;
@@ -106,24 +133,34 @@ void HelloTriangleApplication::Draw() {
 	constants.outputImageRID = ctx.outputImage.RID();
 	
 	vkw::BeginCommandBuffer(vkw::Queue::Graphics);
-
+	// vkw::CmdBeginRendering(attachs, ctx.depth);
+	// vkw::CmdBindPipeline(ctx.pipeline);
+	// vkw::CmdPushConstants(&constants, sizeof(constants));
+	vkw::AcquireImage();
 	vkw::Image& img = vkw::GetCurrentSwapchainImage();
+	vkw::CmdBarrier(img, vkw::Layout::TransferDst);
+	vkw::CmdClearColorImage(img, {0.7f, 0.0f, 0.4f, 1.0f});
+	vkw::CmdEndPresent();
+	// vkw::EndCommandBuffer();
+	vkw::SubmitAndPresent();
+	vkw::WaitQueue(vkw::Queue::Graphics);
+	sleep(3);
+
+	vkw::BeginCommandBuffer(vkw::Queue::Graphics);
 	// vkw::CmdBeginRendering(attachs, ctx.depth);
 	// vkw::CmdBindPipeline(ctx.pipeline);
 	// vkw::CmdPushConstants(&constants, sizeof(constants));
 	vkw::CmdBeginPresent();
+	img = vkw::GetCurrentSwapchainImage();
 	vkw::CmdBarrier(img, vkw::Layout::TransferDst);
-	vkw::CmdClearColorImage(img, {0.7f, 0.0f, 0.4f, 1.0f});
+	vkw::CmdClearColorImage(img, {0.0f, 0.7f, 0.4f, 1.0f});
 	vkw::CmdEndPresent();
-	timer.Start();
 	// vkw::EndCommandBuffer();
 	vkw::SubmitAndPresent();
 	vkw::WaitQueue(vkw::Queue::Graphics);
-	printf("Compute time: %fs\n", timer.Elapsed());
 	sleep(3);
+
 	// timer.Start();
-	// saveBuffer("HelloTriangle.bmp", &ctx.outputImage, ctx.width, ctx.height);
-	// printf("Save time: %fs\n", timer.Elapsed());
 }
 
 void HelloTriangleApplication::Finish() {

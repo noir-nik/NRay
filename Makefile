@@ -4,7 +4,7 @@ CC := clang++
 # CC := ccache clang++
 TARGET := app
 
-OPT_LEVEL := 0
+OPT_LEVEL := 2
 
 INCLUDES := -Isource/Core -Isource/Base -Isource/Shaders 
 CXXFLAGS := -MMD -MP $(INCLUDES) -O$(OPT_LEVEL) -DENGINE -std=c++17

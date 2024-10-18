@@ -24,7 +24,7 @@ struct Context
 	void CmdCopy(Image& dst, Buffer& src, uint32_t srcOffset);
 	void CmdCopy(Buffer& dst, Image& src, uint32_t srcOffset);
 	void CmdCopy(Buffer& dst, Image& src, uint32_t size, uint32_t dstOffset, ivec2 imageOffset, ivec2 imageExtent);
-	void CmdBarrier(Image& img, Layout::ImageLayout layout);
+	void CmdBarrier(Image& img, Layout::ImageLayout newLayout, Layout::ImageLayout oldLayout);
 	void CmdBarrier();
 	void CmdClearColorImage(Image& image, float4& color);
 
@@ -115,8 +115,8 @@ struct Context
 	std::vector<CommandResources> commandResources; // Owns all command resources
 	InternalQueue* queues[Queue::Count]; // Pointers to uniqueQueues
 	Queue currentQueue = Queue::Count;
+
 	std::shared_ptr<PipelineResource> currentPipeline;
-	// const uint32_t stagingBufferSize = 256 * 1024 * 1024;
 	const uint32_t stagingBufferSize = 312 * 1024 * 1024;
 
 	VkPhysicalDeviceMemoryProperties memoryProperties;
@@ -901,8 +901,11 @@ void CmdCopy(Buffer &dst, Image &src, uint32_t size, uint32_t dstOffset, ivec2 i
 	_ctx.CmdCopy(dst, src, size, dstOffset, imageOffset, imageExtent);
 }
 
-void CmdBarrier(Image& img, Layout::ImageLayout layout) {
-	_ctx.CmdBarrier(img, layout);
+void CmdBarrier(Image& img, Layout::ImageLayout newLayout, Layout::ImageLayout oldLayout) {
+	if (oldLayout == Layout::MaxEnum) {
+		oldLayout = img.layout;
+	}
+	_ctx.CmdBarrier(img, newLayout, oldLayout);
 }
 
 void CmdBarrier() {
@@ -988,7 +991,7 @@ void CmdEndRendering() {
 
 void CmdBeginPresent() {
     vkw::AcquireImage();
-    vkw::CmdBarrier(_ctx.GetCurrentSwapChainImage(), vkw::Layout::ColorAttachment);
+    // vkw::CmdBarrier(_ctx.GetCurrentSwapChainImage(), vkw::Layout::ColorAttachment);
     // vkw::CmdBeginRendering({ _ctx.GetCurrentSwapChainImage() }, {});
 }
 
@@ -1444,11 +1447,6 @@ void Context::CreatePhysicalDevice() {
 			}
 		}
 
-		// // TODO: change logic
-		// queues[Queue::Graphics].family = graphicsFamily;
-		// queues[Queue::Compute].family = computeFamily == -1 ? graphicsFamily : computeFamily;
-		// queues[Queue::Transfer].family = transferFamily == -1 ? graphicsFamily : transferFamily;
-
 		bufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
 		indexingFeatures.sType	= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT;
 		indexingFeatures.pNext = &bufferDeviceAddressFeatures;
@@ -1471,17 +1469,15 @@ void Context::CreatePhysicalDevice() {
 		// else if (counts & VK_SAMPLE_COUNT_2_BIT) { maxSamples = VK_SAMPLE_COUNT_2_BIT; }
 
 		// check if all required extensions are available
-		// todo: string_view
 		if (graphicsEnabled) requiredExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
-		std::set<std::string> required(requiredExtensions.begin(), requiredExtensions.end());
+		std::set<std::string_view> required(requiredExtensions.begin(), requiredExtensions.end());
 		for (const auto& extension : availableExtensions) {
-			required.erase(std::string(extension.extensionName));
+			required.erase(extension.extensionName);
 		}
 		
-		// LOG_INFO("Families: {0}, {1}, {2}", graphicsFamily, computeFamily, transferFamily);
 		// check if all required queues are supported
 		bool suitable = required.empty();
-		if (!suitable) LOG_ERROR("Required extensions not available: {0}", required.begin()->c_str());
+		if (!suitable) LOG_ERROR("Required extensions not available: {0}", required.begin()->data());
 		suitable &= (graphicsAvailable && computeAvailable && transferAvailable && presentAvailable);
 		if (!suitable) LOG_ERROR("Required queue not available");
 		// suitable &= graphicsFamily != -1;
@@ -1495,12 +1491,10 @@ void Context::CreatePhysicalDevice() {
 }
 
 void Context::CreateDevice() {
-	// std::vector<uint32_t> numActiveQueuesInFamilies(familyCount, 0);
 	uint32_t familyCount = availableFamilies.size();
 
 	std::unordered_map<uint32_t, uint32_t> numActiveQueuesInFamilies; // <queueFamilyIndex, queueCount>
 	numActiveQueuesInFamilies.reserve(familyCount);
-	uint32_t queueNotFound = (~0U);
 	auto find_first = [&](VkQueueFlags desired_flags) -> std::pair<uint32_t, uint32_t> {
 		for (uint32_t i = 0; i < familyCount; i++) {
 			auto& family = availableFamilies[i];
@@ -1520,7 +1514,7 @@ void Context::CreateDevice() {
 		}
 		LOG_ERROR("No queue with flags {0} found", desired_flags);
 		DEBUG_ASSERT(false, "No queue found"); //todo:remove after debugging
-		return {queueNotFound, 0};
+		return {~0U, 0};
 	};
 
 	auto find_separate = [&](VkQueueFlags desired_flags) -> std::tuple<uint32_t, uint32_t, bool> {
@@ -2453,7 +2447,7 @@ void Context::CmdCopy(Buffer &dst, Image &src, uint32_t size, uint32_t dstOffset
 	vkCmdCopyImageToBuffer2(cmd.buffer, &copyInfo);
 }
 
-void Context::CmdBarrier(Image& img, Layout::ImageLayout layout) {
+void Context::CmdBarrier(Image& img, Layout::ImageLayout newLayout, Layout::ImageLayout oldLayout) {
 	CommandResources& cmd = GetCurrentCommandResources();
 	VkImageSubresourceRange range = {};
 	range.aspectMask = (VkImageAspectFlags)img.aspect;
@@ -2464,8 +2458,8 @@ void Context::CmdBarrier(Image& img, Layout::ImageLayout layout) {
 
 	VkAccessFlags srcAccess = VK_ACCESS_SHADER_WRITE_BIT;
 	VkAccessFlags dstAccess = VK_ACCESS_SHADER_READ_BIT;
-	VkPipelineStageFlags srcStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
-	VkPipelineStageFlags dstStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+	VkPipelineStageFlags srcStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT; // Bottom
+	VkPipelineStageFlags dstStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT; // Top
 
 	VkImageMemoryBarrier barrier{};
 	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -2473,12 +2467,12 @@ void Context::CmdBarrier(Image& img, Layout::ImageLayout layout) {
 	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 	barrier.srcAccessMask = srcAccess;
 	barrier.dstAccessMask = dstAccess;
-	barrier.oldLayout = (VkImageLayout)img.layout;
-	barrier.newLayout = (VkImageLayout)layout;
+	barrier.oldLayout = (VkImageLayout)oldLayout;
+	barrier.newLayout = (VkImageLayout)newLayout;
 	barrier.image = img.resource->image;
 	barrier.subresourceRange = range;
 	vkCmdPipelineBarrier(cmd.buffer, srcStage, dstStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
-	img.layout = layout;
+	img.layout = newLayout;
 }
 
 void Context::CmdBarrier() {

@@ -19,6 +19,7 @@ private:
 	void Setup();
 	void Create();
 	void Draw();
+	void MainLoop();
 	void Finish();
 
 	HelloTriangleInfo* info;
