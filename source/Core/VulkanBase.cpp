@@ -662,6 +662,7 @@ void Context::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipeline) {
 
 	std::vector<VkPipelineShaderStageCreateInfo> shaderStages(desc.stages.size());
 	std::vector<VkShaderModule> shaderModules(desc.stages.size());
+	DEBUG_TRACE("Creating {} shader modules", desc.stages.size());
 	for (int i = 0; i < desc.stages.size(); i++) {
 		VkShaderModuleCreateInfo createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -783,11 +784,11 @@ void Context::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipeline) {
 
 		VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
 		vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-		// vertexInputInfo.vertexBindingDescriptionCount = 1;
-		// vertexInputInfo.vertexAttributeDescriptionCount = (uint32_t)(attributeDescs.size());
-		// // these points to an array of structs that describe how to load the vertex data
-		// vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-		// vertexInputInfo.pVertexAttributeDescriptions = attributeDescs.data();
+		vertexInputInfo.vertexBindingDescriptionCount = 1;
+		vertexInputInfo.vertexAttributeDescriptionCount = (uint32_t)(attributeDescs.size());
+		// these points to an array of structs that describe how to load the vertex data
+		vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+		vertexInputInfo.pVertexAttributeDescriptions = attributeDescs.data();
 
 		std::vector<VkDynamicState> dynamicStates;
 		dynamicStates.push_back(VK_DYNAMIC_STATE_VIEWPORT);
@@ -955,7 +956,7 @@ void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach
         colorAttachInfos[i].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         // colorAttachInfos[i].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
         colorAttachInfos[i].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        colorAttachInfos[i].clearValue.color = { 0.4f, 0.7f, 0.1f, 0.0f };
+        colorAttachInfos[i].clearValue.color = { 0.1f, 0.4f, 0.1f, 0.0f };
     }
 
     renderingInfo.colorAttachmentCount = colorAttachInfos.size();
@@ -1010,6 +1011,7 @@ void CmdEndPresent() {
 
 void CmdDraw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance) {
 	auto& cmd = _ctx.GetCurrentCommandResources();
+	DEBUG_TRACE("CmdDraw({},{},{},{})", vertexCount, instanceCount, firstVertex, firstInstance);
 	vkCmdDraw(cmd.buffer, vertexCount, instanceCount, firstVertex, firstInstance);
 }
 
@@ -1019,6 +1021,12 @@ void CmdDrawMesh(Buffer& vertexBuffer, Buffer& indexBuffer, uint32_t indexCount)
     vkCmdBindVertexBuffers(cmd.buffer, 0, 1, &vertexBuffer.resource->buffer, offsets);
     vkCmdBindIndexBuffer(cmd.buffer, indexBuffer.resource->buffer, 0, VK_INDEX_TYPE_UINT32);
     vkCmdDrawIndexed(cmd.buffer, indexCount, 1, 0, 0, 0);
+}
+
+void CmdBindVertexBuffer(Buffer& vertexBuffer) {
+    auto& cmd = _ctx.GetCurrentCommandResources();
+    VkDeviceSize offsets[] = { 0 };
+    vkCmdBindVertexBuffers(cmd.buffer, 0, 1, &vertexBuffer.resource->buffer, offsets);
 }
 
 void CmdDrawLineStrip(const Buffer& pointsBuffer, uint32_t firstPoint, uint32_t pointCount, float thickness) {
@@ -1469,17 +1477,17 @@ void Context::CreatePhysicalDevice() {
 		vkGetPhysicalDeviceProperties(device, &physicalProperties);
 		vkGetPhysicalDeviceMemoryProperties(device, &memoryProperties);
 
-		// VkSampleCountFlags counts = physicalProperties.limits.framebufferColorSampleCounts;
-		// counts &= physicalProperties.limits.framebufferDepthSampleCounts;
+		VkSampleCountFlags counts = physicalProperties.limits.framebufferColorSampleCounts;
+		counts &= physicalProperties.limits.framebufferDepthSampleCounts;
 
 		// get max number of samples
-		// maxSamples = VK_SAMPLE_COUNT_1_BIT;
-		// if (counts & VK_SAMPLE_COUNT_64_BIT) { maxSamples = VK_SAMPLE_COUNT_64_BIT; }
-		// else if (counts & VK_SAMPLE_COUNT_32_BIT) { maxSamples = VK_SAMPLE_COUNT_32_BIT; }
-		// else if (counts & VK_SAMPLE_COUNT_16_BIT) { maxSamples = VK_SAMPLE_COUNT_16_BIT; }
-		// else if (counts & VK_SAMPLE_COUNT_8_BIT) { maxSamples = VK_SAMPLE_COUNT_8_BIT; }
-		// else if (counts & VK_SAMPLE_COUNT_4_BIT) { maxSamples = VK_SAMPLE_COUNT_4_BIT; }
-		// else if (counts & VK_SAMPLE_COUNT_2_BIT) { maxSamples = VK_SAMPLE_COUNT_2_BIT; }
+		maxSamples = VK_SAMPLE_COUNT_1_BIT;
+		if (counts & VK_SAMPLE_COUNT_64_BIT) { maxSamples = VK_SAMPLE_COUNT_64_BIT; }
+		else if (counts & VK_SAMPLE_COUNT_32_BIT) { maxSamples = VK_SAMPLE_COUNT_32_BIT; }
+		else if (counts & VK_SAMPLE_COUNT_16_BIT) { maxSamples = VK_SAMPLE_COUNT_16_BIT; }
+		else if (counts & VK_SAMPLE_COUNT_8_BIT) { maxSamples = VK_SAMPLE_COUNT_8_BIT; }
+		else if (counts & VK_SAMPLE_COUNT_4_BIT) { maxSamples = VK_SAMPLE_COUNT_4_BIT; }
+		else if (counts & VK_SAMPLE_COUNT_2_BIT) { maxSamples = VK_SAMPLE_COUNT_2_BIT; }
 
 		// check if all required extensions are available
 		if (graphicsEnabled) requiredExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
@@ -1715,12 +1723,6 @@ void Context::CreateDevice() {
 	allocatorCreateInfo.pVulkanFunctions = &vulkanFunctions;
 	vmaCreateAllocator(&allocatorCreateInfo, &vmaAllocator);
 
-	// for (int q = 0; q < Queue::Count; q++) {
-	// 	vkGetDeviceQueue(device, queues[q].family, queues[q].indexInFamily, &queues[q].queue);
-	// }
-	// for (int q = 0; q < uniqueQueues.size(); q++) {
-	// 	vkGetDeviceQueue(device, uniqueQueues[q].family, uniqueQueues[q].indexInFamily, &uniqueQueues[q].queue);
-	// }
 	for (auto& [key, q]: uniqueQueues) {
 		vkGetDeviceQueue(device, q.family, q.indexInFamily, &q.queue);
 	}

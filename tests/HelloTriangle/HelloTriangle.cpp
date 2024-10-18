@@ -18,6 +18,7 @@ using Pixel = vec4;
 namespace {
 struct Context {
 	vkw::Pipeline pipeline;
+	vkw::Pipeline computePipeline;
 
 	uint32_t width, height;
 
@@ -25,7 +26,7 @@ struct Context {
 	// float4x4 worldViewInv;
 	// float4x4 worldViewProjInv;
 
-	vkw::Buffer outputImage;
+	// vkw::Buffer outputImage;
 	vkw::Buffer vertexBuffer;
 
 	vkw::Image renderImage;
@@ -55,26 +56,33 @@ void Context::CreateShaders() {
             {.stage = vkw::ShaderStage::Fragment, .path = "tests/HelloTriangle/HelloTriangle.frag"},
         },
         .name = "Hello triangle pipeline",
-        // .vertexAttributes = {vkw::Format::RGB32_sfloat, vkw::Format::RGB32_sfloat, vkw::Format::RGBA32_sfloat, vkw::Format::RG32_sfloat},
 		// pos2 + color3
-        // .vertexAttributes = {vkw::Format::RG32_sfloat, vkw::Format::RGB32_sfloat},
+        .vertexAttributes = {vkw::Format::RG32_sfloat, vkw::Format::RGB32_sfloat},
         // .colorFormats = {ctx.albedo.format, ctx.normal.format, ctx.material.format, ctx.emission.format},
         .colorFormats = {vkw::Format::RGBA32_sfloat},
         .useDepth = false,
         // .depthFormat = {ctx.depth.format}
     });
+
+	computePipeline = vkw::CreatePipeline({
+		.point = vkw::PipelinePoint::Compute,
+		.stages = {
+			{.stage = vkw::ShaderStage::Compute, .path = "tests/HelloTriangle/testDraw.comp"},
+		},
+		.name = "TestDraw Compute Pipeline",
+	});
 }
 
 void Context::CreateImages(uint32_t width, uint32_t height) {
-	ctx.outputImage = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage, vkw::Memory::CPU, "Output Image");
+	// ctx.outputImage = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage, vkw::Memory::CPU, "Output Image");
 	ctx.vertexBuffer = vkw::CreateBuffer(vertices.size() * sizeof(Vertex), vkw::BufferUsage::Vertex, vkw::Memory::GPU, "Vertex Buffer");
 
 	ctx.renderImage = vkw::CreateImage({
 		.width = width,
 		.height = height,
 		.format = vkw::Format::RGBA32_sfloat,
-		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::TransferSrc | vkw::ImageUsage::TransferDst,
-		.name = "Output Image",
+		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::TransferSrc | vkw::ImageUsage::TransferDst | vkw::ImageUsage::Storage,
+		.name = "Render Image",
 	});
 }
 
@@ -131,7 +139,7 @@ void HelloTriangleApplication::Draw() {
 	HelloTriangleConstants constants{};
 	constants.width = ctx.width;
 	constants.height = ctx.height;
-	constants.outputImageRID = ctx.outputImage.RID();
+	constants.outputImageRID = ctx.renderImage.RID();
 	
 	vkw::BeginCommandBuffer(vkw::Queue::Graphics);
 	// vkw::CmdPushConstants(&constants, sizeof(constants));
@@ -140,20 +148,21 @@ void HelloTriangleApplication::Draw() {
 	vkw::AcquireImage();
 	vkw::Image& img = vkw::GetCurrentSwapchainImage();
 	vkw::CmdBarrier(ctx.renderImage, vkw::Layout::ColorAttachment);
-
+	vkw::CmdCopy(ctx.vertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex));
 	// vkw::CmdClearColorImage(ctx.renderImage, {0.7f, 0.0f, 0.4f, 1.0f});
 
 	vkw::CmdBeginRendering({ctx.renderImage});
-
 	vkw::CmdBindPipeline(ctx.pipeline);
-
+	vkw::CmdBindVertexBuffer(ctx.vertexBuffer);
 	vkw::CmdDraw(3, 1, 0, 0);
-
-	// vkw::CmdEndPresent();
 	vkw::CmdEndRendering();
+	
+	// vkw::CmdBindPipeline(ctx.computePipeline);
+	// vkw::CmdPushConstants(&constants, sizeof(constants));
+	// vkw::CmdDispatch({(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
 
-	vkw::CmdBarrier(img, vkw::Layout::TransferDst);
 	vkw::CmdBarrier(ctx.renderImage, vkw::Layout::TransferSrc);
+	vkw::CmdBarrier(img, vkw::Layout::TransferDst);
 	vkw::CmdBlit(img, ctx.renderImage);
 
 	vkw::CmdBarrier(img, vkw::Layout::Present);
