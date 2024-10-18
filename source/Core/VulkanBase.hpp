@@ -218,9 +218,10 @@ void CmdCopy(Buffer& dst, Image& src, uint32_t size = 0, uint32_t srcOffset = 0)
 void CmdCopy(Buffer& dst, Image& src, uint32_t size, uint32_t dstOffset, ivec2 imageOffset, ivec2 imageExtent); // size is a No OP
 void CmdBarrier(Image& img, Layout::ImageLayout newLayout, Layout::ImageLayout oldLayout = Layout::MaxEnum);
 void CmdBarrier();
+void CmdBlit(Image& dst, Image& src, uvec2 dstSize = {0,0}, uvec2 srcSize = {0,0});
+void CmdClearColorImage(Image &image, float4 color);
 
 Image& GetCurrentSwapchainImage();
-void CmdClearColorImage(Image &image, float4 color);
 void AcquireImage();
 void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach = {}, uint32_t layerCount = 1);
 void CmdEndRendering();

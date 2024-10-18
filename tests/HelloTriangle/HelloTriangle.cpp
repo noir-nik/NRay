@@ -19,7 +19,7 @@ namespace {
 struct Context {
 	vkw::Pipeline pipeline;
 
-	int width, height;
+	uint32_t width, height;
 
 	// float4x4 viewMat;
 	// float4x4 worldViewInv;
@@ -28,7 +28,7 @@ struct Context {
 	vkw::Buffer outputImage;
 	vkw::Buffer vertexBuffer;
 
-	vkw::Image imageCPU;
+	vkw::Image renderImage;
 
 	void CreateImages(uint32_t width, uint32_t height);
 	void CreateShaders();
@@ -59,7 +59,7 @@ void Context::CreateShaders() {
 		// pos2 + color3
         // .vertexAttributes = {vkw::Format::RG32_sfloat, vkw::Format::RGB32_sfloat},
         // .colorFormats = {ctx.albedo.format, ctx.normal.format, ctx.material.format, ctx.emission.format},
-        .colorFormats = {vkw::Format::BGRA8_unorm},
+        .colorFormats = {vkw::Format::RGBA32_sfloat},
         .useDepth = false,
         // .depthFormat = {ctx.depth.format}
     });
@@ -69,7 +69,7 @@ void Context::CreateImages(uint32_t width, uint32_t height) {
 	ctx.outputImage = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage, vkw::Memory::CPU, "Output Image");
 	ctx.vertexBuffer = vkw::CreateBuffer(vertices.size() * sizeof(Vertex), vkw::BufferUsage::Vertex, vkw::Memory::GPU, "Vertex Buffer");
 
-	ctx.imageCPU = vkw::CreateImage({
+	ctx.renderImage = vkw::CreateImage({
 		.width = width,
 		.height = height,
 		.format = vkw::Format::RGBA32_sfloat,
@@ -139,12 +139,11 @@ void HelloTriangleApplication::Draw() {
 	// vkw::CmdBeginPresent();
 	vkw::AcquireImage();
 	vkw::Image& img = vkw::GetCurrentSwapchainImage();
+	vkw::CmdBarrier(ctx.renderImage, vkw::Layout::ColorAttachment);
 
-	vkw::CmdBarrier(img, vkw::Layout::TransferDst);
-	vkw::CmdClearColorImage(img, {0.7f, 0.0f, 0.4f, 1.0f});
+	// vkw::CmdClearColorImage(ctx.renderImage, {0.7f, 0.0f, 0.4f, 1.0f});
 
-	vkw::CmdBarrier(img, vkw::Layout::ColorAttachment);
-	vkw::CmdBeginRendering({img});
+	vkw::CmdBeginRendering({ctx.renderImage});
 
 	vkw::CmdBindPipeline(ctx.pipeline);
 
@@ -152,6 +151,41 @@ void HelloTriangleApplication::Draw() {
 
 	// vkw::CmdEndPresent();
 	vkw::CmdEndRendering();
+
+	vkw::CmdBarrier(img, vkw::Layout::TransferDst);
+	vkw::CmdBarrier(ctx.renderImage, vkw::Layout::TransferSrc);
+	vkw::CmdBlit(img, ctx.renderImage);
+
+	vkw::CmdBarrier(img, vkw::Layout::Present);
+	vkw::SubmitAndPresent();
+	vkw::WaitQueue(vkw::Queue::Graphics);
+	sleep(3);
+	// timer.Start();
+}
+
+
+/* 
+void HelloTriangleApplication::Draw() {
+	Timer timer;
+	HelloTriangleConstants constants{};
+	constants.width = ctx.width;
+	constants.height = ctx.height;
+	constants.outputImageRID = ctx.outputImage.RID();
+	
+	vkw::BeginCommandBuffer(vkw::Queue::Graphics);
+	// vkw::CmdPushConstants(&constants, sizeof(constants));
+
+	// vkw::CmdBeginPresent();
+	vkw::AcquireImage();
+	vkw::Image& img = vkw::GetCurrentSwapchainImage();
+	vkw::CmdBarrier(img, vkw::Layout::TransferDst);
+
+	vkw::CmdBarrier(ctx.renderImage, vkw::Layout::TransferDst);
+	vkw::CmdClearColorImage(ctx.renderImage, {0.7f, 0.0f, 0.4f, 1.0f});
+	vkw::CmdBarrier(ctx.renderImage, vkw::Layout::TransferSrc);
+
+	vkw::CmdBlit(img, ctx.renderImage, {ctx.width, ctx.height}, {ctx.width, ctx.height});
+
 	vkw::CmdBarrier(img, vkw::Layout::Present);
 
 	// vkw::EndCommandBuffer();
@@ -159,7 +193,7 @@ void HelloTriangleApplication::Draw() {
 	vkw::WaitQueue(vkw::Queue::Graphics);
 	sleep(3);
 	// timer.Start();
-}
+} */
 
 void HelloTriangleApplication::Finish() {
 	ctx = {};

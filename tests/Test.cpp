@@ -72,8 +72,8 @@ static void RadienceFieldTest() {
 static void HelloTriangleTest() {
 	HelloTriangleApplication app;
 	HelloTriangleInfo HelloTriangleInfo = {
-		.width = 256,
-		.height = 256,
+		.width = 640,
+		.height = 480,
 	};
 	app.run(&HelloTriangleInfo);
 }

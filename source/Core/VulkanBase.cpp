@@ -912,7 +912,14 @@ void CmdBarrier() {
 	_ctx.CmdBarrier();
 }
 
-void CmdClearColorImage(Image& image, float4 color){
+void CmdBlit(Image& dst, Image& src, uvec2 dstSize, uvec2 srcSize) {
+	if (dstSize.x == 0 && dstSize.y == 0) {dstSize.x = dst.width; dstSize.y = dst.height;}
+	if (srcSize.x == 0 && srcSize.y == 0) {srcSize.x = src.width; srcSize.y = src.height;}
+	_ctx.CmdBlit(dst, src, dstSize, srcSize);
+}
+
+void CmdClearColorImage(Image &image, float4 color)
+{
 	_ctx.CmdClearColorImage(image, color);
 }
 
@@ -945,10 +952,10 @@ void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach
         colorAttachInfos[i].imageView = colorAttachs[i].resource->view;
         colorAttachInfos[i].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         colorAttachInfos[i].resolveMode = VK_RESOLVE_MODE_NONE;
-        // colorAttachInfos[i].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        colorAttachInfos[i].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+        colorAttachInfos[i].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        // colorAttachInfos[i].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
         colorAttachInfos[i].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        colorAttachInfos[i].clearValue.color = { 0, 0, 0, 0 };
+        colorAttachInfos[i].clearValue.color = { 0.4f, 0.7f, 0.1f, 0.0f };
     }
 
     renderingInfo.colorAttachmentCount = colorAttachInfos.size();
@@ -1579,11 +1586,11 @@ void Context::CreateDevice() {
 		queueCreateInfos.push_back(createInfo);
 	}
 
-	DEBUG_TRACE("Queue[Graphics]: [{0}][{1}]", queues[Queue::Graphics]->family, queues[Queue::Graphics]->indexInFamily);
-	DEBUG_TRACE("Queue[Compute ]: [{0}][{1}]", queues[Queue::Compute ]->family, queues[Queue::Compute ]->indexInFamily);
-	DEBUG_TRACE("Queue[Transfer]: [{0}][{1}]", queues[Queue::Transfer]->family, queues[Queue::Transfer]->indexInFamily);
-	DEBUG_TRACE("numActiveQueuesInFamilies size: {0}", numActiveQueuesInFamilies.size());
-	DEBUG_TRACE("queues in family[0]: {0}", numActiveQueuesInFamilies[0]);
+	// DEBUG_TRACE("Queue[Graphics]: [{0}][{1}]", queues[Queue::Graphics]->family, queues[Queue::Graphics]->indexInFamily);
+	// DEBUG_TRACE("Queue[Compute ]: [{0}][{1}]", queues[Queue::Compute ]->family, queues[Queue::Compute ]->indexInFamily);
+	// DEBUG_TRACE("Queue[Transfer]: [{0}][{1}]", queues[Queue::Transfer]->family, queues[Queue::Transfer]->indexInFamily);
+	// DEBUG_TRACE("numActiveQueuesInFamilies size: {0}", numActiveQueuesInFamilies.size());
+	// DEBUG_TRACE("queues in family[0]: {0}", numActiveQueuesInFamilies[0]);
 
 	auto supportedFeatures = physicalFeatures2.features;
 	
@@ -1917,7 +1924,7 @@ void Context::CreateSwapChain(uint32_t width, uint32_t height) {
 		}
 	}
 
-	LOG_INFO("Create Swapchain");
+	LOG_INFO("Created Swapchain");
 	swapChainCurrentFrame = 0;
 	currentImageIndex = 0;
 	swapChainDirty = false;
@@ -2238,16 +2245,12 @@ void Context::createCommandBuffers(){
 	}
 
 		// DEBUG_TRACE("Queue[{}]: [{}][{}], commands.size = {}", q, queue.family, queue.indexInFamily, queue.commands.size());
-		// DEBUG_ASSERT(queue.family != -1, "Queue family = -1, fix in CreatePhysicalDevice()");
 		
-	// for (int q = 0; q < Queue::Count; q++) {
-	// for (int q = 0; q < uniqueQueues.size(); q++) {
 	for (auto& [key, queue]: uniqueQueues) {
-		// InternalQueue& queue = uniqueQueues[q];
-		DEBUG_TRACE("Queue[{}]: [{}][{}]", key, queue.family, queue.indexInFamily);
+		// DEBUG_TRACE("Queue[{}]: [{}][{}]", key, queue.family, queue.indexInFamily);
 		poolInfo.queueFamilyIndex = queue.family;
 		for (int i = 0; i < framesInFlight; i++) {
-			DEBUG_TRACE("  Frame[{}]: [{}][{}]", i, queue.family, queue.indexInFamily);
+			// DEBUG_TRACE("  Frame[{}]: [{}][{}]", i, queue.family, queue.indexInFamily);
 			auto res = vkCreateCommandPool(device, &poolInfo, allocator, &queue.commands[i].pool);
 			DEBUG_VK(res, "Failed to create command pool!");
 
@@ -2273,9 +2276,9 @@ void Context::createCommandBuffers(){
 			// queue.commands[i].timeStamps.clear();
 			// queue.commands[i].timeStampNames.clear();
 		}
-		DEBUG_TRACE("Queue[{}]: [{}][{}] created", key, queue.family, queue.indexInFamily);
+		// DEBUG_TRACE("Queue[{}]: [{}][{}] created", key, queue.family, queue.indexInFamily);
 	}
-	DEBUG_TRACE("Created {} command buffers", commandResources.size());
+	// DEBUG_TRACE("Created {} command buffers", commandResources.size());
 }
 
 void Context::DestroyCommandBuffers() {
@@ -2539,9 +2542,11 @@ void Context::CmdBlit(Image& dst, Image& src, uvec2 dstSize, uvec2 srcSize) {
 
 	VkBlitImageInfo2 blitInfo{ .sType = VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2, .pNext = nullptr };
 	blitInfo.dstImage = dst.resource->image;
-	blitInfo.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL; // TODO: change
+	// blitInfo.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL; // TODO: change
+	blitInfo.dstImageLayout = (VkImageLayout)dst.layout;
 	blitInfo.srcImage = src.resource->image;
-	blitInfo.srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL; // TODO: change
+	// blitInfo.srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL; // TODO: change
+	blitInfo.srcImageLayout = (VkImageLayout)src.layout;
 	blitInfo.filter = VK_FILTER_LINEAR;
 	blitInfo.regionCount = 1;
 	blitInfo.pRegions = &blitRegion;
