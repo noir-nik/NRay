@@ -6,7 +6,7 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
-#define SHADER_ALWAYS_COMPILE 1
+#define SHADER_ALWAYS_COMPILE 0
 
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
@@ -634,7 +634,7 @@ std::vector<char> Context::CompileShader(const std::filesystem::path& path, cons
 	if (path.extension() == ".slang"){
 		sprintf(compile_string, "%s %s -o %s -entry %s -Wno-39001 -Isource/Shaders", SLANGC, inpath, outpath, entryPoint);
 	} else{
-		sprintf(compile_string, "%s -V %s -o %s --target-env spirv1.4 -DGLSL -Isource/Shaders", GLSL_VALIDATOR, inpath, outpath);
+		sprintf(compile_string, "%s -gVS -V %s -o %s -e %s --target-env spirv1.4 -DGLSL -Isource/Shaders", GLSL_VALIDATOR, inpath, outpath, entryPoint);
 	}
 
 	DEBUG_TRACE("[ShaderCompiler] Command: {}", compile_string);
@@ -729,11 +729,7 @@ void Context::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipeline) {
 		rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
 		// line thickness in terms of number of fragments
 		rasterizer.lineWidth = 1.0f;
-		if (desc.cullFront) {
-			rasterizer.cullMode = VK_CULL_MODE_FRONT_BIT;
-		} else {
-			rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-		}
+		rasterizer.cullMode = (VkCullModeFlags)desc.cullMode;
 		rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 		rasterizer.depthBiasEnable = VK_FALSE;
 		rasterizer.depthBiasConstantFactor = 0.0f;
@@ -953,8 +949,8 @@ void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach
         colorAttachInfos[i].imageView = colorAttachs[i].resource->view;
         colorAttachInfos[i].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         colorAttachInfos[i].resolveMode = VK_RESOLVE_MODE_NONE;
-        colorAttachInfos[i].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        // colorAttachInfos[i].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+        // colorAttachInfos[i].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        colorAttachInfos[i].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
         colorAttachInfos[i].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
         colorAttachInfos[i].clearValue.color = { 0.1f, 0.4f, 0.1f, 0.0f };
     }

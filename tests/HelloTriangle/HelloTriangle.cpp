@@ -44,8 +44,8 @@ struct Vertex {
 
 const std::vector<Vertex> vertices = {
     {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
     {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-    {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
 };
 
 void Context::CreateShaders() {
@@ -151,16 +151,16 @@ void HelloTriangleApplication::Draw() {
 	vkw::CmdCopy(ctx.vertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex));
 	// vkw::CmdClearColorImage(ctx.renderImage, {0.7f, 0.0f, 0.4f, 1.0f});
 
+	vkw::CmdBindPipeline(ctx.computePipeline);
+	vkw::CmdPushConstants(&constants, sizeof(constants));
+	vkw::CmdDispatch({(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
+
 	vkw::CmdBeginRendering({ctx.renderImage});
 	vkw::CmdBindPipeline(ctx.pipeline);
 	vkw::CmdBindVertexBuffer(ctx.vertexBuffer);
 	vkw::CmdDraw(3, 1, 0, 0);
 	vkw::CmdEndRendering();
 	
-	// vkw::CmdBindPipeline(ctx.computePipeline);
-	// vkw::CmdPushConstants(&constants, sizeof(constants));
-	// vkw::CmdDispatch({(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
-
 	vkw::CmdBarrier(ctx.renderImage, vkw::Layout::TransferSrc);
 	vkw::CmdBarrier(img, vkw::Layout::TransferDst);
 	vkw::CmdBlit(img, ctx.renderImage);
@@ -170,6 +170,7 @@ void HelloTriangleApplication::Draw() {
 	vkw::WaitQueue(vkw::Queue::Graphics);
 	sleep(3);
 	// timer.Start();
+	// getchar();
 }
 
 

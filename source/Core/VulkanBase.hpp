@@ -183,6 +183,15 @@ struct Pipeline {
     std::vector<std::vector<char>> stageBytes;
 };
 
+namespace CullMode {
+	enum CullMode : Flags {
+		None = 0,
+		Front = 1,
+		Back = 2,
+	};
+}
+using CullModeFlags = Flags;
+
 struct PipelineDesc {
     PipelinePoint::Point point;
     std::vector<Pipeline::Stage> stages;
@@ -191,7 +200,7 @@ struct PipelineDesc {
     std::vector<Format> colorFormats;
     bool useDepth = false;
     Format depthFormat;
-    bool cullFront = false;
+    CullModeFlags cullMode = CullMode::None;
     bool lineTopology = false;
 };
 
