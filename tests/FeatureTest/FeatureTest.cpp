@@ -84,8 +84,8 @@ void FeatureTestApplication::run(FeatureTestInfo* pFeatureTestInfo) {
 	info = pFeatureTestInfo;
 	Setup();
 	Create();
-	MainLoop();
-	// Draw();
+	// MainLoop();
+	Draw();
 	Finish();
 }
 
@@ -97,8 +97,8 @@ void FeatureTestApplication::Setup() {
 void FeatureTestApplication::Create() {
 	ctx.window = WindowManager::NewWindow(ctx.width, ctx.height, "Feature Test");
 	vkw::Init(ctx.window->GetGLFWwindow(), ctx.window->GetWidth(), ctx.window->GetHeight());
-	// ctx.CreateImages(ctx.width, ctx.height);
-	// ctx.CreateShaders();
+	ctx.CreateImages(ctx.width, ctx.height);
+	ctx.CreateShaders();
 }
 
 void FeatureTestApplication::MainLoop() {

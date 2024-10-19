@@ -14,6 +14,7 @@ static const char *VK_ERROR_STRING(VkResult result);
 namespace vkw {
 
 void AcquireImage();
+struct SwapChainResource;
 
 struct Context
 {	
@@ -36,7 +37,8 @@ struct Context
 	void CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipeline);
 
 	VkInstance instance = VK_NULL_HANDLE;
-	std::vector<VkSurfaceKHR> surfaces;
+	VkSurfaceKHR _dummySurface = VK_NULL_HANDLE; // for querying present support
+	std::unordered_map<GLFWwindow*, SwapChainResource> swapChains;
 	VkAllocationCallbacks* allocator = VK_NULL_HANDLE;
 	VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
 	VkDebugReportCallbackEXT debugReport = VK_NULL_HANDLE;
@@ -185,7 +187,7 @@ struct Context
 	void createBindlessResources();
 	void destroyBindlessResources();
 
-	void CreateSurfaceFormats();
+	void CreateSurfaceFormats(VkSurfaceKHR surface);
 
 	void CreateSwapChain(uint32_t width, uint32_t height);
 	void DestroySwapChain();
@@ -284,6 +286,16 @@ struct PipelineResource : Resource {
 	}
 };
 
+struct SwapChainResource {
+	VkSwapchainKHR swapChain;
+	VkSurfaceKHR surface;
+
+	~SwapChainResource() {
+		vkDestroySwapchainKHR(_ctx.device, swapChain, _ctx.allocator);
+		vkDestroySurfaceKHR(_ctx.instance, surface, _ctx.allocator);
+	}
+};
+
 uint32_t Buffer::RID() {
 	DEBUG_ASSERT(resource->rid != -1, "Invalid buffer rid");
 	return uint32_t(resource->rid);
@@ -309,7 +321,12 @@ static void InitImpl(GLFWwindow* window, uint32_t width, uint32_t height){
 	// _ctx.createDescriptorResources();
 
 	if (_ctx.presentRequested) {
-		_ctx.CreateSurfaceFormats();
+		VkSurfaceKHR surface;
+		VkResult res = glfwCreateWindowSurface(_ctx.instance, window, _ctx.allocator, &surface);
+		DEBUG_VK(res, "Failed to create window surface!");
+		DEBUG_TRACE("Created surface.");
+
+		_ctx.CreateSurfaceFormats(surface);
 		_ctx.CreateSwapChain(width, height);
 		// _ctx.CreateImGui(window);
 	}
@@ -327,9 +344,9 @@ void Init(GLFWwindow* window, uint32_t width, uint32_t height) {
 	InitImpl(window, width, height);
 }
 
-void OnSurfaceUpdate(uint32_t width, uint32_t height) {
+void OnSurfaceUpdate(GLFWwindow* window, uint32_t width, uint32_t height) {
 	_ctx.DestroySwapChain();
-	_ctx.CreateSurfaceFormats();
+	_ctx.CreateSurfaceFormats(_ctx.surfaces[window]);
 	_ctx.CreateSwapChain(width, height);
 }
 
@@ -1494,13 +1511,6 @@ void Context::CreateInstance(GLFWwindow* glfwWindow){
 		DEBUG_TRACE("Created debug report callback., res = {}", (uint64_t)debugReport);
 	}
 
-	if (presentRequested){
-		VkSurfaceKHR surface = VK_NULL_HANDLE;
-		res = glfwCreateWindowSurface(instance, glfwWindow, allocator, &surface);
-		DEBUG_VK(res, "Failed to create window surface!");
-		surfaces.push_back(surface);
-		DEBUG_TRACE("Created surface.");
-	}
 	LOG_INFO("Created VulkanInstance.");
 }
 
@@ -1565,7 +1575,7 @@ void Context::CreatePhysicalDevice() {
 			if (presentRequested){
 				if (presentAvailable == false){
 					VkBool32 present = false;
-					vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surfaces[0], &present);
+					vkGetPhysicalDeviceSurfaceSupportKHR(device, i, _dummySurface, &present);
 					if (present) presentAvailable = true;
 				}
 			}
@@ -1632,7 +1642,7 @@ void Context::CreateDevice() {
 				if (presentRequested) {
 					if (desired_flags & VK_QUEUE_GRAPHICS_BIT) { // TODO: move to separate function and split queues
 						VkBool32 present = false;
-						vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, surfaces[0], &present);
+						vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, _dummySurface, &present);
 						if (!present) continue;
 					}
 				}
@@ -1875,8 +1885,7 @@ void Context::DestroyDevice() {
 }
 
 
-void Context::CreateSurfaceFormats() {
-	auto surface = _ctx.surfaces[0];
+void Context::CreateSurfaceFormats(VKSurfaceKHR surface) {
 
 	// get capabilities
 	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &surfaceCapabilities);
@@ -1908,10 +1917,17 @@ void Context::CreateSurfaceFormats() {
 	}
 }
 
-void Context::CreateSwapChain(uint32_t width, uint32_t height) {
+void Context::CreateSwapChain(GLFWwindow* glfwWindow, uint32_t width, uint32_t height) {
 
 	if (numSamples > maxSamples) {
 		numSamples = maxSamples;
+	}
+
+	
+	if (presentRequested){
+		VkResult res = glfwCreateWindowSurface(instance, glfwWindow, allocator, &_dummySurface);
+		DEBUG_VK(res, "Failed to create window surface!");
+		DEBUG_TRACE("Created surface.");
 	}
 
 	// create swapchain
