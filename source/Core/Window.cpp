@@ -93,6 +93,7 @@ std::shared_ptr<Window> WindowManager::NewWindow(int width, int height, const ch
 	auto window = std::make_shared<Window>(width, height, name);
 	GLFWwindow* glfwWindow = glfwCreateWindow(width, height, name, nullptr, nullptr);
 	window->window = glfwWindow;
+	glfwSetWindowUserPointer(glfwWindow, window.get());
 	glfwGetWindowPos(glfwWindow, &window->posX, &window->posY);
 	// glfwSetWindowPos(window, posX, posY);
 	// glfwSetFramebufferSizeCallback(glfwWindow, FramebufferSizeCallback);

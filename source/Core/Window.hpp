@@ -64,6 +64,8 @@ public:
 	inline bool        GetFramebufferResized()          { return framebufferResized;                     }
 	inline bool        IsKeyDown(uint16_t keyCode)      { return glfwGetKey(window, keyCode);            }
 	inline bool        IsMouseDown(uint16_t buttonCode) { return glfwGetMouseButton(window, buttonCode); }
+	inline void        SetUserPointer(void *user_ptr)   { glfwSetWindowUserPointer(window, user_ptr);    }
+
 	inline void        SetMode(WindowMode newMode)      { mode = newMode; dirty = true; }
 	inline std::vector<std::string> GetAndClearPaths()  { auto paths = pathsDrop; pathsDrop.clear(); return paths; }
 };

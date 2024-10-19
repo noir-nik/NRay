@@ -130,7 +130,7 @@ struct Context
 
 	VkDevice device = VK_NULL_HANDLE;
 
-	struct SwapChainResource {
+	struct SwapChain {
 		VkSurfaceKHR surface = VK_NULL_HANDLE;	
 		VkSwapchainKHR swapChain = VK_NULL_HANDLE;
 		std::vector<Image> swapChainImages;
@@ -149,13 +149,14 @@ struct Context
 		bool swapChainDirty = true;
 		uint32_t currentImageIndex = 0;
 
-		~SwapChainResource() {
-			vkDestroySwapchainKHR(_ctx.device, swapChain, _ctx.allocator);
-			vkDestroySurfaceKHR(_ctx.instance, surface, _ctx.allocator);
+		~SwapChain() { // TODO: check if this is possible
+			// vkDestroySwapchainKHR(_ctx.device, swapChain, _ctx.allocator);
+			// vkDestroySurfaceKHR(_ctx.instance, surface, _ctx.allocator);
 		}
 	};
-	// std::vector<SwapChainResource> swapChainResources;
-	std::unordered_map<GLFWwindow*, SwapChainResource> swapChains;
+
+	GLFWwindow* currentWindow = nullptr;
+	std::unordered_map<GLFWwindow*, SwapChain> swapChains;
 
 
 	// VkSwapchainKHR swapChain = VK_NULL_HANDLE;
@@ -207,10 +208,10 @@ struct Context
 	void createBindlessResources();
 	void destroyBindlessResources();
 
-	void Context::CreateSurfaceFormats(SwapChainResource& swapChain);
+	void Context::CreateSurfaceFormats(SwapChain& swapChain);
 
 	void CreateSwapChain(GLFWwindow* window, uint32_t width, uint32_t height);
-	void DestroySwapChain();
+	void DestroySwapChain(SwapChain& swapChain);
 
 	void createCommandBuffers();
 	void DestroyCommandBuffers();
@@ -221,7 +222,9 @@ struct Context
 
 
 	inline Image& GetCurrentSwapChainImage() {
-		return swapChainImages[currentImageIndex];
+		// swapChainImages[currentImageIndex];
+		auto& swapChain = swapChains[currentWindow];
+		return swapChain.swapChainImages[swapChain.currentImageIndex];
 	}
 
 	inline CommandResources& GetCurrentCommandResources() {
@@ -350,7 +353,7 @@ void Init(GLFWwindow* window, uint32_t width, uint32_t height) {
 
 void OnSurfaceUpdate(GLFWwindow* window, uint32_t width, uint32_t height) {
 	_ctx.DestroySwapChain();
-	_ctx.CreateSurfaceFormats(_ctx.swapChains[window].surface);
+	_ctx.CreateSurfaceFormats(_ctx.swapChains[window]);
 	_ctx.CreateSwapChain(window, width, height);
 }
 
@@ -1631,8 +1634,12 @@ void Context::CreatePhysicalDevice() {
 			break;
 		}
 	}
+	
 	ASSERT(physicalDevice != VK_NULL_HANDLE, "no device with Vulkan support!");
 	DEBUG_TRACE("Created physical device: {0}", physicalProperties.deviceName);
+	if (numSamples > maxSamples) {
+		numSamples = maxSamples;
+	}
 }
 
 void Context::CreateDevice() {
@@ -1890,7 +1897,7 @@ void Context::DestroyDevice() {
 }
 
 
-void Context::CreateSurfaceFormats(SwapChainResource& swapChain) {
+void Context::CreateSurfaceFormats(SwapChain& swapChain) {
 
 	// get capabilities
 	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, swapChain.surface, &swapChain.surfaceCapabilities);
@@ -1924,9 +1931,7 @@ void Context::CreateSurfaceFormats(SwapChainResource& swapChain) {
 
 void Context::CreateSwapChain(GLFWwindow* glfwWindow, uint32_t width, uint32_t height) {
 
-	if (numSamples > maxSamples) {
-		numSamples = maxSamples;
-	}
+	
 	swapChains.try_emplace(glfwWindow);//.second;
 	auto& swapChain = swapChains[glfwWindow];
 	
@@ -2069,7 +2074,7 @@ void Context::CreateSwapChain(GLFWwindow* glfwWindow, uint32_t width, uint32_t h
 	swapChain.swapChainDirty = false;
 }
 
-void Context::DestroySwapChain() {
+void Context::DestroySwapChain(SwapChain& swapChain) {
 	for (size_t i = 0; i < swapChainImages.size(); i++) {
 		vkDestroyImageView(device, swapChainViews[i], allocator);
 	}
@@ -2116,6 +2121,8 @@ void SubmitAndPresent() {
 	submitInfo.signalSemaphoreCount = 1;
 	submitInfo.pSignalSemaphores = &_ctx.renderFinishedSemaphores[_ctx.swapChainCurrentFrame];
 
+	_ctx.EndCommandBuffer(submitInfo);
+
 	VkPresentInfoKHR presentInfo{};
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 	presentInfo.waitSemaphoreCount = 1;
@@ -2124,8 +2131,6 @@ void SubmitAndPresent() {
 	presentInfo.pSwapchains = &_ctx.swapChain;
 	presentInfo.pImageIndices = &_ctx.currentImageIndex;
 	presentInfo.pResults = nullptr;
-
-	_ctx.EndCommandBuffer(submitInfo);
 
 	auto res = vkQueuePresentKHR(_ctx.queues[_ctx.currentQueue]->queue, &presentInfo); // TODO: use present queue
 	_ctx.currentQueue = Queue::Count;
