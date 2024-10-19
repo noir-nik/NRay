@@ -8,57 +8,81 @@
 #include "../TestCommon.hpp"
 #include "Timer.hpp"
 
+#include "Window.hpp"
+
+#include <unistd.h>
+
+using namespace Lmath;
+
 using Pixel = vec4;
 namespace {
 struct Context {
 	vkw::Pipeline pipeline;
+	// vkw::Pipeline computePipeline;
 
-	int width, height;
+	uint32_t width, height;
 
-	vkw::Buffer BufferGT;
-	vkw::Buffer BufferOpt;
-	vkw::Buffer grad;
-	vkw::Buffer outputImage;
+	// float4x4 viewMat;
+	// float4x4 worldViewInv;
+	// float4x4 worldViewProjInv;
 
-	vkw::Buffer bufferCPU;
+	// vkw::Buffer outputImage;
+	vkw::Buffer vertexBuffer;
 	
-	vkw::Image imageCPU;
+	vkw::Image renderImage;
 
 	void CreateImages(uint32_t width, uint32_t height);
 	void CreateShaders();
 };
 static Context ctx;
 }
+
+struct Vertex {
+    vec2 pos;
+    vec3 color;
+};
+
+const std::vector<Vertex> vertices = {
+    {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+    {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+};
+
 void Context::CreateShaders() {
 	pipeline = vkw::CreatePipeline({
-		.point = vkw::PipelinePoint::Compute,
-		.stages = {
-			{.stage = vkw::ShaderStage::Compute, .path = "tests/FeatureTest/FeatureTest.slang"},
-		},
-		.name = "Slang Test",
-	});
+        .point = vkw::PipelinePoint::Graphics,
+        .stages = {
+            {.stage = vkw::ShaderStage::Vertex, .path = "tests/HelloTriangle/HelloTriangle.vert"},
+            {.stage = vkw::ShaderStage::Fragment, .path = "tests/HelloTriangle/HelloTriangle.frag"},
+        },
+        .name = "Hello triangle pipeline",
+		// pos2 + color3
+        .vertexAttributes = {vkw::Format::RG32_sfloat, vkw::Format::RGB32_sfloat},
+        // .colorFormats = {ctx.albedo.format, ctx.normal.format, ctx.material.format, ctx.emission.format},
+        .colorFormats = {vkw::Format::RGBA16_sfloat},
+        .useDepth = false,
+        // .depthFormat = {ctx.depth.format}
+    });
+
 }
 
 void Context::CreateImages(uint32_t width, uint32_t height) {
-	ctx.BufferGT = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst, vkw::Memory::GPU, "Ground Truth Image");
-	ctx.BufferOpt = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferSrc | vkw::BufferUsage::TransferDst, vkw::Memory::GPU, "Optimized Image");
-	ctx.grad = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage, vkw::Memory::GPU, "Gradient Image");
-	ctx.bufferCPU = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst, vkw::Memory::CPU, "Buffer CPU");
-	ctx.imageCPU = vkw::CreateImage({
+	ctx.vertexBuffer = vkw::CreateBuffer(vertices.size() * sizeof(Vertex), vkw::BufferUsage::Vertex, vkw::Memory::GPU, "Vertex Buffer");
+
+	ctx.renderImage = vkw::CreateImage({
 		.width = width,
 		.height = height,
-		.format = vkw::Format::RGBA32_sfloat,
+		.format = vkw::Format::RGBA16_sfloat,
 		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::TransferSrc | vkw::ImageUsage::TransferDst,
-		.name = "Output Image",
+		.name = "Render Image",
 	});
-	ctx.outputImage = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferSrc, vkw::Memory::CPU, "Output Image");
 }
 
 void FeatureTestApplication::run(FeatureTestInfo* pFeatureTestInfo) {
 	info = pFeatureTestInfo;
 	Setup();
 	Create();
-	Compute();
+	Draw();
 	Finish();
 }
 
@@ -68,50 +92,50 @@ void FeatureTestApplication::Setup() {
 }
 
 void FeatureTestApplication::Create() {
-	vkw::Init();
+	Window::Create();
+	vkw::Init(Window::GetGLFWwindow(), Window::GetWidth(), Window::GetHeight());
 	ctx.CreateImages(ctx.width, ctx.height);
 	ctx.CreateShaders();
 }
 
-void FeatureTestApplication::Compute() {
+
+void FeatureTestApplication::Draw() {
 	Timer timer;
 	FeatureTestConstants constants{};
 	constants.width = ctx.width;
 	constants.height = ctx.height;
-	constants.imageOptRID = ctx.BufferOpt.RID();
-	constants.imageGTRID = ctx.BufferGT.RID();
-	constants.gradRID = ctx.grad.RID();
-	constants.outputImageRID = ctx.outputImage.RID();
+	// constants.storageImageRID = ctx.renderImage.RID();
+	
+	vkw::BeginCommandBuffer(vkw::Queue::Graphics);
+	// vkw::CmdPushConstants(&constants, sizeof(constants));
 
-	std::vector<float4> imageUV(ctx.width * ctx.height);
-	fillUV(imageUV.data(), ctx.width, ctx.height);
+	// vkw::CmdBeginPresent();
+	vkw::AcquireImage();
+	vkw::Image& img = vkw::GetCurrentSwapchainImage();
+	vkw::CmdCopy(ctx.vertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex));
+	vkw::CmdBarrier(ctx.renderImage, vkw::Layout::TransferDst);
+	vkw::CmdClearColorImage(ctx.renderImage, {0.7f, 0.0f, 0.4f, 1.0f});
 
-	vkw::BeginCommandBuffer(vkw::Queue::Compute);
-	// Prepare BufferGT and BufferOpt
-	// vkw::CmdCopy(ctx.BufferGT, imageUV.data(), ctx.width * ctx.height * sizeof(Pixel));
-	// vkw::CmdBarrier(ctx.imageCPU, vkw::Layout::General);
-	// vkw::CmdClearColorImage(ctx.imageCPU, {0.0f, 0.0f, 0.5f, 0.0f});
-	// vkw::CmdBarrier(ctx.imageCPU, vkw::Layout::TransferSrc);
-	// vkw::CmdCopy(ctx.BufferOpt, ctx.imageCPU);
-	// vkw::CmdBarrier();
-
+	vkw::CmdBeginRendering({ctx.renderImage});
 	vkw::CmdBindPipeline(ctx.pipeline);
-	vkw::CmdPushConstants(&constants, sizeof(constants));
+	vkw::CmdBindVertexBuffer(ctx.vertexBuffer);
+	vkw::CmdDraw(3, 1, 0, 0);
+	vkw::CmdEndRendering();
+	
+	vkw::CmdBarrier(ctx.renderImage, vkw::Layout::TransferSrc);
+	vkw::CmdBarrier(img, vkw::Layout::TransferDst);
+	vkw::CmdBlit(img, ctx.renderImage);
 
-	vkw::CmdDispatch({(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
-	vkw::CmdBarrier();
-	// vkw::CmdCopy(ctx.bufferCPU, ctx.BufferOpt, ctx.width * ctx.height * sizeof(Pixel));
-
-	timer.Start();
-	vkw::EndCommandBuffer();
-	vkw::WaitQueue(vkw::Queue::Compute);
-	printf("Compute time: %fs\n", timer.Elapsed());
-	timer.Start();
-	saveBuffer("outputFeature.bmp", &ctx.outputImage, ctx.width, ctx.height);
-	printf("Save time: %fs\n", timer.Elapsed());
+	vkw::CmdBarrier(img, vkw::Layout::Present);
+	vkw::SubmitAndPresent();
+	vkw::WaitQueue(vkw::Queue::Graphics);
+	sleep(3);
+	// timer.Start();
+	// getchar();
 }
 
 void FeatureTestApplication::Finish() {
 	ctx = {};
 	vkw::Destroy();
+	Window::Destroy();
 }

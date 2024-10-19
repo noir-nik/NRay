@@ -29,6 +29,6 @@ private:
 struct HelloTriangleConstants {
 	int width;
 	int height;
-	int outputImageRID;
+	int storageImageRID;
 	int pad[1];
 };

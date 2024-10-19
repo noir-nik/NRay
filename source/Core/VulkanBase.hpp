@@ -55,13 +55,15 @@ namespace BufferUsage {
 using BufferUsageFlags = Flags;
 
 enum Format {
-    RGBA8_unorm = 37,
-    BGRA8_unorm = 44,
-    RG32_sfloat = 103,
-    RGB32_sfloat = 106,
-    RGBA32_sfloat = 109,
-    D32_sfloat = 126,
-    D24_unorm_S8_uint = 129,
+	R8_unorm = 9,            // Sampled, heightmap
+    RGBA8_unorm = 37,        // |)
+    BGRA8_unorm = 44,        // ||}  ColorAttachment
+	RGBA16_sfloat = 97,      // |)
+    RG32_sfloat = 103,       // |)
+    RGB32_sfloat = 106,	     // ||}  VertexAttribute
+    RGBA32_sfloat = 109,     // |)
+    D32_sfloat = 126,	     // DepthAttachment
+    D24_unorm_S8_uint = 129, // DepthStencilAttachment
 };
 
 namespace ImageUsage {

@@ -52,7 +52,6 @@ void Window::Create() {
 	glfwSetWindowMaximizeCallback(window, Window::WindowMaximizeCallback);
 	glfwSetWindowPosCallback(window, Window::WindowChangePosCallback);
 	glfwSetDropCallback(window, Window::WindowDropCallback);
-
 	dirty = false;
 	Window::ApplyChanges();
 }

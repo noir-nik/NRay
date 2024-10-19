@@ -52,8 +52,8 @@ static void ImageOptimizationTest() {
 static void FeatureTest() {
 	FeatureTestApplication app;
 	FeatureTestInfo FeatureTestInfo = {
-		.width = 64,
-		.height = 64,
+		.width = 640,
+		.height = 480,
 	};
 	app.run(&FeatureTestInfo);
 }

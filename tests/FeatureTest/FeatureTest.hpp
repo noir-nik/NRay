@@ -16,6 +16,7 @@ public:
 private:
 	void Setup();
 	void Create();
+	void Draw();
 	void Compute();
 	void MainLoop();
 	void Finish();
@@ -29,11 +30,6 @@ private:
 struct FeatureTestConstants {
 	int width;
 	int height;
-	int imageOptRID;
-	int imageGTRID;
-
-	int gradRID;
-	float learningRate;
-	int numIterations;
-	int outputImageRID;
+	int storageImageRID;
+	int pad[1];
 };

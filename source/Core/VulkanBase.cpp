@@ -53,7 +53,7 @@ struct Context
 	// VkFence *fences;
 
 	uint32_t apiVersion;
-	bool graphicsEnabled = false;
+	bool presentRequested = false;
 	bool enableValidationLayers = true;
 	// bool enableValidationLayers = false;
 	bool enableDebugReport = false;
@@ -308,7 +308,7 @@ static void InitImpl(GLFWwindow* window, uint32_t width, uint32_t height){
 	_ctx.createBindlessResources();
 	// _ctx.createDescriptorResources();
 
-	if (_ctx.graphicsEnabled) {
+	if (_ctx.presentRequested) {
 		_ctx.CreateSurfaceFormats();
 		_ctx.CreateSwapChain(width, height);
 		// _ctx.CreateImGui(window);
@@ -322,7 +322,7 @@ void Init() {
 }
 
 void Init(GLFWwindow* window, uint32_t width, uint32_t height) {
-	_ctx.graphicsEnabled = true;
+	_ctx.presentRequested = true;
 	_ctx.framesInFlight = 2;
 	InitImpl(window, width, height);
 }
@@ -1377,7 +1377,7 @@ void Context::CreateInstance(GLFWwindow* glfwWindow){
 	
 	std::vector<const char*> requiredInstanceExtensions;
 	uint32_t glfwExtensionCount = 0;
-	if (graphicsEnabled) {
+	if (presentRequested) {
 		// get all extensions required by glfw
 		const char** glfwExtensions;
 		glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
@@ -1494,7 +1494,7 @@ void Context::CreateInstance(GLFWwindow* glfwWindow){
 		DEBUG_TRACE("Created debug report callback., res = {}", (uint64_t)debugReport);
 	}
 
-	if (_ctx.graphicsEnabled){
+	if (_ctx.presentRequested){
 		res = glfwCreateWindowSurface(instance, glfwWindow, allocator, &surface);
 		DEBUG_VK(res, "Failed to create window surface!");
 		DEBUG_TRACE("Created surface.");
@@ -1515,7 +1515,7 @@ void Context::DestroyInstance() {
 		DEBUG_TRACE("Destroyed debug report callback.");
 		debugReport = nullptr;
 	}
-	if (_ctx.graphicsEnabled){
+	if (_ctx.presentRequested){
 		vkDestroySurfaceKHR(instance, surface, allocator);
 		DEBUG_TRACE("Destroyed surface.");
 		surface = nullptr;
@@ -1547,7 +1547,7 @@ void Context::CreatePhysicalDevice() {
 		availableFamilies.resize(familyCount);
 		vkGetPhysicalDeviceQueueFamilyProperties(device, &familyCount, availableFamilies.data());
 
-		bool graphicsAvailable = false; // TODO: if (graphicsEnabled)
+		bool graphicsAvailable = false; // TODO: if (presentRequested)
 		bool computeAvailable = false;
 		bool transferAvailable = false;
 		VkBool32 presentAvailable = false;
@@ -1558,11 +1558,12 @@ void Context::CreatePhysicalDevice() {
 			if (family.queueFlags & VK_QUEUE_GRAPHICS_BIT) graphicsAvailable = true;
 			if (family.queueFlags & VK_QUEUE_COMPUTE_BIT) computeAvailable = true;
 			if (family.queueFlags & VK_QUEUE_TRANSFER_BIT) transferAvailable = true;
-			
-			if (presentAvailable == false){
-				VkBool32 present = false;
-				vkGetPhysicalDeviceSurfaceSupportKHR(device, i, this->surface, &present);
-				if (present) presentAvailable = true;
+			if (presentRequested){
+				if (presentAvailable == false){
+					VkBool32 present = false;
+					vkGetPhysicalDeviceSurfaceSupportKHR(device, i, this->surface, &present);
+					if (present) presentAvailable = true;
+				}
 			}
 		}
 		
@@ -1591,7 +1592,7 @@ void Context::CreatePhysicalDevice() {
 		else if (counts & VK_SAMPLE_COUNT_2_BIT) { maxSamples = VK_SAMPLE_COUNT_2_BIT; }
 
 		// check if all required extensions are available
-		if (graphicsEnabled) requiredExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+		if (presentRequested) requiredExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 		std::set<std::string_view> required(requiredExtensions.begin(), requiredExtensions.end());
 		for (const auto& extension : availableExtensions) {
 			required.erase(extension.extensionName);
@@ -1600,7 +1601,10 @@ void Context::CreatePhysicalDevice() {
 		// check if all required queues are supported
 		bool suitable = required.empty();
 		if (!suitable) LOG_ERROR("Required extensions not available: {0}", required.begin()->data());
-		suitable &= (graphicsAvailable && computeAvailable && transferAvailable && presentAvailable);
+		suitable &= (graphicsAvailable && computeAvailable && transferAvailable);
+		if (presentRequested) {
+			suitable &= presentAvailable;
+		}
 		if (!suitable) LOG_ERROR("Required queue not available");
 		// suitable &= graphicsFamily != -1;
 		if (suitable) {
@@ -1621,10 +1625,12 @@ void Context::CreateDevice() {
 		for (uint32_t i = 0; i < familyCount; i++) {
 			auto& family = availableFamilies[i];
 			if ((family.queueFlags & desired_flags) == desired_flags){
-				if (desired_flags & VK_QUEUE_GRAPHICS_BIT) { // TODO: move to separate function and split queues
-					VkBool32 present = false;
-					vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, this->surface, &present);
-					if (!present) continue;
+				if (presentRequested) {
+					if (desired_flags & VK_QUEUE_GRAPHICS_BIT) { // TODO: move to separate function and split queues
+						VkBool32 present = false;
+						vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, this->surface, &present);
+						if (!present) continue;
+					}
 				}
 				// Set active queue count in this family to at least 1
 				if (numActiveQueuesInFamilies[i] < 1){

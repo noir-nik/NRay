@@ -139,7 +139,7 @@ void HelloTriangleApplication::Draw() {
 	HelloTriangleConstants constants{};
 	constants.width = ctx.width;
 	constants.height = ctx.height;
-	constants.outputImageRID = ctx.renderImage.RID();
+	constants.storageImageRID = ctx.renderImage.RID();
 	
 	vkw::BeginCommandBuffer(vkw::Queue::Graphics);
 	// vkw::CmdPushConstants(&constants, sizeof(constants));
@@ -161,7 +161,7 @@ void HelloTriangleApplication::Draw() {
 	vkw::CmdDraw(3, 1, 0, 0);
 	vkw::CmdEndRendering();
 	
-	// vkw::CmdBarrier(ctx.renderImage, vkw::Layout::TransferSrc);
+	vkw::CmdBarrier(ctx.renderImage, vkw::Layout::TransferSrc);
 	vkw::CmdBarrier(img, vkw::Layout::TransferDst);
 	vkw::CmdBlit(img, ctx.renderImage);
 
