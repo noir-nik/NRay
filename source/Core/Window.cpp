@@ -3,61 +3,97 @@
 #include "Window.hpp"
 // #include <imgui/imgui.h>
 
-void Window::ScrollCallback(GLFWwindow* window, double x, double y) {
-	Window::scroll += y;
-	Window::deltaScroll += y;
-}
+static void ScrollCallback(GLFWwindow* window, double x, double y);
+static void FramebufferResizeCallback(GLFWwindow* window, int width, int height);
+static void WindowMaximizeCallback(GLFWwindow* window, int maximized);
+static void WindowChangePosCallback(GLFWwindow* window, int x, int y);
+static void WindowDropCallback(GLFWwindow* window, int count, const char* paths[]);
 
-void Window::FramebufferResizeCallback(GLFWwindow* window, int width, int height) {
-	Window::width = width;
-	Window::height = height;
-	Window::framebufferResized = true;
-}
+namespace {
+struct Context
+{
+	// static inline GLFWmonitor** monitors           = nullptr;
+	// static inline int           monitorCount       = 0;
+	std::vector<std::string> pathsDrop;
+	std::vector<Window>      windows;
+};
 
-void Window::WindowMaximizeCallback(GLFWwindow* window, int maximize) {
-	maximized = maximize;
-}
+static Context ctx;
 
-void Window::WindowChangePosCallback(GLFWwindow* window, int x, int y) {
-	Window::posX = x;
-	Window::posY = y;
-}
 
-void Window::WindowDropCallback(GLFWwindow* window, int count, const char* paths[]) {
-	for (int i = 0; i < count; i++) {
-		pathsDrop.push_back(paths[i]);
-	}
-	for (int i = 0; i < count; i++) {
-		printf("%s\n", paths[i]);
-	}
-}
+/* 
+// void Window::ScrollCallback(GLFWwindow* window, double x, double y) {
+// 	Window::scroll += y;
+// 	Window::deltaScroll += y;
+// }
 
-void Window::Create() {
+// void Window::FramebufferResizeCallback(GLFWwindow* window, int width, int height) {
+// 	Window::width = width;
+// 	Window::height = height;
+// 	Window::framebufferResized = true;
+// }
+
+// void Window::WindowMaximizeCallback(GLFWwindow* window, int maximize) {
+// 	maximized = maximize;
+// }
+
+// void Window::WindowChangePosCallback(GLFWwindow* window, int x, int y) {
+// 	Window::posX = x;
+// 	Window::posY = y;
+// }
+
+// void Window::WindowDropCallback(GLFWwindow* window, int count, const char* paths[]) {
+// 	for (int i = 0; i < count; i++) {
+// 		pathsDrop.push_back(paths[i]);
+// 	}
+// 	for (int i = 0; i < count; i++) {
+// 		printf("%s\n", paths[i]);
+// 	}
+// }
+ */
+
+}; // namespace WindowManager
+
+
+void WindowManager::Init(){
 	// initializing glfw
 	glfwInit();
 
 	// glfw uses OpenGL context by default
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	
-	monitors = glfwGetMonitors(&monitorCount);
+	// // ctx.monitors = glfwGetMonitors(&ctx.monitorCount);
+	// glfwGetVideoModes(ctx.monitors[monitorIndex], &videoModeIndex);
+	// videoModeIndex -= 1;
+}
 
-	glfwGetVideoModes(monitors[monitorIndex], &videoModeIndex);
-	videoModeIndex -= 1;
+void WindowManager::Destroy() {
 
-	window = glfwCreateWindow(width, height, name, nullptr, nullptr);
+}
+
+Window* WindowManager::NewWindow(int width, int height, const char* name) {
+	auto window = std::make_shared<Window>(width, height, name);
+	GLFWwindow* glfwWindow = glfwCreateWindow(width, height, name, nullptr, nullptr);
+	glfwGetWindowPos(glfwWindow, &window->posX, &window->posY);
 	// glfwSetWindowPos(window, posX, posY);
+	glfwSetFramebufferSizeCallback(glfwWindow, Window::FramebufferSizeCallback);
+	glfwSetScrollCallback(glfwWindow, Window::ScrollCallback);
+	glfwSetWindowMaximizeCallback(glfwWindow, Window::WindowMaximizeCallback);
+	glfwSetWindowPosCallback(glfwWindow, Window::WindowChangePosCallback);
+	glfwSetDropCallback(glfwWindow, Window::WindowDropCallback);
 
-	glfwSetFramebufferSizeCallback(window, Window::FramebufferResizeCallback);
-	glfwSetScrollCallback(window, Window::ScrollCallback);
-	glfwSetWindowMaximizeCallback(window, Window::WindowMaximizeCallback);
-	glfwSetWindowPosCallback(window, Window::WindowChangePosCallback);
-	glfwSetDropCallback(window, Window::WindowDropCallback);
-	dirty = false;
-	Window::ApplyChanges();
+	window->dirty = false;
+    window->ApplyChanges();
+}
+
+void Window::Destroy() {
+	glfwDestroyWindow(window);
+	
 }
 
 void Window::ApplyChanges() {
-	monitors = glfwGetMonitors(&monitorCount);
+	int monitorCount;
+	auto monitors = glfwGetMonitors(&monitorCount);
 	ASSERT(monitorIndex < monitorCount, "Invalid monitorIndex inside Window creation!");
 	auto monitor = monitors[monitorIndex];
 	auto monitorMode = glfwGetVideoMode(monitor);
@@ -98,7 +134,7 @@ void Window::ApplyChanges() {
 	dirty = false;
 }
 
-void Window::Destroy() {
+void WindowManager::Destroy() {
 	glfwGetWindowPos(window, &posX, &posY);
 	glfwDestroyWindow(window);
 	glfwTerminate();
