@@ -16,13 +16,17 @@ struct Context
 	// static inline int           monitorCount       = 0;
 	std::vector<std::string> pathsDrop;
 	std::vector<Window>      windows;
+
+	~Context() {
+		WindowManager::Finish();
+	}
 };
 
 static Context ctx;
 
 
-/* 
-// void Window::ScrollCallback(GLFWwindow* window, double x, double y) {
+
+// void ScrollCallback(GLFWwindow* window, double x, double y) {
 // 	Window::scroll += y;
 // 	Window::deltaScroll += y;
 // }
@@ -33,16 +37,16 @@ static Context ctx;
 // 	Window::framebufferResized = true;
 // }
 
-// void Window::WindowMaximizeCallback(GLFWwindow* window, int maximize) {
+// void WindowMaximizeCallback(GLFWwindow* window, int maximize) {
 // 	maximized = maximize;
 // }
 
-// void Window::WindowChangePosCallback(GLFWwindow* window, int x, int y) {
+// void WindowChangePosCallback(GLFWwindow* window, int x, int y) {
 // 	Window::posX = x;
 // 	Window::posY = y;
 // }
 
-// void Window::WindowDropCallback(GLFWwindow* window, int count, const char* paths[]) {
+// void WindowDropCallback(GLFWwindow* window, int count, const char* paths[]) {
 // 	for (int i = 0; i < count; i++) {
 // 		pathsDrop.push_back(paths[i]);
 // 	}
@@ -50,12 +54,18 @@ static Context ctx;
 // 		printf("%s\n", paths[i]);
 // 	}
 // }
- */
+
+
+void errorCallback(int error, const char* description)
+{
+	LOG_ERROR("[GLFW ERROR] ({}) {}", error, description);
+}
 
 }; // namespace WindowManager
 
 
 void WindowManager::Init(){
+	glfwSetErrorCallback(errorCallback);
 	// initializing glfw
 	glfwInit();
 
@@ -65,36 +75,53 @@ void WindowManager::Init(){
 	// // ctx.monitors = glfwGetMonitors(&ctx.monitorCount);
 	// glfwGetVideoModes(ctx.monitors[monitorIndex], &videoModeIndex);
 	// videoModeIndex -= 1;
+	is_initialized = true;
 }
 
-void WindowManager::Destroy() {
-
+// Call after all graphics contexts are destroyed
+void WindowManager::Finish() {
+	// Do not Log
+	if (!is_initialized) return;
+	glfwTerminate();
+	is_initialized = false;
 }
 
-Window* WindowManager::NewWindow(int width, int height, const char* name) {
+std::shared_ptr<Window> WindowManager::NewWindow(int width, int height, const char* name) {
+	if (!is_initialized) {
+		Init();
+	}
 	auto window = std::make_shared<Window>(width, height, name);
 	GLFWwindow* glfwWindow = glfwCreateWindow(width, height, name, nullptr, nullptr);
+	window->window = glfwWindow;
 	glfwGetWindowPos(glfwWindow, &window->posX, &window->posY);
 	// glfwSetWindowPos(window, posX, posY);
-	glfwSetFramebufferSizeCallback(glfwWindow, Window::FramebufferSizeCallback);
-	glfwSetScrollCallback(glfwWindow, Window::ScrollCallback);
-	glfwSetWindowMaximizeCallback(glfwWindow, Window::WindowMaximizeCallback);
-	glfwSetWindowPosCallback(glfwWindow, Window::WindowChangePosCallback);
-	glfwSetDropCallback(glfwWindow, Window::WindowDropCallback);
+	// glfwSetFramebufferSizeCallback(glfwWindow, FramebufferSizeCallback);
+	// glfwSetScrollCallback(glfwWindow, ScrollCallback);
+	// glfwSetWindowMaximizeCallback(glfwWindow, WindowMaximizeCallback);
+	// glfwSetWindowPosCallback(glfwWindow, WindowChangePosCallback);
+	// glfwSetDropCallback(glfwWindow, WindowDropCallback);
 
 	window->dirty = false;
     window->ApplyChanges();
+	// windowCount++;
+	return window;
 }
 
 void Window::Destroy() {
+	glfwGetWindowPos(window, &posX, &posY);
 	glfwDestroyWindow(window);
-	
+	window = nullptr;
+	LOG_INFO("Window::Destroy()");
+	// WindowManager::windowCount--;
+	// if (WindowManager::windowCount == 0) {
+	// 	WindowManager::Finish();
+	// }
 }
 
 void Window::ApplyChanges() {
 	int monitorCount;
 	auto monitors = glfwGetMonitors(&monitorCount);
-	ASSERT(monitorIndex < monitorCount, "Invalid monitorIndex inside Window creation!");
+	ASSERT(monitorIndex < monitorCount, "Invalid monitorIndex inside Window creation!", monitorIndex);
 	auto monitor = monitors[monitorIndex];
 	auto monitorMode = glfwGetVideoMode(monitor);
 
@@ -112,12 +139,11 @@ void Window::ApplyChanges() {
 		if (maximized) {
 			glfwMaximizeWindow(window);
 		}
-		glfwSetWindowAttrib(window, GLFW_MAXIMIZED, maximized);
+		// glfwSetWindowAttrib(window, GLFW_MAXIMIZED, maximized);
 		glfwSetWindowAttrib(window, GLFW_RESIZABLE, resizable);
 		glfwSetWindowAttrib(window, GLFW_DECORATED, decorated);
 		break;
 	case WindowMode::WindowedFullScreen:
-	
 		glfwWindowHint(GLFW_RED_BITS, monitorMode->redBits);
 		glfwWindowHint(GLFW_GREEN_BITS, monitorMode->greenBits);
 		glfwWindowHint(GLFW_BLUE_BITS, monitorMode->blueBits);
@@ -134,14 +160,10 @@ void Window::ApplyChanges() {
 	dirty = false;
 }
 
-void WindowManager::Destroy() {
-	glfwGetWindowPos(window, &posX, &posY);
-	glfwDestroyWindow(window);
-	glfwTerminate();
-}
+
 
 void Window::Update() {
-	for (int i = 0; i < GLFW_KEY_LAST + 1; i++) {
+	for (int i = GLFW_KEY_SPACE; i < GLFW_KEY_LAST + 1; i++) {
 		lastKeyState[i] = glfwGetKey(window, i);
 	}
 	deltaScroll = 0;

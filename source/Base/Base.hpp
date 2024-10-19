@@ -35,7 +35,7 @@ using f64 = double;
 	#define APP_DEBUGBREAK()
 #endif 
 
-#define ASSERT(condition, ...) { if (!(condition)) { LOG_ERROR("[ASSERTION FAILED] {0} in {1}:{2}", __VA_ARGS__, __FILE__, __LINE__); exit(1); } }
+#define ASSERT(condition, ...) { if (!(condition)) { LOG_ERROR("[ASSERTION FAILED] in {0}:{1} {}", __FILE__, __LINE__, __VA_ARGS__); exit(1); } }
 
 #ifdef APP_DEBUG
 #define DEBUG_ASSERT(condition, ...) { if (!(condition)) { LOG_ERROR("[ASSERTION FAILED] {0}", __VA_ARGS__); APP_DEBUGBREAK(); } }

@@ -30,6 +30,8 @@ struct Context {
 	vkw::Buffer vertexBuffer;
 	
 	vkw::Image renderImage;
+	
+	std::shared_ptr<Window> window;
 
 	void CreateImages(uint32_t width, uint32_t height);
 	void CreateShaders();
@@ -38,31 +40,31 @@ static Context ctx;
 }
 
 struct Vertex {
-    vec2 pos;
-    vec3 color;
+	vec2 pos;
+	vec3 color;
 };
 
 const std::vector<Vertex> vertices = {
-    {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-    {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-    {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+	{{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+	{{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+	{{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
 };
 
 void Context::CreateShaders() {
 	pipeline = vkw::CreatePipeline({
-        .point = vkw::PipelinePoint::Graphics,
-        .stages = {
-            {.stage = vkw::ShaderStage::Vertex, .path = "tests/HelloTriangle/HelloTriangle.vert"},
-            {.stage = vkw::ShaderStage::Fragment, .path = "tests/HelloTriangle/HelloTriangle.frag"},
-        },
-        .name = "Hello triangle pipeline",
+		.point = vkw::PipelinePoint::Graphics,
+		.stages = {
+			{.stage = vkw::ShaderStage::Vertex, .path = "tests/HelloTriangle/HelloTriangle.vert"},
+			{.stage = vkw::ShaderStage::Fragment, .path = "tests/HelloTriangle/HelloTriangle.frag"},
+		},
+		.name = "Hello triangle pipeline",
 		// pos2 + color3
-        .vertexAttributes = {vkw::Format::RG32_sfloat, vkw::Format::RGB32_sfloat},
-        // .colorFormats = {ctx.albedo.format, ctx.normal.format, ctx.material.format, ctx.emission.format},
-        .colorFormats = {vkw::Format::RGBA16_sfloat},
-        .useDepth = false,
-        // .depthFormat = {ctx.depth.format}
-    });
+		.vertexAttributes = {vkw::Format::RG32_sfloat, vkw::Format::RGB32_sfloat},
+		// .colorFormats = {ctx.albedo.format, ctx.normal.format, ctx.material.format, ctx.emission.format},
+		.colorFormats = {vkw::Format::RGBA16_sfloat},
+		.useDepth = false,
+		// .depthFormat = {ctx.depth.format}
+	});
 
 }
 
@@ -82,7 +84,8 @@ void FeatureTestApplication::run(FeatureTestInfo* pFeatureTestInfo) {
 	info = pFeatureTestInfo;
 	Setup();
 	Create();
-	Draw();
+	MainLoop();
+	// Draw();
 	Finish();
 }
 
@@ -92,12 +95,17 @@ void FeatureTestApplication::Setup() {
 }
 
 void FeatureTestApplication::Create() {
-	Window::Create();
-	vkw::Init(Window::GetGLFWwindow(), Window::GetWidth(), Window::GetHeight());
-	ctx.CreateImages(ctx.width, ctx.height);
-	ctx.CreateShaders();
+	ctx.window = WindowManager::NewWindow(ctx.width, ctx.height, "Feature Test");
+	vkw::Init(ctx.window->GetGLFWwindow(), ctx.window->GetWidth(), ctx.window->GetHeight());
+	// ctx.CreateImages(ctx.width, ctx.height);
+	// ctx.CreateShaders();
 }
 
+void FeatureTestApplication::MainLoop() {
+	// while (!ctx.window->GetShouldClose()) {
+	// 	ctx.window->Update();
+	// }
+}
 
 void FeatureTestApplication::Draw() {
 	Timer timer;
@@ -137,5 +145,5 @@ void FeatureTestApplication::Draw() {
 void FeatureTestApplication::Finish() {
 	ctx = {};
 	vkw::Destroy();
-	Window::Destroy();
+	// WindowManager::Finish();
 }

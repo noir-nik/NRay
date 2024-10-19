@@ -31,6 +31,8 @@ struct Context {
 
 	vkw::Image renderImage;
 
+	std::shared_ptr<Window> window;
+
 	void CreateImages(uint32_t width, uint32_t height);
 	void CreateShaders();
 };
@@ -101,8 +103,8 @@ void HelloTriangleApplication::Setup() {
 }
 
 void HelloTriangleApplication::Create() {
-	Window::Create();
-	vkw::Init(Window::GetGLFWwindow(), Window::GetWidth(), Window::GetHeight());
+	ctx.window = WindowManager::NewWindow(ctx.width, ctx.height, "Feature Test");
+	vkw::Init(ctx.window->GetGLFWwindow(), ctx.window->GetWidth(), ctx.window->GetHeight());
 	ctx.CreateImages(ctx.width, ctx.height);
 	ctx.CreateShaders();
 }
@@ -208,5 +210,4 @@ void HelloTriangleApplication::Draw() {
 void HelloTriangleApplication::Finish() {
 	ctx = {};
 	vkw::Destroy();
-	Window::Destroy();
 }

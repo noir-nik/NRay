@@ -36,7 +36,7 @@ struct Context
 	void CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipeline);
 
 	VkInstance instance = VK_NULL_HANDLE;
-	VkSurfaceKHR surface = VK_NULL_HANDLE;
+	std::vector<VkSurfaceKHR> surfaces;
 	VkAllocationCallbacks* allocator = VK_NULL_HANDLE;
 	VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
 	VkDebugReportCallbackEXT debugReport = VK_NULL_HANDLE;
@@ -1494,9 +1494,11 @@ void Context::CreateInstance(GLFWwindow* glfwWindow){
 		DEBUG_TRACE("Created debug report callback., res = {}", (uint64_t)debugReport);
 	}
 
-	if (_ctx.presentRequested){
+	if (presentRequested){
+		VkSurfaceKHR surface = VK_NULL_HANDLE;
 		res = glfwCreateWindowSurface(instance, glfwWindow, allocator, &surface);
 		DEBUG_VK(res, "Failed to create window surface!");
+		surfaces.push_back(surface);
 		DEBUG_TRACE("Created surface.");
 	}
 	LOG_INFO("Created VulkanInstance.");
@@ -1516,9 +1518,11 @@ void Context::DestroyInstance() {
 		debugReport = nullptr;
 	}
 	if (_ctx.presentRequested){
-		vkDestroySurfaceKHR(instance, surface, allocator);
-		DEBUG_TRACE("Destroyed surface.");
-		surface = nullptr;
+		for (auto surface: surfaces){
+			vkDestroySurfaceKHR(instance, surface, allocator);
+		}
+		surfaces.clear();
+		DEBUG_TRACE("Destroyed surfaces.");
 	}
 	vkDestroyInstance(instance, allocator);
 	DEBUG_TRACE("Destroyed instance.");
@@ -1561,7 +1565,7 @@ void Context::CreatePhysicalDevice() {
 			if (presentRequested){
 				if (presentAvailable == false){
 					VkBool32 present = false;
-					vkGetPhysicalDeviceSurfaceSupportKHR(device, i, this->surface, &present);
+					vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surfaces[0], &present);
 					if (present) presentAvailable = true;
 				}
 			}
@@ -1628,7 +1632,7 @@ void Context::CreateDevice() {
 				if (presentRequested) {
 					if (desired_flags & VK_QUEUE_GRAPHICS_BIT) { // TODO: move to separate function and split queues
 						VkBool32 present = false;
-						vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, this->surface, &present);
+						vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, i, surfaces[0], &present);
 						if (!present) continue;
 					}
 				}
@@ -1872,7 +1876,7 @@ void Context::DestroyDevice() {
 
 
 void Context::CreateSurfaceFormats() {
-	auto surface = _ctx.surface;
+	auto surface = _ctx.surfaces[0];
 
 	// get capabilities
 	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &surfaceCapabilities);
@@ -1935,7 +1939,7 @@ void Context::CreateSwapChain(uint32_t width, uint32_t height) {
 
 		VkSwapchainCreateInfoKHR createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-		createInfo.surface = _ctx.surface;
+		createInfo.surface = _ctx.surfaces[0];
 		createInfo.minImageCount = imageCount;
 		createInfo.imageFormat = surfaceFormat.format;
 		createInfo.imageColorSpace = surfaceFormat.colorSpace;
@@ -2347,17 +2351,14 @@ void Context::createCommandBuffers(){
 	allocInfo.commandBufferCount = 1;
 
 	commandResources.resize(uniqueQueues.size() * framesInFlight);
-	DEBUG_TRACE("commandResources.size = {}", commandResources.size());
-	// for (int q = 0; q < uniqueQueues.size(); q++) {
-	// 	queues[q]->commands = commandResources.data() + q * framesInFlight;
-	// }
+
 	uint32_t command_counter = 0;
 	for (auto& [key, q]: uniqueQueues) {
 		q.commands = commandResources.data() + command_counter * framesInFlight;
 		command_counter++;
 	}
 
-		// DEBUG_TRACE("Queue[{}]: [{}][{}], commands.size = {}", q, queue.family, queue.indexInFamily, queue.commands.size());
+	// DEBUG_TRACE("Queue[{}]: [{}][{}], commands.size = {}", q, queue.family, queue.indexInFamily, queue.commands.size());
 		
 	for (auto& [key, queue]: uniqueQueues) {
 		// DEBUG_TRACE("Queue[{}]: [{}][{}]", key, queue.family, queue.indexInFamily);

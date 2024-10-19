@@ -125,10 +125,9 @@ $(OBJ_DIR)/%.o: $(TST_HELLOTRIANGLE)/%.cpp # tests/HelloTriangle
 run:
 	@./$(BUILD_DIR)/$(TARGET)
 
-# VLGRND_OUTPUT := --log-file="bin/mem"
-VLGRND_OUTPUT := 
+
+# VLGRND_OUTPUT := --log-file="bin/mem2"
 # VLGRND_FULL := --leak-check=full --show-leak-kinds=all
-VLGRND_FULL :=
 
 runv:
 	@valgrind $(VLGRND_FULL) $(VLGRND_OUTPUT) ./$(BUILD_DIR)/$(TARGET) 

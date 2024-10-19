@@ -6,6 +6,8 @@
 #include <string>
 #include "Lmath.hpp"
 
+
+class WindowManager;
 enum class WindowMode {
 	Windowed,
 	WindowedFullScreen,
@@ -42,7 +44,8 @@ class Window {
 	bool maximized = false;
 
 public:
-	Window(int width, int height, const char* name = "Engine"): width(width), height(height), name(name) {};
+	Window(int width, int height, const char* name = "Engine"): width(width), height(height), name(name) {}
+	~Window(){ if(window) Destroy(); }
 	void ApplyChanges();
 	void UpdateFramebufferSize();
 	void Update();
@@ -66,13 +69,15 @@ public:
 };
 
 class WindowManager {
+friend class Window;
 public:
+	WindowManager() = delete;
 	static void Init();
-	static Window* NewWindow(int width, int height, const char* name);
+	static std::shared_ptr<Window> NewWindow(int width, int height, const char* name);
 	// void OnImgui();
-	static void Destroy();
 
-// private:
-// 	std::vector<std::string> pathsDrop;
-// 	std::vector<Window>      windows;
+	static void Finish();
+private:
+	static inline bool is_initialized = false;
+	// static inline int  windowCount = 0;
 };
