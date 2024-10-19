@@ -161,7 +161,7 @@ void HelloTriangleApplication::Draw() {
 	vkw::CmdDraw(3, 1, 0, 0);
 	vkw::CmdEndRendering();
 	
-	vkw::CmdBarrier(ctx.renderImage, vkw::Layout::TransferSrc);
+	// vkw::CmdBarrier(ctx.renderImage, vkw::Layout::TransferSrc);
 	vkw::CmdBarrier(img, vkw::Layout::TransferDst);
 	vkw::CmdBlit(img, ctx.renderImage);
 

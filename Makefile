@@ -26,8 +26,8 @@ else
 	BUILD_DIR := build-linux
 	MKDIR:= mkdir -p
 	RM := rm -rf
-	CLEAN_BUILD := $(BUILD_DIR)/*
-	CLEAN_OBJ := $(OBJ_DIR)/*
+	CLEAN_BUILD := $(RM) $(BUILD_DIR)/*
+	CLEAN_OBJ := $(RM) $(OBJ_DIR)/*
 endif
 
 LDFLAGS += $(foreach lib,$(LIBS),-l$(lib))
@@ -125,7 +125,7 @@ $(OBJ_DIR)/%.o: $(TST_HELLOTRIANGLE)/%.cpp # tests/HelloTriangle
 run:
 	@./$(BUILD_DIR)/$(TARGET)
 
-# VLGRND_OUTPUT := --log-file="mem"
+# VLGRND_OUTPUT := --log-file="bin/mem"
 VLGRND_OUTPUT := 
 # VLGRND_FULL := --leak-check=full --show-leak-kinds=all
 VLGRND_FULL :=

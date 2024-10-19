@@ -3,13 +3,12 @@
 #include "VulkanBase.hpp"
 #include "ShaderCommon.h"
 
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
-
 #define SHADER_ALWAYS_COMPILE 0
 
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
+
+#include <GLFW/glfw3.h>
 
 static const char *VK_ERROR_STRING(VkResult result);
 namespace vkw {
@@ -57,6 +56,7 @@ struct Context
 	bool graphicsEnabled = false;
 	bool enableValidationLayers = true;
 	// bool enableValidationLayers = false;
+	bool enableDebugReport = false;
 	std::vector<bool> activeLayers; // Available layers
 	std::vector<const char*> activeLayersNames;
 	std::vector<VkLayerProperties> layers;
@@ -212,7 +212,12 @@ struct Context
 	VkSampler CreateSampler(f32 maxLod);
 
 	PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT;
-
+	// PFN_vkGetAccelerationStructureBuildSizesKHR vkGetAccelerationStructureBuildSizesKHR;
+	// PFN_vkCreateAccelerationStructureKHR vkCreateAccelerationStructureKHR;
+	// PFN_vkGetBufferDeviceAddressKHR vkGetBufferDeviceAddressKHR;
+	// PFN_vkCmdBuildAccelerationStructuresKHR vkCmdBuildAccelerationStructuresKHR;
+	// PFN_vkGetAccelerationStructureDeviceAddressKHR vkGetAccelerationStructureDeviceAddressKHR;
+	// PFN_vkDestroyAccelerationStructureKHR vkDestroyAccelerationStructureKHR;
 
 	VkDescriptorPool      descriptorPool = VK_NULL_HANDLE;
 	VkDescriptorSet       descriptorSet = VK_NULL_HANDLE;
@@ -666,7 +671,6 @@ void Context::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipeline) {
 
 	std::vector<VkPipelineShaderStageCreateInfo> shaderStages(desc.stages.size());
 	std::vector<VkShaderModule> shaderModules(desc.stages.size());
-	DEBUG_TRACE("Creating {} shader modules", desc.stages.size());
 	for (int i = 0; i < desc.stages.size(); i++) {
 		VkShaderModuleCreateInfo createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -925,88 +929,88 @@ void CmdClearColorImage(Image &image, float4 color)
 }
 
 void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach, uint32_t layerCount) {
-    auto& cmd = _ctx.GetCurrentCommandResources();
+	auto& cmd = _ctx.GetCurrentCommandResources();
 
-    ivec2 offset(0, 0);
-    uvec2 extent(0, 0);
-    if (colorAttachs.size() > 0) {
-        extent.x = colorAttachs[0].width;
-        extent.y = colorAttachs[0].height;
-    } else if (depthAttach.resource) {
-        extent.x = depthAttach.width;
-        extent.y = depthAttach.height;
-    }
+	ivec2 offset(0, 0);
+	uvec2 extent(0, 0);
+	if (colorAttachs.size() > 0) {
+		extent.x = colorAttachs[0].width;
+		extent.y = colorAttachs[0].height;
+	} else if (depthAttach.resource) {
+		extent.x = depthAttach.width;
+		extent.y = depthAttach.height;
+	}
 
-    VkRenderingInfoKHR renderingInfo{};
-    renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
-    renderingInfo.viewMask = 0;
-    renderingInfo.layerCount = layerCount;
-    renderingInfo.renderArea.extent = { uint32_t(extent.x), uint32_t(extent.y) };
-    renderingInfo.renderArea.offset = { offset.x, offset.y };
-    renderingInfo.flags = 0;
+	VkRenderingInfoKHR renderingInfo{};
+	renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
+	renderingInfo.viewMask = 0;
+	renderingInfo.layerCount = layerCount;
+	renderingInfo.renderArea.extent = { uint32_t(extent.x), uint32_t(extent.y) };
+	renderingInfo.renderArea.offset = { offset.x, offset.y };
+	renderingInfo.flags = 0;
 
-    std::vector<VkRenderingAttachmentInfoKHR> colorAttachInfos(colorAttachs.size());
-    VkRenderingAttachmentInfoKHR depthAttachInfo;
-    for (int i = 0; i < colorAttachs.size(); i++) {
-        colorAttachInfos[i] = {};
-        colorAttachInfos[i].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-        colorAttachInfos[i].imageView = colorAttachs[i].resource->view;
-        colorAttachInfos[i].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        colorAttachInfos[i].resolveMode = VK_RESOLVE_MODE_NONE;
-        // colorAttachInfos[i].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        colorAttachInfos[i].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-        colorAttachInfos[i].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        colorAttachInfos[i].clearValue.color = { 0.1f, 0.4f, 0.1f, 0.0f };
-    }
+	std::vector<VkRenderingAttachmentInfoKHR> colorAttachInfos(colorAttachs.size());
+	VkRenderingAttachmentInfoKHR depthAttachInfo;
+	for (int i = 0; i < colorAttachs.size(); i++) {
+		colorAttachInfos[i] = {};
+		colorAttachInfos[i].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+		colorAttachInfos[i].imageView = colorAttachs[i].resource->view;
+		colorAttachInfos[i].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		colorAttachInfos[i].resolveMode = VK_RESOLVE_MODE_NONE;
+		// colorAttachInfos[i].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+		colorAttachInfos[i].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+		colorAttachInfos[i].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+		colorAttachInfos[i].clearValue.color = { 0.1f, 0.4f, 0.1f, 0.0f };
+	}
 
-    renderingInfo.colorAttachmentCount = colorAttachInfos.size();
-    renderingInfo.pColorAttachments = colorAttachInfos.data();
-    renderingInfo.pDepthAttachment = nullptr;
-    renderingInfo.pStencilAttachment = nullptr;
+	renderingInfo.colorAttachmentCount = colorAttachInfos.size();
+	renderingInfo.pColorAttachments = colorAttachInfos.data();
+	renderingInfo.pDepthAttachment = nullptr;
+	renderingInfo.pStencilAttachment = nullptr;
 
-    if (depthAttach.resource) {
-        depthAttachInfo = {};
-        depthAttachInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
-        depthAttachInfo.imageView = depthAttach.resource->view;
-        depthAttachInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-        depthAttachInfo.resolveMode = VK_RESOLVE_MODE_NONE;
-        depthAttachInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        depthAttachInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        depthAttachInfo.clearValue.depthStencil = { 1.0f, 0 };
-        renderingInfo.pDepthAttachment = &depthAttachInfo;
-    }
+	if (depthAttach.resource) {
+		depthAttachInfo = {};
+		depthAttachInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR;
+		depthAttachInfo.imageView = depthAttach.resource->view;
+		depthAttachInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+		depthAttachInfo.resolveMode = VK_RESOLVE_MODE_NONE;
+		depthAttachInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+		depthAttachInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+		depthAttachInfo.clearValue.depthStencil = { 1.0f, 0 };
+		renderingInfo.pDepthAttachment = &depthAttachInfo;
+	}
 
-    VkViewport viewport = {};
-    viewport.x = 0.0f;
-    viewport.y = 0.0f;
-    viewport.width = static_cast<float>(extent.x);
-    viewport.height = static_cast<float>(extent.y);
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
-    VkRect2D scissor = {};
-    scissor.offset = { offset.x, offset.y };
-    scissor.extent.width = extent.x;
-    scissor.extent.height = extent.y;
-    vkCmdSetViewport(cmd.buffer, 0, 1, &viewport);
-    vkCmdSetScissor(cmd.buffer, 0, 1, &scissor);
+	VkViewport viewport = {};
+	viewport.x = 0.0f;
+	viewport.y = 0.0f;
+	viewport.width = static_cast<float>(extent.x);
+	viewport.height = static_cast<float>(extent.y);
+	viewport.minDepth = 0.0f;
+	viewport.maxDepth = 1.0f;
+	VkRect2D scissor = {};
+	scissor.offset = { offset.x, offset.y };
+	scissor.extent.width = extent.x;
+	scissor.extent.height = extent.y;
+	vkCmdSetViewport(cmd.buffer, 0, 1, &viewport);
+	vkCmdSetScissor(cmd.buffer, 0, 1, &scissor);
 
-    vkCmdBeginRendering(cmd.buffer, &renderingInfo);
+	vkCmdBeginRendering(cmd.buffer, &renderingInfo);
 }
 
 void CmdEndRendering() {
-    auto& cmd = _ctx.GetCurrentCommandResources();
-    vkCmdEndRendering(cmd.buffer);
+	auto& cmd = _ctx.GetCurrentCommandResources();
+	vkCmdEndRendering(cmd.buffer);
 }
 // Acquire + CmdBarrier + CmdBeginRendering
 void CmdBeginPresent() {
-    vkw::AcquireImage();
-    vkw::CmdBarrier(_ctx.GetCurrentSwapChainImage(), vkw::Layout::ColorAttachment);
-    vkw::CmdBeginRendering({ _ctx.GetCurrentSwapChainImage() }, {});
+	vkw::AcquireImage();
+	vkw::CmdBarrier(_ctx.GetCurrentSwapChainImage(), vkw::Layout::ColorAttachment);
+	vkw::CmdBeginRendering({ _ctx.GetCurrentSwapChainImage() }, {});
 }
 // CmdEndRendering + CmdBarrier
 void CmdEndPresent() {
-    vkw::CmdEndRendering();
-    vkw::CmdBarrier(_ctx.GetCurrentSwapChainImage(), vkw::Layout::Present);
+	vkw::CmdEndRendering();
+	vkw::CmdBarrier(_ctx.GetCurrentSwapChainImage(), vkw::Layout::Present);
 }
 
 void CmdDraw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance) {
@@ -1016,25 +1020,25 @@ void CmdDraw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex,
 }
 
 void CmdDrawMesh(Buffer& vertexBuffer, Buffer& indexBuffer, uint32_t indexCount) {
-    auto& cmd = _ctx.GetCurrentCommandResources();
-    VkDeviceSize offsets[] = { 0 };
-    vkCmdBindVertexBuffers(cmd.buffer, 0, 1, &vertexBuffer.resource->buffer, offsets);
-    vkCmdBindIndexBuffer(cmd.buffer, indexBuffer.resource->buffer, 0, VK_INDEX_TYPE_UINT32);
-    vkCmdDrawIndexed(cmd.buffer, indexCount, 1, 0, 0, 0);
+	auto& cmd = _ctx.GetCurrentCommandResources();
+	VkDeviceSize offsets[] = { 0 };
+	vkCmdBindVertexBuffers(cmd.buffer, 0, 1, &vertexBuffer.resource->buffer, offsets);
+	vkCmdBindIndexBuffer(cmd.buffer, indexBuffer.resource->buffer, 0, VK_INDEX_TYPE_UINT32);
+	vkCmdDrawIndexed(cmd.buffer, indexCount, 1, 0, 0, 0);
 }
 
 void CmdBindVertexBuffer(Buffer& vertexBuffer) {
-    auto& cmd = _ctx.GetCurrentCommandResources();
-    VkDeviceSize offsets[] = { 0 };
-    vkCmdBindVertexBuffers(cmd.buffer, 0, 1, &vertexBuffer.resource->buffer, offsets);
+	auto& cmd = _ctx.GetCurrentCommandResources();
+	VkDeviceSize offsets[] = { 0 };
+	vkCmdBindVertexBuffers(cmd.buffer, 0, 1, &vertexBuffer.resource->buffer, offsets);
 }
 
 void CmdDrawLineStrip(const Buffer& pointsBuffer, uint32_t firstPoint, uint32_t pointCount, float thickness) {
-    auto& cmd = _ctx.GetCurrentCommandResources();
-    VkDeviceSize offsets[] = { 0 };
-    vkCmdSetLineWidth(cmd.buffer, thickness);
-    vkCmdBindVertexBuffers(cmd.buffer, 0, 1, &pointsBuffer.resource->buffer, offsets);
-    vkCmdDraw(cmd.buffer, pointCount, 1, firstPoint, 0);
+	auto& cmd = _ctx.GetCurrentCommandResources();
+	VkDeviceSize offsets[] = { 0 };
+	vkCmdSetLineWidth(cmd.buffer, thickness);
+	vkCmdBindVertexBuffers(cmd.buffer, 0, 1, &pointsBuffer.resource->buffer, offsets);
+	vkCmdDraw(cmd.buffer, pointCount, 1, firstPoint, 0);
 }
 
 // void CmdDrawPassThrough() {
@@ -1232,12 +1236,33 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL DebugUtilsCallback (
 	// log the message
 	// here we can set a minimum severity to log the message
 	// if (messageSeverity > VK_DEBUG_UTILS...)
-	if (messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
-		LOG_ERROR("[Validation Layer] {0}", pCallbackData->pMessage);
-	}
+	if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) { LOG_TRACE("[Validation Layer] {} ", pCallbackData->pMessage); }
+	if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)    { LOG_INFO ("[Validation Layer] {} ", pCallbackData->pMessage); }
+	if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) { LOG_WARN ("[Validation Layer] {} ", pCallbackData->pMessage); }
+	if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)   { LOG_ERROR("[Validation Layer] {} ", pCallbackData->pMessage); }
+
 	return VK_FALSE;	
 }
+// Do-nothing in case validation layers are not enabled
+VKAPI_ATTR VkResult VKAPI_CALL SetDebugUtilsObjectNameEXT(VkDevice device, VkDebugUtilsObjectNameInfoEXT* pNameInfo) {
+	return VK_SUCCESS;
+}
 
+void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo) {
+	createInfo = {};
+	createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+	// createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
+	createInfo.messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
+	createInfo.messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+	createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT;
+	createInfo.messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
+	createInfo.messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+	createInfo.messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT;
+	createInfo.pfnUserCallback = DebugUtilsCallback;
+	createInfo.pUserData = nullptr;
+}
+
+// Debug Report
 VkResult CreateDebugReportCallbackEXT (
 	VkInstance                                instance,
 	const VkDebugReportCallbackCreateInfoEXT* pCreateInfo,
@@ -1258,7 +1283,7 @@ VkResult CreateDebugReportCallbackEXT (
 
 void DestroyDebugReportCallbackEXT (
 	VkInstance                   instance,
-	VkDebugReportCallbackEXT     debugMessenger,
+	VkDebugReportCallbackEXT     debugReport,
 	const VkAllocationCallbacks* pAllocator) {
 	// search for the requested function and return null if cannot find
 	auto func = (PFN_vkDestroyDebugReportCallbackEXT)vkGetInstanceProcAddr (
@@ -1266,11 +1291,12 @@ void DestroyDebugReportCallbackEXT (
 		"vkDestroyDebugReportCallbackEXT"
 	);
 	if (func != nullptr) {
-		func(instance, debugMessenger, pAllocator);
+		func(instance, debugReport, pAllocator);
 	}
 }
 
-static VKAPI_ATTR VkBool32 VKAPI_CALL DebugReportCallback(VkDebugReportFlagsEXT flags,
+static VKAPI_ATTR VkBool32 VKAPI_CALL DebugReportCallback(
+	VkDebugReportFlagsEXT flags,
 	VkDebugReportObjectTypeEXT objectType,
 	uint64_t object, 
 	size_t location, 
@@ -1279,27 +1305,29 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL DebugReportCallback(VkDebugReportFlagsEXT 
 	const char* pMessage, 
 	void* pUserData)
 {
-	// if(flags & VK_DEBUG_REPORT_ERROR_BIT_EXT)
-	{
-		printf("debugPrintfEXT: %s", pMessage);
-	}
+	if (flags & VK_DEBUG_REPORT_INFORMATION_BIT_EXT)         { LOG_INFO ("[Debug Report] {0}", pMessage) };
+	if (flags & VK_DEBUG_REPORT_WARNING_BIT_EXT)             { LOG_WARN ("[Debug Report] {0}", pMessage) };
+	if (flags & VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT) { LOG_WARN ("[Debug Report Performance] {0}", pMessage) };
+	if (flags & VK_DEBUG_REPORT_ERROR_BIT_EXT)               { LOG_ERROR("[Debug Report] {0}", pMessage) };
+	if (flags & VK_DEBUG_REPORT_DEBUG_BIT_EXT)               { LOG_TRACE("[Debug Report] {0}", pMessage) };
 
 	return VK_FALSE;
 }
 
-void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo) {
+
+
+void PopulateDebugReportCreateInfo(VkDebugReportCallbackCreateInfoEXT& createInfo) {
 	createInfo = {};
-	createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-	createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT;
-	createInfo.messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
-	createInfo.messageSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-	createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT;
-	createInfo.messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
-	createInfo.messageType |= VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-	createInfo.pfnUserCallback = DebugUtilsCallback;
-	createInfo.pUserData = nullptr;
+	createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
+	createInfo.flags |= VK_DEBUG_REPORT_INFORMATION_BIT_EXT;
+	createInfo.flags |= VK_DEBUG_REPORT_WARNING_BIT_EXT;
+	createInfo.flags |= VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT;
+	createInfo.flags |= VK_DEBUG_REPORT_ERROR_BIT_EXT;
+	createInfo.flags |= VK_DEBUG_REPORT_DEBUG_BIT_EXT;
+	createInfo.pfnCallback = DebugReportCallback;
 }
-}
+
+} // vulkan debug callbacks
 
 void Context::CreateInstance(GLFWwindow* glfwWindow){
 	// optional data, provides useful info to the driver
@@ -1359,7 +1387,9 @@ void Context::CreateInstance(GLFWwindow* glfwWindow){
 	// Extensions
 	if (enableValidationLayers) {
 		requiredInstanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-		requiredInstanceExtensions.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
+		if (enableDebugReport) {
+			requiredInstanceExtensions.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
+		}
 	}
 
 	// get all available extensions
@@ -1429,8 +1459,8 @@ void Context::CreateInstance(GLFWwindow* glfwWindow){
 		// we need to set up a separate logger just for the instance creation/destruction
 		// because our "default" logger is created after
 		PopulateDebugMessengerCreateInfo(debugCreateInfo);
-		// debugCreateInfo.pNext = createInfo.pNext;
-		// createInfo.pNext      = &debugCreateInfo;
+		debugCreateInfo.pNext = createInfo.pNext;
+		createInfo.pNext      = &debugCreateInfo;
 	} else {
 		createInfo.enabledLayerCount = 0;
 		createInfo.pNext = nullptr;
@@ -1455,13 +1485,9 @@ void Context::CreateInstance(GLFWwindow* glfwWindow){
 	}
 
 	// Debug Report
-	if (enableValidationLayers) {
-		VkDebugReportCallbackCreateInfoEXT debugReportInfo = {};
-		debugReportInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
-		debugReportInfo.pfnCallback = DebugReportCallback;
-		debugReportInfo.flags = VK_DEBUG_REPORT_INFORMATION_BIT_EXT;
-		debugReportInfo.pUserData = nullptr;
-
+	if (enableValidationLayers && enableDebugReport) {
+		VkDebugReportCallbackCreateInfoEXT debugReportInfo;
+		PopulateDebugReportCreateInfo(debugReportInfo);
 		// Create the callback handle
 		res = CreateDebugReportCallbackEXT(instance, &debugReportInfo, nullptr, &debugReport);
 		// DEBUG_VK(res, "Failed to set up debug report callback!");
@@ -1803,7 +1829,11 @@ void Context::CreateDevice() {
 	}
 
 	genericSampler = CreateSampler(1.0);
-	vkSetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetDeviceProcAddr(device, "vkSetDebugUtilsObjectNameEXT");
+	if (enableValidationLayers) {
+		vkSetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetDeviceProcAddr(device, "vkSetDebugUtilsObjectNameEXT");
+	} else {
+		vkSetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)SetDebugUtilsObjectNameEXT;
+	}
 	// vkGetAccelerationStructureBuildSizesKHR = (PFN_vkGetAccelerationStructureBuildSizesKHR)vkGetDeviceProcAddr(device, "vkGetAccelerationStructureBuildSizesKHR");
 	// vkCreateAccelerationStructureKHR = (PFN_vkCreateAccelerationStructureKHR)vkGetDeviceProcAddr(device, "vkCreateAccelerationStructureKHR");
 	// vkCmdBuildAccelerationStructuresKHR = (PFN_vkCmdBuildAccelerationStructuresKHR)vkGetDeviceProcAddr(device, "vkCmdBuildAccelerationStructuresKHR");
@@ -1910,7 +1940,7 @@ void Context::CreateSwapChain(uint32_t width, uint32_t height) {
 		// if we want to render to a separate image first to perform post-processing
 		// we should change this image usage
 		createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | 
-		                        VK_IMAGE_USAGE_TRANSFER_DST_BIT;// TODO: remove transfer dst if not drawing to swapchain image
+								VK_IMAGE_USAGE_TRANSFER_DST_BIT;// TODO: remove transfer dst if not drawing to swapchain image
 
 		// don't support different graphics and present family
 		createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -2041,42 +2071,42 @@ bool GetSwapChainDirty() {
 }
 // EndCommandBuffer + vkQueuePresentKHR
 void SubmitAndPresent() {
-    auto& cmd = _ctx.GetCurrentCommandResources();
+	auto& cmd = _ctx.GetCurrentCommandResources();
 
-    VkPipelineStageFlags waitStages = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    VkSubmitInfo submitInfo{};
-    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submitInfo.waitSemaphoreCount = 1;
-    submitInfo.pWaitSemaphores = &_ctx.imageAvailableSemaphores[_ctx.swapChainCurrentFrame];
-    submitInfo.pWaitDstStageMask = &waitStages;
-    submitInfo.commandBufferCount = 1;
-    submitInfo.pCommandBuffers = &(cmd.buffer);
-    submitInfo.signalSemaphoreCount = 1;
-    submitInfo.pSignalSemaphores = &_ctx.renderFinishedSemaphores[_ctx.swapChainCurrentFrame];
+	VkPipelineStageFlags waitStages = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	VkSubmitInfo submitInfo{};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.waitSemaphoreCount = 1;
+	submitInfo.pWaitSemaphores = &_ctx.imageAvailableSemaphores[_ctx.swapChainCurrentFrame];
+	submitInfo.pWaitDstStageMask = &waitStages;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &(cmd.buffer);
+	submitInfo.signalSemaphoreCount = 1;
+	submitInfo.pSignalSemaphores = &_ctx.renderFinishedSemaphores[_ctx.swapChainCurrentFrame];
 
-    VkPresentInfoKHR presentInfo{};
-    presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-    presentInfo.waitSemaphoreCount = 1;
-    presentInfo.pWaitSemaphores = submitInfo.pSignalSemaphores;
-    presentInfo.swapchainCount = 1;
-    presentInfo.pSwapchains = &_ctx.swapChain;
-    presentInfo.pImageIndices = &_ctx.currentImageIndex;
-    presentInfo.pResults = nullptr;
+	VkPresentInfoKHR presentInfo{};
+	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+	presentInfo.waitSemaphoreCount = 1;
+	presentInfo.pWaitSemaphores = submitInfo.pSignalSemaphores;
+	presentInfo.swapchainCount = 1;
+	presentInfo.pSwapchains = &_ctx.swapChain;
+	presentInfo.pImageIndices = &_ctx.currentImageIndex;
+	presentInfo.pResults = nullptr;
 
-    _ctx.EndCommandBuffer(submitInfo);
+	_ctx.EndCommandBuffer(submitInfo);
 
-    auto res = vkQueuePresentKHR(_ctx.queues[_ctx.currentQueue]->queue, &presentInfo); // TODO: use present queue
-    _ctx.currentQueue = Queue::Count;
+	auto res = vkQueuePresentKHR(_ctx.queues[_ctx.currentQueue]->queue, &presentInfo); // TODO: use present queue
+	_ctx.currentQueue = Queue::Count;
 
-    if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR) {
-        _ctx.swapChainDirty = true;
-        return;
-    }
-    else if (res != VK_SUCCESS) {
-        DEBUG_VK(res, "Failed to present swap chain image!");
-    }
+	if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR) {
+		_ctx.swapChainDirty = true;
+		return;
+	}
+	else if (res != VK_SUCCESS) {
+		DEBUG_VK(res, "Failed to present swap chain image!");
+	}
 
-    _ctx.swapChainCurrentFrame = (_ctx.swapChainCurrentFrame + 1) % _ctx.framesInFlight;
+	_ctx.swapChainCurrentFrame = (_ctx.swapChainCurrentFrame + 1) % _ctx.framesInFlight;
 }
 
 
