@@ -221,42 +221,44 @@ bool GetSwapChainDirty();
 
 // void GetTimeStamps(std::map<std::string, float>& timeTable);
 
-void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset = 0);
-void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset = 0, uint32_t srcOffset = 0);
-void CmdCopy(Image& dst, void* data, uint32_t size);
-void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset = 0); // size is a No OP
-void CmdCopy(Buffer& dst, Image& src, uint32_t size = 0, uint32_t srcOffset = 0); // size is a No OP
-void CmdCopy(Buffer& dst, Image& src, uint32_t size, uint32_t dstOffset, ivec2 imageOffset, ivec2 imageExtent); // size is a No OP
-void CmdBarrier(Image& img, Layout::ImageLayout newLayout, Layout::ImageLayout oldLayout = Layout::MaxEnum);
-void CmdBarrier();
-void CmdBlit(Image& dst, Image& src, uvec2 dstSize = {0,0}, uvec2 srcSize = {0,0});
-void CmdClearColorImage(Image &image, float4 color);
+struct CommandHandle;
 
-Image& GetCurrentSwapchainImage();
-void AcquireImage();
-void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach = {}, uint32_t layerCount = 1);
-void CmdEndRendering();
-void CmdBeginPresent();
-void CmdEndPresent();
-void CmdBindPipeline(Pipeline& pipeline);
-void CmdPushConstants(void* data, uint32_t size);
+void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset = 0, CommandHandle cmd = {});
+void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset = 0, uint32_t srcOffset = 0, CommandHandle cmd = {});
+void CmdCopy(Image& dst, void* data, uint32_t size, CommandHandle cmd = {});
+void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset = 0, CommandHandle cmd = {}); // size is a No OP
+void CmdCopy(Buffer& dst, Image& src, uint32_t size = 0, uint32_t srcOffset = 0, CommandHandle cmd = {}); // size is a No OP
+void CmdCopy(Buffer& dst, Image& src, uint32_t size, uint32_t dstOffset, ivec2 imageOffset, ivec2 imageExtent, CommandHandle cmd = {}); // size is a No OP
+void CmdBarrier(Image& img, Layout::ImageLayout newLayout, Layout::ImageLayout oldLayout = Layout::MaxEnum, CommandHandle cmd = {});
+void CmdBarrier(CommandHandle cmd = {});
+void CmdBlit(Image& dst, Image& src, uvec2 dstSize = {0,0}, uvec2 srcSize = {0,0}, CommandHandle cmd = {});
+void CmdClearColorImage(Image &image, float4 color, CommandHandle cmd = {});
 
-// void CmdBuildBLAS(BLAS& blas);
-// void CmdBuildTLAS(TLAS& tlas, const std::vector<BLASInstance>& instances);
+Image& GetCurrentSwapchainImage(CommandHandle cmd = {});
+void AcquireImage(CommandHandle cmd = {});
+void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach = {}, uint32_t layerCount = 1, CommandHandle cmd = {});
+void CmdEndRendering(CommandHandle cmd = {});
+void CmdBeginPresent(CommandHandle cmd = {});
+void CmdEndPresent(CommandHandle cmd = {});
+void CmdBindPipeline(Pipeline& pipeline, CommandHandle cmd = {});
+void CmdPushConstants(void* data, uint32_t size, CommandHandle cmd = {});
 
-void CmdDraw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance);
-void CmdBindVertexBuffer(Buffer& vertexBuffer);
-void CmdDrawMesh(Buffer& vertexBuffer, Buffer& indexBuffer, uint32_t indexCount);
-void CmdDrawLineStrip(const Buffer& pointsBuffer, uint32_t firstPoint, uint32_t pointCount, float thickness = 1.0f);
-void CmdDrawPassThrough();
-// void CmdDrawImGui(ImDrawData* data);
-void CmdDispatch(const uvec3& groups);
+// void CmdBuildBLAS(BLAS& blas, CommandHandle cmd = {});
+// void CmdBuildTLAS(TLAS& tlas, const std::vector<BLASInstance>& instances, CommandHandle cmd = {});
 
-int CmdBeginTimeStamp(const std::string& name);
-void CmdEndTimeStamp(int timeStampIndex);
+void CmdDraw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance, CommandHandle cmd = {});
+void CmdBindVertexBuffer(Buffer& vertexBuffer, CommandHandle cmd = {});
+void CmdDrawMesh(Buffer& vertexBuffer, Buffer& indexBuffer, uint32_t indexCount, CommandHandle cmd = {});
+void CmdDrawLineStrip(const Buffer& pointsBuffer, uint32_t firstPoint, uint32_t pointCount, float thickness = 1.0f, CommandHandle cmd = {});
+void CmdDrawPassThrough(CommandHandle cmd = {});
+// void CmdDrawImGui(ImDrawData* data, CommandHandle cmd = {});
+void CmdDispatch(const uvec3& groups, CommandHandle cmd = {});
 
-void BeginCommandBuffer(Queue queue);
-void EndCommandBuffer();
+int CmdBeginTimeStamp(const std::string& name, CommandHandle cmd = {});
+void CmdEndTimeStamp(int timeStampIndex, CommandHandle cmd = {});
+
+void BeginCommandBuffer(Queue queue, CommandHandle cmd = {});
+void EndCommandBuffer(CommandHandle cmd = {});
 void WaitQueue(Queue queue);
 void WaitIdle();
 // void BeginImGui();

@@ -15,6 +15,25 @@ namespace vkw {
 
 void AcquireImage();
 
+struct CommandResource {
+	u8* stagingCpu = nullptr;
+	uint32_t stagingOffset = 0;
+	Buffer staging;
+	uint32_t queueFamilyIndex = 0;
+	VkCommandPool pool = VK_NULL_HANDLE;
+	VkCommandBuffer buffer = VK_NULL_HANDLE;
+	VkFence fence = VK_NULL_HANDLE;
+	VkQueryPool queryPool;
+	std::vector<std::string> timeStampNames;
+	std::vector<uint64_t> timeStamps;
+};
+
+struct CommandHandle
+{
+	CommandResource* resource = nullptr;
+};
+
+
 struct Context
 {	
 	void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset);
@@ -91,28 +110,18 @@ struct Context
 	std::vector<VkQueueFamilyProperties> availableFamilies;
 
 	const uint32_t timeStampPerPool = 64;
-	struct CommandResources {
-		u8* stagingCpu = nullptr;
-		uint32_t stagingOffset = 0;
-		Buffer staging;
-		VkCommandPool pool = VK_NULL_HANDLE;
-		VkCommandBuffer buffer = VK_NULL_HANDLE;
-		VkFence fence = VK_NULL_HANDLE;
-		VkQueryPool queryPool;
-		std::vector<std::string> timeStampNames;
-		std::vector<uint64_t> timeStamps;
-	};
+	
 	struct InternalQueue {
 		int family = -1;
 		uint32_t indexInFamily = 0;
 		VkQueue queue = VK_NULL_HANDLE;
-		CommandResources* commands = nullptr; // Size = framesInFlight
+		CommandResource* commands = nullptr; // Size = framesInFlight
 	};
 
 	
 	bool requestSeparate[Queue::Count] = {false};
 	std::unordered_map<uint32_t, InternalQueue> uniqueQueues;
-	std::vector<CommandResources> commandResources; // Owns all command resources
+	std::vector<CommandResource> commandResources; // Owns all command resources outside swapchains
 	InternalQueue* queues[Queue::Count]; // Pointers to uniqueQueues
 	Queue currentQueue = Queue::Count;
 
@@ -143,7 +152,11 @@ struct Context
 		VkSurfaceCapabilitiesKHR surfaceCapabilities;
 		std::vector<VkPresentModeKHR> availablePresentModes;
 		std::vector<VkSurfaceFormatKHR> availableSurfaceFormats;
+
+		std::vector<CommandResource> commandResources; // Owns all command resources
 		
+		uint32_t framesInFlight = 1;
+		uint32_t additionalImages = 0;
 		VkExtent2D extent;
 		uint32_t swapChainCurrentFrame = 0;
 		bool swapChainDirty = true;
@@ -166,8 +179,7 @@ struct Context
 	// std::vector<VkSemaphore> imageAvailableSemaphores;
 	// std::vector<VkSemaphore> renderFinishedSemaphores;
 
-	uint32_t additionalImages = 0;
-	uint32_t framesInFlight = 1;
+
 	// VkFormat depthFormat;
 	
 
@@ -227,8 +239,10 @@ struct Context
 		return swapChain.swapChainImages[swapChain.currentImageIndex];
 	}
 
-	inline CommandResources& GetCurrentCommandResources() {
-		return queues[currentQueue]->commands[swapChainCurrentFrame];
+	// Only outside swapchain
+	inline CommandResource& GetCurrentCommandResources() {
+		// return queues[currentQueue]->commands[swapChainCurrentFrame];
+		return *(queues[currentQueue]->commands);
 	}
 
 	VkExtent2D ChooseExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32_t width, uint32_t height);
@@ -351,17 +365,17 @@ void Init(GLFWwindow* window, uint32_t width, uint32_t height) {
 	InitImpl(window, width, height);
 }
 
-void OnSurfaceUpdate(GLFWwindow* window, uint32_t width, uint32_t height) {
-	_ctx.DestroySwapChain();
-	_ctx.CreateSurfaceFormats(_ctx.swapChains[window]);
-	_ctx.CreateSwapChain(window, width, height);
-}
+// void OnSurfaceUpdate(GLFWwindow* window, uint32_t width, uint32_t height) {
+// 	_ctx.DestroySwapChain();
+// 	_ctx.CreateSurfaceFormats(_ctx.swapChains[window]);
+// 	_ctx.CreateSwapChain(window, width, height);
+// }
 
 
 void Destroy() {
 	// ImGui_ImplVulkan_Shutdown();
 	// ImGui_ImplGlfw_Shutdown();
-	for (auto& swapChain : _ctx.swapChains) {
+	for (auto& [key, swapChain] : _ctx.swapChains) {
 		_ctx.DestroySwapChain(swapChain);
 	}
 
@@ -1026,17 +1040,18 @@ void CmdEndRendering() {
 	auto& cmd = _ctx.GetCurrentCommandResources();
 	vkCmdEndRendering(cmd.buffer);
 }
+
 // Acquire + CmdBarrier + CmdBeginRendering
-void CmdBeginPresent() {
-	vkw::AcquireImage();
-	vkw::CmdBarrier(_ctx.GetCurrentSwapChainImage(), vkw::Layout::ColorAttachment);
-	vkw::CmdBeginRendering({ _ctx.GetCurrentSwapChainImage() }, {});
-}
+// void CmdBeginPresent() {
+// 	vkw::AcquireImage();
+// 	vkw::CmdBarrier(_ctx.GetCurrentSwapChainImage(), vkw::Layout::ColorAttachment);
+// 	vkw::CmdBeginRendering({ _ctx.GetCurrentSwapChainImage() }, {});
+// }
 // CmdEndRendering + CmdBarrier
-void CmdEndPresent() {
-	vkw::CmdEndRendering();
-	vkw::CmdBarrier(_ctx.GetCurrentSwapChainImage(), vkw::Layout::Present);
-}
+// void CmdEndPresent() {
+// 	vkw::CmdEndRendering();
+// 	vkw::CmdBarrier(_ctx.GetCurrentSwapChainImage(), vkw::Layout::Present);
+// }
 
 void CmdDraw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance) {
 	auto& cmd = _ctx.GetCurrentCommandResources();
@@ -1120,6 +1135,17 @@ void CmdPushConstants(void* data, uint32_t size) {
 //     ImGui_ImplVulkan_NewFrame();
 //     ImGui_ImplGlfw_NewFrame();
 // }
+
+// for swapchain
+
+// CommandHandle* GetCurrentCommandBuffer(GLFWWindow* window) {
+// 	auto& swapChain = _ctx.swapChains[window];
+// 	return swapChain.commandResources[swapChain.swapChainCurrentFrame];
+// }
+
+CommandHandle* GetCurrentCommandBuffer(Context* window) {
+	return nullptr;
+}
 
 // vkWaitForFences + vkResetFences +
 // vkResetCommandPool + vkBeginCommandBuffer
@@ -1534,13 +1560,6 @@ void Context::DestroyInstance() {
 		DestroyDebugReportCallbackEXT(instance, debugReport, allocator);
 		DEBUG_TRACE("Destroyed debug report callback.");
 		debugReport = nullptr;
-	}
-	if (_ctx.presentRequested){
-		for (auto surface: surfaces){
-			vkDestroySurfaceKHR(instance, surface, allocator);
-		}
-		surfaces.clear();
-		DEBUG_TRACE("Destroyed surfaces.");
 	}
 	vkDestroyInstance(instance, allocator);
 	DEBUG_TRACE("Destroyed instance.");
@@ -2075,22 +2094,22 @@ void Context::CreateSwapChain(GLFWwindow* glfwWindow, uint32_t width, uint32_t h
 }
 
 void Context::DestroySwapChain(SwapChain& swapChain) {
-	for (size_t i = 0; i < swapChainImages.size(); i++) {
-		vkDestroyImageView(device, swapChainViews[i], allocator);
+	for (size_t i = 0; i < swapChain.swapChainImages.size(); i++) {
+		vkDestroyImageView(device, swapChain.swapChainViews[i], allocator);
 	}
 
-	for (size_t i = 0; i < framesInFlight; i++) {
-		vkDestroySemaphore(device, imageAvailableSemaphores[i], allocator);
-		vkDestroySemaphore(device, renderFinishedSemaphores[i], allocator);
+	for (size_t i = 0; i < swapChain.framesInFlight; i++) {
+		vkDestroySemaphore(device, swapChain.imageAvailableSemaphores[i], allocator);
+		vkDestroySemaphore(device, swapChain.renderFinishedSemaphores[i], allocator);
 	}
 
-	vkDestroySwapchainKHR(device, swapChain, allocator);
+	vkDestroySwapchainKHR(device, swapChain.swapChain, allocator);
 
-	imageAvailableSemaphores.clear();
-	renderFinishedSemaphores.clear();
-	swapChainViews.clear();
-	swapChainImages.clear();
-	swapChain = VK_NULL_HANDLE;
+	swapChain.imageAvailableSemaphores.clear();
+	swapChain.renderFinishedSemaphores.clear();
+	swapChain.swapChainViews.clear();
+	swapChain.swapChainImages.clear();
+	swapChain.swapChain = VK_NULL_HANDLE;
 }
 
 void AcquireImage() {
@@ -2367,7 +2386,7 @@ void Context::destroyBindlessResources(){
 }
 
 
-void Context::createCommandBuffers(){
+void Context::createCommandBuffers(std::vector<CommandResource>& commandResources, uint32_t framesInFlight) {
 	VkCommandPoolCreateInfo poolInfo{};
 	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	poolInfo.flags = 0; // ?VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT
@@ -2507,7 +2526,7 @@ VkExtent2D Context::ChooseExtent(const VkSurfaceCapabilitiesKHR& capabilities, u
 
 
 void Context::CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset) {
-	CommandResources& cmd = GetCurrentCommandResources();
+	CommandResource& cmd = GetCurrentCommandResources();
 	if (stagingBufferSize - cmd.stagingOffset < size) {
 		LOG_ERROR("not enough size in staging buffer to copy");
 		// todo: allocate additional buffer
@@ -2519,7 +2538,7 @@ void Context::CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset
 }
 
 void Context::CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset) {
-	CommandResources& cmd = GetCurrentCommandResources();
+	CommandResource& cmd = GetCurrentCommandResources();
 	VkBufferCopy copyRegion{};
 	copyRegion.srcOffset = srcOffset;
 	copyRegion.dstOffset = dstOffset;
@@ -2528,7 +2547,7 @@ void Context::CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffse
 }
 
 void Context::CmdCopy(Image& dst, void* data, uint32_t size) {
-	CommandResources& cmd = GetCurrentCommandResources();
+	CommandResource& cmd = GetCurrentCommandResources();
 	if (stagingBufferSize - cmd.stagingOffset < size) {
 		LOG_ERROR("not enough size in staging buffer to copy");
 		// todo: allocate additional buffer
@@ -2540,7 +2559,7 @@ void Context::CmdCopy(Image& dst, void* data, uint32_t size) {
 }
 
 void Context::CmdCopy(Image& dst, Buffer& src, uint32_t srcOffset) {
-	CommandResources& cmd = GetCurrentCommandResources();
+	CommandResource& cmd = GetCurrentCommandResources();
 	VkBufferImageCopy region{};
 	region.bufferOffset = srcOffset;
 	region.bufferRowLength = 0;
@@ -2556,7 +2575,7 @@ void Context::CmdCopy(Image& dst, Buffer& src, uint32_t srcOffset) {
 }
 
 void Context::CmdCopy(Buffer& dst, Image& src, uint32_t dstOffset) {
-	CommandResources& cmd = GetCurrentCommandResources();
+	CommandResource& cmd = GetCurrentCommandResources();
 	VkBufferImageCopy region{};
 	region.bufferOffset = dstOffset;
 	region.bufferRowLength = 0;
@@ -2573,7 +2592,7 @@ void Context::CmdCopy(Buffer& dst, Image& src, uint32_t dstOffset) {
 // Vulkan 1.3 // 
 void Context::CmdCopy(Buffer &dst, Image &src, uint32_t size, uint32_t dstOffset, ivec2 imageOffset, ivec2 imageExtent) {
 // void Context::CmdCopy(Buffer &dst, Image &src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset){
-	CommandResources& cmd = GetCurrentCommandResources();
+	CommandResource& cmd = GetCurrentCommandResources();
 	VkBufferImageCopy2 region{};
 	region.sType = VK_STRUCTURE_TYPE_BUFFER_IMAGE_COPY_2;
 	region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -2598,7 +2617,7 @@ void Context::CmdCopy(Buffer &dst, Image &src, uint32_t size, uint32_t dstOffset
 }
 
 void Context::CmdBarrier(Image& img, Layout::ImageLayout newLayout, Layout::ImageLayout oldLayout) {
-	CommandResources& cmd = GetCurrentCommandResources();
+	CommandResource& cmd = GetCurrentCommandResources();
 	VkImageSubresourceRange range = {};
 	range.aspectMask = (VkImageAspectFlags)img.aspect;
 	range.baseMipLevel = 0;
@@ -2642,7 +2661,7 @@ void Context::CmdBarrier() {
 }
 
 void Context::CmdClearColorImage(Image& img, float4& color) {
-	CommandResources& cmd = GetCurrentCommandResources();
+	CommandResource& cmd = GetCurrentCommandResources();
 	VkClearColorValue clearColor{};
 	clearColor.float32[0] = color.r;
 	clearColor.float32[1] = color.g;
