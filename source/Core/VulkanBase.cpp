@@ -265,7 +265,7 @@ struct BufferResource : Resource {
 
 	virtual ~BufferResource() {
 		vmaDestroyBuffer(_ctx.vmaAllocator, buffer, allocation);
-		printf("destroy buffer %s\n", name.c_str());
+		// printf("destroy buffer %s\n", name.c_str());
 		if (rid >= 0) {
 			_ctx.availableBufferRID.push_back(rid);
 			rid = -1;
@@ -283,7 +283,7 @@ struct ImageResource : Resource {
 
 	virtual ~ImageResource() {
 		if (!fromSwapchain) {
-			printf("destroy image %s\n", name.c_str());
+			// printf("destroy image %s\n", name.c_str());
 			for (VkImageView layerView : layersView) {
 				vkDestroyImageView(_ctx.device, layerView, _ctx.allocator);
 			}
@@ -299,7 +299,7 @@ struct ImageResource : Resource {
 				// imguiRIDs.clear();
 			}
 		} else {
-			printf("FROM SWAPCHAIN %s\n", name.c_str());
+			// printf("FROM SWAPCHAIN %s\n", name.c_str());
 		}
 	}
 };
@@ -392,9 +392,11 @@ void Init(GLFWwindow* window, uint32_t width, uint32_t height) {
 
 void OnSurfaceUpdate(GLFWwindow* window, uint32_t width, uint32_t height) {
 	_ctx.DestroySwapChain(_ctx.swapChains[window]);
-	_ctx.swapChains.clear();
-	_ctx.CreateSurfaceFormats(_ctx.swapChains[window]);
+	_ctx.swapChains.erase(window);
+	if (window == nullptr) {LOG_WARN("Window is null, swapchain NOT recreated"); return;}
+	if (width == 0 || height == 0) {LOG_WARN("Window size is 0, swapchain NOT recreated"); return;}
 	_ctx.CreateSwapChain(window, width, height);
+	LOG_INFO("Swapchain recreated!");
 }
 
 
@@ -465,7 +467,7 @@ Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, c
 	auto result = vmaCreateBuffer(_ctx.vmaAllocator, &bufferInfo, &allocInfo, &res->buffer, &res->allocation, nullptr);
 	DEBUG_VK(result, "Failed to create buffer!");
 	ASSERT(result == VK_SUCCESS, "Failed to create buffer!");
-	LOG_INFO("Created buffer {}", name);
+	// LOG_INFO("Created buffer {}", name);
 
 	Buffer buffer = {
 		.resource = res,
@@ -2182,14 +2184,21 @@ void Context::DestroySwapChain(SwapChain& swapChain) {
 	swapChain.swapChain = VK_NULL_HANDLE;
 }
 
-void AcquireImage(GLFWwindow* window) {
+bool AcquireImage(GLFWwindow* window) {
 	auto& swapChain = _ctx.swapChains[window];
 	auto res = vkAcquireNextImageKHR(_ctx.device, swapChain.swapChain, UINT64_MAX, swapChain.imageAvailableSemaphores[swapChain.currentFrame], VK_NULL_HANDLE, &swapChain.currentImageIndex);
 
 	if (res == VK_ERROR_OUT_OF_DATE_KHR) {
+		LOG_WARN("AcquireImage: Out of date");
 		swapChain.dirty = true;
 	} else if (res != VK_SUCCESS && res != VK_SUBOPTIMAL_KHR) {
 		DEBUG_VK(res, "Failed to acquire swap chain image!");
+	}
+
+	if (res == VK_SUCCESS) {
+		return true;
+	} else {
+		return false;
 	}
 }
 
@@ -2222,6 +2231,9 @@ void SubmitAndPresent(GLFWwindow* window) {
 	auto res = vkQueuePresentKHR(swapChain.commandResources[swapChain.currentFrame].queue->queue, &presentInfo); // TODO: use present queue
 
 	if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR) {
+		if (res == VK_ERROR_OUT_OF_DATE_KHR) { LOG_WARN("vkQueuePresentKHR: Out of date") }
+		if (res == VK_SUBOPTIMAL_KHR) { LOG_WARN("vkQueuePresentKHR: Suboptimal") }
+
 		swapChain.dirty = true;
 		return;
 	}
@@ -2567,7 +2579,7 @@ VkExtent2D Context::ChooseExtent(const VkSurfaceCapabilitiesKHR& capabilities, u
 			capabilities.minImageExtent.height,
 			std::min(capabilities.maxImageExtent.height, actualExtent.height)
 		);
-
+		DEBUG_TRACE("ChooseExtent: {0}, {1}", actualExtent.width, actualExtent.height);
 		return actualExtent;
 	}
 }

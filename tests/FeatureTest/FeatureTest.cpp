@@ -105,6 +105,7 @@ void FeatureTestApplication::Create() {
 	ctx.CreateShaders();
 }
 
+void RecreateFrameResources(Window* w);
 
 void RenderFrame(GLFWwindow* window) {
 	
@@ -112,7 +113,7 @@ void RenderFrame(GLFWwindow* window) {
 	vkw::BeginCommandBuffer(cmd);
 	// vkw::CmdPushConstants(&constants, sizeof(constants));
 	// vkw::CmdBeginPresent();
-	vkw::AcquireImage(window);
+	if (!vkw::AcquireImage(window)) return;
 	vkw::Image& img = vkw::GetCurrentSwapchainImage(window);
 	
 	vkw::CmdCopy(cmd, ctx.vertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex));
@@ -135,35 +136,60 @@ void RenderFrame(GLFWwindow* window) {
 void DrawFrame(GLFWwindow* window) {
 	RenderFrame(window);
 	if (vkw::GetSwapChainDirty(window)) {
+		LOG_WARN("DrawFrame: Swapchain dirty");
 		return;
 	}
 	vkw::SubmitAndPresent(window);
 }
 
-bool DirtyFrameResources(Window* w) {
+bool SwapchainDirty(Window* w) {
 	bool dirty = false;
-	dirty |= vkw::GetSwapChainDirty(w->GetGLFWwindow());
-	dirty |= w->GetFramebufferResized();
-	dirty |= w->IsDirty();
+	auto swapChainDirty = vkw::GetSwapChainDirty(w->GetGLFWwindow());
+	auto windowDirty = w->GetSwapchainDirty();
+	LOG_INFO("swapChainDirty: {}, windowDirty: {}", swapChainDirty, windowDirty);
+	dirty = swapChainDirty || windowDirty;
 	return dirty;
 }
 
 void FeatureTestApplication::MainLoop() {
-	// while (ctx.window->GetAlive()) {
-	// 	ctx.window->Update();
-	// 	// DrawFrame(ctx.window->GetGLFWwindow());
-	// 	ctx.window->ApplyChanges();
-	// 	WindowManager::WaitEvents();
-	// 	printf("Loop\n");
-	// 	fflush(stdout);
+	while (ctx.window->GetAlive() && !ctx.window->GetShouldClose()) {
+		ctx.window->Update();
+		if (/* engine->drawNeeded || */ ctx.window->GetDrawNeeded()) {
+			DrawFrame(ctx.window->GetGLFWwindow());
+			/* engine->redrawNeeded = false; */
+			ctx.window->SetDrawNeeded(false);
+			continue;
+		}
+		// usleep(1000 * 1000);
+		// ctx.window->SetSize(800, 600); 
+		if (SwapchainDirty(ctx.window.get())) {
+			LOG_INFO("DIRTY FRAME RESOURCES");
+			RecreateFrameResources(ctx.window.get());
+		}
+		WindowManager::WaitEvents();
+		printf("Loop\n");
+		fflush(stdout);
+	}
+
+
+	// DrawFrame(ctx.window->GetGLFWwindow());
+	// usleep(1000 * 1000);
+	// ctx.window->SetSize(800, 600); 
+	// // ctx.window->ApplyChanges();
+	// if (SwapchainDirty(ctx.window.get())) {
+	// 	LOG_INFO("DIRTY FRAME RESOURCES");
+	// 	RecreateFrameResources(ctx.window.get());
 	// }
+	// usleep(1000 * 1000);
+	// DrawFrame(ctx.window->GetGLFWwindow());
+	// usleep(1000 * 1000);
 
-	usleep(1000 * 1000);
-	ctx.window->SetSize(800, 600);
-	ctx.window->ApplyChanges();
-	usleep(1000 * 1000);
 
-	// vkw::WaitIdle();
+
+	// DrawFrame(ctx.window->GetGLFWwindow());
+	// usleep(1000 * 1000);
+
+	vkw::WaitIdle();
 }
 
 void FeatureTestApplication::Draw() {
@@ -216,10 +242,19 @@ void RecreateFrameResources(Window* w) {
 	vkw::WaitIdle();
 	if (w->GetFramebufferResized() || w->IsDirty()) {
 		if (w->IsDirty()) {
+			LOG_INFO("RecreateFrameResources: Dirty");
 			w->ApplyChanges();
 		}
-		w->UpdateFramebufferSize();
-		vkw::OnSurfaceUpdate(w->GetGLFWwindow(), w->GetWidth(), w->GetHeight());
+		if (w->GetFramebufferResized()) {
+			LOG_INFO("RecreateFrameResources: FramebufferResized");
+		}
+		if (w->GetAlive()) {
+			w->UpdateFramebufferSize();
+			vkw::OnSurfaceUpdate(w->GetGLFWwindow(), w->GetWidth(), w->GetHeight());
+		} else {
+			LOG_WARN("RecreateFrameResources: Window is dead");
+			return;
+		}
 	}
 	// DeferredRenderer::CreateImages(viewportSize.x, viewportSize.y);
 	// camera->extent = {viewportSize.x, viewportSize.y};

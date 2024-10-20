@@ -245,7 +245,7 @@ void CmdBlit(CommandResource* cmd, Image& dst, Image& src, uvec2 dstSize = {}, u
 void CmdClearColorImage(CommandResource* cmd, Image &image, float4 color);
 
 Image& GetCurrentSwapchainImage(GLFWwindow* window);
-void AcquireImage(GLFWwindow* window);
+bool AcquireImage(GLFWwindow* window);
 void CmdBeginRendering(CommandResource* cmd, const std::vector<Image>& colorAttachs, Image depthAttach = {}, uint32_t layerCount = 1);
 void CmdEndRendering(CommandResource* cmd);
 // void CmdBeginPresent(CommandResource* cmd);

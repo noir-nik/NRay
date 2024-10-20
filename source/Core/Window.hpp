@@ -38,8 +38,11 @@ class Window {
 
 	char lastKeyState[GLFW_KEY_LAST + 1];
 	WindowMode mode = WindowMode::Windowed;
+	WindowMode newMode = WindowMode::Windowed;
 
-	bool dirty     = true;
+	// bool dirty     = true;
+	bool drawNeeded = true;
+	bool swapchainDirty = true;
 	bool resizable = true;
 	bool decorated = true;
 	bool maximized = false;
@@ -57,7 +60,7 @@ public:
 	void Destroy();
 
 	inline GLFWwindow* GetGLFWwindow()                     { return window;                                 }
-	inline bool        IsDirty()                           { return dirty;                                  }
+	// inline bool        IsDirty()                           { return dirty;                                  }
 	inline void        WaitEvents()                        { glfwWaitEvents();                              }
 	inline uint32_t    GetWidth()                          { return width;                                  }
 	inline uint32_t    GetHeight()                         { return height;                                 }
@@ -76,23 +79,26 @@ public:
 	inline bool        IsMouseDown(uint16_t buttonCode)    { return glfwGetMouseButton(window, buttonCode); }
 	inline void        SetUserPointer(void *user_ptr)      { glfwSetWindowUserPointer(window, user_ptr);    }
 
-	inline void        SetSize(int width, int height)      { glfwSetWindowSize(window, width, height);      }
+	inline void        CmdResizeTo(int width, int height)  { glfwSetWindowSize(window, width, height); drawNeeded = true; }
+	inline void        SetSize(int width, int height)      { width = width; height = height;}
 	
 	inline Lmath::int2 GetPos()                            { glfwGetWindowPos(window, &posX, &posY); return {posX, posY}; }
 	inline void        SetPos(int x, int y)                { posX = x; posY = y; }
 
 	inline WindowMode  GetMode()                           { return mode; }
-	inline void        SetMode(WindowMode newMode)         { mode = newMode; dirty = true; }
+	inline void        SetMode(WindowMode newMode)         { mode = newMode;}
 
 	inline void        SetFramebufferResized()             { framebufferResized = true; }
-	inline void        SetFramebufferResized(bool resized) { framebufferResized = resized; }
 
 	inline const char* GetName()                           { return name; }
 	inline void        SetName(const char* name)           { glfwSetWindowTitle(window, name);               }
 
 	inline bool        GetMaximized()                      { return maximized; }
-	inline void        SetMaximized(bool maximized)        { maximized = maximized; dirty = true; }
+	inline void        SetMaximized(bool maximized)        { maximized = maximized;}
 
+	inline bool        GetDrawNeeded()                        { return drawNeeded; }
+	inline void        SetDrawNeeded(bool drawNeeded)        { drawNeeded = drawNeeded;}
+	inline bool        GetSwapchainDirty()                 { return swapchainDirty; }
 	inline bool        GetAlive()                          { return window != nullptr; }
 
 

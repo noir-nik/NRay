@@ -3,7 +3,7 @@
 #include "Window.hpp"
 // #include <imgui/imgui.h>
 
-#define WINDOW_ALIVE_GUARD if (window == nullptr) return;
+#define WINDOW_ALIVE_GUARD if (window == nullptr) {LOG_WARN("ALIVE_GUARD {}:{}", __FILE__, __LINE__) return;}
 
 namespace {
 struct Context
@@ -31,7 +31,7 @@ void ScrollCallback(GLFWwindow* window, double x, double y) {
 void FramebufferSizeCallback(GLFWwindow* window, int width, int height) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
 	pWindow->SetSize(width, height);
-	pWindow->SetFramebufferResized(true);
+	pWindow->SetFramebufferResized();
 	DEBUG_TRACE("Window {} framebuffer resized to {}x{}", pWindow->GetName(), width, height);
 }
 
@@ -102,19 +102,22 @@ std::shared_ptr<Window> WindowManager::NewWindow(int width, int height, const ch
 		Init();
 	}
 	auto window = std::make_shared<Window>(width, height, name);
+
+	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+	glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 	GLFWwindow* glfwWindow = glfwCreateWindow(width, height, name, nullptr, nullptr);
 	window->window = glfwWindow;
 	window->SetUserPointer(window.get());
 	window->GetPos();
 	
-	// glfwSetFramebufferSizeCallback(glfwWindow, FramebufferSizeCallback);
-	// glfwSetScrollCallback(glfwWindow, ScrollCallback);
-	// glfwSetWindowMaximizeCallback(glfwWindow, WindowMaximizeCallback);
+	glfwSetFramebufferSizeCallback(glfwWindow, FramebufferSizeCallback);
+	glfwSetScrollCallback(glfwWindow, ScrollCallback);
+	glfwSetWindowMaximizeCallback(glfwWindow, WindowMaximizeCallback);
 	glfwSetWindowPosCallback(glfwWindow, WindowChangePosCallback);
-	// glfwSetDropCallback(glfwWindow, WindowDropCallback);
+	glfwSetDropCallback(glfwWindow, WindowDropCallback);
 	glfwSetWindowCloseCallback(glfwWindow, WindowCloseCallback);
 
-	window->dirty = false;
+	// window->dirty = false;
     window->ApplyChanges();
 	// windowCount++;
 	return window;
@@ -133,50 +136,54 @@ void Window::Destroy() {
 
 void Window::ApplyChanges() {
 	WINDOW_ALIVE_GUARD
-	if (GetShouldClose()) {
+	// Destroy if should close
+	if (shouldClose) {
 		Destroy();
 		return;
 	}
+	
+	// Change mode
+	if (newMode != mode) {
+		mode = newMode;
+		swapchainDirty = true;
+		drawNeeded = true;
+		int monitorCount;
+		auto monitors = glfwGetMonitors(&monitorCount);
+		ASSERT(monitorIndex < monitorCount, "Invalid monitorIndex inside Window creation!", monitorIndex);
+		auto monitor = monitors[monitorIndex];
+		auto monitorMode = glfwGetVideoMode(monitor);
 
-	int monitorCount;
-	auto monitors = glfwGetMonitors(&monitorCount);
-	ASSERT(monitorIndex < monitorCount, "Invalid monitorIndex inside Window creation!", monitorIndex);
-	auto monitor = monitors[monitorIndex];
-	auto monitorMode = glfwGetVideoMode(monitor);
-
-	int modesCount;
-	const GLFWvidmode* videoModes = glfwGetVideoModes(monitors[monitorIndex], &modesCount);
-	if (videoModeIndex >= modesCount) {
-		videoModeIndex = modesCount - 1;
-	}
-
-	// creating window
-	switch (mode) {
-	case WindowMode::Windowed:
-		// posY = std::max(posY, 31);
-		// glfwSetWindowMonitor(window, nullptr, posX, posY, width, height, GLFW_DONT_CARE);
-		if (maximized) {
-			glfwMaximizeWindow(window);
+		int modesCount;
+		const GLFWvidmode* videoModes = glfwGetVideoModes(monitors[monitorIndex], &modesCount);
+		if (videoModeIndex >= modesCount) {
+			videoModeIndex = modesCount - 1;
 		}
-		// glfwSetWindowAttrib(window, GLFW_MAXIMIZED, maximized);
-		glfwSetWindowAttrib(window, GLFW_RESIZABLE, resizable);
-		glfwSetWindowAttrib(window, GLFW_DECORATED, decorated);
-		break;
-	case WindowMode::WindowedFullScreen:
-		glfwWindowHint(GLFW_RED_BITS, monitorMode->redBits);
-		glfwWindowHint(GLFW_GREEN_BITS, monitorMode->greenBits);
-		glfwWindowHint(GLFW_BLUE_BITS, monitorMode->blueBits);
-		glfwWindowHint(GLFW_REFRESH_RATE, monitorMode->refreshRate);
-		glfwSetWindowMonitor(window, monitor, 0, 0, monitorMode->width, monitorMode->height, monitorMode->refreshRate);
-		break;
-	case WindowMode::FullScreen:
-		GLFWvidmode videoMode = videoModes[videoModeIndex];
-		glfwSetWindowMonitor(window, monitor, 0, 0, videoMode.width, videoMode.height, videoMode.refreshRate);
-		break;
+		switch (newMode) {
+		case WindowMode::Windowed:
+			// posY = std::max(posY, 31);
+			// glfwSetWindowMonitor(window, nullptr, posX, posY, width, height, GLFW_DONT_CARE);
+			if (maximized) {
+				glfwMaximizeWindow(window);
+			}
+			// glfwSetWindowAttrib(window, GLFW_MAXIMIZED, maximized);
+			glfwSetWindowAttrib(window, GLFW_RESIZABLE, resizable);
+			glfwSetWindowAttrib(window, GLFW_DECORATED, decorated);
+			break;
+		case WindowMode::WindowedFullScreen:
+			glfwWindowHint(GLFW_RED_BITS, monitorMode->redBits);
+			glfwWindowHint(GLFW_GREEN_BITS, monitorMode->greenBits);
+			glfwWindowHint(GLFW_BLUE_BITS, monitorMode->blueBits);
+			glfwWindowHint(GLFW_REFRESH_RATE, monitorMode->refreshRate);
+			glfwSetWindowMonitor(window, monitor, 0, 0, monitorMode->width, monitorMode->height, monitorMode->refreshRate);
+			break;
+		case WindowMode::FullScreen:
+			GLFWvidmode videoMode = videoModes[videoModeIndex];
+			glfwSetWindowMonitor(window, monitor, 0, 0, videoMode.width, videoMode.height, videoMode.refreshRate);
+			break;
+		}
 	}
 
-	framebufferResized = false;
-	dirty = false;
+	// framebufferResized = false;
 }
 
 
@@ -204,6 +211,7 @@ std::string VideoModeText(GLFWvidmode mode) {
 // void Window::OnImgui(){}
 
 void Window::UpdateFramebufferSize() {
+	WINDOW_ALIVE_GUARD
 	framebufferResized = false;
 	glfwGetFramebufferSize(window, &width, &height);
 }
