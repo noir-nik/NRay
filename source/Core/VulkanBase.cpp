@@ -148,12 +148,12 @@ struct Context
 			return this->swapChainImages[currentImageIndex];
 		}
 
-		inline VkSemaphore* GetImageAvailableSemaphore() {
-			return &imageAvailableSemaphores[currentFrame];
+		inline VkSemaphore GetImageAvailableSemaphore() {
+			return imageAvailableSemaphores[currentFrame];
 		}
 
-		inline VkSemaphore* GetRenderFinishedSemaphore() {
-			return &renderFinishedSemaphores[currentFrame];
+		inline VkSemaphore GetRenderFinishedSemaphore() {
+			return renderFinishedSemaphores[currentFrame];
 		}
 
 		CommandResource* GetCommandBuffer() {
@@ -1202,36 +1202,37 @@ void EndCommandBuffer(CommandResource* cmd) {
 
 struct SubmitInfo
 {
-	VkSemaphore_T *waitSemaphore;
-	VkSemaphore_T *signalSemaphore;
-
+	CommandResource* commandBuffer   = nullptr;
+	Semaphore*       waitSemaphore   = nullptr;
+	uint64_t         waitStages      = PipelineStage::None;
+	Semaphore*       signalSemaphore = nullptr;
+	uint64_t         signalStages    = PipelineStage::None;
 };
 
-
-void QueueSubmit(SubmitInfo submitInfo) {
+void QueueSubmit(const SubmitInfo* submitInfo) {
 
 	VkSemaphoreSubmitInfo waitInfo { VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO };
-	waitInfo.semaphore = swapChain.imageAvailableSemaphores[swapChain.currentFrame];
-	waitInfo.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR;
+	waitInfo.semaphore = (VkSemaphore)submitInfo->waitSemaphore;
+	waitInfo.stageMask = (VkPipelineStageFlags2)submitInfo->waitStages;
 	// waitInfo.value = 1; // Only for timeline semaphores
 
 	VkSemaphoreSubmitInfo signalInfo { VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO };
-	signalInfo.semaphore = swapChain.renderFinishedSemaphores[swapChain.currentFrame];
-	signalInfo.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+	signalInfo.semaphore = (VkSemaphore)submitInfo->signalSemaphore;
+	signalInfo.stageMask = (VkPipelineStageFlags2)submitInfo->signalStages;
 
-	VkCommandBufferSubmitInfo info { VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO };
-	info.commandBuffer = swapChain.commandResources[swapChain.currentFrame].buffer;
+	VkCommandBufferSubmitInfo cmdInfo { VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO };
+	cmdInfo.commandBuffer = submitInfo->commandBuffer->buffer;
 
-	VkSubmitInfo2 submitInfo{};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
-    submitInfo.waitSemaphoreInfoCount = 1; // TODO pass by parameter
-    submitInfo.pWaitSemaphoreInfos = &waitInfo;
-    submitInfo.signalSemaphoreInfoCount = 1;
-    submitInfo.pSignalSemaphoreInfos = &signalInfo;
-    submitInfo.commandBufferInfoCount = 1;
-    submitInfo.pCommandBufferInfos = cmd;
+	VkSubmitInfo2 info{};
+	info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
+	info.waitSemaphoreInfoCount = 1; // TODO pass by parameter
+	info.pWaitSemaphoreInfos = &waitInfo;
+	info.commandBufferInfoCount = 1;
+	info.pCommandBufferInfos = &cmdInfo;
+	info.signalSemaphoreInfoCount = 1;
+	info.pSignalSemaphoreInfos = &signalInfo;
 
-	auto res = vkQueueSubmit(cmd->queue->queue, 1, &submitInfo, cmd->fence);
+	auto res = vkQueueSubmit2(submitInfo->commandBuffer->queue->queue, 1, &info, submitInfo->commandBuffer->fence);
 	DEBUG_VK(res, "Failed to submit command buffer");
 }
 
@@ -1239,6 +1240,11 @@ void QueueSubmit(SubmitInfo submitInfo) {
 void WaitQueue(Queue queue) {
 	// todo: wait on fence
 	auto res = vkQueueWaitIdle(_ctx.queues[queue]->queue);
+	DEBUG_VK(res, "Failed to wait idle command buffer");
+}
+
+void WaitQueue(CommandResource* cmd) {
+	auto res = vkQueueWaitIdle(cmd->queue->queue);
 	DEBUG_VK(res, "Failed to wait idle command buffer");
 }
 
@@ -2190,41 +2196,29 @@ bool GetSwapChainDirty(GLFWwindow* window) {
 	auto& swapChain = _ctx.swapChains[window];
 	return swapChain.dirty;
 }
-/* 
-typedef struct VkSubmitInfo2 {
-    VkStructureType                     sType;
-    const void*                         pNext;
-    VkSubmitFlags                       flags;
-    uint32_t                            waitSemaphoreInfoCount;
-    const VkSemaphoreSubmitInfo*        pWaitSemaphoreInfos;
-    uint32_t                            commandBufferInfoCount;
-    const VkCommandBufferSubmitInfo*    pCommandBufferInfos;
-    uint32_t                            signalSemaphoreInfoCount;
-    const VkSemaphoreSubmitInfo*        pSignalSemaphoreInfos;
-} VkSubmitInfo2;
- */
+
 // EndCommandBuffer + vkQueuePresentKHR
 void SubmitAndPresent(GLFWwindow* window) {
 	auto& swapChain = _ctx.swapChains[window];
 
-	
-
 	SubmitInfo submitInfo{};
+	submitInfo.waitSemaphore   = (Semaphore*)swapChain.GetImageAvailableSemaphore();
+	submitInfo.commandBuffer   = swapChain.GetCommandBuffer();
+	submitInfo.signalSemaphore = (Semaphore*)swapChain.GetRenderFinishedSemaphore();
 
-	_ctx.EndCommandBuffer(&swapChain.commandResources[swapChain.currentFrame], submitInfo);
 	EndCommandBuffer(swapChain.GetCommandBuffer());
+	QueueSubmit(&submitInfo);
 
 	VkPresentInfoKHR presentInfo{};
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-	presentInfo.waitSemaphoreCount = 1;
-	presentInfo.pWaitSemaphores = submitInfo.pSignalSemaphores;
+	presentInfo.waitSemaphoreCount = 1; // TODO: pass with info
+	presentInfo.pWaitSemaphores = (VkSemaphore*)&submitInfo.signalSemaphore;
 	presentInfo.swapchainCount = 1;
 	presentInfo.pSwapchains = &swapChain.swapChain;
 	presentInfo.pImageIndices = &swapChain.currentImageIndex;
 	presentInfo.pResults = nullptr;
 
 	auto res = vkQueuePresentKHR(swapChain.commandResources[swapChain.currentFrame].queue->queue, &presentInfo); // TODO: use present queue
-	// _ctx.currentQueue = Queue::Count;
 
 	if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR) {
 		swapChain.dirty = true;

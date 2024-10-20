@@ -32,6 +32,7 @@ struct Context {
 	vkw::Image renderImage;
 	
 	std::shared_ptr<Window> window;
+	std::shared_ptr<Window> window2;
 
 	void CreateImages(uint32_t width, uint32_t height);
 	void CreateShaders();
@@ -47,7 +48,7 @@ struct Vertex {
 const std::vector<Vertex> vertices = {
 	{{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
 	{{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-	{{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+	{{0.5f, 0.5f},  {0.0f, 1.0f, 0.0f}},
 };
 
 void Context::CreateShaders() {
@@ -84,26 +85,29 @@ void FeatureTestApplication::run(FeatureTestInfo* pFeatureTestInfo) {
 	info = pFeatureTestInfo;
 	Setup();
 	Create();
-	// MainLoop();
-	Draw();
+	MainLoop();
+	// Draw();
 	Finish();
 }
 
 void FeatureTestApplication::Setup() {
-	ctx.width = info->width; 
+	ctx.width = info->width;
 	ctx.height = info->height;
 }
 
 void FeatureTestApplication::Create() {
 	ctx.window = WindowManager::NewWindow(ctx.width, ctx.height, "Feature Test");
-	vkw::Init(ctx.window->GetGLFWwindow(), ctx.window->GetWidth(), ctx.window->GetHeight());
-	ctx.CreateImages(ctx.width, ctx.height);
-	ctx.CreateShaders();
+	ctx.window2 = WindowManager::NewWindow(ctx.width, ctx.height, "Feature Test 2");
+	// vkw::Init(ctx.window->GetGLFWwindow(), ctx.window->GetWidth(), ctx.window->GetHeight());
+	// ctx.CreateImages(ctx.width, ctx.height);
+	// ctx.CreateShaders();
 }
 
 void FeatureTestApplication::MainLoop() {
 	while (!ctx.window->GetShouldClose()) {
 		ctx.window->Update();
+
+		WindowManager::PollEvents();
 	}
 }
 
@@ -114,7 +118,7 @@ void FeatureTestApplication::Draw() {
 	constants.height = ctx.height;
 	// constants.storageImageRID = ctx.renderImage.RID();
 	GLFWwindow* window = ctx.window->GetGLFWwindow();
-	
+
 	auto cmd = vkw::GetCommandBuffer(window);
 	vkw::BeginCommandBuffer(cmd);
 	// vkw::CmdPushConstants(&constants, sizeof(constants));
@@ -144,6 +148,6 @@ void FeatureTestApplication::Draw() {
 
 void FeatureTestApplication::Finish() {
 	ctx = {};
-	vkw::Destroy();
+	// vkw::Destroy();
 	// WindowManager::Finish();
 }

@@ -3,12 +3,6 @@
 #include "Window.hpp"
 // #include <imgui/imgui.h>
 
-static void ScrollCallback(GLFWwindow* window, double x, double y);
-static void FramebufferResizeCallback(GLFWwindow* window, int width, int height);
-static void WindowMaximizeCallback(GLFWwindow* window, int maximized);
-static void WindowChangePosCallback(GLFWwindow* window, int x, int y);
-static void WindowDropCallback(GLFWwindow* window, int count, const char* paths[]);
-
 namespace {
 struct Context
 {
@@ -26,34 +20,37 @@ static Context ctx;
 
 
 
-// void ScrollCallback(GLFWwindow* window, double x, double y) {
-// 	Window::scroll += y;
-// 	Window::deltaScroll += y;
-// }
+void ScrollCallback(GLFWwindow* window, double x, double y) {
+	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
+	pWindow->GetScroll() += y;
+	pWindow->GetDeltaScroll() += y;
+}
 
-// void Window::FramebufferResizeCallback(GLFWwindow* window, int width, int height) {
-// 	Window::width = width;
-// 	Window::height = height;
-// 	Window::framebufferResized = true;
-// }
+void FramebufferSizeCallback(GLFWwindow* window, int width, int height) {
+	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
+	pWindow->SetSize(width, height);
+	pWindow->SetFramebufferResized(true);
+	DEBUG_TRACE("Window {} framebuffer resized to {}x{}", pWindow->GetName(), width, height);
+}
 
-// void WindowMaximizeCallback(GLFWwindow* window, int maximize) {
-// 	maximized = maximize;
-// }
+void WindowMaximizeCallback(GLFWwindow* window, int maximize) {
+	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
+	pWindow->SetMaximized(maximize);
+}
 
-// void WindowChangePosCallback(GLFWwindow* window, int x, int y) {
-// 	Window::posX = x;
-// 	Window::posY = y;
-// }
+void WindowChangePosCallback(GLFWwindow* window, int x, int y) {
+	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
+	pWindow->SetPos(x, y);
+}
 
-// void WindowDropCallback(GLFWwindow* window, int count, const char* paths[]) {
-// 	for (int i = 0; i < count; i++) {
-// 		pathsDrop.push_back(paths[i]);
-// 	}
-// 	for (int i = 0; i < count; i++) {
-// 		printf("%s\n", paths[i]);
-// 	}
-// }
+void WindowDropCallback(GLFWwindow* window, int count, const char* paths[]) {
+	for (int i = 0; i < count; i++) {
+		ctx.pathsDrop.push_back(paths[i]);
+	}
+	for (int i = 0; i < count; i++) {
+		printf("%s\n", paths[i]);
+	}
+}
 
 
 void errorCallback(int error, const char* description)
@@ -93,14 +90,14 @@ std::shared_ptr<Window> WindowManager::NewWindow(int width, int height, const ch
 	auto window = std::make_shared<Window>(width, height, name);
 	GLFWwindow* glfwWindow = glfwCreateWindow(width, height, name, nullptr, nullptr);
 	window->window = glfwWindow;
-	glfwSetWindowUserPointer(glfwWindow, window.get());
-	glfwGetWindowPos(glfwWindow, &window->posX, &window->posY);
-	// glfwSetWindowPos(window, posX, posY);
-	// glfwSetFramebufferSizeCallback(glfwWindow, FramebufferSizeCallback);
-	// glfwSetScrollCallback(glfwWindow, ScrollCallback);
-	// glfwSetWindowMaximizeCallback(glfwWindow, WindowMaximizeCallback);
-	// glfwSetWindowPosCallback(glfwWindow, WindowChangePosCallback);
-	// glfwSetDropCallback(glfwWindow, WindowDropCallback);
+	window->SetUserPointer(window.get());
+	window->GetPos();
+	
+	glfwSetFramebufferSizeCallback(glfwWindow, FramebufferSizeCallback);
+	glfwSetScrollCallback(glfwWindow, ScrollCallback);
+	glfwSetWindowMaximizeCallback(glfwWindow, WindowMaximizeCallback);
+	glfwSetWindowPosCallback(glfwWindow, WindowChangePosCallback);
+	glfwSetDropCallback(glfwWindow, WindowDropCallback);
 
 	window->dirty = false;
     window->ApplyChanges();
@@ -176,7 +173,6 @@ void Window::Update() {
 	glfwGetCursorPos(window, &x, &y);
 	deltaMousePos = mousePos - Lmath::vec2(x, y);
 	mousePos = Lmath::vec2(x, y);
-	glfwPollEvents();
 }
 
 std::string VideoModeText(GLFWvidmode mode) {
