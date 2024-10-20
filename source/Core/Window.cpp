@@ -31,8 +31,15 @@ void ScrollCallback(GLFWwindow* window, double x, double y) {
 void FramebufferSizeCallback(GLFWwindow* window, int width, int height) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
 	pWindow->SetSize(width, height);
-	pWindow->SetFramebufferResized();
+	pWindow->SetSwapchainDirty(true);
+	pWindow->SetDrawNeeded(true);
+	// pWindow->SetFramebufferResized();
 	DEBUG_TRACE("Window {} framebuffer resized to {}x{}", pWindow->GetName(), width, height);
+}
+
+void WindowIconifyCallback(GLFWwindow* window, int iconified) {
+	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
+	LOG_INFO("Window {} iconified {}", pWindow->GetName(), iconified);
 }
 
 void WindowMaximizeCallback(GLFWwindow* window, int maximize) {
@@ -106,16 +113,20 @@ std::shared_ptr<Window> WindowManager::NewWindow(int width, int height, const ch
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 	GLFWwindow* glfwWindow = glfwCreateWindow(width, height, name, nullptr, nullptr);
+	LOG_INFO("Window::Create({}x{}):{}", width, height, name);
 	window->window = glfwWindow;
 	window->SetUserPointer(window.get());
 	window->GetPos();
 	
 	glfwSetFramebufferSizeCallback(glfwWindow, FramebufferSizeCallback);
 	glfwSetScrollCallback(glfwWindow, ScrollCallback);
-	glfwSetWindowMaximizeCallback(glfwWindow, WindowMaximizeCallback);
 	glfwSetWindowPosCallback(glfwWindow, WindowChangePosCallback);
 	glfwSetDropCallback(glfwWindow, WindowDropCallback);
 	glfwSetWindowCloseCallback(glfwWindow, WindowCloseCallback);
+	// Minimize
+	glfwSetWindowIconifyCallback(glfwWindow, WindowIconifyCallback);
+	// Maximize
+	glfwSetWindowMaximizeCallback(glfwWindow, WindowMaximizeCallback);
 
 	// window->dirty = false;
     window->ApplyChanges();
@@ -212,7 +223,7 @@ std::string VideoModeText(GLFWvidmode mode) {
 
 void Window::UpdateFramebufferSize() {
 	WINDOW_ALIVE_GUARD
-	framebufferResized = false;
+	// framebufferResized = false;
 	glfwGetFramebufferSize(window, &width, &height);
 }
 

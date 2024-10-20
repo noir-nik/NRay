@@ -107,7 +107,7 @@ void FeatureTestApplication::Create() {
 
 void RecreateFrameResources(Window* w);
 
-void RenderFrame(GLFWwindow* window) {
+void RecordCommands(GLFWwindow* window) {
 	
 	auto cmd = vkw::GetCommandBuffer(window);
 	vkw::BeginCommandBuffer(cmd);
@@ -133,13 +133,18 @@ void RenderFrame(GLFWwindow* window) {
 }
 
 
-void DrawFrame(GLFWwindow* window) {
-	RenderFrame(window);
+int DrawFrame(GLFWwindow* window) {
+	RecordCommands(window);
 	if (vkw::GetSwapChainDirty(window)) {
-		LOG_WARN("DrawFrame: Swapchain dirty");
-		return;
+		LOG_WARN("RecordCommands: Swapchain dirty");
+		return 0;
 	}
 	vkw::SubmitAndPresent(window);
+	if (vkw::GetSwapChainDirty(window)) {
+		LOG_WARN("SubmitAndPresent: Swapchain dirty");
+		return 0;
+	}
+	return 1;
 }
 
 bool SwapchainDirty(Window* w) {
@@ -155,16 +160,20 @@ void FeatureTestApplication::MainLoop() {
 	while (ctx.window->GetAlive() && !ctx.window->GetShouldClose()) {
 		ctx.window->Update();
 		if (/* engine->drawNeeded || */ ctx.window->GetDrawNeeded()) {
-			DrawFrame(ctx.window->GetGLFWwindow());
-			/* engine->redrawNeeded = false; */
-			ctx.window->SetDrawNeeded(false);
-			continue;
+			LOG_INFO("DRAW FRAME");
+			auto drawn = DrawFrame(ctx.window->GetGLFWwindow());
+			LOG_TRACE("drawn: {}", drawn);
+			if (drawn) {
+				ctx.window->SetDrawNeeded(false);
+				/* engine->redrawNeeded = false; */
+			}
 		}
 		// usleep(1000 * 1000);
 		// ctx.window->SetSize(800, 600); 
 		if (SwapchainDirty(ctx.window.get())) {
 			LOG_INFO("DIRTY FRAME RESOURCES");
 			RecreateFrameResources(ctx.window.get());
+			ctx.window->SetSwapchainDirty(false);
 		}
 		WindowManager::WaitEvents();
 		printf("Loop\n");
@@ -237,17 +246,18 @@ void FeatureTestApplication::Finish() {
 void RecreateFrameResources(Window* w) {
 	// busy wait while the window is minimized
 	while (w->GetWidth() == 0 || w->GetHeight() == 0) {
+		LOG_TRACE("Iconified");
 		WindowManager::WaitEvents();
 	}
 	vkw::WaitIdle();
-	if (w->GetFramebufferResized() || w->IsDirty()) {
-		if (w->IsDirty()) {
-			LOG_INFO("RecreateFrameResources: Dirty");
-			w->ApplyChanges();
-		}
-		if (w->GetFramebufferResized()) {
-			LOG_INFO("RecreateFrameResources: FramebufferResized");
-		}
+	// if (w->GetFramebufferResized() || w->IsDirty()) {
+		// if (w->IsDirty()) {
+		// 	LOG_INFO("RecreateFrameResources: Dirty");
+		// 	w->ApplyChanges();
+		// }
+		// if (w->GetFramebufferResized()) {
+		// 	LOG_INFO("RecreateFrameResources: FramebufferResized");
+		// }
 		if (w->GetAlive()) {
 			w->UpdateFramebufferSize();
 			vkw::OnSurfaceUpdate(w->GetGLFWwindow(), w->GetWidth(), w->GetHeight());
@@ -255,7 +265,7 @@ void RecreateFrameResources(Window* w) {
 			LOG_WARN("RecreateFrameResources: Window is dead");
 			return;
 		}
-	}
+	// }
 	// DeferredRenderer::CreateImages(viewportSize.x, viewportSize.y);
 	// camera->extent = {viewportSize.x, viewportSize.y};
 }
