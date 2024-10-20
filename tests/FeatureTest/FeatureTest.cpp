@@ -140,8 +140,6 @@ void FeatureTestApplication::Draw() {
 	vkw::SubmitAndPresent(window);
 	vkw::WaitQueue(vkw::Queue::Graphics);
 	sleep(3);
-	// timer.Start();
-	// getchar();
 }
 
 void FeatureTestApplication::Finish() {
