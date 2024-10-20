@@ -222,49 +222,47 @@ bool GetSwapChainDirty(GLFWwindow* window);
 // void GetTimeStamps(std::map<std::string, float>& timeTable);
 
 struct CommandResource;
-struct CommandHandle {
-	CommandResource* resource = nullptr;
-};
 
-void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset = 0, CommandHandle commandHandle = {});
-void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset = 0, uint32_t srcOffset = 0, CommandHandle commandHandle = {});
-void CmdCopy(Image& dst, void* data, uint32_t size, CommandHandle commandHandle = {});
-void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset = 0, CommandHandle commandHandle = {}); // size is a No OP
-void CmdCopy(Buffer& dst, Image& src, uint32_t size = 0, uint32_t srcOffset = 0, CommandHandle commandHandle = {}); // size is a No OP
-void CmdCopy(Buffer& dst, Image& src, uint32_t size, uint32_t dstOffset, ivec2 imageOffset, ivec2 imageExtent, CommandHandle commandHandle = {}); // size is a No OP
-void CmdBarrier(Image& img, Layout::ImageLayout newLayout, Layout::ImageLayout oldLayout = Layout::MaxEnum, CommandHandle commandHandle = {});
-void CmdBarrier(CommandHandle commandHandle = {});
-void CmdBlit(Image& dst, Image& src, uvec2 dstSize = {}, uvec2 srcSize = {}, CommandHandle commandHandle = {});
-void CmdClearColorImage(Image &image, float4 color, CommandHandle commandHandle = {});
+void CmdCopy(CommandResource* cmd, Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset = 0);
+void CmdCopy(CommandResource* cmd, Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset = 0, uint32_t srcOffset = 0);
+void CmdCopy(CommandResource* cmd, Image& dst, void* data, uint32_t size);
+void CmdCopy(CommandResource* cmd, Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset = 0); // size is a No OP
+void CmdCopy(CommandResource* cmd, Buffer& dst, Image& src, uint32_t size = 0, uint32_t srcOffset = 0); // size is a No OP
+void CmdCopy(CommandResource* cmd, Buffer& dst, Image& src, uint32_t size, uint32_t dstOffset, ivec2 imageOffset, ivec2 imageExtent); // size is a No OP
+void CmdBarrier(CommandResource* cmd, Image& img, Layout::ImageLayout newLayout, Layout::ImageLayout oldLayout = Layout::MaxEnum);
+void CmdBarrier(CommandResource* cmd);
+void CmdBlit(CommandResource* cmd, Image& dst, Image& src, uvec2 dstSize = {}, uvec2 srcSize = {});
+void CmdClearColorImage(CommandResource* cmd, Image &image, float4 color);
 
 Image& GetCurrentSwapchainImage(GLFWwindow* window);
 void AcquireImage(GLFWwindow* window);
-void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach = {}, uint32_t layerCount = 1, CommandHandle commandHandle = {});
-void CmdEndRendering(CommandHandle commandHandle = {});
-// void CmdBeginPresent(CommandHandle commandHandle = {});
-// void CmdEndPresent(CommandHandle commandHandle = {});
-void CmdBindPipeline(Pipeline& pipeline, CommandHandle commandHandle = {});
-void CmdPushConstants(void* data, uint32_t size, CommandHandle commandHandle = {});
+void CmdBeginRendering(CommandResource* cmd, const std::vector<Image>& colorAttachs, Image depthAttach = {}, uint32_t layerCount = 1);
+void CmdEndRendering(CommandResource* cmd);
+// void CmdBeginPresent(CommandResource* cmd);
+// void CmdEndPresent(CommandResource* cmd);
+void CmdBindPipeline(CommandResource* cmd, Pipeline& pipeline);
+void CmdPushConstants(CommandResource* cmd, void* data, uint32_t size);
 
-// void CmdBuildBLAS(BLAS& blas, CommandHandle commandHandle = {});
-// void CmdBuildTLAS(TLAS& tlas, const std::vector<BLASInstance>& instances, CommandHandle commandHandle = {});
+// void CmdBuildBLAS(CommandResource* cmd, BLAS& blas);
+// void CmdBuildTLAS(CommandResource* cmd, TLAS& tlas, const std::vector<BLASInstance>& instances);
 
-void CmdDraw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance, CommandHandle commandHandle = {});
-void CmdBindVertexBuffer(Buffer& vertexBuffer, CommandHandle commandHandle = {});
-void CmdDrawMesh(Buffer& vertexBuffer, Buffer& indexBuffer, uint32_t indexCount, CommandHandle commandHandle = {});
-void CmdDrawLineStrip(const Buffer& pointsBuffer, uint32_t firstPoint, uint32_t pointCount, float thickness = 1.0f, CommandHandle commandHandle = {});
-void CmdDrawPassThrough(CommandHandle commandHandle = {});
-// void CmdDrawImGui(ImDrawData* data, CommandHandle commandHandle = {});
-void CmdDispatch(const uvec3& groups, CommandHandle commandHandle = {});
+void CmdDraw(CommandResource* cmd, uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance);
+void CmdBindVertexBuffer(CommandResource* cmd, Buffer& vertexBuffer);
+void CmdDrawMesh(CommandResource* cmd, Buffer& vertexBuffer, Buffer& indexBuffer, uint32_t indexCount);
+void CmdDrawLineStrip(CommandResource* cmd, const Buffer& pointsBuffer, uint32_t firstPoint, uint32_t pointCount, float thickness = 1.0f);
+void CmdDrawPassThrough(CommandResource* cmd);
+// void CmdDrawImGui(CommandResource* cmd, ImDrawData* data);
+void CmdDispatch(CommandResource* cmd, const uvec3& groups);
 
-int CmdBeginTimeStamp(const std::string& name, CommandHandle commandHandle = {});
-void CmdEndTimeStamp(int timeStampIndex, CommandHandle commandHandle = {});
+int CmdBeginTimeStamp(CommandResource* cmd, const std::string& name);
+void CmdEndTimeStamp(CommandResource* cmd, int timeStampIndex);
 
-CommandHandle GetCurrentCommandBuffer(GLFWwindow* window);
+CommandResource* GetCommandBuffer(GLFWwindow* window);
+CommandResource* GetCommandBuffer(Queue queue);
 
-void BeginCommandBuffer(Queue queue, CommandHandle commandHandle = {});
-// CommandHandle BeginCommandBuffer(GLFWwindow* window, CommandHandle commandHandle = {});
-void EndCommandBuffer(CommandHandle commandHandle = {});
+void BeginCommandBuffer(CommandResource* cmd);
+
+void EndCommandBuffer(CommandResource* cmd);
 void WaitQueue(Queue queue);
 void WaitIdle();
 // void BeginImGui();

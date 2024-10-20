@@ -141,25 +141,27 @@ void NeuralSdfApplication::Compute() {
 	constants.weightsRID = ctx.weightsGPU.RID();
 	constants.outputImageRID = ctx.outputImage.RID();
 
-	vkw::BeginCommandBuffer(vkw::Queue::Compute);
-	vkw::CmdCopy(ctx.weightsGPU, weights.data(), ctx.num_parameters * sizeof(float));
+	auto cmd = vkw::GetCommandBuffer(vkw::Queue::Compute);
+	vkw::BeginCommandBuffer(cmd);
+
+	vkw::CmdCopy(cmd, ctx.weightsGPU, weights.data(), ctx.num_parameters * sizeof(float));
 	// Glsl shader
-	vkw::CmdBindPipeline(ctx.glslPipeline);
+	vkw::CmdBindPipeline(cmd, ctx.glslPipeline);
 	constants.outputImageRID = ctx.bufferCPUglsl.RID();
-	vkw::CmdPushConstants(&constants, sizeof(constants));
-	vkw::CmdDispatch({(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
-	vkw::CmdBarrier();
-	// vkw::CmdCopy(ctx.bufferCPUglsl, ctx.outputImage, ctx.width * ctx.height * sizeof(Pixel));
-	// vkw::CmdBarrier();
+	vkw::CmdPushConstants(cmd, &constants, sizeof(constants));
+	vkw::CmdDispatch(cmd, {(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
+	vkw::CmdBarrier(cmd);
+	// vkw::CmdCopy(cmd, ctx.bufferCPUglsl, ctx.outputImage, ctx.width * ctx.height * sizeof(Pixel));
+	// vkw::CmdBarrier(cmd, );
 	// Slang shader
-	vkw::CmdBindPipeline(ctx.slangPipeline);
+	vkw::CmdBindPipeline(cmd, ctx.slangPipeline);
 	constants.outputImageRID = ctx.bufferCPUslang.RID();
-	vkw::CmdPushConstants(&constants, sizeof(constants));
-	vkw::CmdDispatch({(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
-	// vkw::CmdBarrier();
-	// vkw::CmdCopy(ctx.bufferCPUslang, ctx.outputImage, ctx.width * ctx.height * sizeof(Pixel));
+	vkw::CmdPushConstants(cmd, &constants, sizeof(constants));
+	vkw::CmdDispatch(cmd, {(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
+	// vkw::CmdBarrier(cmd, );
+	// vkw::CmdCopy(cmd, ctx.bufferCPUslang, ctx.outputImage, ctx.width * ctx.height * sizeof(Pixel));
 	timer.Start();
-	vkw::EndCommandBuffer();
+	vkw::EndCommandBuffer(cmd);
 	vkw::WaitQueue(vkw::Queue::Compute);
 	printf("Compute time: %fs\n", timer.Elapsed());
 	timer.Start();

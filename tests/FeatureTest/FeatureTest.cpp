@@ -102,9 +102,9 @@ void FeatureTestApplication::Create() {
 }
 
 void FeatureTestApplication::MainLoop() {
-	// while (!ctx.window->GetShouldClose()) {
-	// 	ctx.window->Update();
-	// }
+	while (!ctx.window->GetShouldClose()) {
+		ctx.window->Update();
+	}
 }
 
 void FeatureTestApplication::Draw() {
@@ -115,28 +115,28 @@ void FeatureTestApplication::Draw() {
 	// constants.storageImageRID = ctx.renderImage.RID();
 	GLFWwindow* window = ctx.window->GetGLFWwindow();
 	
-	auto cmd = vkw::GetCurrentCommandBuffer(window);
-	vkw::BeginCommandBuffer(vkw::Queue::Graphics, cmd);
+	auto cmd = vkw::GetCommandBuffer(window);
+	vkw::BeginCommandBuffer(cmd);
 	// vkw::CmdPushConstants(&constants, sizeof(constants));
 	// vkw::CmdBeginPresent();
 	vkw::AcquireImage(window);
 	vkw::Image& img = vkw::GetCurrentSwapchainImage(window);
 	
-	vkw::CmdCopy(ctx.vertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex), 0, cmd);
-	vkw::CmdBarrier(ctx.renderImage, vkw::Layout::TransferDst, ctx.renderImage.layout, cmd);
-	vkw::CmdClearColorImage(ctx.renderImage, {0.7f, 0.0f, 0.4f, 1.0f}, cmd);
+	vkw::CmdCopy(cmd, ctx.vertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex));
+	vkw::CmdBarrier(cmd, ctx.renderImage, vkw::Layout::TransferDst);
+	vkw::CmdClearColorImage(cmd, ctx.renderImage, {0.7f, 0.0f, 0.4f, 1.0f});
 
-	vkw::CmdBeginRendering({ctx.renderImage}, {}, 1, cmd);
-	vkw::CmdBindPipeline(ctx.pipeline, cmd);
-	vkw::CmdBindVertexBuffer(ctx.vertexBuffer, cmd);
-	vkw::CmdDraw(3, 1, 0, 0, cmd);
+	vkw::CmdBeginRendering(cmd, {ctx.renderImage});
+	vkw::CmdBindPipeline(cmd, ctx.pipeline);
+	vkw::CmdBindVertexBuffer(cmd, ctx.vertexBuffer);
+	vkw::CmdDraw(cmd, 3, 1, 0, 0);
 	vkw::CmdEndRendering(cmd);
 	
-	vkw::CmdBarrier(ctx.renderImage, vkw::Layout::TransferSrc, ctx.renderImage.layout, cmd);
-	vkw::CmdBarrier(img, vkw::Layout::TransferDst, img.layout, cmd);
-	vkw::CmdBlit(img, ctx.renderImage, {}, {}, cmd);
+	vkw::CmdBarrier(cmd, ctx.renderImage, vkw::Layout::TransferSrc);
+	vkw::CmdBarrier(cmd, img, vkw::Layout::TransferDst);
+	vkw::CmdBlit(cmd, img, ctx.renderImage, {}, {});
 
-	vkw::CmdBarrier(img, vkw::Layout::Present, img.layout, cmd);
+	vkw::CmdBarrier(cmd, img, vkw::Layout::Present);
 	vkw::SubmitAndPresent(window);
 	vkw::WaitQueue(vkw::Queue::Graphics);
 	sleep(3);

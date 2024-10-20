@@ -104,18 +104,19 @@ void RadienceFieldApplication::Compute() {
 	constants.worldViewInv = ctx.worldViewInv;
 	constants.worldViewProjInv = ctx.worldViewProjInv;
 
-	vkw::BeginCommandBuffer(vkw::Queue::Compute);
+	auto cmd = vkw::GetCommandBuffer(vkw::Queue::Compute);
+	vkw::BeginCommandBuffer(cmd);
 	// Prepare BufferGT and BufferOpt
-	vkw::CmdCopy(ctx.BufferGrid, ctx.grid.data(), ctx.numCells * sizeof(Cell));
-	vkw::CmdBarrier();
+	vkw::CmdCopy(cmd, ctx.BufferGrid, ctx.grid.data(), ctx.numCells * sizeof(Cell));
+	vkw::CmdBarrier(cmd);
 
-	vkw::CmdBindPipeline(ctx.pipeline);
-	vkw::CmdPushConstants(&constants, sizeof(constants));
+	vkw::CmdBindPipeline(cmd, ctx.pipeline);
+	vkw::CmdPushConstants(cmd, &constants, sizeof(constants));
 
-	vkw::CmdDispatch({(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
+	vkw::CmdDispatch(cmd, {(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
 
 	timer.Start();
-	vkw::EndCommandBuffer();
+	vkw::EndCommandBuffer(cmd);
 	vkw::WaitQueue(vkw::Queue::Compute);
 	printf("Compute time: %fs\n", timer.Elapsed());
 	timer.Start();
