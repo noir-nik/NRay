@@ -222,6 +222,7 @@ bool GetSwapChainDirty(GLFWwindow* window);
 // void GetTimeStamps(std::map<std::string, float>& timeTable);
 
 struct CommandResource;
+struct VkSemaphore_T;
 
 void CmdCopy(CommandResource* cmd, Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset = 0);
 void CmdCopy(CommandResource* cmd, Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset = 0, uint32_t srcOffset = 0);
