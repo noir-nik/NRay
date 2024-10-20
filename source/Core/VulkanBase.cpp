@@ -19,7 +19,9 @@ struct CommandResource {
 	u8* stagingCpu = nullptr;
 	uint32_t stagingOffset = 0;
 	Buffer staging;
-	uint32_t queueFamilyIndex = 0;
+
+	uint32_t queueFamilyIndex = 0; //
+
 	VkCommandPool pool = VK_NULL_HANDLE;
 	VkCommandBuffer buffer = VK_NULL_HANDLE;
 	VkFence fence = VK_NULL_HANDLE;
@@ -121,7 +123,9 @@ struct Context
 	
 	bool requestSeparate[Queue::Count] = {false};
 	std::unordered_map<uint32_t, InternalQueue> uniqueQueues;
-	std::vector<CommandResource> commandResources; // Owns all command resources outside swapchains
+	// Owns all command resources outside swapchains
+	// Do not resize after creation!
+	std::vector<CommandResource> commandResources;
 	InternalQueue* queues[Queue::Count]; // Pointers to uniqueQueues
 	Queue currentQueue = Queue::Count;
 
@@ -155,7 +159,7 @@ struct Context
 
 		std::vector<CommandResource> commandResources; // Owns all command resources
 		
-		uint32_t framesInFlight = 1;
+		uint32_t framesInFlight = 2;
 		uint32_t additionalImages = 0;
 		VkExtent2D extent;
 		uint32_t swapChainCurrentFrame = 0;
@@ -203,7 +207,7 @@ struct Context
 
 	// std::map<std::string, float> timeStampTable;
 
-	void CreateInstance(GLFWwindow* window);
+	void CreateInstance();
 	void DestroyInstance();
 
 	void CreatePhysicalDevice();
@@ -225,9 +229,9 @@ struct Context
 	void CreateSwapChain(GLFWwindow* window, uint32_t width, uint32_t height);
 	void DestroySwapChain(SwapChain& swapChain);
 
-	void createCommandBuffers();
-	void DestroyCommandBuffers();
-
+	// void createCommandBuffers();
+	void createCommandBuffers(std::vector<CommandResource>& commandResources);
+	void DestroyCommandBuffers(std::vector<CommandResource>& commandResources);
 
 	uint32_t FindMemoryType(uint32_t type, VkMemoryPropertyFlags properties);
 	bool SupportFormat(VkFormat format, VkImageTiling tiling, VkFormatFeatureFlags features);
@@ -340,7 +344,7 @@ uint32_t Image::RID() {
 
 static void InitImpl(GLFWwindow* window, uint32_t width, uint32_t height){
 
-	_ctx.CreateInstance(window);
+	_ctx.CreateInstance();
 	_ctx.CreatePhysicalDevice();
 	_ctx.CreateDevice();
 
@@ -352,7 +356,15 @@ static void InitImpl(GLFWwindow* window, uint32_t width, uint32_t height){
 		// _ctx.CreateImGui(window);
 	}
 	
-	_ctx.createCommandBuffers();
+	// Command pools and buffers just for queues
+	_ctx.commandResources.resize(_ctx.uniqueQueues.size());
+	uint32_t i = 0;
+	for (auto& [key, q]: _ctx.uniqueQueues) {
+		q.commands = _ctx.commandResources.data() + i;
+		q.commands->queueFamilyIndex = q.family;
+		i++;
+	}
+	_ctx.createCommandBuffers(_ctx.commandResources);
 }
 
 void Init() {
@@ -361,7 +373,6 @@ void Init() {
 
 void Init(GLFWwindow* window, uint32_t width, uint32_t height) {
 	_ctx.presentRequested = true;
-	_ctx.framesInFlight = 2;
 	InitImpl(window, width, height);
 }
 
@@ -382,7 +393,7 @@ void Destroy() {
 	_ctx.destroyBindlessResources();
 	// _ctx.destroyDescriptorResources();
 
-	_ctx.DestroyCommandBuffers();
+	_ctx.DestroyCommandBuffers(_ctx.commandResources);
 	_ctx.DestroyDevice();
 	_ctx.DestroyInstance();
 }
@@ -776,7 +787,7 @@ void Context::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipeline) {
 		// line thickness in terms of number of fragments
 		rasterizer.lineWidth = 1.0f;
 		rasterizer.cullMode = (VkCullModeFlags)desc.cullMode;
-		rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+		rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
 		rasterizer.depthBiasEnable = VK_FALSE;
 		rasterizer.depthBiasConstantFactor = 0.0f;
 		rasterizer.depthBiasClamp = 0.0f;
@@ -1380,7 +1391,7 @@ void PopulateDebugReportCreateInfo(VkDebugReportCallbackCreateInfoEXT& createInf
 
 } // vulkan debug callbacks
 
-void Context::CreateInstance(GLFWwindow* glfwWindow){
+void Context::CreateInstance(){
 	// optional data, provides useful info to the driver
 	VkApplicationInfo appInfo{};
 	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -1948,13 +1959,13 @@ void Context::CreateSurfaceFormats(SwapChain& swapChain) {
 	}
 }
 
-void Context::CreateSwapChain(GLFWwindow* glfwWindow, uint32_t width, uint32_t height) {
+void Context::CreateSwapChain(GLFWwindow* window, uint32_t width, uint32_t height) {
 
 	
-	swapChains.try_emplace(glfwWindow);//.second;
-	auto& swapChain = swapChains[glfwWindow];
+	swapChains.try_emplace(window);//.second;
+	auto& swapChain = swapChains[window];
 	
-	VkResult res = glfwCreateWindowSurface(_ctx.instance, glfwWindow, _ctx.allocator, &swapChain.surface);
+	VkResult res = glfwCreateWindowSurface(_ctx.instance, window, _ctx.allocator, &swapChain.surface);
 	DEBUG_VK(res, "Failed to create window surface!");
 	DEBUG_TRACE("Created surface.");
 
@@ -1970,7 +1981,7 @@ void Context::CreateSwapChain(GLFWwindow* glfwWindow, uint32_t width, uint32_t h
 		swapChain.extent = ChooseExtent(capabilities, width, height);
 
 		// acquire additional images to prevent waiting for driver's internal operations
-		uint32_t imageCount = framesInFlight + additionalImages;
+		uint32_t imageCount = swapChain.framesInFlight + swapChain.additionalImages;
 		
 		if (imageCount < capabilities.minImageCount) {
 			LOG_WARN("Querying less images than the necessary!");
@@ -2073,19 +2084,25 @@ void Context::CreateSwapChain(GLFWwindow* glfwWindow, uint32_t width, uint32_t h
 
 	// synchronization objects
 	{
-		swapChain.imageAvailableSemaphores.resize(framesInFlight);
-		swapChain.renderFinishedSemaphores.resize(framesInFlight);
+		swapChain.imageAvailableSemaphores.resize(swapChain.framesInFlight);
+		swapChain.renderFinishedSemaphores.resize(swapChain.framesInFlight);
 
 		VkSemaphoreCreateInfo semaphoreInfo{};
 		semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-		for (size_t i = 0; i < framesInFlight; i++) {
+		for (size_t i = 0; i < swapChain.framesInFlight; i++) {
 			auto res = vkCreateSemaphore(device, &semaphoreInfo, nullptr, &swapChain.imageAvailableSemaphores[i]);
 			DEBUG_VK(res, "Failed to create semaphore!");
 			res = vkCreateSemaphore(device, &semaphoreInfo, nullptr, &swapChain.renderFinishedSemaphores[i]);
 			DEBUG_VK(res, "Failed to create semaphore!");
 		}
 	}
+
+	swapChain.commandResources.resize(swapChain.framesInFlight);
+	for (auto& cmd: swapChain.commandResources) {
+		cmd.queueFamilyIndex = queues[Queue::Graphics]->family;
+	}
+	createCommandBuffers(swapChain.commandResources);
 
 	LOG_INFO("Created Swapchain");
 	swapChain.swapChainCurrentFrame = 0;
@@ -2112,33 +2129,36 @@ void Context::DestroySwapChain(SwapChain& swapChain) {
 	swapChain.swapChain = VK_NULL_HANDLE;
 }
 
-void AcquireImage() {
-	auto res = vkAcquireNextImageKHR(_ctx.device, _ctx.swapChain, UINT64_MAX, _ctx.imageAvailableSemaphores[_ctx.swapChainCurrentFrame], VK_NULL_HANDLE, &_ctx.currentImageIndex);
+void AcquireImage(GLFWwindow* window) {
+	auto& swapChain = _ctx.swapChains[window];
+	auto res = vkAcquireNextImageKHR(_ctx.device, swapChain.swapChain, UINT64_MAX, swapChain.imageAvailableSemaphores[swapChain.swapChainCurrentFrame], VK_NULL_HANDLE, &swapChain.currentImageIndex);
 
 	if (res == VK_ERROR_OUT_OF_DATE_KHR) {
-		_ctx.swapChainDirty = true;
+		swapChain.swapChainDirty = true;
 	} else if (res != VK_SUCCESS && res != VK_SUBOPTIMAL_KHR) {
 		DEBUG_VK(res, "Failed to acquire swap chain image!");
 	}
 }
 
-bool GetSwapChainDirty() {
-	return _ctx.swapChainDirty;
+bool GetSwapChainDirty(GLFWwindow* window) {
+	auto& swapChain = _ctx.swapChains[window];
+	return swapChain.swapChainDirty;
 }
 // EndCommandBuffer + vkQueuePresentKHR
-void SubmitAndPresent() {
-	auto& cmd = _ctx.GetCurrentCommandResources();
+void SubmitAndPresent(GLFWwindow* window) {
+	// auto& cmd = _ctx.GetCurrentCommandResources();
+	auto& swapChain = _ctx.swapChains[window];
 
 	VkPipelineStageFlags waitStages = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 	VkSubmitInfo submitInfo{};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 	submitInfo.waitSemaphoreCount = 1;
-	submitInfo.pWaitSemaphores = &_ctx.imageAvailableSemaphores[_ctx.swapChainCurrentFrame];
+	submitInfo.pWaitSemaphores = &swapChain.imageAvailableSemaphores[swapChain.swapChainCurrentFrame];
 	submitInfo.pWaitDstStageMask = &waitStages;
 	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &(cmd.buffer);
+	submitInfo.pCommandBuffers = &(swapChain.commandResources[swapChain.swapChainCurrentFrame].buffer);
 	submitInfo.signalSemaphoreCount = 1;
-	submitInfo.pSignalSemaphores = &_ctx.renderFinishedSemaphores[_ctx.swapChainCurrentFrame];
+	submitInfo.pSignalSemaphores = &swapChain.renderFinishedSemaphores[swapChain.swapChainCurrentFrame];
 
 	_ctx.EndCommandBuffer(submitInfo);
 
@@ -2147,22 +2167,22 @@ void SubmitAndPresent() {
 	presentInfo.waitSemaphoreCount = 1;
 	presentInfo.pWaitSemaphores = submitInfo.pSignalSemaphores;
 	presentInfo.swapchainCount = 1;
-	presentInfo.pSwapchains = &_ctx.swapChain;
-	presentInfo.pImageIndices = &_ctx.currentImageIndex;
+	presentInfo.pSwapchains = &swapChain.swapChain;
+	presentInfo.pImageIndices = &swapChain.currentImageIndex;
 	presentInfo.pResults = nullptr;
 
 	auto res = vkQueuePresentKHR(_ctx.queues[_ctx.currentQueue]->queue, &presentInfo); // TODO: use present queue
 	_ctx.currentQueue = Queue::Count;
 
 	if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR) {
-		_ctx.swapChainDirty = true;
+		swapChain.swapChainDirty = true;
 		return;
 	}
 	else if (res != VK_SUCCESS) {
 		DEBUG_VK(res, "Failed to present swap chain image!");
 	}
 
-	_ctx.swapChainCurrentFrame = (_ctx.swapChainCurrentFrame + 1) % _ctx.framesInFlight;
+	swapChain.swapChainCurrentFrame = (swapChain.swapChainCurrentFrame + 1) % swapChain.framesInFlight;
 }
 
 
@@ -2386,72 +2406,53 @@ void Context::destroyBindlessResources(){
 }
 
 
-void Context::createCommandBuffers(std::vector<CommandResource>& commandResources, uint32_t framesInFlight) {
+void Context::createCommandBuffers(std::vector<CommandResource>& commandResources) {
 	VkCommandPoolCreateInfo poolInfo{};
 	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	poolInfo.flags = 0; // ?VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT
-
+	
 	VkCommandBufferAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 	allocInfo.commandBufferCount = 1;
 
-	commandResources.resize(uniqueQueues.size() * framesInFlight);
+	for (auto& cmd: commandResources) {
+		poolInfo.queueFamilyIndex = cmd.queueFamilyIndex;
+		auto res = vkCreateCommandPool(device, &poolInfo, allocator, &cmd.pool);
+		DEBUG_VK(res, "Failed to create command pool!");
 
-	uint32_t command_counter = 0;
-	for (auto& [key, q]: uniqueQueues) {
-		q.commands = commandResources.data() + command_counter * framesInFlight;
-		command_counter++;
+		allocInfo.commandPool = cmd.pool;
+		res = vkAllocateCommandBuffers(device, &allocInfo, &cmd.buffer);
+		DEBUG_VK(res, "Failed to allocate command buffer!");
+
+		// cmd.staging = CreateBuffer(stagingBufferSize, BufferUsage::TransferSrc, Memory::CPU, "StagingBuffer[" + std::to_string(cmd.queueFamilyIndex) + "]");
+		// cmd.stagingCpu = (u8*)cmd.staging.resource->allocation->GetMappedData();
+
+		VkFenceCreateInfo fenceInfo{};
+		fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+		fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+		vkCreateFence(device, &fenceInfo, allocator, &cmd.fence);
+
+		// VkQueryPoolCreateInfo queryPoolInfo{};
+		// queryPoolInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+		// queryPoolInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
+		// queryPoolInfo.queryCount = timeStampPerPool;
+		// res = vkCreateQueryPool(device, &queryPoolInfo, allocator, &cmd.queryPool);
+		// DEBUG_VK(res, "failed to create query pool");
+
+		// cmd.timeStamps.clear();
+		// cmd.timeStampNames.clear();
+
 	}
-
-	// DEBUG_TRACE("Queue[{}]: [{}][{}], commands.size = {}", q, queue.family, queue.indexInFamily, queue.commands.size());
-		
-	for (auto& [key, queue]: uniqueQueues) {
-		// DEBUG_TRACE("Queue[{}]: [{}][{}]", key, queue.family, queue.indexInFamily);
-		poolInfo.queueFamilyIndex = queue.family;
-		for (int i = 0; i < framesInFlight; i++) {
-			// DEBUG_TRACE("  Frame[{}]: [{}][{}]", i, queue.family, queue.indexInFamily);
-			auto res = vkCreateCommandPool(device, &poolInfo, allocator, &queue.commands[i].pool);
-			DEBUG_VK(res, "Failed to create command pool!");
-
-			allocInfo.commandPool = queue.commands[i].pool;
-			res = vkAllocateCommandBuffers(device, &allocInfo, &queue.commands[i].buffer);
-			DEBUG_VK(res, "Failed to allocate command buffer!");
-
-			queue.commands[i].staging = CreateBuffer(stagingBufferSize, BufferUsage::TransferSrc, Memory::CPU, "StagingBuffer[" + std::to_string(queue.family) + "][" + std::to_string(queue.indexInFamily) + "_" + std::to_string(i));
-			queue.commands[i].stagingCpu = (u8*)queue.commands[i].staging.resource->allocation->GetMappedData();
-
-			VkFenceCreateInfo fenceInfo{};
-			fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-			fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-			vkCreateFence(device, &fenceInfo, allocator, &queue.commands[i].fence);
-
-			// VkQueryPoolCreateInfo queryPoolInfo{};
-			// queryPoolInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
-			// queryPoolInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
-			// queryPoolInfo.queryCount = timeStampPerPool;
-			// res = vkCreateQueryPool(device, &queryPoolInfo, allocator, &queue.commands[i].queryPool);
-			// DEBUG_VK(res, "failed to create query pool");
-
-			// queue.commands[i].timeStamps.clear();
-			// queue.commands[i].timeStampNames.clear();
-		}
-		// DEBUG_TRACE("Queue[{}]: [{}][{}] created", key, queue.family, queue.indexInFamily);
-	}
-	// DEBUG_TRACE("Created {} command buffers", commandResources.size());
 }
 
-void Context::DestroyCommandBuffers() {
-	// for (int q = 0; q < Queue::Count; q++) {
-	for (int q = 0; q < uniqueQueues.size(); q++) {
-		for (int i = 0; i < framesInFlight; i++) {
-			// vkFreeCommandBuffers(device, queues[q]->commands[i].pool, 1, &queues[q]->commands[i].buffer); // No OP
-			vkDestroyCommandPool(device, queues[q]->commands[i].pool, allocator);
-			queues[q]->commands[i].staging = {};
-			queues[q]->commands[i].stagingCpu = nullptr;
-			vkDestroyFence(device, queues[q]->commands[i].fence, allocator);
-			// vkDestroyQueryPool(device, queues[q]->commands[i].queryPool, allocator);
-		}
+void Context::DestroyCommandBuffers(std::vector<CommandResource>& commandResources) {
+	for (auto& cmd: commandResources) {
+		vkDestroyCommandPool(device, cmd.pool, allocator);
+		// cmd.staging = {};
+		// cmd.stagingCpu = nullptr;
+		vkDestroyFence(device, cmd.fence, allocator);
+		// vkDestroyQueryPool(device, cmd.queryPool, allocator);
 	}
 }
 
