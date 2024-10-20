@@ -216,55 +216,62 @@ Pipeline CreatePipeline(const PipelineDesc& desc);
 void* MapBuffer(Buffer& buffer);
 void UnmapBuffer(Buffer& buffer);
 
-void SubmitAndPresent();
-bool GetSwapChainDirty();
+void SubmitAndPresent(GLFWwindow* window);
+bool GetSwapChainDirty(GLFWwindow* window);
 
 // void GetTimeStamps(std::map<std::string, float>& timeTable);
 
-struct CommandHandle;
+struct CommandResource;
+struct CommandHandle {
+	CommandResource* resource = nullptr;
+};
 
-void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset = 0, CommandHandle cmd = {});
-void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset = 0, uint32_t srcOffset = 0, CommandHandle cmd = {});
-void CmdCopy(Image& dst, void* data, uint32_t size, CommandHandle cmd = {});
-void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset = 0, CommandHandle cmd = {}); // size is a No OP
-void CmdCopy(Buffer& dst, Image& src, uint32_t size = 0, uint32_t srcOffset = 0, CommandHandle cmd = {}); // size is a No OP
-void CmdCopy(Buffer& dst, Image& src, uint32_t size, uint32_t dstOffset, ivec2 imageOffset, ivec2 imageExtent, CommandHandle cmd = {}); // size is a No OP
-void CmdBarrier(Image& img, Layout::ImageLayout newLayout, Layout::ImageLayout oldLayout = Layout::MaxEnum, CommandHandle cmd = {});
-void CmdBarrier(CommandHandle cmd = {});
-void CmdBlit(Image& dst, Image& src, uvec2 dstSize = {0,0}, uvec2 srcSize = {0,0}, CommandHandle cmd = {});
-void CmdClearColorImage(Image &image, float4 color, CommandHandle cmd = {});
+void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset = 0, CommandHandle commandHandle = {});
+void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset = 0, uint32_t srcOffset = 0, CommandHandle commandHandle = {});
+void CmdCopy(Image& dst, void* data, uint32_t size, CommandHandle commandHandle = {});
+void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset = 0, CommandHandle commandHandle = {}); // size is a No OP
+void CmdCopy(Buffer& dst, Image& src, uint32_t size = 0, uint32_t srcOffset = 0, CommandHandle commandHandle = {}); // size is a No OP
+void CmdCopy(Buffer& dst, Image& src, uint32_t size, uint32_t dstOffset, ivec2 imageOffset, ivec2 imageExtent, CommandHandle commandHandle = {}); // size is a No OP
+void CmdBarrier(Image& img, Layout::ImageLayout newLayout, Layout::ImageLayout oldLayout = Layout::MaxEnum, CommandHandle commandHandle = {});
+void CmdBarrier(CommandHandle commandHandle = {});
+void CmdBlit(Image& dst, Image& src, uvec2 dstSize = {0,0}, uvec2 srcSize = {0,0}, CommandHandle commandHandle = {});
+void CmdClearColorImage(Image &image, float4 color, CommandHandle commandHandle = {});
 
-Image& GetCurrentSwapchainImage(CommandHandle cmd = {});
-void AcquireImage(CommandHandle cmd = {});
-void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach = {}, uint32_t layerCount = 1, CommandHandle cmd = {});
-void CmdEndRendering(CommandHandle cmd = {});
-void CmdBeginPresent(CommandHandle cmd = {});
-void CmdEndPresent(CommandHandle cmd = {});
-void CmdBindPipeline(Pipeline& pipeline, CommandHandle cmd = {});
-void CmdPushConstants(void* data, uint32_t size, CommandHandle cmd = {});
+Image& GetCurrentSwapchainImage(GLFWwindow* window);
+void AcquireImage(GLFWwindow* window);
+void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach = {}, uint32_t layerCount = 1, CommandHandle commandHandle = {});
+void CmdEndRendering(CommandHandle commandHandle = {});
+// void CmdBeginPresent(CommandHandle commandHandle = {});
+// void CmdEndPresent(CommandHandle commandHandle = {});
+void CmdBindPipeline(Pipeline& pipeline, CommandHandle commandHandle = {});
+void CmdPushConstants(void* data, uint32_t size, CommandHandle commandHandle = {});
 
-// void CmdBuildBLAS(BLAS& blas, CommandHandle cmd = {});
-// void CmdBuildTLAS(TLAS& tlas, const std::vector<BLASInstance>& instances, CommandHandle cmd = {});
+// void CmdBuildBLAS(BLAS& blas, CommandHandle commandHandle = {});
+// void CmdBuildTLAS(TLAS& tlas, const std::vector<BLASInstance>& instances, CommandHandle commandHandle = {});
 
-void CmdDraw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance, CommandHandle cmd = {});
-void CmdBindVertexBuffer(Buffer& vertexBuffer, CommandHandle cmd = {});
-void CmdDrawMesh(Buffer& vertexBuffer, Buffer& indexBuffer, uint32_t indexCount, CommandHandle cmd = {});
-void CmdDrawLineStrip(const Buffer& pointsBuffer, uint32_t firstPoint, uint32_t pointCount, float thickness = 1.0f, CommandHandle cmd = {});
-void CmdDrawPassThrough(CommandHandle cmd = {});
-// void CmdDrawImGui(ImDrawData* data, CommandHandle cmd = {});
-void CmdDispatch(const uvec3& groups, CommandHandle cmd = {});
+void CmdDraw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance, CommandHandle commandHandle = {});
+void CmdBindVertexBuffer(Buffer& vertexBuffer, CommandHandle commandHandle = {});
+void CmdDrawMesh(Buffer& vertexBuffer, Buffer& indexBuffer, uint32_t indexCount, CommandHandle commandHandle = {});
+void CmdDrawLineStrip(const Buffer& pointsBuffer, uint32_t firstPoint, uint32_t pointCount, float thickness = 1.0f, CommandHandle commandHandle = {});
+void CmdDrawPassThrough(CommandHandle commandHandle = {});
+// void CmdDrawImGui(ImDrawData* data, CommandHandle commandHandle = {});
+void CmdDispatch(const uvec3& groups, CommandHandle commandHandle = {});
 
-int CmdBeginTimeStamp(const std::string& name, CommandHandle cmd = {});
-void CmdEndTimeStamp(int timeStampIndex, CommandHandle cmd = {});
+int CmdBeginTimeStamp(const std::string& name, CommandHandle commandHandle = {});
+void CmdEndTimeStamp(int timeStampIndex, CommandHandle commandHandle = {});
 
-void BeginCommandBuffer(Queue queue, CommandHandle cmd = {});
-void EndCommandBuffer(CommandHandle cmd = {});
+CommandHandle GetCurrentCommandBuffer(GLFWwindow* window);
+
+void BeginCommandBuffer(Queue queue, CommandHandle commandHandle = {});
+// CommandHandle BeginCommandBuffer(GLFWwindow* window, CommandHandle commandHandle = {});
+void EndCommandBuffer(CommandHandle commandHandle = {});
 void WaitQueue(Queue queue);
 void WaitIdle();
 // void BeginImGui();
 
 void Init();
 void Init(GLFWwindow* window, uint32_t width, uint32_t height);
+
 void OnSurfaceUpdate(uint32_t width, uint32_t height);
 void Destroy();
 

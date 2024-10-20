@@ -116,10 +116,10 @@ void FeatureTestApplication::Draw() {
 	
 	vkw::BeginCommandBuffer(vkw::Queue::Graphics);
 	// vkw::CmdPushConstants(&constants, sizeof(constants));
-
+	GLFWwindow* window = ctx.window->GetGLFWwindow();
 	// vkw::CmdBeginPresent();
-	vkw::AcquireImage();
-	vkw::Image& img = vkw::GetCurrentSwapchainImage();
+	vkw::AcquireImage(window);
+	vkw::Image& img = vkw::GetCurrentSwapchainImage(window);
 	vkw::CmdCopy(ctx.vertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex));
 	vkw::CmdBarrier(ctx.renderImage, vkw::Layout::TransferDst);
 	vkw::CmdClearColorImage(ctx.renderImage, {0.7f, 0.0f, 0.4f, 1.0f});
@@ -135,7 +135,7 @@ void FeatureTestApplication::Draw() {
 	vkw::CmdBlit(img, ctx.renderImage);
 
 	vkw::CmdBarrier(img, vkw::Layout::Present);
-	vkw::SubmitAndPresent();
+	vkw::SubmitAndPresent(window);
 	vkw::WaitQueue(vkw::Queue::Graphics);
 	sleep(3);
 	// timer.Start();
