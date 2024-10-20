@@ -234,7 +234,7 @@ void CmdCopy(Buffer& dst, Image& src, uint32_t size = 0, uint32_t srcOffset = 0,
 void CmdCopy(Buffer& dst, Image& src, uint32_t size, uint32_t dstOffset, ivec2 imageOffset, ivec2 imageExtent, CommandHandle commandHandle = {}); // size is a No OP
 void CmdBarrier(Image& img, Layout::ImageLayout newLayout, Layout::ImageLayout oldLayout = Layout::MaxEnum, CommandHandle commandHandle = {});
 void CmdBarrier(CommandHandle commandHandle = {});
-void CmdBlit(Image& dst, Image& src, uvec2 dstSize = {0,0}, uvec2 srcSize = {0,0}, CommandHandle commandHandle = {});
+void CmdBlit(Image& dst, Image& src, uvec2 dstSize = {}, uvec2 srcSize = {}, CommandHandle commandHandle = {});
 void CmdClearColorImage(Image &image, float4 color, CommandHandle commandHandle = {});
 
 Image& GetCurrentSwapchainImage(GLFWwindow* window);

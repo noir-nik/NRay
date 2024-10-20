@@ -34,20 +34,20 @@ struct CommandResource {
 
 struct Context
 {	
-	void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset);
-	void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset);
-	void CmdCopy(Image& dst, void* data, uint32_t size);
-	void CmdCopy(Image& dst, Buffer& src, uint32_t srcOffset);
-	void CmdCopy(Buffer& dst, Image& src, uint32_t srcOffset);
-	void CmdCopy(Buffer& dst, Image& src, uint32_t size, uint32_t dstOffset, ivec2 imageOffset, ivec2 imageExtent);
-	void CmdBarrier(Image& img, Layout::ImageLayout newLayout, Layout::ImageLayout oldLayout);
-	void CmdBarrier();
-	void CmdClearColorImage(Image& image, float4& color);
+	void CmdCopy(CommandResource& cmd, Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset);
+	void CmdCopy(CommandResource& cmd, Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset);
+	void CmdCopy(CommandResource& cmd, Image& dst, void* data, uint32_t size);
+	void CmdCopy(CommandResource& cmd, Image& dst, Buffer& src, uint32_t srcOffset);
+	void CmdCopy(CommandResource& cmd, Buffer& dst, Image& src, uint32_t srcOffset);
+	void CmdCopy(CommandResource& cmd, Buffer& dst, Image& src, uint32_t size, uint32_t dstOffset, ivec2 imageOffset, ivec2 imageExtent);
+	void CmdBarrier(CommandResource& cmd, Image& img, Layout::ImageLayout newLayout, Layout::ImageLayout oldLayout);
+	void CmdBarrier(CommandResource& cmd);
+	void CmdClearColorImage(CommandResource& cmd, Image& image, float4& color);
 
-	void CmdBlit(Image& dst, Image& src, uvec2 dstSize, uvec2 srcSize);
+	void CmdBlit(CommandResource& cmd, Image& dst, Image& src, uvec2 dstSize, uvec2 srcSize);
 
 	// void EndCommandBuffer(VkSubmitInfo submitInfo);
-	void EndCommandBuffer(VkSubmitInfo submitInfo, CommandResource& cmd);
+	void EndCommandBuffer(CommandResource& cmd, VkSubmitInfo submitInfo);
 
 	void LoadShaders(Pipeline& pipeline);
 	std::vector<char> CompileShader(const std::filesystem::path& path, const char* entryPoint);
@@ -127,7 +127,7 @@ struct Context
 	Queue currentQueue = Queue::Count;
 
 	std::shared_ptr<PipelineResource> currentPipeline;
-	const uint32_t stagingBufferSize = 312 * 1024 * 1024;
+	const uint32_t stagingBufferSize = 2 * 1024 * 1024;
 
 	VkPhysicalDeviceMemoryProperties memoryProperties;
 
@@ -169,7 +169,7 @@ struct Context
 		}
 
 		inline Image& GetCurrentSwapChainImage() {
-			return swapChainImages[swapChainCurrentFrame];
+			return swapChainImages[currentImageIndex];
 		}
 	};
 
@@ -208,7 +208,7 @@ struct Context
 
 	// std::map<std::string, float> timeStampTable;
 
-	void CreateInstance();
+	void CreateInstance(GLFWwindow* window);
 	void DestroyInstance();
 
 	void CreatePhysicalDevice();
@@ -338,7 +338,7 @@ uint32_t Image::RID() {
 
 static void InitImpl(GLFWwindow* window, uint32_t width, uint32_t height){
 
-	_ctx.CreateInstance();
+	_ctx.CreateInstance(window);
 	_ctx.CreatePhysicalDevice();
 	_ctx.CreateDevice();
 
@@ -357,6 +357,9 @@ static void InitImpl(GLFWwindow* window, uint32_t width, uint32_t height){
 		q.commands = _ctx.commandResources.data() + i;
 		q.commands->queueFamilyIndex = q.family;
 		i++;
+		auto& cmd = *(q.commands);
+		cmd.staging = CreateBuffer(_ctx.stagingBufferSize, BufferUsage::TransferSrc, Memory::CPU, "StagingBuffer[" + std::to_string(cmd.queueFamilyIndex) + "]");
+		cmd.stagingCpu = (u8*)cmd.staging.resource->allocation->GetMappedData();
 	}
 	_ctx.createCommandBuffers(_ctx.commandResources);
 }
@@ -635,7 +638,7 @@ Image CreateImage(const ImageDesc& desc) {
 
 
 void CmdDispatch(const uvec3& groups, CommandHandle commandHandle) {
-	auto& cmd = _ctx.GetCurrentCommandResources();
+	auto& cmd = commandHandle.resource? *(commandHandle.resource): _ctx.GetCurrentCommandResources();
 	vkCmdDispatch(cmd.buffer, groups.x, groups.y, groups.z);
 }
 
@@ -927,52 +930,62 @@ void Context::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipeline) {
 
 
 void CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset, CommandHandle commandHandle) {
-	_ctx.CmdCopy(dst, data, size, dstOfsset);
+	auto& cmd = commandHandle.resource? *(commandHandle.resource): _ctx.GetCurrentCommandResources();
+	_ctx.CmdCopy(cmd, dst, data, size, dstOfsset);
 }
 
 void CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset, CommandHandle commandHandle) {
-	_ctx.CmdCopy(dst, src, size, dstOffset, srcOffset);
+	auto& cmd = commandHandle.resource? *(commandHandle.resource): _ctx.GetCurrentCommandResources();
+	_ctx.CmdCopy(cmd, dst, src, size, dstOffset, srcOffset);
 }
 
 void CmdCopy(Image& dst, void* data, uint32_t size, CommandHandle commandHandle) {
-	_ctx.CmdCopy(dst, data, size); 
+	auto& cmd = commandHandle.resource? *(commandHandle.resource): _ctx.GetCurrentCommandResources();
+	_ctx.CmdCopy(cmd, dst, data, size); 
 }
 
 void CmdCopy(Image& dst, Buffer& src, uint32_t size, uint32_t srcOffset, CommandHandle commandHandle) {
-	_ctx.CmdCopy(dst, src, srcOffset); 
+	auto& cmd = commandHandle.resource? *(commandHandle.resource): _ctx.GetCurrentCommandResources();
+	_ctx.CmdCopy(cmd, dst, src, srcOffset); 
 }
 
 void CmdCopy(Buffer& dst, Image& src, uint32_t size, uint32_t srcOffset, CommandHandle commandHandle) {
-	_ctx.CmdCopy(dst, src, srcOffset);
+	auto& cmd = commandHandle.resource? *(commandHandle.resource): _ctx.GetCurrentCommandResources();
+	_ctx.CmdCopy(cmd, dst, src, srcOffset);
 }
 
 void CmdCopy(Buffer &dst, Image &src, uint32_t size, uint32_t dstOffset, ivec2 imageOffset, ivec2 imageExtent, CommandHandle commandHandle){
-	_ctx.CmdCopy(dst, src, size, dstOffset, imageOffset, imageExtent);
+	auto& cmd = commandHandle.resource? *(commandHandle.resource): _ctx.GetCurrentCommandResources();
+	_ctx.CmdCopy(cmd, dst, src, size, dstOffset, imageOffset, imageExtent);
 }
 
 void CmdBarrier(Image& img, Layout::ImageLayout newLayout, Layout::ImageLayout oldLayout, CommandHandle commandHandle) {
 	if (oldLayout == Layout::MaxEnum) {
 		oldLayout = img.layout;
 	}
-	_ctx.CmdBarrier(img, newLayout, oldLayout);
+	auto& cmd = commandHandle.resource? *(commandHandle.resource): _ctx.GetCurrentCommandResources();
+	_ctx.CmdBarrier(cmd, img, newLayout, oldLayout);
 }
 
 void CmdBarrier(CommandHandle commandHandle) {
-	_ctx.CmdBarrier();
+	auto& cmd = commandHandle.resource? *(commandHandle.resource): _ctx.GetCurrentCommandResources();
+	_ctx.CmdBarrier(cmd);
 }
 
 void CmdBlit(Image& dst, Image& src, uvec2 dstSize, uvec2 srcSize, CommandHandle commandHandle) {
 	if (dstSize.x == 0 && dstSize.y == 0) {dstSize.x = dst.width; dstSize.y = dst.height;}
 	if (srcSize.x == 0 && srcSize.y == 0) {srcSize.x = src.width; srcSize.y = src.height;}
-	_ctx.CmdBlit(dst, src, dstSize, srcSize);
+	auto& cmd = commandHandle.resource? *(commandHandle.resource): _ctx.GetCurrentCommandResources();
+	_ctx.CmdBlit(cmd, dst, src, dstSize, srcSize);
 }
 
 void CmdClearColorImage(Image &image, float4 color, CommandHandle commandHandle) {
-	_ctx.CmdClearColorImage(image, color);
+	auto& cmd = commandHandle.resource? *(commandHandle.resource): _ctx.GetCurrentCommandResources();
+	_ctx.CmdClearColorImage(cmd, image, color);
 }
 
 void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach, uint32_t layerCount, CommandHandle commandHandle) {
-	auto& cmd = _ctx.GetCurrentCommandResources();
+	auto& cmd = commandHandle.resource? *(commandHandle.resource): _ctx.GetCurrentCommandResources();
 
 	ivec2 offset(0, 0);
 	uvec2 extent(0, 0);
@@ -1041,7 +1054,7 @@ void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach
 }
 
 void CmdEndRendering(CommandHandle commandHandle) {
-	auto& cmd = _ctx.GetCurrentCommandResources();
+	auto& cmd = commandHandle.resource? *(commandHandle.resource): _ctx.GetCurrentCommandResources();
 	vkCmdEndRendering(cmd.buffer);
 }
 
@@ -1058,13 +1071,13 @@ void CmdEndRendering(CommandHandle commandHandle) {
 // }
 
 void CmdDraw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance, CommandHandle commandHandle) {
-	auto& cmd = _ctx.GetCurrentCommandResources();
+	auto& cmd = commandHandle.resource? *(commandHandle.resource): _ctx.GetCurrentCommandResources();
 	DEBUG_TRACE("CmdDraw({},{},{},{})", vertexCount, instanceCount, firstVertex, firstInstance);
 	vkCmdDraw(cmd.buffer, vertexCount, instanceCount, firstVertex, firstInstance);
 }
 
 void CmdDrawMesh(Buffer& vertexBuffer, Buffer& indexBuffer, uint32_t indexCount, CommandHandle commandHandle) {
-	auto& cmd = _ctx.GetCurrentCommandResources();
+	auto& cmd = commandHandle.resource? *(commandHandle.resource): _ctx.GetCurrentCommandResources();
 	VkDeviceSize offsets[] = { 0 };
 	vkCmdBindVertexBuffers(cmd.buffer, 0, 1, &vertexBuffer.resource->buffer, offsets);
 	vkCmdBindIndexBuffer(cmd.buffer, indexBuffer.resource->buffer, 0, VK_INDEX_TYPE_UINT32);
@@ -1072,13 +1085,13 @@ void CmdDrawMesh(Buffer& vertexBuffer, Buffer& indexBuffer, uint32_t indexCount,
 }
 
 void CmdBindVertexBuffer(Buffer& vertexBuffer, CommandHandle commandHandle) {
-	auto& cmd = _ctx.GetCurrentCommandResources();
+	auto& cmd = commandHandle.resource? *(commandHandle.resource): _ctx.GetCurrentCommandResources();
 	VkDeviceSize offsets[] = { 0 };
 	vkCmdBindVertexBuffers(cmd.buffer, 0, 1, &vertexBuffer.resource->buffer, offsets);
 }
 
 void CmdDrawLineStrip(const Buffer& pointsBuffer, uint32_t firstPoint, uint32_t pointCount, float thickness, CommandHandle commandHandle) {
-	auto& cmd = _ctx.GetCurrentCommandResources();
+	auto& cmd = commandHandle.resource? *(commandHandle.resource): _ctx.GetCurrentCommandResources();
 	VkDeviceSize offsets[] = { 0 };
 	vkCmdSetLineWidth(cmd.buffer, thickness);
 	vkCmdBindVertexBuffers(cmd.buffer, 0, 1, &pointsBuffer.resource->buffer, offsets);
@@ -1086,7 +1099,7 @@ void CmdDrawLineStrip(const Buffer& pointsBuffer, uint32_t firstPoint, uint32_t 
 }
 
 // void CmdDrawPassThrough(CommandHandle commandHandle) {
-//     auto& cmd = _ctx.GetCurrentCommandResources();
+//     auto& cmd = commandHandle.resource? *(commandHandle.resource): _ctx.GetCurrentCommandResources();
 //     VkDeviceSize offsets[] = { 0 };
 //     vkCmdBindVertexBuffers(cmd.buffer, 0, 1, &_ctx.dummyVertexBuffer.resource->buffer, offsets);
 //     vkCmdDraw(cmd.buffer, 6, 1, 0, 0);
@@ -1099,7 +1112,7 @@ void CmdDrawLineStrip(const Buffer& pointsBuffer, uint32_t firstPoint, uint32_t 
 
 // int CmdBeginTimeStamp(const std::string& name) {
 //     DEBUG_ASSERT(_ctx.currentQueue != Queue::Transfer, "Time Stamp not supported in Transfer queue");
-//     auto& cmd = _ctx.GetCurrentCommandResources();
+//     auto& cmd = commandHandle.resource? *(commandHandle.resource): _ctx.GetCurrentCommandResources();
 //     int id = cmd.timeStamps.size();
 //     if (id >= _ctx.timeStampPerPool - 1) {
 //         LOG_WARN("Maximum number of time stamp per pool exceeded. Ignoring Time stamp {}", name.c_str());
@@ -1114,13 +1127,13 @@ void CmdDrawLineStrip(const Buffer& pointsBuffer, uint32_t firstPoint, uint32_t 
 
 // void CmdEndTimeStamp(int timeStampIndex, CommandHandle commandHandle) {
 //     if (timeStampIndex >= 0 && timeStampIndex < _ctx.timeStampPerPool - 1) {
-//         auto& cmd = _ctx.GetCurrentCommandResources();
+//         auto& cmd = commandHandle.resource? *(commandHandle.resource): _ctx.GetCurrentCommandResources();
 //         vkCmdWriteTimestamp(cmd.buffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, cmd.queryPool, timeStampIndex + 1);
 //     }
 // }
 
 void CmdBindPipeline(Pipeline& pipeline, CommandHandle commandHandle) {
-	auto& cmd = _ctx.GetCurrentCommandResources();
+	auto& cmd = commandHandle.resource? *(commandHandle.resource): _ctx.GetCurrentCommandResources();
 	vkCmdBindPipeline(cmd.buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->pipeline);
 	// TODO: bind only if not compatible for used descriptor sets or push constant range
 	// ref: https://registry.khronos.org/vulkan/specs/1.2-extensions/html/vkspec.html#descriptorsets-compatibility
@@ -1131,7 +1144,7 @@ void CmdBindPipeline(Pipeline& pipeline, CommandHandle commandHandle) {
 }
 
 void CmdPushConstants(void* data, uint32_t size, CommandHandle commandHandle) {
-	auto& cmd = _ctx.GetCurrentCommandResources();
+	auto& cmd = commandHandle.resource? *(commandHandle.resource): _ctx.GetCurrentCommandResources();
 	vkCmdPushConstants(cmd.buffer, _ctx.currentPipeline->layout, VK_SHADER_STAGE_ALL, 0, size, data);
 }
 
@@ -1158,7 +1171,7 @@ CommandHandle GetCurrentCommandBuffer(GLFWwindow* window) {
 void BeginCommandBuffer(Queue queue, CommandHandle commandHandle) {
 	ASSERT(_ctx.currentQueue == Queue::Count, "Already recording a command buffer");
 	_ctx.currentQueue = queue;
-	auto& cmd = _ctx.GetCurrentCommandResources();
+	auto& cmd = commandHandle.resource? *(commandHandle.resource): _ctx.GetCurrentCommandResources();
 	vkWaitForFences(_ctx.device, 1, &cmd.fence, VK_TRUE, UINT64_MAX);
 	vkResetFences(_ctx.device, 1, &cmd.fence);
 
@@ -1186,7 +1199,7 @@ void BeginCommandBuffer(Queue queue, CommandHandle commandHandle) {
 	// }
 }
 
-void Context::EndCommandBuffer(VkSubmitInfo submitInfo, CommandResource& cmd) {
+void Context::EndCommandBuffer(CommandResource& cmd, VkSubmitInfo submitInfo) {
 	// auto& cmd = GetCurrentCommandResources();
 
 	vkEndCommandBuffer(cmd.buffer);
@@ -1201,7 +1214,7 @@ void Context::EndCommandBuffer(VkSubmitInfo submitInfo, CommandResource& cmd) {
 
 // vkEndCommandBuffer + vkQueueSubmit
 void EndCommandBuffer(CommandHandle commandHandle) {
-	_ctx.EndCommandBuffer({}, *(commandHandle.resource));
+	_ctx.EndCommandBuffer(*(commandHandle.resource), {});
 	_ctx.currentQueue = vkw::Queue::Count;
 	_ctx.currentPipeline = {};
 }
@@ -1386,7 +1399,7 @@ void PopulateDebugReportCreateInfo(VkDebugReportCallbackCreateInfoEXT& createInf
 
 } // vulkan debug callbacks
 
-void Context::CreateInstance(){
+void Context::CreateInstance(GLFWwindow* glfwWindow){
 	// optional data, provides useful info to the driver
 	VkApplicationInfo appInfo{};
 	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -1538,7 +1551,7 @@ void Context::CreateInstance(){
 		PopulateDebugMessengerCreateInfo(messengerInfo);
 		res = CreateDebugUtilsMessengerEXT(instance, &messengerInfo, allocator, &debugMessenger);
 		DEBUG_VK(res, "Failed to set up debug messenger!");
-		DEBUG_TRACE("Created debug messenger., res = {}", (uint64_t)debugMessenger);
+		DEBUG_TRACE("Created debug messenger.");
 	}
 
 	// Debug Report
@@ -1548,9 +1561,14 @@ void Context::CreateInstance(){
 		// Create the callback handle
 		res = CreateDebugReportCallbackEXT(instance, &debugReportInfo, nullptr, &debugReport);
 		// DEBUG_VK(res, "Failed to set up debug report callback!");
-		DEBUG_TRACE("Created debug report callback., res = {}", (uint64_t)debugReport);
+		DEBUG_TRACE("Created debug report callback.");
 	}
 
+	if (_ctx.presentRequested) {
+		res = glfwCreateWindowSurface(instance, glfwWindow, allocator, &_dummySurface);
+		DEBUG_VK(res, "Failed to create window surface!");
+		DEBUG_TRACE("Created surface.");
+	}
 	LOG_INFO("Created VulkanInstance.");
 }
 
@@ -1695,6 +1713,8 @@ void Context::CreateDevice() {
 		DEBUG_ASSERT(false, "No queue found"); //todo:remove after debugging
 		return {~0U, 0};
 	};
+
+	
 
 	auto find_separate = [&](VkQueueFlags desired_flags) -> std::tuple<uint32_t, uint32_t, bool> {
 		for (uint32_t i = 0; i < familyCount; i++) {
@@ -1907,6 +1927,11 @@ void Context::CreateDevice() {
 
 	// VkResult result = vkCreateDescriptorPool(device, &imguiPoolInfo, allocator, &imguiDescriptorPool);
 	// DEBUG_VK(result, "Failed to create imgui descriptor pool!");
+	
+	if (_dummySurface != VK_NULL_HANDLE) {
+		vkDestroySurfaceKHR(instance, _dummySurface, nullptr);
+		_dummySurface = VK_NULL_HANDLE;
+	}
 }
 
 void Context::DestroyDevice() {
@@ -2116,6 +2141,9 @@ void Context::DestroySwapChain(SwapChain& swapChain) {
 	}
 
 	vkDestroySwapchainKHR(device, swapChain.swapChain, allocator);
+	vkDestroySurfaceKHR(instance, swapChain.surface, allocator);
+
+	DestroyCommandBuffers(swapChain.commandResources);
 
 	swapChain.imageAvailableSemaphores.clear();
 	swapChain.renderFinishedSemaphores.clear();
@@ -2141,7 +2169,7 @@ bool GetSwapChainDirty(GLFWwindow* window) {
 }
 // EndCommandBuffer + vkQueuePresentKHR
 void SubmitAndPresent(GLFWwindow* window) {
-	// auto& cmd = _ctx.GetCurrentCommandResources();
+	// auto& cmd = commandHandle.resource? *(commandHandle.resource): _ctx.GetCurrentCommandResources();
 	auto& swapChain = _ctx.swapChains[window];
 
 	VkPipelineStageFlags waitStages = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -2155,7 +2183,7 @@ void SubmitAndPresent(GLFWwindow* window) {
 	submitInfo.signalSemaphoreCount = 1;
 	submitInfo.pSignalSemaphores = &swapChain.renderFinishedSemaphores[swapChain.swapChainCurrentFrame];
 
-	_ctx.EndCommandBuffer(submitInfo, swapChain.commandResources[swapChain.swapChainCurrentFrame]);
+	_ctx.EndCommandBuffer(swapChain.commandResources[swapChain.swapChainCurrentFrame], submitInfo);
 
 	VkPresentInfoKHR presentInfo{};
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -2420,8 +2448,8 @@ void Context::createCommandBuffers(std::vector<CommandResource>& commandResource
 		res = vkAllocateCommandBuffers(device, &allocInfo, &cmd.buffer);
 		DEBUG_VK(res, "Failed to allocate command buffer!");
 
-		// cmd.staging = CreateBuffer(stagingBufferSize, BufferUsage::TransferSrc, Memory::CPU, "StagingBuffer[" + std::to_string(cmd.queueFamilyIndex) + "]");
-		// cmd.stagingCpu = (u8*)cmd.staging.resource->allocation->GetMappedData();
+		cmd.staging = CreateBuffer(stagingBufferSize, BufferUsage::TransferSrc, Memory::CPU, "StagingBuffer[" + std::to_string(cmd.queueFamilyIndex) + "]");
+		cmd.stagingCpu = (u8*)cmd.staging.resource->allocation->GetMappedData();
 
 		VkFenceCreateInfo fenceInfo{};
 		fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
@@ -2521,20 +2549,18 @@ VkExtent2D Context::ChooseExtent(const VkSurfaceCapabilitiesKHR& capabilities, u
 
 
 
-void Context::CmdCopy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset) {
-	CommandResource& cmd = GetCurrentCommandResources();
+void Context::CmdCopy(CommandResource& cmd, Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset) {
 	if (stagingBufferSize - cmd.stagingOffset < size) {
 		LOG_ERROR("not enough size in staging buffer to copy");
 		// todo: allocate additional buffer
 		return;
 	}
 	memcpy(cmd.stagingCpu + cmd.stagingOffset, data, size);
-	CmdCopy(dst, cmd.staging, size, dstOfsset, cmd.stagingOffset);
+	CmdCopy(cmd, dst, cmd.staging, size, dstOfsset, cmd.stagingOffset);
 	cmd.stagingOffset += size;
 }
 
-void Context::CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset) {
-	CommandResource& cmd = GetCurrentCommandResources();
+void Context::CmdCopy(CommandResource& cmd, Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset) {
 	VkBufferCopy copyRegion{};
 	copyRegion.srcOffset = srcOffset;
 	copyRegion.dstOffset = dstOffset;
@@ -2542,20 +2568,18 @@ void Context::CmdCopy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffse
 	vkCmdCopyBuffer(cmd.buffer, src.resource->buffer, dst.resource->buffer, 1, &copyRegion);
 }
 
-void Context::CmdCopy(Image& dst, void* data, uint32_t size) {
-	CommandResource& cmd = GetCurrentCommandResources();
+void Context::CmdCopy(CommandResource& cmd, Image& dst, void* data, uint32_t size) {
 	if (stagingBufferSize - cmd.stagingOffset < size) {
 		LOG_ERROR("not enough size in staging buffer to copy");
 		// todo: allocate additional buffer
 		return;
 	}
 	memcpy(cmd.stagingCpu + cmd.stagingOffset, data, size);
-	CmdCopy(dst, cmd.staging, cmd.stagingOffset);
+	CmdCopy(cmd, dst, cmd.staging, cmd.stagingOffset);
 	cmd.stagingOffset += size;
 }
 
-void Context::CmdCopy(Image& dst, Buffer& src, uint32_t srcOffset) {
-	CommandResource& cmd = GetCurrentCommandResources();
+void Context::CmdCopy(CommandResource& cmd, Image& dst, Buffer& src, uint32_t srcOffset) {
 	VkBufferImageCopy region{};
 	region.bufferOffset = srcOffset;
 	region.bufferRowLength = 0;
@@ -2570,8 +2594,7 @@ void Context::CmdCopy(Image& dst, Buffer& src, uint32_t srcOffset) {
 	vkCmdCopyBufferToImage(cmd.buffer, src.resource->buffer, dst.resource->image, (VkImageLayout)dst.layout, 1, &region);
 }
 
-void Context::CmdCopy(Buffer& dst, Image& src, uint32_t dstOffset) {
-	CommandResource& cmd = GetCurrentCommandResources();
+void Context::CmdCopy(CommandResource& cmd, Buffer& dst, Image& src, uint32_t dstOffset) {
 	VkBufferImageCopy region{};
 	region.bufferOffset = dstOffset;
 	region.bufferRowLength = 0;
@@ -2586,9 +2609,8 @@ void Context::CmdCopy(Buffer& dst, Image& src, uint32_t dstOffset) {
 	vkCmdCopyImageToBuffer(cmd.buffer, src.resource->image, (VkImageLayout)src.layout, dst.resource->buffer, 1, &region);
 }
 // Vulkan 1.3 // 
-void Context::CmdCopy(Buffer &dst, Image &src, uint32_t size, uint32_t dstOffset, ivec2 imageOffset, ivec2 imageExtent) {
-// void Context::CmdCopy(Buffer &dst, Image &src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset){
-	CommandResource& cmd = GetCurrentCommandResources();
+void Context::CmdCopy(CommandResource& cmd, Buffer &dst, Image &src, uint32_t size, uint32_t dstOffset, ivec2 imageOffset, ivec2 imageExtent) {
+// void Context::CmdCopy(CommandResource& cmd, Buffer &dst, Image &src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset){
 	VkBufferImageCopy2 region{};
 	region.sType = VK_STRUCTURE_TYPE_BUFFER_IMAGE_COPY_2;
 	region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -2612,8 +2634,7 @@ void Context::CmdCopy(Buffer &dst, Image &src, uint32_t size, uint32_t dstOffset
 	vkCmdCopyImageToBuffer2(cmd.buffer, &copyInfo);
 }
 
-void Context::CmdBarrier(Image& img, Layout::ImageLayout newLayout, Layout::ImageLayout oldLayout) {
-	CommandResource& cmd = GetCurrentCommandResources();
+void Context::CmdBarrier(CommandResource& cmd, Image& img, Layout::ImageLayout newLayout, Layout::ImageLayout oldLayout) {
 	VkImageSubresourceRange range = {};
 	range.aspectMask = (VkImageAspectFlags)img.aspect;
 	range.baseMipLevel = 0;
@@ -2640,7 +2661,7 @@ void Context::CmdBarrier(Image& img, Layout::ImageLayout newLayout, Layout::Imag
 	img.layout = newLayout;
 }
 
-void Context::CmdBarrier() {
+void Context::CmdBarrier(CommandResource& cmd) {
 	VkMemoryBarrier2 barrier = {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
 		.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
@@ -2656,8 +2677,7 @@ void Context::CmdBarrier() {
 	vkCmdPipelineBarrier2(GetCurrentCommandResources().buffer, &dependency);
 }
 
-void Context::CmdClearColorImage(Image& img, float4& color) {
-	CommandResource& cmd = GetCurrentCommandResources();
+void Context::CmdClearColorImage(CommandResource& cmd, Image& img, float4& color) {
 	VkClearColorValue clearColor{};
 	clearColor.float32[0] = color.r;
 	clearColor.float32[1] = color.g;
@@ -2673,9 +2693,7 @@ void Context::CmdClearColorImage(Image& img, float4& color) {
 	vkCmdClearColorImage(cmd.buffer, img.resource->image, (VkImageLayout)img.layout, &clearColor, 1, &range);
 }
 
-void Context::CmdBlit(Image& dst, Image& src, uvec2 dstSize, uvec2 srcSize) {	
-	auto& cmd = GetCurrentCommandResources();
-
+void Context::CmdBlit(CommandResource& cmd, Image& dst, Image& src, uvec2 dstSize, uvec2 srcSize) {	
 	VkImageBlit2 blitRegion{ .sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2, .pNext = nullptr };
 
 	blitRegion.srcOffsets[1].x = srcSize.x;
