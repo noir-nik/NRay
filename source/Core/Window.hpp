@@ -38,13 +38,17 @@ class Window {
 
 	char lastKeyState[GLFW_KEY_LAST + 1];
 	WindowMode mode = WindowMode::Windowed;
+
 	bool dirty     = true;
 	bool resizable = true;
 	bool decorated = true;
 	bool maximized = false;
+	bool shouldClose = false;
 
 public:
 	Window(int width, int height, const char* name = "Engine"): width(width), height(height), name(name) {}
+	Window& operator=(const Window&) = delete;
+	Window(const Window&) = delete;
 	~Window(){ if(window) Destroy(); }
 	void ApplyChanges();
 	void UpdateFramebufferSize();
@@ -59,7 +63,7 @@ public:
 	inline uint32_t    GetHeight()                         { return height;                                 }
 	inline float       GetDeltaTime()                      { return deltaTime;                              }
 
-	inline bool        GetShouldClose()                    { return glfwWindowShouldClose(window);          }
+	inline bool        GetShouldClose()                    { return shouldClose = glfwWindowShouldClose(window); }
 	inline void        SetShouldClose(bool shouldClose)    { glfwSetWindowShouldClose(window, shouldClose); }
 
 	inline float&      GetScroll()                         { return scroll;                                 }
@@ -75,7 +79,7 @@ public:
 	inline void        SetSize(int width, int height)      { glfwSetWindowSize(window, width, height);      }
 	
 	inline Lmath::int2 GetPos()                            { glfwGetWindowPos(window, &posX, &posY); return {posX, posY}; }
-	inline void        SetPos(int x, int y)                { glfwSetWindowPos(window, x, y);                }
+	inline void        SetPos(int x, int y)                { posX = x; posY = y; }
 
 	inline WindowMode  GetMode()                           { return mode; }
 	inline void        SetMode(WindowMode newMode)         { mode = newMode; dirty = true; }
@@ -101,7 +105,8 @@ public:
 	WindowManager() = delete;
 	static void Init();
 	static std::shared_ptr<Window> NewWindow(int width, int height, const char* name);
-	static void PollEvents(){glfwPollEvents();}
+	static void PollEvents(){ glfwPollEvents(); }
+	static void WaitEvents(){ glfwWaitEvents(); }
 	// void OnImgui();
 
 	static void Finish();

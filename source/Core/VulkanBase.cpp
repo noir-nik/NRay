@@ -390,11 +390,12 @@ void Init(GLFWwindow* window, uint32_t width, uint32_t height) {
 	InitImpl(window, width, height);
 }
 
-// void OnSurfaceUpdate(GLFWwindow* window, uint32_t width, uint32_t height) {
-// 	_ctx.DestroySwapChain();
-// 	_ctx.CreateSurfaceFormats(_ctx.swapChains[window]);
-// 	_ctx.CreateSwapChain(window, width, height);
-// }
+void OnSurfaceUpdate(GLFWwindow* window, uint32_t width, uint32_t height) {
+	_ctx.DestroySwapChain(_ctx.swapChains[window]);
+	_ctx.swapChains.clear();
+	_ctx.CreateSurfaceFormats(_ctx.swapChains[window]);
+	_ctx.CreateSwapChain(window, width, height);
+}
 
 
 void Destroy() {

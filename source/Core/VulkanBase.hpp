@@ -282,7 +282,8 @@ void WaitIdle();
 void Init();
 void Init(GLFWwindow* window, uint32_t width, uint32_t height);
 
-void OnSurfaceUpdate(uint32_t width, uint32_t height);
+void OnSurfaceUpdate (GLFWwindow* window, uint32_t width, uint32_t height);
+
 void Destroy();
 
 

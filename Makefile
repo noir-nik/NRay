@@ -127,7 +127,8 @@ run:
 
 
 # VLGRND_OUTPUT := --log-file="bin/mem2"
-# VLGRND_FULL := --leak-check=full --show-leak-kinds=all
+# VLGRND_FULL := --leak-check=full 
+# VLGRND_FULL += --show-leak-kinds=all
 
 runv:
 	@valgrind $(VLGRND_FULL) $(VLGRND_OUTPUT) ./$(BUILD_DIR)/$(TARGET) 

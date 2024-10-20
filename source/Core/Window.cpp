@@ -3,6 +3,8 @@
 #include "Window.hpp"
 // #include <imgui/imgui.h>
 
+#define WINDOW_ALIVE_GUARD if (window == nullptr) return;
+
 namespace {
 struct Context
 {
@@ -52,6 +54,12 @@ void WindowDropCallback(GLFWwindow* window, int count, const char* paths[]) {
 	}
 }
 
+void WindowCloseCallback(GLFWwindow* window) {
+	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
+	pWindow->SetShouldClose(true);
+	printf("Close callback triggered\n");
+}
+
 
 void errorCallback(int error, const char* description)
 {
@@ -64,7 +72,12 @@ void errorCallback(int error, const char* description)
 void WindowManager::Init(){
 	glfwSetErrorCallback(errorCallback);
 	// initializing glfw
-	glfwInit();
+	auto res = glfwInit();
+
+	if (!res) {
+		LOG_CRITICAL("Failed to initialize GLFW");
+		return;
+	}
 
 	// glfw uses OpenGL context by default
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -79,6 +92,7 @@ void WindowManager::Init(){
 void WindowManager::Finish() {
 	// Do not Log
 	if (!is_initialized) return;
+	printf("WindowManager::Finish()\n");
 	glfwTerminate();
 	is_initialized = false;
 }
@@ -93,11 +107,12 @@ std::shared_ptr<Window> WindowManager::NewWindow(int width, int height, const ch
 	window->SetUserPointer(window.get());
 	window->GetPos();
 	
-	glfwSetFramebufferSizeCallback(glfwWindow, FramebufferSizeCallback);
-	glfwSetScrollCallback(glfwWindow, ScrollCallback);
-	glfwSetWindowMaximizeCallback(glfwWindow, WindowMaximizeCallback);
+	// glfwSetFramebufferSizeCallback(glfwWindow, FramebufferSizeCallback);
+	// glfwSetScrollCallback(glfwWindow, ScrollCallback);
+	// glfwSetWindowMaximizeCallback(glfwWindow, WindowMaximizeCallback);
 	glfwSetWindowPosCallback(glfwWindow, WindowChangePosCallback);
-	glfwSetDropCallback(glfwWindow, WindowDropCallback);
+	// glfwSetDropCallback(glfwWindow, WindowDropCallback);
+	glfwSetWindowCloseCallback(glfwWindow, WindowCloseCallback);
 
 	window->dirty = false;
     window->ApplyChanges();
@@ -117,6 +132,12 @@ void Window::Destroy() {
 }
 
 void Window::ApplyChanges() {
+	WINDOW_ALIVE_GUARD
+	if (GetShouldClose()) {
+		Destroy();
+		return;
+	}
+
 	int monitorCount;
 	auto monitors = glfwGetMonitors(&monitorCount);
 	ASSERT(monitorIndex < monitorCount, "Invalid monitorIndex inside Window creation!", monitorIndex);
@@ -161,9 +182,10 @@ void Window::ApplyChanges() {
 
 
 void Window::Update() {
-	for (int i = GLFW_KEY_SPACE; i < GLFW_KEY_LAST + 1; i++) {
-		lastKeyState[i] = glfwGetKey(window, i);
-	}
+	WINDOW_ALIVE_GUARD
+	// for (int i = GLFW_KEY_SPACE; i < GLFW_KEY_LAST + 1; i++) {
+	// 	lastKeyState[i] = glfwGetKey(window, i);
+	// }
 	deltaScroll = 0;
 	auto newTime = std::chrono::high_resolution_clock::now();
 	deltaTime = std::chrono::duration_cast<std::chrono::microseconds>(newTime - lastTime).count();

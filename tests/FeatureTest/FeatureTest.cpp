@@ -32,7 +32,8 @@ struct Context {
 	vkw::Image renderImage;
 	
 	std::shared_ptr<Window> window;
-	std::shared_ptr<Window> window2;
+	// GLFWwindow* glfwWindow = nullptr;
+	std::shared_ptr<Window> window1;
 
 	void CreateImages(uint32_t width, uint32_t height);
 	void CreateShaders();
@@ -96,19 +97,73 @@ void FeatureTestApplication::Setup() {
 }
 
 void FeatureTestApplication::Create() {
-	ctx.window = WindowManager::NewWindow(ctx.width, ctx.height, "Feature Test");
-	ctx.window2 = WindowManager::NewWindow(ctx.width, ctx.height, "Feature Test 2");
-	// vkw::Init(ctx.window->GetGLFWwindow(), ctx.window->GetWidth(), ctx.window->GetHeight());
-	// ctx.CreateImages(ctx.width, ctx.height);
-	// ctx.CreateShaders();
+	ctx.window = WindowManager::NewWindow(ctx.width, ctx.height, "w0");
+	// ctx.glfwWindow = ctx.window->GetGLFWwindow();
+	// ctx.window1 = WindowManager::NewWindow(ctx.width, ctx.height, "w1");
+	vkw::Init(ctx.window->GetGLFWwindow(), ctx.window->GetWidth(), ctx.window->GetHeight());
+	ctx.CreateImages(ctx.width, ctx.height);
+	ctx.CreateShaders();
+}
+
+
+void RenderFrame(GLFWwindow* window) {
+	
+	auto cmd = vkw::GetCommandBuffer(window);
+	vkw::BeginCommandBuffer(cmd);
+	// vkw::CmdPushConstants(&constants, sizeof(constants));
+	// vkw::CmdBeginPresent();
+	vkw::AcquireImage(window);
+	vkw::Image& img = vkw::GetCurrentSwapchainImage(window);
+	
+	vkw::CmdCopy(cmd, ctx.vertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex));
+	vkw::CmdBarrier(cmd, ctx.renderImage, vkw::Layout::TransferDst);
+	vkw::CmdClearColorImage(cmd, ctx.renderImage, {0.7f, 0.0f, 0.4f, 1.0f});
+
+	vkw::CmdBeginRendering(cmd, {ctx.renderImage});
+	vkw::CmdBindPipeline(cmd, ctx.pipeline);
+	vkw::CmdBindVertexBuffer(cmd, ctx.vertexBuffer);
+	vkw::CmdDraw(cmd, 3, 1, 0, 0);
+	vkw::CmdEndRendering(cmd);
+	
+	vkw::CmdBarrier(cmd, ctx.renderImage, vkw::Layout::TransferSrc);
+	vkw::CmdBarrier(cmd, img, vkw::Layout::TransferDst);
+	vkw::CmdBlit(cmd, img, ctx.renderImage, {}, {});
+	vkw::CmdBarrier(cmd, img, vkw::Layout::Present);
+}
+
+
+void DrawFrame(GLFWwindow* window) {
+	RenderFrame(window);
+	if (vkw::GetSwapChainDirty(window)) {
+		return;
+	}
+	vkw::SubmitAndPresent(window);
+}
+
+bool DirtyFrameResources(Window* w) {
+	bool dirty = false;
+	dirty |= vkw::GetSwapChainDirty(w->GetGLFWwindow());
+	dirty |= w->GetFramebufferResized();
+	dirty |= w->IsDirty();
+	return dirty;
 }
 
 void FeatureTestApplication::MainLoop() {
-	while (!ctx.window->GetShouldClose()) {
-		ctx.window->Update();
+	// while (ctx.window->GetAlive()) {
+	// 	ctx.window->Update();
+	// 	// DrawFrame(ctx.window->GetGLFWwindow());
+	// 	ctx.window->ApplyChanges();
+	// 	WindowManager::WaitEvents();
+	// 	printf("Loop\n");
+	// 	fflush(stdout);
+	// }
 
-		WindowManager::PollEvents();
-	}
+	usleep(1000 * 1000);
+	ctx.window->SetSize(800, 600);
+	ctx.window->ApplyChanges();
+	usleep(1000 * 1000);
+
+	// vkw::WaitIdle();
 }
 
 void FeatureTestApplication::Draw() {
@@ -148,6 +203,24 @@ void FeatureTestApplication::Draw() {
 
 void FeatureTestApplication::Finish() {
 	ctx = {};
-	// vkw::Destroy();
-	// WindowManager::Finish();
+	vkw::Destroy();
+	
+	WindowManager::Finish();
+}
+
+void RecreateFrameResources(Window* w) {
+	// busy wait while the window is minimized
+	while (w->GetWidth() == 0 || w->GetHeight() == 0) {
+		WindowManager::WaitEvents();
+	}
+	vkw::WaitIdle();
+	if (w->GetFramebufferResized() || w->IsDirty()) {
+		if (w->IsDirty()) {
+			w->ApplyChanges();
+		}
+		w->UpdateFramebufferSize();
+		vkw::OnSurfaceUpdate(w->GetGLFWwindow(), w->GetWidth(), w->GetHeight());
+	}
+	// DeferredRenderer::CreateImages(viewportSize.x, viewportSize.y);
+	// camera->extent = {viewportSize.x, viewportSize.y};
 }
