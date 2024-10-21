@@ -3,6 +3,7 @@
 
 #include "Lmath.hpp"
 using vec4 = Lmath::vec4;
+using ivec4 = Lmath::ivec4;
 
 using float3 = Lmath::float3;
 using float4 = Lmath::float4;

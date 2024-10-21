@@ -49,7 +49,7 @@ struct Vertex {
 const std::vector<Vertex> vertices = {
 	{{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
 	{{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-	{{0.5f, 0.5f},  {0.0f, 1.0f, 0.0f}},
+	{{0.5f, 0.1f},  {0.0f, 1.0f, 0.0f}},
 };
 
 void Context::CreateShaders() {
@@ -71,8 +71,6 @@ void Context::CreateShaders() {
 }
 
 void Context::CreateImages(uint32_t width, uint32_t height) {
-	ctx.vertexBuffer = vkw::CreateBuffer(vertices.size() * sizeof(Vertex), vkw::BufferUsage::Vertex, vkw::Memory::GPU, "Vertex Buffer");
-
 	ctx.renderImage = vkw::CreateImage({
 		.width = width,
 		.height = height,
@@ -101,11 +99,21 @@ void FeatureTestApplication::Create() {
 	// ctx.glfwWindow = ctx.window->GetGLFWwindow();
 	// ctx.window1 = WindowManager::NewWindow(ctx.width, ctx.height, "w1");
 	vkw::Init(ctx.window->GetGLFWwindow(), ctx.window->GetWidth(), ctx.window->GetHeight());
-	ctx.CreateImages(ctx.width, ctx.height);
+	ctx.CreateImages(ctx.window->GetMonitorWidth(), ctx.window->GetMonitorHeight());
+	ctx.vertexBuffer = vkw::CreateBuffer(vertices.size() * sizeof(Vertex), vkw::BufferUsage::Vertex, vkw::Memory::GPU, "Vertex Buffer");
 	ctx.CreateShaders();
 }
 
 void RecreateFrameResources(Window* w);
+
+void FramebufferCallback(GLFWwindow* window, int width, int height) {
+	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
+	pWindow->SetSize(width, height);
+	pWindow->SetSwapchainDirty(true);
+	pWindow->SetDrawNeeded(true);
+	// pWindow->SetFramebufferResized();
+	DEBUG_TRACE("Window {} framebuffer resized to {}x{}", pWindow->GetName(), width, height);
+}
 
 void RecordCommands(GLFWwindow* window) {
 	
@@ -120,18 +128,22 @@ void RecordCommands(GLFWwindow* window) {
 	vkw::CmdBarrier(cmd, ctx.renderImage, vkw::Layout::TransferDst);
 	vkw::CmdClearColorImage(cmd, ctx.renderImage, {0.7f, 0.0f, 0.4f, 1.0f});
 
-	vkw::CmdBeginRendering(cmd, {ctx.renderImage});
+	auto size = ctx.window->GetSize();
+	vec4 viewport = {0, 0, (float)size.x, (float)size.y};
+
+	LOG_INFO("Viewport: {}, {}, {}, {}", viewport.x, viewport.y, viewport.z, viewport.w); 
+	vkw::CmdBeginRendering(cmd, {ctx.renderImage}, {}, 1, viewport);
 	vkw::CmdBindPipeline(cmd, ctx.pipeline);
 	vkw::CmdBindVertexBuffer(cmd, ctx.vertexBuffer);
+	vkw::CmdDraw(cmd, 3, 1, 0, 0);
 	vkw::CmdDraw(cmd, 3, 1, 0, 0);
 	vkw::CmdEndRendering(cmd);
 	
 	vkw::CmdBarrier(cmd, ctx.renderImage, vkw::Layout::TransferSrc);
 	vkw::CmdBarrier(cmd, img, vkw::Layout::TransferDst);
-	vkw::CmdBlit(cmd, img, ctx.renderImage, {}, {});
+	vkw::CmdBlit(cmd, img, ctx.renderImage, {0, 0, size.x, size.y}, {0, 0, size.x, size.y});
 	vkw::CmdBarrier(cmd, img, vkw::Layout::Present);
 }
-
 
 int DrawFrame(GLFWwindow* window) {
 	RecordCommands(window);
@@ -157,6 +169,7 @@ bool SwapchainDirty(Window* w) {
 }
 
 void FeatureTestApplication::MainLoop() {
+	ctx.window->SetFramebufferSizeCallback(FramebufferCallback);
 	while (ctx.window->GetAlive() && !ctx.window->GetShouldClose()) {
 		ctx.window->Update();
 		if (/* engine->drawNeeded || */ ctx.window->GetDrawNeeded()) {
@@ -170,12 +183,13 @@ void FeatureTestApplication::MainLoop() {
 		}
 		// usleep(1000 * 1000);
 		// ctx.window->SetSize(800, 600); 
+		WindowManager::WaitEvents();
+		// ctx.window->ApplyChanges();
 		if (SwapchainDirty(ctx.window.get())) {
 			LOG_INFO("DIRTY FRAME RESOURCES");
 			RecreateFrameResources(ctx.window.get());
 			ctx.window->SetSwapchainDirty(false);
 		}
-		WindowManager::WaitEvents();
 		printf("Loop\n");
 		fflush(stdout);
 	}
@@ -246,26 +260,18 @@ void FeatureTestApplication::Finish() {
 void RecreateFrameResources(Window* w) {
 	// busy wait while the window is minimized
 	while (w->GetWidth() == 0 || w->GetHeight() == 0) {
-		LOG_TRACE("Iconified");
+		DEBUG_TRACE("Iconified");
 		WindowManager::WaitEvents();
 	}
 	vkw::WaitIdle();
-	// if (w->GetFramebufferResized() || w->IsDirty()) {
-		// if (w->IsDirty()) {
-		// 	LOG_INFO("RecreateFrameResources: Dirty");
-		// 	w->ApplyChanges();
-		// }
-		// if (w->GetFramebufferResized()) {
-		// 	LOG_INFO("RecreateFrameResources: FramebufferResized");
-		// }
-		if (w->GetAlive()) {
-			w->UpdateFramebufferSize();
-			vkw::OnSurfaceUpdate(w->GetGLFWwindow(), w->GetWidth(), w->GetHeight());
-		} else {
-			LOG_WARN("RecreateFrameResources: Window is dead");
-			return;
-		}
+	if (w->GetAlive()) {
+		w->UpdateFramebufferSize();
+		vkw::OnSurfaceUpdate(w->GetGLFWwindow(), w->GetWidth(), w->GetHeight());
+	} else {
+		LOG_WARN("RecreateFrameResources: Window is dead");
+		return;
+	}
 	// }
-	// DeferredRenderer::CreateImages(viewportSize.x, viewportSize.y);
+	ctx.CreateImages(w->GetWidth(), w->GetHeight());
 	// camera->extent = {viewportSize.x, viewportSize.y};
 }

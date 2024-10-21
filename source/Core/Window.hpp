@@ -39,10 +39,11 @@ class Window {
 	char lastKeyState[GLFW_KEY_LAST + 1];
 	WindowMode mode = WindowMode::Windowed;
 	WindowMode newMode = WindowMode::Windowed;
+	const GLFWvidmode* vidMode = nullptr;
 
 	// bool dirty     = true;
 	bool drawNeeded = true;
-	bool swapchainDirty = true;
+	bool swapchainDirty = false;
 	bool resizable = true;
 	bool decorated = true;
 	bool maximized = false;
@@ -62,8 +63,14 @@ public:
 	inline GLFWwindow* GetGLFWwindow()                     { return window;                                 }
 	// inline bool        IsDirty()                           { return dirty;                                  }
 	inline void        WaitEvents()                        { glfwWaitEvents();                              }
-	inline uint32_t    GetWidth()                          { return width;                                  }
-	inline uint32_t    GetHeight()                         { return height;                                 }
+	inline int         GetWidth()                          { return width;                                  }
+	inline int         GetHeight()                         { return height;                                 }
+	inline auto        GetSize()                           { return Lmath::ivec2(width, height);            }
+
+	inline int         GetMonitorIndex()                   { return monitorIndex;                           }
+	inline int         GetMonitorWidth()                   { vidMode = glfwGetVideoMode(glfwGetPrimaryMonitor()); return vidMode->width; }
+	inline int         GetMonitorHeight()                  { vidMode = glfwGetVideoMode(glfwGetPrimaryMonitor()); return vidMode->height; }
+
 	inline float       GetDeltaTime()                      { return deltaTime;                              }
 
 	inline bool        GetShouldClose()                    { return shouldClose = glfwWindowShouldClose(window); }
@@ -101,6 +108,11 @@ public:
 	inline bool        GetSwapchainDirty()                 { return swapchainDirty; }
 	inline void        SetSwapchainDirty(bool value)       { swapchainDirty = value; }
 	inline bool        GetAlive()                          { return window != nullptr; }
+
+	inline bool        GetResizable()                      { return resizable; }
+	inline void        SetResizable(bool value)            { resizable = value; glfwSetWindowAttrib(window, GLFW_RESIZABLE, value); }
+
+	inline void        SetFramebufferSizeCallback(void(*callback)(GLFWwindow* window, int width, int height)) { glfwSetFramebufferSizeCallback(window, callback); }
 
 
 	inline std::vector<std::string> GetAndClearPaths()     { auto paths = pathsDrop; pathsDrop.clear(); return paths; }

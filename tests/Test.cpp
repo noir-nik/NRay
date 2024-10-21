@@ -74,8 +74,8 @@ static void HelloTriangleTest() {
 	HelloTriangleInfo HelloTriangleInfo = {
 		// .width = 640,
 		// .height = 480,
-		.width = 160,
-		.height = 90,
+		.width = 320,
+		.height = 180,
 	};
 	app.run(&HelloTriangleInfo);
 }

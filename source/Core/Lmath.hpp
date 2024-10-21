@@ -35,6 +35,8 @@ typedef struct int4
 	};
 } ivec4;
 
+static inline bool operator==(const ivec4& a, const ivec4& b) { return a.x == b.x && a.y == b.y && a.z == b.z && a.w == b.w; }
+
 typedef struct int3
 {
 	inline int3() : x(0), y(0), z(0) {}
@@ -155,6 +157,7 @@ typedef struct float4
 } vec4;
 
 static inline float4 operator*(const float4 a, const float4 b) { return float4{a.x * b.x, a.y * b.y, a.z * b.z, a.w * b.w}; }
+static inline bool operator==(const float4 a, const float4 b) { return a.x == b.x && a.y == b.y && a.z == b.z && a.w == b.w; }
 
 static inline void store  (float* p, const float4 a_val) { memcpy((void*)p, (void*)&a_val, sizeof(float)*4); }
 static inline void store_u(float* p, const float4 a_val) { memcpy((void*)p, (void*)&a_val, sizeof(float)*4); }  

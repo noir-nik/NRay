@@ -26,7 +26,7 @@ struct Context
 	void CmdBarrier(CommandResource* cmd);
 	void CmdClearColorImage(CommandResource* cmd, Image& image, float4& color);
 
-	void CmdBlit(CommandResource* cmd, Image& dst, Image& src, uvec2 dstSize, uvec2 srcSize);
+	void CmdBlit (CommandResource* cmd, Image& dst, Image& src, const ivec4& dstRegion, const ivec4& srcRegion);
 
 	// void EndCommandBuffer(VkSubmitInfo submitInfo);
 	// void EndCommandBuffer(CommandResource* cmd, VkSubmitInfo submitInfo);
@@ -986,20 +986,21 @@ void CmdBarrier(CommandResource* cmd) {
 	_ctx.CmdBarrier(cmd);
 }
 
-void CmdBlit(CommandResource* cmd, Image& dst, Image& src, uvec2 dstSize, uvec2 srcSize) {
-	if (dstSize.x == 0 && dstSize.y == 0) {dstSize.x = dst.width; dstSize.y = dst.height;}
-	if (srcSize.x == 0 && srcSize.y == 0) {srcSize.x = src.width; srcSize.y = src.height;}
-	_ctx.CmdBlit(cmd, dst, src, dstSize, srcSize);
+void CmdBlit(CommandResource* cmd, Image& dst, Image& src, ivec4 dstRegion, ivec4 srcRegion) {
+	if (dstRegion == ivec4{}) {dstRegion = {0, 0, (int)dst.width, (int)dst.height};}
+	if (srcRegion == ivec4{}) {srcRegion = {0, 0, (int)src.width, (int)src.height};}
+	_ctx.CmdBlit(cmd, dst, src, dstRegion, srcRegion);
 }
 
 void CmdClearColorImage(CommandResource* cmd, Image &image, float4 color) {
 	_ctx.CmdClearColorImage(cmd, image, color);
 }
 
-void CmdBeginRendering(CommandResource* cmd, const std::vector<Image>& colorAttachs, Image depthAttach, uint32_t layerCount) {
+void CmdBeginRendering(CommandResource* cmd, const std::vector<Image>& colorAttachs, Image depthAttach, uint32_t layerCount, vec4 viewport, ivec4 scissor) {
 
 	ivec2 offset(0, 0);
 	uvec2 extent(0, 0);
+
 	if (colorAttachs.size() > 0) {
 		extent.x = colorAttachs[0].width;
 		extent.y = colorAttachs[0].height;
@@ -1008,11 +1009,11 @@ void CmdBeginRendering(CommandResource* cmd, const std::vector<Image>& colorAtta
 		extent.y = depthAttach.height;
 	}
 
-	VkRenderingInfoKHR renderingInfo{};
+	VkRenderingInfo renderingInfo{};
 	renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
 	renderingInfo.viewMask = 0;
 	renderingInfo.layerCount = layerCount;
-	renderingInfo.renderArea.extent = { uint32_t(extent.x), uint32_t(extent.y) };
+	renderingInfo.renderArea.extent = { uint32_t(extent.x), uint32_t(extent.y)};
 	renderingInfo.renderArea.offset = { offset.x, offset.y };
 	renderingInfo.flags = 0;
 
@@ -1046,20 +1047,29 @@ void CmdBeginRendering(CommandResource* cmd, const std::vector<Image>& colorAtta
 		depthAttachInfo.clearValue.depthStencil = { 1.0f, 0 };
 		renderingInfo.pDepthAttachment = &depthAttachInfo;
 	}
+	
+	if (viewport == vec4(0.0f)) {
+		viewport = { 0.0f, 0.0f, static_cast<float>(extent.x), static_cast<float>(extent.y) };
+	}
 
-	VkViewport viewport = {};
-	viewport.x = 0.0f;
-	viewport.y = 0.0f;
-	viewport.width = static_cast<float>(extent.x);
-	viewport.height = static_cast<float>(extent.y);
-	viewport.minDepth = 0.0f;
-	viewport.maxDepth = 1.0f;
-	VkRect2D scissor = {};
-	scissor.offset = { offset.x, offset.y };
-	scissor.extent.width = extent.x;
-	scissor.extent.height = extent.y;
-	vkCmdSetViewport(cmd->buffer, 0, 1, &viewport);
-	vkCmdSetScissor(cmd->buffer, 0, 1, &scissor);
+	if (scissor == ivec4(0)) {
+		scissor = { offset.x, offset.y, static_cast<int>(extent.x), static_cast<int>(extent.y) };
+	}
+
+	VkViewport _viewport = {};
+	_viewport.x = viewport.x;
+	_viewport.y = viewport.y;
+	_viewport.width = viewport.z;
+	_viewport.height = viewport.w;
+	_viewport.minDepth = 0.0f;
+	_viewport.maxDepth = 1.0f;
+
+	VkRect2D _scissor = {};
+	_scissor.offset = { scissor.x, scissor.y };
+	_scissor.extent.width = scissor.z;
+	_scissor.extent.height = scissor.w;
+	vkCmdSetViewport(cmd->buffer, 0, 1, &_viewport);
+	vkCmdSetScissor(cmd->buffer, 0, 1, &_scissor);
 
 	vkCmdBeginRendering(cmd->buffer, &renderingInfo);
 }
@@ -1732,15 +1742,13 @@ void Context::CreateDevice() {
 					numActiveQueuesInFamilies[i] = 1;
 				};
 				// Each family has at least one queue
-				return {i, 0}; // queue in family i with index 0
+				return {i, 0}; // return queue with index 0
 			}
 		}
 		LOG_ERROR("No queue with flags {0} found", desired_flags);
 		DEBUG_ASSERT(false, "No queue found"); //todo:remove after debugging
 		return {~0U, 0};
 	};
-
-	
 
 	auto find_separate = [&](VkQueueFlags desired_flags) -> std::tuple<uint32_t, uint32_t, bool> {
 		for (uint32_t i = 0; i < familyCount; i++) {
@@ -1756,19 +1764,10 @@ void Context::CreateDevice() {
 		return {familyIndex, indexInFamily, false};
 	};
 
-	// uint32_t maxQueuesInFamily = 0;
-	// for (uint32_t i = 0; i < familyCount; i++) {
-	// 	if (availableFamilies[i].queueCount > maxQueuesInFamily) maxQueuesInFamily = availableFamilies[i].queueCount;
-	// }
-
 	uint32_t maxQueuesInFamily = std::max_element(availableFamilies.begin(), availableFamilies.end(), [](const auto& a, const auto& b) {
 		return a.queueCount < b.queueCount;
 	}).base()->queueCount;
 	
-	auto queueKey = [&maxQueuesInFamily](uint32_t family, uint32_t index) -> uint32_t {
-		return family*maxQueuesInFamily + index;
-	};
-
 	// requestSeparate[Queue::Transfer] = true;
 
 	for (uint32_t i = 0; i < Queue::Count; i++) {
@@ -1779,7 +1778,7 @@ void Context::CreateDevice() {
 		} else {
 			std::tie(queueFamily, indexInFamily) = find_first((VkQueueFlagBits)i);
 		}
-		key = queueKey(queueFamily, indexInFamily);
+		key = queueFamily*maxQueuesInFamily + indexInFamily;
 		uniqueQueues[key].family = queueFamily;
 		uniqueQueues[key].indexInFamily = indexInFamily;
 		queues[i] = &uniqueQueues[key];
@@ -1816,6 +1815,7 @@ void Context::CreateDevice() {
 	// if (supportedFeatures.fillModeNonSolid)  { features2.features.fillModeNonSolid  = VK_TRUE; }
 	// if (supportedFeatures.wideLines)         { features2.features.wideLines         = VK_TRUE; }
 	// if (supportedFeatures.depthClamp)        { features2.features.depthClamp        = VK_TRUE; }
+	// if (supportedFeatures.multiViewport)     { features2.features.multiViewport     = VK_TRUE; }
 
 
 	// DELETE LATER (already checked in CreatePhysicalDevice)
@@ -1884,7 +1884,7 @@ void Context::CreateDevice() {
 	// atomicFeatures.shaderBufferFloat32AtomicAdd = VK_TRUE;
 	// atomicFeatures.pNext = &sync2Features;
 
-	// features2.pNext = &atomicFeatures;
+	features2.pNext = &sync2Features;
 
 	VkDeviceCreateInfo createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -1895,8 +1895,7 @@ void Context::CreateDevice() {
 	createInfo.enabledExtensionCount = static_cast<uint32_t>(requiredExtensions.size());
 	createInfo.ppEnabledExtensionNames = requiredExtensions.data();
 	// createInfo.pEnabledFeatures; // !Should be NULL if pNext is used
-	// createInfo.pNext = &features2; // feature chain
-	createInfo.pNext = &sync2Features; // feature chain
+	createInfo.pNext = &features2; // feature chain
 
 
 	// specify the required layers to the device 
@@ -2594,6 +2593,7 @@ void Context::CmdCopy(CommandResource* cmd, Buffer& dst, void* data, uint32_t si
 	}
 	memcpy(cmd->stagingCpu + cmd->stagingOffset, data, size);
 	CmdCopy(cmd, dst, cmd->staging, size, dstOfsset, cmd->stagingOffset);
+	DEBUG_TRACE("CmdCopy, size: {}, offset: {}", size, cmd->stagingOffset);
 	cmd->stagingOffset += size;
 }
 
@@ -2730,15 +2730,23 @@ void Context::CmdClearColorImage(CommandResource* cmd, Image& img, float4& color
 	vkCmdClearColorImage(cmd->buffer, img.resource->image, (VkImageLayout)img.layout, &clearColor, 1, &range);
 }
 
-void Context::CmdBlit(CommandResource* cmd, Image& dst, Image& src, uvec2 dstSize, uvec2 srcSize) {	
+void Context::CmdBlit(CommandResource* cmd, Image& dst, Image& src, const ivec4& dstRegion, const ivec4& srcRegion) {	
 	VkImageBlit2 blitRegion{ .sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2, .pNext = nullptr };
 
-	blitRegion.srcOffsets[1].x = srcSize.x;
-	blitRegion.srcOffsets[1].y = srcSize.y;
+	blitRegion.srcOffsets[0].x = srcRegion.x;
+	blitRegion.srcOffsets[0].y = srcRegion.y;
+	blitRegion.srcOffsets[0].z = 0;
+
+	blitRegion.srcOffsets[1].x = srcRegion.z;
+	blitRegion.srcOffsets[1].y = srcRegion.w;
 	blitRegion.srcOffsets[1].z = 1;
 
-	blitRegion.dstOffsets[1].x = dstSize.x;
-	blitRegion.dstOffsets[1].y = dstSize.y;
+	blitRegion.dstOffsets[0].x = dstRegion.x;
+	blitRegion.dstOffsets[0].y = dstRegion.y;
+	blitRegion.dstOffsets[0].z = 0;
+
+	blitRegion.dstOffsets[1].x = dstRegion.z;
+	blitRegion.dstOffsets[1].y = dstRegion.w;
 	blitRegion.dstOffsets[1].z = 1;
 
 	blitRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;

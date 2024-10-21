@@ -13,8 +13,11 @@ struct GLFWwindow;
 namespace vkw {
 
 using float4 = Lmath::float4;
-using uvec3 = Lmath::uvec3;
+
+using vec4 = Lmath::vec4;
+using ivec4 = Lmath::ivec4;
 using ivec2 = Lmath::ivec2;
+using uvec3 = Lmath::uvec3;
 using uvec2 = Lmath::uvec2;
 
 using Flags = uint32_t;
@@ -241,12 +244,12 @@ void CmdCopy(CommandResource* cmd, Buffer& dst, Image& src, uint32_t size = 0, u
 void CmdCopy(CommandResource* cmd, Buffer& dst, Image& src, uint32_t size, uint32_t dstOffset, ivec2 imageOffset, ivec2 imageExtent); // size is a No OP
 void CmdBarrier(CommandResource* cmd, Image& img, Layout::ImageLayout newLayout, Layout::ImageLayout oldLayout = Layout::MaxEnum);
 void CmdBarrier(CommandResource* cmd);
-void CmdBlit(CommandResource* cmd, Image& dst, Image& src, uvec2 dstSize = {}, uvec2 srcSize = {});
+void CmdBlit (CommandResource* cmd, Image& dst, Image& src, ivec4 dstRegion = {}, ivec4 srcRegion = {});
 void CmdClearColorImage(CommandResource* cmd, Image &image, float4 color);
 
 Image& GetCurrentSwapchainImage(GLFWwindow* window);
 bool AcquireImage(GLFWwindow* window);
-void CmdBeginRendering(CommandResource* cmd, const std::vector<Image>& colorAttachs, Image depthAttach = {}, uint32_t layerCount = 1);
+void CmdBeginRendering(CommandResource* cmd, const std::vector<Image>& colorAttachs, Image depthAttach = {}, uint32_t layerCount = 1, vec4 viewport = {}, ivec4 scissor = {});
 void CmdEndRendering(CommandResource* cmd);
 // void CmdBeginPresent(CommandResource* cmd);
 // void CmdEndPresent(CommandResource* cmd);

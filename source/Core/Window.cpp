@@ -52,6 +52,14 @@ void WindowChangePosCallback(GLFWwindow* window, int x, int y) {
 	pWindow->SetPos(x, y);
 }
 
+void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
+	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
+	if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS){
+		pWindow->SetResizable(!pWindow->GetResizable());
+	}
+	
+}
+
 void WindowDropCallback(GLFWwindow* window, int count, const char* paths[]) {
 	for (int i = 0; i < count; i++) {
 		ctx.pathsDrop.push_back(paths[i]);
@@ -127,6 +135,8 @@ std::shared_ptr<Window> WindowManager::NewWindow(int width, int height, const ch
 	glfwSetWindowIconifyCallback(glfwWindow, WindowIconifyCallback);
 	// Maximize
 	glfwSetWindowMaximizeCallback(glfwWindow, WindowMaximizeCallback);
+	// Mouse
+	glfwSetMouseButtonCallback(glfwWindow, MouseButtonCallback);
 
 	// window->dirty = false;
     window->ApplyChanges();
