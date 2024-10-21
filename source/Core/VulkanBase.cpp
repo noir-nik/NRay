@@ -392,9 +392,11 @@ void Init(GLFWwindow* window, uint32_t width, uint32_t height) {
 }
 
 bool RecreateSwapChain(GLFWwindow* window, uint32_t width, uint32_t height) {
-	_ctx.DestroySwapChain(_ctx.swapChains.at(window));
-	_ctx.swapChains.erase(window);
-	if (width == 0 || height == 0) {LOG_WARN("Window size is 0, swapchain NOT recreated"); return false;}
+	DEBUG_ASSERT(!(width == 0 || height == 0), "Window size is 0, swapchain NOT recreated");
+	if (_ctx.swapChains.find(window) != _ctx.swapChains.end()) {
+		_ctx.DestroySwapChain(_ctx.swapChains.at(window));
+		_ctx.swapChains.erase(window);
+	}
 	_ctx.CreateSwapChain(window, width, height);
 	LOG_INFO("Swapchain recreated!");
 	return true;
@@ -2198,6 +2200,9 @@ bool AcquireImage(GLFWwindow* window) {
 }
 
 bool GetSwapChainDirty(GLFWwindow* window) {
+	if  (_ctx.swapChains.find(window) == _ctx.swapChains.end()) {
+		return true;
+	};
 	auto& swapChain = _ctx.swapChains[window];
 	return swapChain.dirty;
 }

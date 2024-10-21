@@ -31,7 +31,7 @@ struct Context {
 
 	vkw::Image renderImage;
 
-	std::shared_ptr<Window> window;
+	Window* window;
 
 	void CreateImages(uint32_t width, uint32_t height);
 	void CreateShaders();

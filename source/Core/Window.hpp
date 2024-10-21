@@ -1,5 +1,4 @@
 #pragma once
-
 #include <GLFW/glfw3.h>
 #include <chrono>
 #include <vector>
@@ -25,6 +24,7 @@ class Window {
 	int           monitorIndex       = 0;
 	int           videoModeIndex     = 0;
 	// bool          framebufferResized = false;
+	Lmath::ivec4  windowedSize        = { 30, 30, 640, 480 };
 
 	std::chrono::high_resolution_clock::time_point lastTime;
 	float deltaTime = .0f;
@@ -53,7 +53,7 @@ public:
 	Window(int width, int height, const char* name = "Engine"): width(width), height(height), name(name) {}
 	Window& operator=(const Window&) = delete;
 	Window(const Window&) = delete;
-	~Window(){ if(window) Destroy(); }
+	virtual ~Window(){ if(window) Destroy(); }
 	void ApplyChanges();
 	void UpdateFramebufferSize();
 	void Update();
@@ -66,6 +66,7 @@ public:
 	inline int         GetWidth()                          { return width;                                  }
 	inline int         GetHeight()                         { return height;                                 }
 	inline auto        GetSize()                           { return Lmath::ivec2(width, height);            }
+	inline void        StoreWindowSize()                   { windowedSize = {posX, posY, width, height};    }
 
 	inline int         GetMonitorIndex()                   { return monitorIndex;                           }
 	inline int         GetMonitorWidth()                   { vidMode = glfwGetVideoMode(glfwGetPrimaryMonitor()); return vidMode->width; }
@@ -133,12 +134,26 @@ public:
 	inline std::vector<std::string> GetAndClearPaths()     { auto paths = pathsDrop; pathsDrop.clear(); return paths; }
 };
 
+/* 
+class MainWindow : public Window {
+	std::set<Window*> children;
+public:
+	MainWindow(int width, int height, const char* name) : Window(width, height, name) {}
+
+	~MainWindow() {
+		for (auto child : children) {
+			delete child;
+		}
+	}
+};
+ */
+
 class WindowManager {
 friend class Window;
 public:
 	WindowManager() = delete;
 	static void Init();
-	static std::shared_ptr<Window> NewWindow(int width, int height, const char* name);
+	static Window* NewWindow(int width, int height, const char* name);
 	static void PollEvents(){ glfwPollEvents(); }
 	static void WaitEvents(){ glfwWaitEvents(); }
 	// void OnImgui();

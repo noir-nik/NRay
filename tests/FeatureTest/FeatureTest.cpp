@@ -30,12 +30,9 @@ struct Context {
 	vkw::Buffer vertexBuffer;
 	
 	// vkw::Image renderImage;
-	
-	// std::shared_ptr<Window> window;
-	// GLFWwindow* glfwWindow = nullptr;
-	// std::shared_ptr<Window> window1;
 
-	std::vector<std::shared_ptr<Window>> windows;
+	Window* mainWindow;
+	std::set<Window*> windows;
 	std::unordered_map<Window*, vkw::Image> renderImages;
 
 	void CreateImages(uint32_t width, uint32_t height);
@@ -103,7 +100,6 @@ void FeatureTestApplication::run(FeatureTestInfo* pFeatureTestInfo) {
 	Finish();
 }
 
-bool SwapchainDirty(Window* w);
 void RecreateFrameResources(Window* w);
 void UploadBuffers();
 
@@ -118,7 +114,8 @@ void FeatureTestApplication::Setup() {
 
 void FeatureTestApplication::Create() {
 	auto window = WindowManager::NewWindow(ctx.width, ctx.height, "w0");
-	ctx.windows.push_back(window);
+	ctx.windows.emplace(window);
+	ctx.mainWindow = window;
 	// ctx.window1 = WindowManager::NewWindow(ctx.width, ctx.height, "w1");
 	vkw::Init(window->GetGLFWwindow(), window->GetWidth(), window->GetHeight());
 	window->SetFramebufferSizeCallback(FramebufferCallback);
@@ -126,7 +123,7 @@ void FeatureTestApplication::Create() {
 	window->SetKeyCallback(KeyCallback);
 	window->SetMaxSize(3000, 3000);
 	// ctx.CreateImages(window->GetMonitorWidth(), window->GetMonitorHeight());
-	CreateRenderImage(window.get());
+	CreateRenderImage(window);
 	ctx.vertexBuffer = vkw::CreateBuffer(vertices.size() * sizeof(Vertex), vkw::BufferUsage::Vertex, vkw::Memory::GPU, "Vertex Buffer");
 	UploadBuffers();
 	ctx.CreateShaders();
@@ -207,8 +204,19 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 			if (pWindow->GetMode() == WindowMode::WindowedFullScreen) {
 				pWindow->SetMode(WindowMode::Windowed);
 			} else {
+				pWindow->StoreWindowSize();
 				pWindow->SetMode(WindowMode::WindowedFullScreen);
 			}}
+			break;
+		case GLFW_KEY_N: {
+			auto window = WindowManager::NewWindow(ctx.width, ctx.height, "w1");
+			CreateRenderImage(window);
+			ctx.windows.emplace(window);
+			window->SetFramebufferSizeCallback(FramebufferCallback);
+			window->SetMouseButtonCallback(MouseButtonCallback);
+			window->SetKeyCallback(KeyCallback);
+			window->SetMaxSize(3000, 3000);
+		}
 		default:
 			break;
 		}
@@ -239,12 +247,19 @@ void FramebufferCallback(GLFWwindow* window, int width, int height) {
 
 
 void FeatureTestApplication::MainLoop() {
-	while (ctx.windows[0]->GetAlive()) {
-		for (auto& window : ctx.windows) {DrawWindow(window.get());}
+	Context* c = &ctx;
+	while (ctx.mainWindow->GetAlive()) {
+		for (auto& window : ctx.windows) {DrawWindow(window);}
 		WindowManager::WaitEvents();
-		for (auto& window : ctx.windows) {
+		for (auto& window: ctx.windows) {
 			window->ApplyChanges();
-			RecreateFrameResources(window.get());
+			if (!window->GetAlive()) {
+				ctx.windows.erase(window);
+				ctx.renderImages.erase(window);
+				delete window;
+				continue; 
+			}
+			RecreateFrameResources(window);
 		}
 		// printf("Loop\n");
 		// fflush(stdout);
@@ -285,6 +300,7 @@ void FeatureTestApplication::Draw() {
 }
  */
 void FeatureTestApplication::Finish() {
+	for (auto& window: ctx.windows) {delete window;}
 	ctx = {};
 	vkw::Destroy();
 	
@@ -292,7 +308,7 @@ void FeatureTestApplication::Finish() {
 }
 
 void RecreateFrameResources(Window* window) {
-	if (!window->GetAlive()) { LOG_WARN("RecreateFrameResources: Window is dead"); return;}
+	if (!window->GetAlive()) { LOG_WARN("RecreateFrameResources: Window is dead"); return;} // important
 	if (window->GetIconified()) {LOG_TRACE("RecreateFrameResources: size = 0"); return;};
 
 	vkw::WaitIdle();

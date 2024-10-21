@@ -47,7 +47,7 @@ void WindowMaximizeCallback(GLFWwindow* window, int maximize) {
 	pWindow->SetMaximized(maximize);
 }
 
-void WindowChangePosCallback(GLFWwindow* window, int x, int y) {
+void WindowPosCallback(GLFWwindow* window, int x, int y) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
 	pWindow->SetPos(x, y);
 }
@@ -112,23 +112,23 @@ void WindowManager::Finish() {
 	is_initialized = false;
 }
 
-std::shared_ptr<Window> WindowManager::NewWindow(int width, int height, const char* name) {
+// Window factory
+Window* WindowManager::NewWindow(int width, int height, const char* name) {
 	if (!is_initialized) {
 		Init();
 	}
-	auto window = std::make_shared<Window>(width, height, name);
+	Window* window = new Window(width, height, name);
 
-	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 	GLFWwindow* glfwWindow = glfwCreateWindow(width, height, name, nullptr, nullptr);
 	LOG_INFO("Window::Create({}x{}):{}", width, height, name);
 	window->window = glfwWindow;
-	window->SetUserPointer(window.get());
+	window->SetUserPointer(window);
 	window->GetPos();
 	
 	glfwSetFramebufferSizeCallback(glfwWindow, FramebufferSizeCallback);
 	glfwSetScrollCallback(glfwWindow, ScrollCallback);
-	glfwSetWindowPosCallback(glfwWindow, WindowChangePosCallback);
+	glfwSetWindowPosCallback(glfwWindow, WindowPosCallback);
 	glfwSetDropCallback(glfwWindow, WindowDropCallback);
 	glfwSetWindowCloseCallback(glfwWindow, WindowCloseCallback);
 	// Minimize
@@ -182,7 +182,7 @@ void Window::ApplyChanges() {
 		switch (newMode) {
 		case WindowMode::Windowed:
 			// posY = std::max(posY, 31);
-			glfwSetWindowMonitor(window, nullptr, posX, posY, width, height, GLFW_DONT_CARE);
+			glfwSetWindowMonitor(window, nullptr, windowedSize.x, windowedSize.y, windowedSize.z, windowedSize.w, GLFW_DONT_CARE);
 			if (maximized) {
 				glfwMaximizeWindow(window);
 			}
