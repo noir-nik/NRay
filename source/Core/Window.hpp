@@ -47,13 +47,14 @@ class Window {
 	bool resizable = true;
 	bool decorated = true;
 	bool maximized = false;
+	bool alive = true;
 	// bool shouldClose = false;
 
 public:
 	Window(int width, int height, const char* name = "Engine"): width(width), height(height), name(name) {}
 	Window& operator=(const Window&) = delete;
 	Window(const Window&) = delete;
-	virtual ~Window(){ if(window) Destroy(); }
+	virtual ~Window(){ if(alive) Destroy(); }
 	void ApplyChanges();
 	void UpdateFramebufferSize();
 	void Update();
@@ -111,7 +112,9 @@ public:
 	inline void        SetDrawNeeded(bool value)           { drawNeeded = value; }
 	inline bool        GetSwapchainDirty()                 { return swapchainDirty; }
 	inline void        SetSwapchainDirty(bool value)       { swapchainDirty = value; }
-	inline bool        GetAlive()                          { return window != nullptr; }
+
+	inline bool        GetAlive()                          { return alive; }
+	inline void        SetAlive(bool value)                { alive = value; }
 
 	inline bool        GetResizable()                      { return resizable; }
 	inline void        SetResizable(bool value)            { resizable = value; glfwSetWindowAttrib(window, GLFW_RESIZABLE, value); }

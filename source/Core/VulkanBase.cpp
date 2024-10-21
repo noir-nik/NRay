@@ -14,6 +14,7 @@ static const char *VK_ERROR_STRING(VkResult result);
 namespace vkw {
 
 struct InternalQueue;
+struct SwapChain;
 struct Context
 {	
 	void CmdCopy(CommandResource* cmd, Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset);
@@ -115,65 +116,8 @@ struct Context
 
 	VkDevice device = VK_NULL_HANDLE;
 
-	struct SwapChain {
-		VkSurfaceKHR surface = VK_NULL_HANDLE;	
-		VkSwapchainKHR swapChain = VK_NULL_HANDLE;
-		std::vector<Image> swapChainImages;
-		std::vector<VkImage> swapChainImageResources;
-		std::vector<VkImageView> swapChainViews;
-		std::vector<VkSemaphore> imageAvailableSemaphores;
-		std::vector<VkSemaphore> renderFinishedSemaphores;
-
-		
-		VkSurfaceCapabilitiesKHR surfaceCapabilities;
-		std::vector<VkPresentModeKHR> availablePresentModes;
-		std::vector<VkSurfaceFormatKHR> availableSurfaceFormats;
-
-		std::vector<CommandResource> commandResources; // Owns all command resources
-		
-		uint32_t framesInFlight = 2;
-		uint32_t additionalImages = 0;
-		VkExtent2D extent;
-		uint32_t currentFrame = 0;
-		bool dirty = true;
-		uint32_t currentImageIndex = 0;
-
-		SwapChain() = default;
-		SwapChain(const SwapChain&) = delete;
-		SwapChain& operator=(const SwapChain&) = delete;
-		~SwapChain() { // TODO: check if this is possible
-			// printf("~SwapChain\n");
-		}
-
-		inline Image& GetCurrentSwapChainImage() {
-			return this->swapChainImages[currentImageIndex];
-		}
-
-		inline VkSemaphore GetImageAvailableSemaphore() {
-			return imageAvailableSemaphores[currentFrame];
-		}
-
-		inline VkSemaphore GetRenderFinishedSemaphore() {
-			return renderFinishedSemaphores[currentFrame];
-		}
-
-		CommandResource* GetCommandBuffer() {
-			return &commandResources[currentFrame];
-		}
-
-	};
-
 	GLFWwindow* currentWindow = nullptr;
 	std::unordered_map<GLFWwindow*, SwapChain> swapChains;
-
-
-	// VkSwapchainKHR swapChain = VK_NULL_HANDLE;
-	// std::vector<Image> swapChainImages;
-	// std::vector<VkImage> swapChainImageResources;
-	// std::vector<VkImageView> swapChainViews;
-	// std::vector<VkSemaphore> imageAvailableSemaphores;
-	// std::vector<VkSemaphore> renderFinishedSemaphores;
-
 
 	// VkFormat depthFormat;
 	
@@ -183,12 +127,7 @@ struct Context
 	std::vector<int32_t> availableTLASRID;
 	VkSampler genericSampler;
 
-	// // preferred, warn if not available
-	VkFormat colorFormat = VK_FORMAT_B8G8R8A8_UNORM;
-	// VkFormat colorFormat = VK_FORMAT_B8G8R8A8_SRGB;
-	VkColorSpaceKHR colorSpace  = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
-	VkPresentModeKHR presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
-	VkSampleCountFlagBits numSamples  = VK_SAMPLE_COUNT_1_BIT;
+	
 
 	// const uint32_t initialScratchBufferSize = 64*1024*1024;
 	// Buffer asScratchBuffer;
@@ -215,29 +154,10 @@ struct Context
 	void createBindlessResources();
 	void destroyBindlessResources();
 
-	void CreateSurfaceFormats(SwapChain& swapChain);
-
-	void CreateSwapChain(GLFWwindow* window, uint32_t width, uint32_t height);
-	void CreateSwapChainSoft(GLFWwindow* window, uint32_t width, uint32_t height);
-	void DestroySwapChain(SwapChain& swapChain);
-	void DestroySwapChainSoft (SwapChain& swapChain);
-
-	// void createCommandBuffers();
-	void createCommandBuffers(std::vector<CommandResource>& commandResources);
+	void CreateCommandBuffers(std::vector<CommandResource>& commandResources);
 	void DestroyCommandBuffers(std::vector<CommandResource>& commandResources);
 
-	uint32_t FindMemoryType(uint32_t type, VkMemoryPropertyFlags properties);
-	bool SupportFormat(VkFormat format, VkImageTiling tiling, VkFormatFeatureFlags features);
-
-	// Only outside swapchain
-	// inline CommandResource* GetCurrentCommandResources() {
-	// 	// return queues[currentQueue]->commands[currentFrame];
-	// 	return queues[currentQueue]->commands;
-	// }
-
-	VkExtent2D ChooseExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32_t width, uint32_t height);
-	VkPresentModeKHR ChoosePresentMode(const std::vector<VkPresentModeKHR>& presentModes);
-	VkSurfaceFormatKHR ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats);
+	VkSampleCountFlagBits numSamples  = VK_SAMPLE_COUNT_1_BIT;
 	VkSampler CreateSampler(f32 maxLod);
 
 	PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT;
@@ -255,6 +175,58 @@ struct Context
 };
 static Context _ctx;
 
+struct SwapChain {
+	VkDevice device = VK_NULL_HANDLE;
+	VkSurfaceKHR surface = VK_NULL_HANDLE;	
+	VkSwapchainKHR swapChain = VK_NULL_HANDLE;
+	std::vector<Image> swapChainImages;
+	std::vector<VkImage> swapChainImageResources;
+	std::vector<VkImageView> swapChainViews;
+	std::vector<VkSemaphore> imageAvailableSemaphores;
+	std::vector<VkSemaphore> renderFinishedSemaphores;
+
+	
+	VkSurfaceCapabilitiesKHR surfaceCapabilities;
+	std::vector<VkPresentModeKHR> availablePresentModes;
+	std::vector<VkSurfaceFormatKHR> availableSurfaceFormats;
+
+	std::vector<CommandResource> commandResources; // Owns all command resources
+
+	// // preferred, warn if not available
+	VkFormat colorFormat = VK_FORMAT_B8G8R8A8_UNORM;
+	// VkFormat colorFormat = VK_FORMAT_B8G8R8A8_SRGB;
+	VkColorSpaceKHR colorSpace  = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
+	VkPresentModeKHR presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+	
+	uint32_t framesInFlight = 2;
+	uint32_t additionalImages = 0;
+	VkExtent2D extent;
+	uint32_t currentFrame = 0;
+	bool dirty = true;
+	uint32_t currentImageIndex = 0;
+
+	SwapChain() = default;
+	SwapChain(const SwapChain&) = delete;
+	SwapChain& operator=(const SwapChain&) = delete;
+	~SwapChain() { // TODO: check if this is possible
+		// printf("~SwapChain\n");
+	}
+
+	inline Image&      GetCurrentSwapChainImage()   { return swapChainImages[currentImageIndex];     }
+	inline VkSemaphore GetImageAvailableSemaphore() { return imageAvailableSemaphores[currentFrame]; }
+	inline VkSemaphore GetRenderFinishedSemaphore() { return renderFinishedSemaphores[currentFrame]; }
+	CommandResource*   GetCommandBuffer()           { return &commandResources[currentFrame];        }
+
+	void CreateSurfaceFormats();
+
+	bool SupportFormat(VkFormat format, VkImageTiling tiling, VkFormatFeatureFlags features);
+	VkExtent2D ChooseExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32_t width, uint32_t height);
+	VkPresentModeKHR ChoosePresentMode(const std::vector<VkPresentModeKHR>& presentModes);
+	VkSurfaceFormatKHR ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats);
+
+	void Create(VkDevice device, GLFWwindow* window, uint32_t width, uint32_t height, bool is_recreation = false);
+	void Destroy(bool is_recreation = false);
+};
 
 struct Resource {
 	std::string name;
@@ -366,7 +338,8 @@ static void InitImpl(GLFWwindow* window, uint32_t width, uint32_t height){
 	// _ctx.createDescriptorResources();
 
 	if (_ctx.presentRequested) {
-		_ctx.CreateSwapChain(window, width, height);
+		_ctx.swapChains.try_emplace(window); printf("Window: %p", window);
+		_ctx.swapChains[window].Create(_ctx.device, window, width, height, false);
 		// _ctx.CreateImGui(window);
 	}
 	
@@ -381,7 +354,7 @@ static void InitImpl(GLFWwindow* window, uint32_t width, uint32_t height){
 		// cmd->staging = CreateBuffer(_ctx.stagingBufferSize, BufferUsage::TransferSrc, Memory::CPU, "StagingBuffer[" + std::to_string(cmd->queueFamilyIndex) + "]");
 		// cmd->stagingCpu = (u8*)cmd->staging.resource->allocation->GetMappedData();
 	}
-	_ctx.createCommandBuffers(_ctx.queuesCommandResources);
+	_ctx.CreateCommandBuffers(_ctx.queuesCommandResources);
 }
 
 void Init() {
@@ -396,22 +369,33 @@ void Init(GLFWwindow* window, uint32_t width, uint32_t height) {
 void RecreateSwapChain(GLFWwindow* window, uint32_t width, uint32_t height) {
 	DEBUG_ASSERT(!(width == 0 || height == 0), "Window size is 0, swapchain NOT recreated");
 	if (_ctx.swapChains.find(window) == _ctx.swapChains.end()) {
-		_ctx.CreateSwapChain(window, width, height);
-	} else{
-		_ctx.DestroySwapChainSoft(_ctx.swapChains.at(window));
-		// _ctx.swapChains.erase(window);
-		_ctx.CreateSwapChainSoft(window, width, height);
+		_ctx.swapChains.try_emplace(window);
+		_ctx.swapChains[window].Create(_ctx.device, window, width, height);
+	} else {
+		auto& swapChain = _ctx.swapChains.at(window);
+		swapChain.Destroy(true);
+		swapChain.Create(_ctx.device, window, width, height, true);
 	}
 	LOG_INFO("Swapchain recreated!");
 }
 
+void DestroySwapChain(GLFWwindow* window) {
+	auto& c = _ctx;
+	if (_ctx.swapChains.find(window) != _ctx.swapChains.end()) {
+		auto& swapChain = _ctx.swapChains[window];
+		swapChain.Destroy();
+		// _ctx.swapChains.erase(window);
+	} else {
+		LOG_ERROR("Swapchain not found!");
+	}
+}
 
 void Destroy() {
 	// ImGui_ImplVulkan_Shutdown();
 	// ImGui_ImplGlfw_Shutdown();
-	for (auto& [key, swapChain] : _ctx.swapChains) {
-		_ctx.DestroySwapChain(swapChain);
-	}
+	// for (auto& [key, swapChain] : _ctx.swapChains) {
+	// 	swapChain.Destroy();
+	// }
 
 	_ctx.destroyBindlessResources();
 	// _ctx.destroyDescriptorResources();
@@ -1973,27 +1957,27 @@ void Context::DestroyDevice() {
 }
 
 
-void Context::CreateSurfaceFormats(SwapChain& swapChain) {
+void SwapChain::CreateSurfaceFormats() {
 
 	// get capabilities
-	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, swapChain.surface, &swapChain.surfaceCapabilities);
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(_ctx.physicalDevice, surface, &surfaceCapabilities);
 
 	// get surface formats
 	uint32_t formatCount;
-	vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, swapChain.surface, &formatCount, nullptr);
+	vkGetPhysicalDeviceSurfaceFormatsKHR(_ctx.physicalDevice, surface, &formatCount, nullptr);
 	if (formatCount != 0) {
-		swapChain.availableSurfaceFormats.clear();
-		swapChain.availableSurfaceFormats.resize(formatCount);
-		vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, swapChain.surface, &formatCount, swapChain.availableSurfaceFormats.data());
+		availableSurfaceFormats.clear();
+		availableSurfaceFormats.resize(formatCount);
+		vkGetPhysicalDeviceSurfaceFormatsKHR(_ctx.physicalDevice, surface, &formatCount, availableSurfaceFormats.data());
 	}
 
 	// get present modes
 	uint32_t modeCount;
-	vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, swapChain.surface, &modeCount, nullptr);
+	vkGetPhysicalDeviceSurfacePresentModesKHR(_ctx.physicalDevice, surface, &modeCount, nullptr);
 	if (modeCount != 0) {
-		swapChain.availablePresentModes.clear();
-		swapChain.availablePresentModes.resize(modeCount);
-		vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, swapChain.surface, &modeCount, swapChain.availablePresentModes.data());
+		availablePresentModes.clear();
+		availablePresentModes.resize(modeCount);
+		vkGetPhysicalDeviceSurfacePresentModesKHR(_ctx.physicalDevice, surface, &modeCount, availablePresentModes.data());
 	}
 
 	// set this device as not suitable if no surface formats or present modes available
@@ -2005,29 +1989,27 @@ void Context::CreateSurfaceFormats(SwapChain& swapChain) {
 	}
 }
 
-void Context::CreateSwapChain(GLFWwindow* window, uint32_t width, uint32_t height) {
-
+void SwapChain::Create(VkDevice device, GLFWwindow* window, uint32_t width, uint32_t height, bool is_recreation) {
+	this->device = device;
+	if (!is_recreation) {
+		VkResult res = glfwCreateWindowSurface(_ctx.instance, window, _ctx.allocator, &surface);
+		DEBUG_VK(res, "Failed to create window surface!");
+		DEBUG_TRACE("Created surface.");
+	}
 	
-	swapChains.try_emplace(window);//.second;
-	auto& swapChain = swapChains[window];
-	
-	VkResult res = glfwCreateWindowSurface(_ctx.instance, window, _ctx.allocator, &swapChain.surface);
-	DEBUG_VK(res, "Failed to create window surface!");
-	DEBUG_TRACE("Created surface.");
-
-	_ctx.CreateSurfaceFormats(swapChain);
+	CreateSurfaceFormats();
 
 	// create swapchain
 	{
-		const auto& capabilities = swapChain.surfaceCapabilities;
-		VkSurfaceFormatKHR surfaceFormat = ChooseSurfaceFormat(swapChain.availableSurfaceFormats);
+		const auto& capabilities = surfaceCapabilities;
+		VkSurfaceFormatKHR surfaceFormat = ChooseSurfaceFormat(availableSurfaceFormats);
 		colorFormat = surfaceFormat.format;
 		colorSpace = surfaceFormat.colorSpace;
-		presentMode = ChoosePresentMode(swapChain.availablePresentModes);
-		swapChain.extent = ChooseExtent(capabilities, width, height);
+		presentMode = ChoosePresentMode(availablePresentModes);
+		extent = ChooseExtent(capabilities, width, height);
 
 		// acquire additional images to prevent waiting for driver's internal operations
-		uint32_t imageCount = swapChain.framesInFlight + swapChain.additionalImages;
+		uint32_t imageCount = framesInFlight + additionalImages;
 		
 		if (imageCount < capabilities.minImageCount) {
 			LOG_WARN("Querying less images {} than the necessary: {}", imageCount, capabilities.minImageCount);
@@ -2042,11 +2024,11 @@ void Context::CreateSwapChain(GLFWwindow* window, uint32_t width, uint32_t heigh
 
 		VkSwapchainCreateInfoKHR createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-		createInfo.surface = swapChain.surface;
+		createInfo.surface = surface;
 		createInfo.minImageCount = imageCount;
 		createInfo.imageFormat = surfaceFormat.format;
 		createInfo.imageColorSpace = surfaceFormat.colorSpace;
-		createInfo.imageExtent = swapChain.extent;
+		createInfo.imageExtent = extent;
 		// amount of layers each image consist of
 		// it's 1 unless we are developing some 3D stereoscopic app
 		createInfo.imageArrayLayers = 1;
@@ -2073,23 +2055,23 @@ void Context::CreateSwapChain(GLFWwindow* window, uint32_t width, uint32_t heigh
 		// possible causes are changing settings or resizing window
 		createInfo.oldSwapchain = VK_NULL_HANDLE; // TODO: Pass current swapchain
 
-		auto res = vkCreateSwapchainKHR(device, &createInfo, nullptr, &swapChain.swapChain);
+		auto res = vkCreateSwapchainKHR(device, &createInfo, nullptr, &swapChain);
 		DEBUG_VK(res, "Failed to create swap chain!");
 		
 		// DEBUG_TRACE("Creating swapchain with {} images.", imageCount);
-		vkGetSwapchainImagesKHR(device, swapChain.swapChain, &imageCount, nullptr);
-		swapChain.swapChainImageResources.resize(imageCount);
-		vkGetSwapchainImagesKHR(device, swapChain.swapChain, &imageCount, swapChain.swapChainImageResources.data());
-		// DEBUG_TRACE("Created swapchain with {} images.", swapChain.swapChainImageResources.size());
+		vkGetSwapchainImagesKHR(device, swapChain, &imageCount, nullptr);
+		swapChainImageResources.resize(imageCount);
+		vkGetSwapchainImagesKHR(device, swapChain, &imageCount, swapChainImageResources.data());
+		// DEBUG_TRACE("Created swapchain with {} images.", swapChainImageResources.size());
 	}
 
 	// create image views
-	swapChain.swapChainViews.resize(swapChain.swapChainImageResources.size());
-	swapChain.swapChainImages.resize(swapChain.swapChainImageResources.size());
-	for (size_t i = 0; i < swapChain.swapChainImages.size(); i++) {
+	swapChainViews.resize(swapChainImageResources.size());
+	swapChainImages.resize(swapChainImageResources.size());
+	for (size_t i = 0; i < swapChainImages.size(); i++) {
 		VkImageViewCreateInfo viewInfo{};
 		viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-		viewInfo.image = swapChain.swapChainImageResources[i];
+		viewInfo.image = swapChainImageResources[i];
 		viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
 		viewInfo.format = colorFormat;
 		viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -2098,258 +2080,96 @@ void Context::CreateSwapChain(GLFWwindow* window, uint32_t width, uint32_t heigh
 		viewInfo.subresourceRange.baseArrayLayer = 0;
 		viewInfo.subresourceRange.layerCount = 1;
 
-		auto res = vkCreateImageView(device, &viewInfo, allocator, &swapChain.swapChainViews[i]);
-		DEBUG_VK(res, "Failed to create swapChain.SwapChain image view!");
+		auto res = vkCreateImageView(device, &viewInfo, _ctx.allocator, &swapChainViews[i]);
+		DEBUG_VK(res, "Failed to create SwapChain image view!");
 
-		swapChain.swapChainImages[i].resource = std::make_shared<ImageResource>();
-		swapChain.swapChainImages[i].resource->fromSwapchain = true;
-		swapChain.swapChainImages[i].resource->image = swapChain.swapChainImageResources[i];
-		swapChain.swapChainImages[i].resource->view = swapChain.swapChainViews[i];
-		swapChain.swapChainImages[i].layout = Layout::Undefined;
-		swapChain.swapChainImages[i].width = width;
-		swapChain.swapChainImages[i].height = height;
-		swapChain.swapChainImages[i].aspect = Aspect::Color;
+		swapChainImages[i].resource = std::make_shared<ImageResource>();
+		swapChainImages[i].resource->fromSwapchain = true;
+		swapChainImages[i].resource->image = swapChainImageResources[i];
+		swapChainImages[i].resource->view = swapChainViews[i];
+		swapChainImages[i].layout = Layout::Undefined;
+		swapChainImages[i].width = width;
+		swapChainImages[i].height = height;
+		swapChainImages[i].aspect = Aspect::Color;
 	}
 
-	for (size_t i = 0; i < swapChain.swapChainImages.size(); i++) {
+	for (size_t i = 0; i < swapChainImages.size(); i++) {
 		std::string strName = ("SwapChain Image " + std::to_string(i));
 		VkDebugUtilsObjectNameInfoEXT name = {
 			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
 			.objectType = VkObjectType::VK_OBJECT_TYPE_IMAGE,
-			.objectHandle = (uint64_t)(VkImage)swapChain.swapChainImageResources[i],
+			.objectHandle = (uint64_t)(VkImage)swapChainImageResources[i],
 			.pObjectName = strName.c_str(),
 		};
-		_ctx.vkSetDebugUtilsObjectNameEXT(_ctx.device, &name);
-		swapChain.swapChainImages[i].resource->name = strName;
+		_ctx.vkSetDebugUtilsObjectNameEXT(device, &name);
+		swapChainImages[i].resource->name = strName;
 		strName = ("SwapChain View " + std::to_string(i));
 		name = {
 			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
 			.objectType = VkObjectType::VK_OBJECT_TYPE_IMAGE_VIEW,
-			.objectHandle = (uint64_t)(VkImageView)swapChain.swapChainViews[i],
+			.objectHandle = (uint64_t)(VkImageView)swapChainViews[i],
 			.pObjectName = strName.c_str(),
 		};
-		_ctx.vkSetDebugUtilsObjectNameEXT(_ctx.device, &name);
+		_ctx.vkSetDebugUtilsObjectNameEXT(device, &name);
 	}
 
-	// synchronization objects
+	if (!is_recreation)
 	{
-		swapChain.imageAvailableSemaphores.resize(swapChain.framesInFlight);
-		swapChain.renderFinishedSemaphores.resize(swapChain.framesInFlight);
+		// synchronization objects
+		imageAvailableSemaphores.resize(framesInFlight);
+		renderFinishedSemaphores.resize(framesInFlight);
 
 		VkSemaphoreCreateInfo semaphoreInfo{};
 		semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-		for (size_t i = 0; i < swapChain.framesInFlight; i++) {
-			auto res = vkCreateSemaphore(device, &semaphoreInfo, nullptr, &swapChain.imageAvailableSemaphores[i]);
+		for (size_t i = 0; i < framesInFlight; i++) {
+			auto res = vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvailableSemaphores[i]);
 			DEBUG_VK(res, "Failed to create semaphore!");
-			res = vkCreateSemaphore(device, &semaphoreInfo, nullptr, &swapChain.renderFinishedSemaphores[i]);
+			res = vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphores[i]);
 			DEBUG_VK(res, "Failed to create semaphore!");
 		}
-	}
 
-	swapChain.commandResources.resize(swapChain.framesInFlight);
-	for (auto& cmd: swapChain.commandResources) {
-		cmd.queue = queues[Queue::Graphics];
+		// command buffers
+		commandResources.resize(framesInFlight);
+		for (auto& cmd: commandResources) {
+			cmd.queue = _ctx.queues[Queue::Graphics]; // TODO: make configurable
+		}
+		_ctx.CreateCommandBuffers(commandResources);
 	}
-	createCommandBuffers(swapChain.commandResources);
 
 	LOG_INFO("Created Swapchain {}", _ctx.swapChains.size());
-	swapChain.currentFrame = 0;
-	swapChain.currentImageIndex = 0;
-	swapChain.dirty = false;
+	currentFrame = 0;
+	currentImageIndex = 0;
+	dirty = false;
 }
 
-void Context::CreateSwapChainSoft(GLFWwindow* window, uint32_t width, uint32_t height) {
-	auto& swapChain = swapChains[window];
-
-	// VkResult res = glfwCreateWindowSurface(_ctx.instance, window, _ctx.allocator, &swapChain.surface);
-	// DEBUG_VK(res, "Failed to create window surface!");
-	// DEBUG_TRACE("Created surface.");
+void SwapChain::Destroy(bool is_recreation) {
+	for (size_t i = 0; i < swapChainImages.size(); i++) {
+		vkDestroyImageView(device, swapChainViews[i], _ctx.allocator);
+	}
 	
-	_ctx.CreateSurfaceFormats(swapChain);
-
-	// create swapchain
-	{
-		const auto& capabilities = swapChain.surfaceCapabilities;
-		VkSurfaceFormatKHR surfaceFormat = ChooseSurfaceFormat(swapChain.availableSurfaceFormats);
-		colorFormat = surfaceFormat.format;
-		colorSpace = surfaceFormat.colorSpace;
-		presentMode = ChoosePresentMode(swapChain.availablePresentModes);
-		swapChain.extent = ChooseExtent(capabilities, width, height);
-
-		// acquire additional images to prevent waiting for driver's internal operations
-		uint32_t imageCount = swapChain.framesInFlight + swapChain.additionalImages;
-		
-		if (imageCount < capabilities.minImageCount) {
-			LOG_WARN("Querying less images {} than the necessary: {}", imageCount, capabilities.minImageCount);
-			imageCount = capabilities.minImageCount;
+	if (!is_recreation) {
+		for (size_t i = 0; i < framesInFlight; i++) {
+			vkDestroySemaphore(device, imageAvailableSemaphores[i], _ctx.allocator);
+			vkDestroySemaphore(device, renderFinishedSemaphores[i], _ctx.allocator);
 		}
-
-		// prevent exceeding the max image count
-		if (capabilities.maxImageCount > 0 && imageCount > capabilities.maxImageCount) {
-			LOG_WARN("Querying more images than supported. imageCount set to maxImageCount.");
-			imageCount = capabilities.maxImageCount;
-		}
-
-		VkSwapchainCreateInfoKHR createInfo{};
-		createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-		createInfo.surface = swapChain.surface;
-		createInfo.minImageCount = imageCount;
-		createInfo.imageFormat = surfaceFormat.format;
-		createInfo.imageColorSpace = surfaceFormat.colorSpace;
-		createInfo.imageExtent = swapChain.extent;
-		// amount of layers each image consist of
-		// it's 1 unless we are developing some 3D stereoscopic app
-		createInfo.imageArrayLayers = 1;
-		// if we want to render to a separate image first to perform post-processing
-		// we should change this image usage
-		createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | 
-								VK_IMAGE_USAGE_TRANSFER_DST_BIT;// TODO: remove transfer dst if not drawing to swapchain image
-
-		// don't support different graphics and present family
-		createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-		// here we could specify a transformation to be applied on the images of the swap chain
-		createInfo.preTransform = capabilities.currentTransform;
-
-		// here we could blend the images with other windows in the window system
-		// to ignore this blending we set OPAQUE
-		createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-
-		createInfo.presentMode = presentMode;
-		// here we clip pixels behind our window
-		createInfo.clipped = true;
-
-		// here we specify a handle to when the swapchain become invalid
-		// possible causes are changing settings or resizing window
-		createInfo.oldSwapchain = VK_NULL_HANDLE; // TODO: Pass current swapchain
-
-		auto res = vkCreateSwapchainKHR(device, &createInfo, nullptr, &swapChain.swapChain);
-		DEBUG_VK(res, "Failed to create swap chain!");
-		
-		// DEBUG_TRACE("Creating swapchain with {} images.", imageCount);
-		vkGetSwapchainImagesKHR(device, swapChain.swapChain, &imageCount, nullptr);
-		swapChain.swapChainImageResources.resize(imageCount);
-		vkGetSwapchainImagesKHR(device, swapChain.swapChain, &imageCount, swapChain.swapChainImageResources.data());
-		// DEBUG_TRACE("Created swapchain with {} images.", swapChain.swapChainImageResources.size());
+		imageAvailableSemaphores.clear();
+		renderFinishedSemaphores.clear();
+		availablePresentModes.clear();
+		availableSurfaceFormats.clear();
 	}
 
-	// create image views
-	swapChain.swapChainViews.resize(swapChain.swapChainImageResources.size());
-	swapChain.swapChainImages.resize(swapChain.swapChainImageResources.size());
-	for (size_t i = 0; i < swapChain.swapChainImages.size(); i++) {
-		VkImageViewCreateInfo viewInfo{};
-		viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-		viewInfo.image = swapChain.swapChainImageResources[i];
-		viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-		viewInfo.format = colorFormat;
-		viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		viewInfo.subresourceRange.baseMipLevel = 0;
-		viewInfo.subresourceRange.levelCount = 1;
-		viewInfo.subresourceRange.baseArrayLayer = 0;
-		viewInfo.subresourceRange.layerCount = 1;
-
-		auto res = vkCreateImageView(device, &viewInfo, allocator, &swapChain.swapChainViews[i]);
-		DEBUG_VK(res, "Failed to create swapChain.SwapChain image view!");
-
-		swapChain.swapChainImages[i].resource = std::make_shared<ImageResource>();
-		swapChain.swapChainImages[i].resource->fromSwapchain = true;
-		swapChain.swapChainImages[i].resource->image = swapChain.swapChainImageResources[i];
-		swapChain.swapChainImages[i].resource->view = swapChain.swapChainViews[i];
-		swapChain.swapChainImages[i].layout = Layout::Undefined;
-		swapChain.swapChainImages[i].width = width;
-		swapChain.swapChainImages[i].height = height;
-		swapChain.swapChainImages[i].aspect = Aspect::Color;
+	vkDestroySwapchainKHR(device, swapChain, _ctx.allocator);
+	if (!is_recreation) {
+		vkDestroySurfaceKHR(_ctx.instance, surface, _ctx.allocator);
+		_ctx.DestroyCommandBuffers(commandResources);
 	}
 
-	for (size_t i = 0; i < swapChain.swapChainImages.size(); i++) {
-		std::string strName = ("SwapChain Image " + std::to_string(i));
-		VkDebugUtilsObjectNameInfoEXT name = {
-			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-			.objectType = VkObjectType::VK_OBJECT_TYPE_IMAGE,
-			.objectHandle = (uint64_t)(VkImage)swapChain.swapChainImageResources[i],
-			.pObjectName = strName.c_str(),
-		};
-		_ctx.vkSetDebugUtilsObjectNameEXT(_ctx.device, &name);
-		swapChain.swapChainImages[i].resource->name = strName;
-		strName = ("SwapChain View " + std::to_string(i));
-		name = {
-			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-			.objectType = VkObjectType::VK_OBJECT_TYPE_IMAGE_VIEW,
-			.objectHandle = (uint64_t)(VkImageView)swapChain.swapChainViews[i],
-			.pObjectName = strName.c_str(),
-		};
-		_ctx.vkSetDebugUtilsObjectNameEXT(_ctx.device, &name);
-	}
-
-	// synchronization objects
-	// {
-	// 	swapChain.imageAvailableSemaphores.resize(swapChain.framesInFlight);
-	// 	swapChain.renderFinishedSemaphores.resize(swapChain.framesInFlight);
-
-	// 	VkSemaphoreCreateInfo semaphoreInfo{};
-	// 	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-	// 	for (size_t i = 0; i < swapChain.framesInFlight; i++) {
-	// 		auto res = vkCreateSemaphore(device, &semaphoreInfo, allocator, &swapChain.imageAvailableSemaphores[i]);
-	// 		DEBUG_VK(res, "Failed to create semaphore!");
-	// 		res = vkCreateSemaphore(device, &semaphoreInfo, allocator, &swapChain.renderFinishedSemaphores[i]);
-	// 		DEBUG_VK(res, "Failed to create semaphore!");
-	// 	}
-	// }
-
-	// swapChain.commandResources.resize(swapChain.framesInFlight);
-	// for (auto& cmd: swapChain.commandResources) {
-	// 	cmd.queue = queues[Queue::Graphics];
-	// }
-	// createCommandBuffers(swapChain.commandResources);
-
-	LOG_INFO("Created Swapchain {}", _ctx.swapChains.size());
-	swapChain.currentFrame = 0;
-	swapChain.currentImageIndex = 0;
-	swapChain.dirty = false;
+	swapChainViews.clear();
+	swapChainImages.clear();
+	swapChain = VK_NULL_HANDLE;
 }
 
-
-void Context::DestroySwapChain(SwapChain& swapChain) {
-	for (size_t i = 0; i < swapChain.swapChainImages.size(); i++) {
-		vkDestroyImageView(device, swapChain.swapChainViews[i], allocator);
-	}
-
-	for (size_t i = 0; i < swapChain.framesInFlight; i++) {
-		vkDestroySemaphore(device, swapChain.imageAvailableSemaphores[i], allocator);
-		vkDestroySemaphore(device, swapChain.renderFinishedSemaphores[i], allocator);
-	}
-
-	vkDestroySwapchainKHR(device, swapChain.swapChain, allocator);
-	vkDestroySurfaceKHR(instance, swapChain.surface, allocator);
-
-	DestroyCommandBuffers(swapChain.commandResources);
-
-	swapChain.availablePresentModes.clear();
-	swapChain.availableSurfaceFormats.clear();
-
-	swapChain.imageAvailableSemaphores.clear();
-	swapChain.renderFinishedSemaphores.clear();
-	swapChain.swapChainViews.clear();
-	swapChain.swapChainImages.clear();
-	swapChain.swapChain = VK_NULL_HANDLE;
-}
-
-void Context::DestroySwapChainSoft(SwapChain& swapChain) {
-	for (size_t i = 0; i < swapChain.swapChainImages.size(); i++) {
-		vkDestroyImageView(device, swapChain.swapChainViews[i], allocator);
-	}
-
-	vkDestroySwapchainKHR(device, swapChain.swapChain, allocator);
-
-	// swapChain.availablePresentModes.clear();
-	// swapChain.availableSurfaceFormats.clear();
-
-	swapChain.swapChainViews.clear();
-	swapChain.swapChainImages.clear();
-	swapChain.swapChain = VK_NULL_HANDLE;
-}
 
 bool AcquireImage(GLFWwindow* window) {
 	auto& swapChain = _ctx.swapChains[window];
@@ -2635,7 +2455,7 @@ void Context::destroyBindlessResources(){
 }
 
 
-void Context::createCommandBuffers(std::vector<CommandResource>& commandResources) {
+void Context::CreateCommandBuffers(std::vector<CommandResource>& commandResources) {
 	VkCommandPoolCreateInfo poolInfo{};
 	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	poolInfo.flags = 0; // ?VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT
@@ -2686,22 +2506,9 @@ void Context::DestroyCommandBuffers(std::vector<CommandResource>& commandResourc
 	commandResources.clear();
 }
 
-uint32_t Context::FindMemoryType(uint32_t type, VkMemoryPropertyFlags properties) {
-	for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; i++) {
-		if (type & (1 << i)) {
-			if ((memoryProperties.memoryTypes[i].propertyFlags & properties) == properties) {
-				return i;
-			}
-		}
-	}
-
-	ASSERT(false, "failed to find suitable memory type");
-}
-
-
-bool Context::SupportFormat(VkFormat format, VkImageTiling tiling, VkFormatFeatureFlags features) {
+bool SwapChain::SupportFormat(VkFormat format, VkImageTiling tiling, VkFormatFeatureFlags features) {
 	VkFormatProperties props;
-	vkGetPhysicalDeviceFormatProperties(physicalDevice, format, &props);
+	vkGetPhysicalDeviceFormatProperties(_ctx.physicalDevice, format, &props);
 
 	if (tiling == VK_IMAGE_TILING_LINEAR && (props.linearTilingFeatures & features) == features) {
 		return true;
@@ -2712,7 +2519,7 @@ bool Context::SupportFormat(VkFormat format, VkImageTiling tiling, VkFormatFeatu
 	return false;
 }
 
-VkSurfaceFormatKHR Context::ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats) {
+VkSurfaceFormatKHR SwapChain::ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats) {
 	for (const auto& availableFormat : formats) {
 		if (availableFormat.format == colorFormat
 			&& availableFormat.colorSpace == colorSpace) {
@@ -2723,7 +2530,7 @@ VkSurfaceFormatKHR Context::ChooseSurfaceFormat(const std::vector<VkSurfaceForma
 	return formats[0];
 }
 
-VkPresentModeKHR Context::ChoosePresentMode(const std::vector<VkPresentModeKHR>& presentModes) {
+VkPresentModeKHR SwapChain::ChoosePresentMode(const std::vector<VkPresentModeKHR>& presentModes) {
 	for (const auto& mode : presentModes) {
 		if (mode == presentMode) {
 			return mode;
@@ -2734,7 +2541,7 @@ VkPresentModeKHR Context::ChoosePresentMode(const std::vector<VkPresentModeKHR>&
 	return VK_PRESENT_MODE_FIFO_KHR;
 }
 
-VkExtent2D Context::ChooseExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32_t width, uint32_t height) {
+VkExtent2D SwapChain::ChooseExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32_t width, uint32_t height) {
 	if (capabilities.currentExtent.width != UINT32_MAX) {
 		return capabilities.currentExtent;
 	}

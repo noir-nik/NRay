@@ -255,12 +255,13 @@ void FeatureTestApplication::MainLoop() {
 			auto window = *it;
 			window->ApplyChanges();
 			if (!window->GetAlive()) {
-				delete window;
 				ctx.renderImages.erase(window);
 				it = ctx.windows.erase(it);
 				if (window == ctx.mainWindow) {
 					ctx.mainWindow = nullptr;
 				}
+				vkw::DestroySwapChain(window->GetGLFWwindow());
+				delete window;
 				continue;
 			}
 			RecreateFrameResources(window);
@@ -305,10 +306,9 @@ void FeatureTestApplication::Draw() {
 }
  */
 void FeatureTestApplication::Finish() {
-	for (auto& window: ctx.windows) {delete window;}
+	for (auto& window: ctx.windows) {vkw::DestroySwapChain(window->GetGLFWwindow()); delete window;}
 	ctx = {};
 	vkw::Destroy();
-	
 	WindowManager::Finish();
 }
 

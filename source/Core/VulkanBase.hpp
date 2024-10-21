@@ -295,6 +295,7 @@ void Init();
 void Init(GLFWwindow* window, uint32_t width, uint32_t height);
 
 void RecreateSwapChain(GLFWwindow* window, uint32_t width, uint32_t height);
+void DestroySwapChain(GLFWwindow* window);
 
 void Destroy();
 

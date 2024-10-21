@@ -3,7 +3,7 @@
 #include "Window.hpp"
 // #include <imgui/imgui.h>
 
-#define WINDOW_ALIVE_GUARD if (window == nullptr) {LOG_WARN("ALIVE_GUARD {}:{}", __FILE__, __LINE__) return;}
+#define WINDOW_ALIVE_GUARD if (!alive) {LOG_WARN("ALIVE_GUARD {}:{}", __FILE__, __LINE__) return;}
 
 namespace {
 struct Context
@@ -147,7 +147,7 @@ Window* WindowManager::NewWindow(int width, int height, const char* name) {
 void Window::Destroy() {
 	glfwGetWindowPos(window, &posX, &posY);
 	glfwDestroyWindow(window);
-	window = nullptr;
+	alive = false;
 	LOG_INFO("Window::Destroy()");
 	// WindowManager::windowCount--;
 	// if (WindowManager::windowCount == 0) {
