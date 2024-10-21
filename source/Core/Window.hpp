@@ -47,7 +47,7 @@ class Window {
 	bool resizable = true;
 	bool decorated = true;
 	bool maximized = false;
-	bool shouldClose = false;
+	// bool shouldClose = false;
 
 public:
 	Window(int width, int height, const char* name = "Engine"): width(width), height(height), name(name) {}
@@ -73,8 +73,8 @@ public:
 
 	inline float       GetDeltaTime()                      { return deltaTime;                              }
 
-	inline bool        GetShouldClose()                    { return shouldClose = glfwWindowShouldClose(window); }
-	inline void        SetShouldClose(bool shouldClose)    { glfwSetWindowShouldClose(window, shouldClose); }
+	inline bool        GetShouldClose()                    { return glfwWindowShouldClose(window);          }
+	inline void        SetShouldClose(bool value)          { glfwSetWindowShouldClose(window, value);       }
 
 	inline float&      GetScroll()                         { return scroll;                                 }
 	inline float&      GetDeltaScroll()                    { return deltaScroll;                            }
@@ -93,7 +93,10 @@ public:
 	inline void        SetPos(int x, int y)                { posX = x; posY = y; }
 
 	inline WindowMode  GetMode()                           { return mode; }
-	inline void        SetMode(WindowMode mode)            { newMode = mode; }
+	inline void        SetMode(WindowMode value)           { newMode = value; }
+
+	// inline bool        GetFullscreen()                     { return mode == WindowMode::FullScreen; }
+
 
 	// inline void        SetFramebufferResized()             { framebufferResized = true; }
 
@@ -121,6 +124,10 @@ public:
 	inline void        SetMaxSize(int w, int h)            { glfwSetWindowSizeLimits(window, GLFW_DONT_CARE, GLFW_DONT_CARE, w, h); }
 
 	inline void        SetFramebufferSizeCallback(void(*callback)(GLFWwindow* window, int width, int height)) { glfwSetFramebufferSizeCallback(window, callback); }
+	inline void        SetDropCallback(void(*callback)(GLFWwindow* window, int count, const char** paths)) { glfwSetDropCallback(window, callback); }
+	inline void        SetKeyCallback(void(*callback)(GLFWwindow* window, int key, int scancode, int action, int mods)) { glfwSetKeyCallback(window, callback); }
+	inline void        SetMouseButtonCallback(void(*callback)(GLFWwindow* window, int button, int action, int mods)) { glfwSetMouseButtonCallback(window, callback); }
+	inline void        SetScrollCallback(void(*callback)(GLFWwindow* window, double xoffset, double yoffset)) { glfwSetScrollCallback(window, callback); }
 
 
 	inline std::vector<std::string> GetAndClearPaths()     { auto paths = pathsDrop; pathsDrop.clear(); return paths; }

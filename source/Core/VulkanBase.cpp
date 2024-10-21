@@ -391,13 +391,13 @@ void Init(GLFWwindow* window, uint32_t width, uint32_t height) {
 	InitImpl(window, width, height);
 }
 
-void OnSurfaceUpdate(GLFWwindow* window, uint32_t width, uint32_t height) {
-	_ctx.DestroySwapChain(_ctx.swapChains[window]);
+bool RecreateSwapChain(GLFWwindow* window, uint32_t width, uint32_t height) {
+	_ctx.DestroySwapChain(_ctx.swapChains.at(window));
 	_ctx.swapChains.erase(window);
-	if (window == nullptr) {LOG_WARN("Window is null, swapchain NOT recreated"); return;}
-	if (width == 0 || height == 0) {LOG_WARN("Window size is 0, swapchain NOT recreated"); return;}
+	if (width == 0 || height == 0) {LOG_WARN("Window size is 0, swapchain NOT recreated"); return false;}
 	_ctx.CreateSwapChain(window, width, height);
 	LOG_INFO("Swapchain recreated!");
+	return true;
 }
 
 

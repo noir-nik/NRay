@@ -52,13 +52,13 @@ void WindowChangePosCallback(GLFWwindow* window, int x, int y) {
 	pWindow->SetPos(x, y);
 }
 
-void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
-	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
-	if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS){
-		pWindow->SetResizable(!pWindow->GetResizable());
-	}
+// void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
+// 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
+// 	if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS){
+// 		pWindow->SetResizable(!pWindow->GetResizable());
+// 	}
 	
-}
+// }
 
 void WindowDropCallback(GLFWwindow* window, int count, const char* paths[]) {
 	for (int i = 0; i < count; i++) {
@@ -136,7 +136,7 @@ std::shared_ptr<Window> WindowManager::NewWindow(int width, int height, const ch
 	// Maximize
 	glfwSetWindowMaximizeCallback(glfwWindow, WindowMaximizeCallback);
 	// Mouse
-	glfwSetMouseButtonCallback(glfwWindow, MouseButtonCallback);
+	// glfwSetMouseButtonCallback(glfwWindow, MouseButtonCallback);
 
 	// window->dirty = false;
     window->ApplyChanges();
@@ -158,7 +158,7 @@ void Window::Destroy() {
 void Window::ApplyChanges() {
 	WINDOW_ALIVE_GUARD
 	// Destroy if should close
-	if (shouldClose) {
+	if (GetShouldClose()) {
 		Destroy();
 		return;
 	}
@@ -182,7 +182,7 @@ void Window::ApplyChanges() {
 		switch (newMode) {
 		case WindowMode::Windowed:
 			// posY = std::max(posY, 31);
-			// glfwSetWindowMonitor(window, nullptr, posX, posY, width, height, GLFW_DONT_CARE);
+			glfwSetWindowMonitor(window, nullptr, posX, posY, width, height, GLFW_DONT_CARE);
 			if (maximized) {
 				glfwMaximizeWindow(window);
 			}
