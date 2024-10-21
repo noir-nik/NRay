@@ -248,18 +248,23 @@ void FramebufferCallback(GLFWwindow* window, int width, int height) {
 
 void FeatureTestApplication::MainLoop() {
 	Context* c = &ctx;
-	while (ctx.mainWindow->GetAlive()) {
+	while (ctx.mainWindow != nullptr) {
 		for (auto& window : ctx.windows) {DrawWindow(window);}
 		WindowManager::WaitEvents();
-		for (auto& window: ctx.windows) {
+		for (auto it = ctx.windows.begin(); it != ctx.windows.end();) {
+			auto window = *it;
 			window->ApplyChanges();
 			if (!window->GetAlive()) {
-				ctx.windows.erase(window);
-				ctx.renderImages.erase(window);
 				delete window;
-				continue; 
+				ctx.renderImages.erase(window);
+				it = ctx.windows.erase(it);
+				if (window == ctx.mainWindow) {
+					ctx.mainWindow = nullptr;
+				}
+				continue;
 			}
 			RecreateFrameResources(window);
+			++it;
 		}
 		// printf("Loop\n");
 		// fflush(stdout);
@@ -317,8 +322,8 @@ void RecreateFrameResources(Window* window) {
 	if (swapChainDirty || windowDirty) {
 		LOG_INFO("DIRTY FRAME RESOURCES");
 		window->UpdateFramebufferSize();
-		auto recreated = vkw::RecreateSwapChain(window->GetGLFWwindow(), window->GetWidth(), window->GetHeight());
-		if (recreated) window->SetSwapchainDirty(false);
+		vkw::RecreateSwapChain(window->GetGLFWwindow(), window->GetWidth(), window->GetHeight());
+		window->SetSwapchainDirty(false);
 		window->SetDrawNeeded(true);
 	}
 
