@@ -23,6 +23,7 @@ struct Context
 	void CmdCopy(CommandResource* cmd, Buffer& dst, Image& src, uint32_t srcOffset);
 	void CmdCopy(CommandResource* cmd, Buffer& dst, Image& src, uint32_t size, uint32_t dstOffset, ivec2 imageOffset, ivec2 imageExtent);
 	void CmdBarrier(CommandResource* cmd, Image& img, Layout::ImageLayout newLayout, Layout::ImageLayout oldLayout);
+	void CmdBarrier(CommandResource* cmd, Buffer& buf);
 	void CmdBarrier(CommandResource* cmd);
 	void CmdClearColorImage(CommandResource* cmd, Image& image, float4& color);
 
@@ -283,7 +284,7 @@ struct ImageResource : Resource {
 
 	virtual ~ImageResource() {
 		if (!fromSwapchain) {
-			// printf("destroy image %s\n", name.c_str());
+			printf("destroy image %s\n", name.c_str());
 			for (VkImageView layerView : layersView) {
 				vkDestroyImageView(_ctx.device, layerView, _ctx.allocator);
 			}
@@ -299,7 +300,7 @@ struct ImageResource : Resource {
 				// imguiRIDs.clear();
 			}
 		} else {
-			// printf("FROM SWAPCHAIN %s\n", name.c_str());
+			printf("FROM SWAPCHAIN %s\n", name.c_str());
 		}
 	}
 };
@@ -982,6 +983,10 @@ void CmdBarrier(CommandResource* cmd, Image& img, Layout::ImageLayout newLayout,
 	_ctx.CmdBarrier(cmd, img, newLayout, oldLayout);
 }
 
+void CmdBarrier (CommandResource* cmd, Buffer& buf) {
+	_ctx.CmdBarrier(cmd, buf);
+}
+
 void CmdBarrier(CommandResource* cmd) {
 	_ctx.CmdBarrier(cmd);
 }
@@ -1213,39 +1218,30 @@ void EndCommandBuffer(CommandResource* cmd) {
 	cmd->currentPipeline = nullptr;
 }
 
-struct SubmitInfo
-{
-	CommandResource* commandBuffer   = nullptr;
-	Semaphore*       waitSemaphore   = nullptr;
-	uint64_t         waitStages      = PipelineStage::None;
-	Semaphore*       signalSemaphore = nullptr;
-	uint64_t         signalStages    = PipelineStage::None;
-};
-
-void QueueSubmit(const SubmitInfo* submitInfo) {
+void QueueSubmit(const SubmitInfo& submitInfo) {
 
 	VkSemaphoreSubmitInfo waitInfo { VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO };
-	waitInfo.semaphore = (VkSemaphore)submitInfo->waitSemaphore;
-	waitInfo.stageMask = (VkPipelineStageFlags2)submitInfo->waitStages;
+	waitInfo.semaphore = (VkSemaphore)submitInfo.waitSemaphore;
+	waitInfo.stageMask = (VkPipelineStageFlags2)submitInfo.waitStages;
 	// waitInfo.value = 1; // Only for timeline semaphores
 
 	VkSemaphoreSubmitInfo signalInfo { VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO };
-	signalInfo.semaphore = (VkSemaphore)submitInfo->signalSemaphore;
-	signalInfo.stageMask = (VkPipelineStageFlags2)submitInfo->signalStages;
+	signalInfo.semaphore = (VkSemaphore)submitInfo.signalSemaphore;
+	signalInfo.stageMask = (VkPipelineStageFlags2)submitInfo.signalStages;
 
 	VkCommandBufferSubmitInfo cmdInfo { VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO };
-	cmdInfo.commandBuffer = submitInfo->commandBuffer->buffer;
+	cmdInfo.commandBuffer = submitInfo.commandBuffer->buffer;
 
 	VkSubmitInfo2 info{};
 	info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
-	info.waitSemaphoreInfoCount = 1; // TODO pass by parameter
+	info.waitSemaphoreInfoCount = submitInfo.waitSemaphore ? 1 : 0; // TODO pass by parameter
 	info.pWaitSemaphoreInfos = &waitInfo;
 	info.commandBufferInfoCount = 1;
 	info.pCommandBufferInfos = &cmdInfo;
-	info.signalSemaphoreInfoCount = 1;
+	info.signalSemaphoreInfoCount = submitInfo.signalSemaphore ? 1 : 0;
 	info.pSignalSemaphoreInfos = &signalInfo;
 
-	auto res = vkQueueSubmit2(submitInfo->commandBuffer->queue->queue, 1, &info, submitInfo->commandBuffer->fence);
+	auto res = vkQueueSubmit2(submitInfo.commandBuffer->queue->queue, 1, &info, submitInfo.commandBuffer->fence);
 	DEBUG_VK(res, "Failed to submit command buffer");
 }
 
@@ -2216,7 +2212,7 @@ void SubmitAndPresent(GLFWwindow* window) {
 	submitInfo.signalSemaphore = (Semaphore*)swapChain.GetRenderFinishedSemaphore();
 
 	EndCommandBuffer(swapChain.GetCommandBuffer());
-	QueueSubmit(&submitInfo);
+	QueueSubmit(submitInfo);
 
 	VkPresentInfoKHR presentInfo{};
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -2696,6 +2692,22 @@ void Context::CmdBarrier(CommandResource* cmd, Image& img, Layout::ImageLayout n
 	barrier.subresourceRange = range;
 	vkCmdPipelineBarrier(cmd->buffer, srcStage, dstStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
 	img.layout = newLayout;
+}
+
+void Context::CmdBarrier(CommandResource* cmd, Buffer& buf) {
+	VkBufferMemoryBarrier2 barrier = {
+		.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+		.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+		.srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
+		.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+		.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
+	};
+	VkDependencyInfo dependency = {
+		.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+		.bufferMemoryBarrierCount = 1,
+		.pBufferMemoryBarriers = &barrier,
+	};
+	vkCmdPipelineBarrier2(cmd->buffer, &dependency);
 }
 
 void Context::CmdBarrier(CommandResource* cmd) {

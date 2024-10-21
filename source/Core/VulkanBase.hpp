@@ -234,7 +234,14 @@ bool GetSwapChainDirty(GLFWwindow* window);
 
 struct CommandResource;
 struct Semaphore;
-struct SubmitInfo;
+
+struct SubmitInfo{
+	CommandResource* commandBuffer   = nullptr;
+	Semaphore*       waitSemaphore   = nullptr;
+	uint64_t         waitStages      = PipelineStage::None;
+	Semaphore*       signalSemaphore = nullptr;
+	uint64_t         signalStages    = PipelineStage::None;
+};
 
 void CmdCopy(CommandResource* cmd, Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset = 0);
 void CmdCopy(CommandResource* cmd, Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset = 0, uint32_t srcOffset = 0);
@@ -243,6 +250,7 @@ void CmdCopy(CommandResource* cmd, Image& dst, Buffer& src, uint32_t size, uint3
 void CmdCopy(CommandResource* cmd, Buffer& dst, Image& src, uint32_t size = 0, uint32_t srcOffset = 0); // size is a No OP
 void CmdCopy(CommandResource* cmd, Buffer& dst, Image& src, uint32_t size, uint32_t dstOffset, ivec2 imageOffset, ivec2 imageExtent); // size is a No OP
 void CmdBarrier(CommandResource* cmd, Image& img, Layout::ImageLayout newLayout, Layout::ImageLayout oldLayout = Layout::MaxEnum);
+void CmdBarrier(CommandResource* cmd, Buffer& buf);
 void CmdBarrier(CommandResource* cmd);
 void CmdBlit (CommandResource* cmd, Image& dst, Image& src, ivec4 dstRegion = {}, ivec4 srcRegion = {});
 void CmdClearColorImage(CommandResource* cmd, Image &image, float4 color);
@@ -276,7 +284,8 @@ CommandResource* GetCommandBuffer(Queue queue);
 void BeginCommandBuffer(CommandResource* cmd);
 
 void EndCommandBuffer(CommandResource* cmd);
-void QueueSubmit (const SubmitInfo* submitInfo);
+// void QueueSubmit (const SubmitInfo* submitInfo);
+void QueueSubmit (const SubmitInfo& submitInfo);
 void WaitQueue (CommandResource* cmd);
 void WaitQueue(Queue queue);
 void WaitIdle();

@@ -112,6 +112,12 @@ public:
 	inline bool        GetResizable()                      { return resizable; }
 	inline void        SetResizable(bool value)            { resizable = value; glfwSetWindowAttrib(window, GLFW_RESIZABLE, value); }
 
+	inline bool        GetDecorated()                      { return decorated; }
+	inline void        SetDecorated(bool value)            { decorated = value; glfwSetWindowAttrib(window, GLFW_DECORATED, value); }
+
+	inline void        SetMinSize(int w, int h)            { glfwSetWindowSizeLimits(window, w, h, GLFW_DONT_CARE, GLFW_DONT_CARE); }
+	inline void        SetMaxSize(int w, int h)            { glfwSetWindowSizeLimits(window, GLFW_DONT_CARE, GLFW_DONT_CARE, w, h); }
+
 	inline void        SetFramebufferSizeCallback(void(*callback)(GLFWwindow* window, int width, int height)) { glfwSetFramebufferSizeCallback(window, callback); }
 
 

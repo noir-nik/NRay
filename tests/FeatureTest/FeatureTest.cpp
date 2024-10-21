@@ -56,8 +56,8 @@ void Context::CreateShaders() {
 	pipeline = vkw::CreatePipeline({
 		.point = vkw::PipelinePoint::Graphics,
 		.stages = {
-			{.stage = vkw::ShaderStage::Vertex, .path = "tests/HelloTriangle/HelloTriangle.vert"},
-			{.stage = vkw::ShaderStage::Fragment, .path = "tests/HelloTriangle/HelloTriangle.frag"},
+			{.stage = vkw::ShaderStage::Vertex, .path = "tests/FeatureTest/FeatureTest.vert"},
+			{.stage = vkw::ShaderStage::Fragment, .path = "tests/FeatureTest/FeatureTest.frag"},
 		},
 		.name = "Hello triangle pipeline",
 		// pos2 + color3
@@ -71,12 +71,13 @@ void Context::CreateShaders() {
 }
 
 void Context::CreateImages(uint32_t width, uint32_t height) {
+	static int count = 0;
 	ctx.renderImage = vkw::CreateImage({
 		.width = width,
 		.height = height,
 		.format = vkw::Format::RGBA16_sfloat,
 		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::TransferSrc | vkw::ImageUsage::TransferDst,
-		.name = "Render Image",
+		.name = "Render Image" + std::to_string(count++),
 	});
 }
 
@@ -89,22 +90,9 @@ void FeatureTestApplication::run(FeatureTestInfo* pFeatureTestInfo) {
 	Finish();
 }
 
-void FeatureTestApplication::Setup() {
-	ctx.width = info->width;
-	ctx.height = info->height;
-}
-
-void FeatureTestApplication::Create() {
-	ctx.window = WindowManager::NewWindow(ctx.width, ctx.height, "w0");
-	// ctx.glfwWindow = ctx.window->GetGLFWwindow();
-	// ctx.window1 = WindowManager::NewWindow(ctx.width, ctx.height, "w1");
-	vkw::Init(ctx.window->GetGLFWwindow(), ctx.window->GetWidth(), ctx.window->GetHeight());
-	ctx.CreateImages(ctx.window->GetMonitorWidth(), ctx.window->GetMonitorHeight());
-	ctx.vertexBuffer = vkw::CreateBuffer(vertices.size() * sizeof(Vertex), vkw::BufferUsage::Vertex, vkw::Memory::GPU, "Vertex Buffer");
-	ctx.CreateShaders();
-}
 
 void RecreateFrameResources(Window* w);
+void UploadBuffers();
 
 void FramebufferCallback(GLFWwindow* window, int width, int height) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
@@ -115,8 +103,44 @@ void FramebufferCallback(GLFWwindow* window, int width, int height) {
 	DEBUG_TRACE("Window {} framebuffer resized to {}x{}", pWindow->GetName(), width, height);
 }
 
+
+void FeatureTestApplication::Setup() {
+	ctx.width = info->width;
+	ctx.height = info->height;
+}
+
+void FeatureTestApplication::Create() {
+	ctx.window = WindowManager::NewWindow(ctx.width, ctx.height, "w0");
+	// ctx.glfwWindow = ctx.window->GetGLFWwindow();
+	// ctx.window1 = WindowManager::NewWindow(ctx.width, ctx.height, "w1");
+	vkw::Init(ctx.window->GetGLFWwindow(), ctx.window->GetWidth(), ctx.window->GetHeight());
+	ctx.window->SetFramebufferSizeCallback(FramebufferCallback);
+	ctx.window->SetMaxSize(3000, 3000);
+	ctx.CreateImages(ctx.window->GetMonitorWidth(), ctx.window->GetMonitorHeight());
+	ctx.vertexBuffer = vkw::CreateBuffer(vertices.size() * sizeof(Vertex), vkw::BufferUsage::Vertex, vkw::Memory::GPU, "Vertex Buffer");
+	UploadBuffers();
+	ctx.CreateShaders();
+}
+
+void UploadBuffers() {
+	auto cmd = vkw::GetCommandBuffer(vkw::Queue::Transfer);
+	vkw::BeginCommandBuffer(cmd);
+	vkw::CmdCopy(cmd, ctx.vertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex));
+	vkw::CmdBarrier(cmd);
+	vkw::EndCommandBuffer(cmd);
+	vkw::QueueSubmit({cmd});
+}
+
 void RecordCommands(GLFWwindow* window) {
-	
+	auto size = ctx.window->GetSize();
+	vec4 viewport = {0, 0, (float)size.x, (float)size.y};
+	FeatureTestConstants constants{};
+	constants.width = size.x;
+	constants.height = size.y;
+
+	LOG_INFO("Viewport: {}, {}, {}, {}", viewport.x, viewport.y, viewport.z, viewport.w); 
+
+
 	auto cmd = vkw::GetCommandBuffer(window);
 	vkw::BeginCommandBuffer(cmd);
 	// vkw::CmdPushConstants(&constants, sizeof(constants));
@@ -124,18 +148,14 @@ void RecordCommands(GLFWwindow* window) {
 	if (!vkw::AcquireImage(window)) return;
 	vkw::Image& img = vkw::GetCurrentSwapchainImage(window);
 	
-	vkw::CmdCopy(cmd, ctx.vertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex));
+	// vkw::CmdCopy(cmd, ctx.vertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex));
 	vkw::CmdBarrier(cmd, ctx.renderImage, vkw::Layout::TransferDst);
 	vkw::CmdClearColorImage(cmd, ctx.renderImage, {0.7f, 0.0f, 0.4f, 1.0f});
 
-	auto size = ctx.window->GetSize();
-	vec4 viewport = {0, 0, (float)size.x, (float)size.y};
-
-	LOG_INFO("Viewport: {}, {}, {}, {}", viewport.x, viewport.y, viewport.z, viewport.w); 
 	vkw::CmdBeginRendering(cmd, {ctx.renderImage}, {}, 1, viewport);
 	vkw::CmdBindPipeline(cmd, ctx.pipeline);
+	vkw::CmdPushConstants(cmd, &constants, sizeof(constants));
 	vkw::CmdBindVertexBuffer(cmd, ctx.vertexBuffer);
-	vkw::CmdDraw(cmd, 3, 1, 0, 0);
 	vkw::CmdDraw(cmd, 3, 1, 0, 0);
 	vkw::CmdEndRendering(cmd);
 	
@@ -163,13 +183,12 @@ bool SwapchainDirty(Window* w) {
 	bool dirty = false;
 	auto swapChainDirty = vkw::GetSwapChainDirty(w->GetGLFWwindow());
 	auto windowDirty = w->GetSwapchainDirty();
-	LOG_INFO("swapChainDirty: {}, windowDirty: {}", swapChainDirty, windowDirty);
+	// LOG_INFO("swapChainDirty: {}, windowDirty: {}", swapChainDirty, windowDirty);
 	dirty = swapChainDirty || windowDirty;
 	return dirty;
 }
 
 void FeatureTestApplication::MainLoop() {
-	ctx.window->SetFramebufferSizeCallback(FramebufferCallback);
 	while (ctx.window->GetAlive() && !ctx.window->GetShouldClose()) {
 		ctx.window->Update();
 		if (/* engine->drawNeeded || */ ctx.window->GetDrawNeeded()) {
@@ -190,7 +209,7 @@ void FeatureTestApplication::MainLoop() {
 			RecreateFrameResources(ctx.window.get());
 			ctx.window->SetSwapchainDirty(false);
 		}
-		printf("Loop\n");
+		// printf("Loop\n");
 		fflush(stdout);
 	}
 
@@ -272,6 +291,9 @@ void RecreateFrameResources(Window* w) {
 		return;
 	}
 	// }
-	ctx.CreateImages(w->GetWidth(), w->GetHeight());
+	ivec2 size = {w->GetWidth(), w->GetHeight()};
+	if (size.x > ctx.renderImage.width || size.y > ctx.renderImage.height) {
+		ctx.CreateImages(size.x, size.y);
+	}
 	// camera->extent = {viewportSize.x, viewportSize.y};
 }
