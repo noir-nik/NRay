@@ -2,6 +2,9 @@
 #pragma once
 
 #include "Lmath.hpp"
+
+using vec2 = Lmath::vec2;
+using vec3 = Lmath::vec3;
 using vec4 = Lmath::vec4;
 using ivec4 = Lmath::ivec4;
 

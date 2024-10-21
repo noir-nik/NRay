@@ -4,6 +4,11 @@
 #include <cstdint>
 #include <vector>
 
+#include "Lmath.hpp"
+
+using mat2  = Lmath::float4;
+using vec2  = Lmath::float2;
+
 struct FeatureTestInfo
 {
 	int width;
@@ -28,8 +33,8 @@ private:
 
 
 struct FeatureTestConstants {
-	int width;
-	int height;
-	int storageImageRID;
-	int pad[1];
+	mat2 transform;
+
+	vec2 offset;
+	int pad[2];
 };

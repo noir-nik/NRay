@@ -31,9 +31,11 @@ struct Context {
 	
 	vkw::Image renderImage;
 	
-	std::shared_ptr<Window> window;
+	// std::shared_ptr<Window> window;
 	// GLFWwindow* glfwWindow = nullptr;
-	std::shared_ptr<Window> window1;
+	// std::shared_ptr<Window> window1;
+
+	std::vector<std::shared_ptr<Window>> windows;
 
 	void CreateImages(uint32_t width, uint32_t height);
 	void CreateShaders();
@@ -49,7 +51,7 @@ struct Vertex {
 const std::vector<Vertex> vertices = {
 	{{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
 	{{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-	{{0.5f, 0.1f},  {0.0f, 1.0f, 0.0f}},
+	{{0.5f, 0.5f},  {0.0f, 1.0f, 0.0f}},
 };
 
 void Context::CreateShaders() {
@@ -64,6 +66,7 @@ void Context::CreateShaders() {
 		.vertexAttributes = {vkw::Format::RG32_sfloat, vkw::Format::RGB32_sfloat},
 		// .colorFormats = {ctx.albedo.format, ctx.normal.format, ctx.material.format, ctx.emission.format},
 		.colorFormats = {vkw::Format::RGBA16_sfloat},
+		// .colorFormats = {vkw::Format::RGBA8_unorm},
 		.useDepth = false,
 		// .depthFormat = {ctx.depth.format}
 	});
@@ -72,10 +75,12 @@ void Context::CreateShaders() {
 
 void Context::CreateImages(uint32_t width, uint32_t height) {
 	static int count = 0;
+	// ctx.renderImage.resource.reset();
 	ctx.renderImage = vkw::CreateImage({
 		.width = width,
 		.height = height,
 		.format = vkw::Format::RGBA16_sfloat,
+		// .format = vkw::Format::RGBA8_unorm,
 		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::TransferSrc | vkw::ImageUsage::TransferDst,
 		.name = "Render Image" + std::to_string(count++),
 	});
@@ -90,18 +95,12 @@ void FeatureTestApplication::run(FeatureTestInfo* pFeatureTestInfo) {
 	Finish();
 }
 
-
+bool SwapchainDirty(Window* w);
 void RecreateFrameResources(Window* w);
 void UploadBuffers();
 
-void FramebufferCallback(GLFWwindow* window, int width, int height) {
-	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
-	pWindow->SetSize(width, height);
-	pWindow->SetSwapchainDirty(true);
-	pWindow->SetDrawNeeded(true);
-	// pWindow->SetFramebufferResized();
-	DEBUG_TRACE("Window {} framebuffer resized to {}x{}", pWindow->GetName(), width, height);
-}
+void FramebufferCallback(GLFWwindow* window, int width, int height);
+
 
 
 void FeatureTestApplication::Setup() {
@@ -135,16 +134,15 @@ void RecordCommands(GLFWwindow* window) {
 	auto size = ctx.window->GetSize();
 	vec4 viewport = {0, 0, (float)size.x, (float)size.y};
 	FeatureTestConstants constants{};
-	constants.width = size.x;
-	constants.height = size.y;
+	constants.transform = float4((float)size.y / size.x, 0.0f,
+								0.0f, float(size.y) / size.x);
+	constants.offset = {0.0f, 0.0f};
 
-	LOG_INFO("Viewport: {}, {}, {}, {}", viewport.x, viewport.y, viewport.z, viewport.w); 
+	// LOG_INFO("Viewport: {}, {}, {}, {}", viewport.x, viewport.y, viewport.z, viewport.w); 
 
 
 	auto cmd = vkw::GetCommandBuffer(window);
 	vkw::BeginCommandBuffer(cmd);
-	// vkw::CmdPushConstants(&constants, sizeof(constants));
-	// vkw::CmdBeginPresent();
 	if (!vkw::AcquireImage(window)) return;
 	vkw::Image& img = vkw::GetCurrentSwapchainImage(window);
 	
@@ -178,67 +176,77 @@ int DrawFrame(GLFWwindow* window) {
 	}
 	return 1;
 }
+Timer t;
+void FramebufferCallback(GLFWwindow* window, int width, int height) {
+	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
+	pWindow->SetSize(width, height);
+	pWindow->SetSwapchainDirty(true);
+	pWindow->SetDrawNeeded(true);
+	DEBUG_TRACE("Window {} framebuffer resized to {}x{}", pWindow->GetName(), width, height);
+	if (width == 0 || height == 0) {
+		return;
+	}
+	auto start = glfwGetTime();
+	if (SwapchainDirty(ctx.window.get())) {
+		LOG_INFO("DIRTY FRAME RESOURCES");
+		RecreateFrameResources(ctx.window.get());
+		ctx.window->SetSwapchainDirty(false);
+	}
+	// LOG_ERROR("Recr: {0:.6f} fps {1}", t.Elapsed(), 1.0f / t.Elapsed());
+	auto end = glfwGetTime();
+	auto delta = end - start;
+	LOG_ERROR("Recr: {0:.6f} fps {1}", delta, 1.0f / delta)
+	// t.Start();
+	start = glfwGetTime();
+	if (/* engine->drawNeeded || */ ctx.window->GetDrawNeeded()) {
+		// LOG_ERROR("DRAW FRAME");
+		auto drawn = DrawFrame(ctx.window->GetGLFWwindow());
+		// LOG_TRACE("drawn: {}", drawn);
+		if (drawn) {
+			ctx.window->SetDrawNeeded(false);
+			/* engine->redrawNeeded = false; */
+			// LOG_ERROR("Draw: {0:.6f} fps {1}", t.Elapsed(), 1.0f / t.Elapsed());
+			auto end = glfwGetTime();
+			auto delta = end - start;
+			LOG_ERROR("Draw: {0:.6f} fps {1}", delta, 1.0f / delta);
+		}
+	}
+	
 
-bool SwapchainDirty(Window* w) {
-	bool dirty = false;
-	auto swapChainDirty = vkw::GetSwapChainDirty(w->GetGLFWwindow());
-	auto windowDirty = w->GetSwapchainDirty();
-	// LOG_INFO("swapChainDirty: {}, windowDirty: {}", swapChainDirty, windowDirty);
-	dirty = swapChainDirty || windowDirty;
-	return dirty;
+
+	// ctx.window->ApplyChanges();
+	
+}
+
+void DrawWindows(){
+	for (auto& window : ctx.windows) {
+		bool drawPossible = window->GetWidth() > 0 && window->GetHeight() > 0;
+		if (window->GetDrawNeeded() && drawPossible) {
+			auto drawn = DrawFrame(window->GetGLFWwindow());
+			LOG_TRACE("drawn: {}", drawn);
+			if (drawn) {window->SetDrawNeeded(false);}
+		}
+	}
 }
 
 void FeatureTestApplication::MainLoop() {
 	while (ctx.window->GetAlive() && !ctx.window->GetShouldClose()) {
-		ctx.window->Update();
-		if (/* engine->drawNeeded || */ ctx.window->GetDrawNeeded()) {
-			LOG_INFO("DRAW FRAME");
-			auto drawn = DrawFrame(ctx.window->GetGLFWwindow());
-			LOG_TRACE("drawn: {}", drawn);
-			if (drawn) {
-				ctx.window->SetDrawNeeded(false);
-				/* engine->redrawNeeded = false; */
-			}
-		}
-		// usleep(1000 * 1000);
-		// ctx.window->SetSize(800, 600); 
+		DrawWindows();
 		WindowManager::WaitEvents();
 		// ctx.window->ApplyChanges();
 		if (SwapchainDirty(ctx.window.get())) {
 			LOG_INFO("DIRTY FRAME RESOURCES");
 			RecreateFrameResources(ctx.window.get());
-			ctx.window->SetSwapchainDirty(false);
+				ctx.window->SetSwapchainDirty(false);
 		}
 		// printf("Loop\n");
 		fflush(stdout);
 	}
-
-
-	// DrawFrame(ctx.window->GetGLFWwindow());
-	// usleep(1000 * 1000);
-	// ctx.window->SetSize(800, 600); 
-	// // ctx.window->ApplyChanges();
-	// if (SwapchainDirty(ctx.window.get())) {
-	// 	LOG_INFO("DIRTY FRAME RESOURCES");
-	// 	RecreateFrameResources(ctx.window.get());
-	// }
-	// usleep(1000 * 1000);
-	// DrawFrame(ctx.window->GetGLFWwindow());
-	// usleep(1000 * 1000);
-
-
-
-	// DrawFrame(ctx.window->GetGLFWwindow());
-	// usleep(1000 * 1000);
-
 	vkw::WaitIdle();
 }
-
+/* 
 void FeatureTestApplication::Draw() {
 	Timer timer;
-	FeatureTestConstants constants{};
-	constants.width = ctx.width;
-	constants.height = ctx.height;
 	// constants.storageImageRID = ctx.renderImage.RID();
 	GLFWwindow* window = ctx.window->GetGLFWwindow();
 
@@ -268,7 +276,7 @@ void FeatureTestApplication::Draw() {
 	vkw::WaitQueue(vkw::Queue::Graphics);
 	sleep(3);
 }
-
+ */
 void FeatureTestApplication::Finish() {
 	ctx = {};
 	vkw::Destroy();
@@ -276,12 +284,23 @@ void FeatureTestApplication::Finish() {
 	WindowManager::Finish();
 }
 
+bool SwapchainDirty(Window* w) {
+	bool dirty = false;
+	auto swapChainDirty = vkw::GetSwapChainDirty(w->GetGLFWwindow());
+	auto windowDirty = w->GetSwapchainDirty();
+	// LOG_INFO("swapChainDirty: {}, windowDirty: {}", swapChainDirty, windowDirty);
+	dirty = swapChainDirty || windowDirty;
+	return dirty;
+}
+
+
 void RecreateFrameResources(Window* w) {
 	// busy wait while the window is minimized
-	while (w->GetWidth() == 0 || w->GetHeight() == 0) {
-		DEBUG_TRACE("Iconified");
-		WindowManager::WaitEvents();
-	}
+	if (w->GetWidth() == 0 || w->GetHeight() == 0) {LOG_ERROR("RecreateFrameResources: size = 0"); return;};
+	// while (w->GetWidth() == 0 || w->GetHeight() == 0) {
+	// 	DEBUG_TRACE("Iconified");
+	// 	WindowManager::WaitEvents();
+	// }
 	vkw::WaitIdle();
 	if (w->GetAlive()) {
 		w->UpdateFramebufferSize();

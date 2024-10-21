@@ -115,6 +115,8 @@ public:
 	inline bool        GetDecorated()                      { return decorated; }
 	inline void        SetDecorated(bool value)            { decorated = value; glfwSetWindowAttrib(window, GLFW_DECORATED, value); }
 
+	inline bool        GetIconified()                      { glfwGetWindowSize(window, &width, &height); return width == 0 || height == 0; }
+
 	inline void        SetMinSize(int w, int h)            { glfwSetWindowSizeLimits(window, w, h, GLFW_DONT_CARE, GLFW_DONT_CARE); }
 	inline void        SetMaxSize(int w, int h)            { glfwSetWindowSizeLimits(window, GLFW_DONT_CARE, GLFW_DONT_CARE, w, h); }
 

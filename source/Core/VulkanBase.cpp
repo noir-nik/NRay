@@ -142,7 +142,7 @@ struct Context
 		SwapChain(const SwapChain&) = delete;
 		SwapChain& operator=(const SwapChain&) = delete;
 		~SwapChain() { // TODO: check if this is possible
-			printf("~SwapChain\n");
+			// printf("~SwapChain\n");
 		}
 
 		inline Image& GetCurrentSwapChainImage() {
@@ -284,7 +284,7 @@ struct ImageResource : Resource {
 
 	virtual ~ImageResource() {
 		if (!fromSwapchain) {
-			printf("destroy image %s\n", name.c_str());
+			// printf("destroy image %s\n", name.c_str());
 			for (VkImageView layerView : layersView) {
 				vkDestroyImageView(_ctx.device, layerView, _ctx.allocator);
 			}
@@ -300,7 +300,7 @@ struct ImageResource : Resource {
 				// imguiRIDs.clear();
 			}
 		} else {
-			printf("FROM SWAPCHAIN %s\n", name.c_str());
+			// printf("FROM SWAPCHAIN %s\n", name.c_str());
 		}
 	}
 };
@@ -2181,7 +2181,7 @@ void Context::DestroySwapChain(SwapChain& swapChain) {
 
 bool AcquireImage(GLFWwindow* window) {
 	auto& swapChain = _ctx.swapChains[window];
-	auto res = vkAcquireNextImageKHR(_ctx.device, swapChain.swapChain, UINT64_MAX, swapChain.imageAvailableSemaphores[swapChain.currentFrame], VK_NULL_HANDLE, &swapChain.currentImageIndex);
+	auto res = vkAcquireNextImageKHR(_ctx.device, swapChain.swapChain, UINT64_MAX, swapChain.GetImageAvailableSemaphore(), VK_NULL_HANDLE, &swapChain.currentImageIndex);
 
 	if (res == VK_ERROR_OUT_OF_DATE_KHR) {
 		LOG_WARN("AcquireImage: Out of date");

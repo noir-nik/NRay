@@ -13,9 +13,10 @@ layout(push_constant) uniform _constants {
 
 
 void main() {
-	float xScale = 1.;
-	float yScale = (ctx.width / ctx.height);
-	vec2 pos = vec2(inPosition.x * xScale, inPosition.y * yScale);
+	// float xScale = 1.;
+	// float yScale = (ctx.width / ctx.height);
+	// vec2 pos = vec2(inPosition.x * xScale, inPosition.y * yScale);
+	vec2 pos  = ctx.transform * inPosition + ctx.offset;
     gl_Position = vec4(pos, 0.0, 1.0);
     fragColor = inColor;
 }
