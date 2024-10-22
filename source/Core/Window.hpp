@@ -16,7 +16,7 @@ enum class WindowMode {
 class Window {
 	friend class WindowManager;
 	GLFWwindow*   window             = nullptr;
-	const char*   name               = "Engine";
+	std::string   name               = "Engine";
 	int           width              = 640;
 	int           height             = 480;
 	int           posX               = 0;
@@ -102,7 +102,7 @@ public:
 
 	// inline void        SetFramebufferResized()             { framebufferResized = true; }
 
-	inline const char* GetName()                           { return name; }
+	inline const char* GetName()                           { return name.c_str(); }
 	inline void        SetName(const char* name)           { glfwSetWindowTitle(window, name);               }
 
 	inline bool        GetMaximized()                      { return maximized; }

@@ -148,7 +148,7 @@ void Window::Destroy() {
 	glfwGetWindowPos(window, &posX, &posY);
 	glfwDestroyWindow(window);
 	alive = false;
-	LOG_INFO("Window::Destroy()");
+	LOG_INFO("Window::Destroy() {} {}", name, (void*)GetGLFWwindow());
 	// WindowManager::windowCount--;
 	// if (WindowManager::windowCount == 0) {
 	// 	WindowManager::Finish();

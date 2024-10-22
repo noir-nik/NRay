@@ -338,7 +338,7 @@ static void InitImpl(GLFWwindow* window, uint32_t width, uint32_t height){
 	// _ctx.createDescriptorResources();
 
 	if (_ctx.presentRequested) {
-		_ctx.swapChains.try_emplace(window); printf("Window: %p", window);
+		_ctx.swapChains.try_emplace(window);
 		_ctx.swapChains[window].Create(_ctx.device, window, width, height, false);
 		// _ctx.CreateImGui(window);
 	}
@@ -369,10 +369,12 @@ void Init(GLFWwindow* window, uint32_t width, uint32_t height) {
 void RecreateSwapChain(GLFWwindow* window, uint32_t width, uint32_t height) {
 	DEBUG_ASSERT(!(width == 0 || height == 0), "Window size is 0, swapchain NOT recreated");
 	if (_ctx.swapChains.find(window) == _ctx.swapChains.end()) {
+		// DEBUG_TRACE("RecreateSwapChain: {} not found", (void*)window);
 		_ctx.swapChains.try_emplace(window);
 		_ctx.swapChains[window].Create(_ctx.device, window, width, height);
 	} else {
 		auto& swapChain = _ctx.swapChains.at(window);
+		// DEBUG_TRACE("RecreateSwapChain: {}", (void*)window);
 		swapChain.Destroy(true);
 		swapChain.Create(_ctx.device, window, width, height, true);
 	}
@@ -381,13 +383,11 @@ void RecreateSwapChain(GLFWwindow* window, uint32_t width, uint32_t height) {
 
 void DestroySwapChain(GLFWwindow* window) {
 	auto& c = _ctx;
-	if (_ctx.swapChains.find(window) != _ctx.swapChains.end()) {
-		auto& swapChain = _ctx.swapChains[window];
-		swapChain.Destroy();
-		// _ctx.swapChains.erase(window);
-	} else {
-		LOG_ERROR("Swapchain not found!");
-	}
+	DEBUG_ASSERT(_ctx.swapChains.find(window) != _ctx.swapChains.end(), "Swapchain not found!");
+	auto& swapChain = _ctx.swapChains[window];
+	swapChain.Destroy();
+	_ctx.swapChains.erase(window);
+	// DEBUG_TRACE("DestroySwapChain {} size =  {}", (void*)window, _ctx.swapChains.size());
 }
 
 void Destroy() {
@@ -2191,9 +2191,11 @@ bool AcquireImage(GLFWwindow* window) {
 
 bool GetSwapChainDirty(GLFWwindow* window) {
 	if  (_ctx.swapChains.find(window) == _ctx.swapChains.end()) {
+		// DEBUG_TRACE("GetSwapChainDirty s={}: Window not found", _ctx.swapChains.size());
 		return true;
 	};
 	auto& swapChain = _ctx.swapChains[window];
+	// DEBUG_TRACE("GetSwapChainDirty: s={} {} {}", _ctx.swapChains.size(), (void*)window, swapChain.dirty);	
 	return swapChain.dirty;
 }
 
@@ -2481,6 +2483,7 @@ void Context::CreateCommandBuffers(std::vector<CommandResource>& commandResource
 		fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 		fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 		vkCreateFence(device, &fenceInfo, allocator, &cmd.fence);
+		// DEBUG_TRACE("Created fence {}", (void*)cmd.fence);
 
 		// VkQueryPoolCreateInfo queryPoolInfo{};
 		// queryPoolInfo.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
@@ -2498,9 +2501,11 @@ void Context::CreateCommandBuffers(std::vector<CommandResource>& commandResource
 void Context::DestroyCommandBuffers(std::vector<CommandResource>& commandResources) {
 	for (auto& cmd: commandResources) {
 		vkDestroyCommandPool(device, cmd.pool, allocator);
-		// cmd.staging = {};
-		// cmd.stagingCpu = nullptr;
+		cmd.staging = {};
+		cmd.stagingCpu = nullptr;
 		vkDestroyFence(device, cmd.fence, allocator);
+		// DEBUG_TRACE("Destroyed fence {}", (void*)cmd.fence);
+		// printf("Destroyed fence %p\n", cmd.fence);
 		// vkDestroyQueryPool(device, cmd.queryPool, allocator);
 	}
 	commandResources.clear();

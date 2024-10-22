@@ -113,7 +113,7 @@ void FeatureTestApplication::Setup() {
 }
 
 void FeatureTestApplication::Create() {
-	auto window = WindowManager::NewWindow(ctx.width, ctx.height, "w0");
+	auto window = WindowManager::NewWindow(ctx.width, ctx.height, "wm");
 	ctx.windows.emplace(window);
 	ctx.mainWindow = window;
 	// ctx.window1 = WindowManager::NewWindow(ctx.width, ctx.height, "w1");
@@ -199,8 +199,8 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 			pWindow->SetShouldClose(true);
 			break;
 		case GLFW_KEY_F11: {
-			auto mode = pWindow->GetMode();
-			LOG_INFO("Window {} mode: {}", pWindow->GetName(), (int)mode);
+			auto moden = pWindow->GetMode();
+			// LOG_INFO("Window {} mode: {}", pWindow->GetName(), (int)mode);
 			if (pWindow->GetMode() == WindowMode::WindowedFullScreen) {
 				pWindow->SetMode(WindowMode::Windowed);
 			} else {
@@ -209,7 +209,9 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 			}}
 			break;
 		case GLFW_KEY_N: {
-			auto window = WindowManager::NewWindow(ctx.width, ctx.height, "w1");
+			static int windowCount = 1;
+			std::string name = "w" + std::to_string(windowCount++);
+			auto window = WindowManager::NewWindow(ctx.width, ctx.height, name.c_str());
 			CreateRenderImage(window);
 			ctx.windows.emplace(window);
 			window->SetFramebufferSizeCallback(FramebufferCallback);
@@ -237,20 +239,21 @@ void FramebufferCallback(GLFWwindow* window, int width, int height) {
 	pWindow->SetSize(width, height);
 	pWindow->SetSwapchainDirty(true);
 	pWindow->SetDrawNeeded(true);
-	DEBUG_TRACE("Window {} framebuffer resized to {}x{}", pWindow->GetName(), width, height);
+	DEBUG_TRACE("Window {} framebuffer resiznnned to {}x{}", pWindow->GetName(), width, height);
 	if (width == 0 || height == 0) {return;}
-
+	LOG_INFO("RecreateFrameResources {} callback", pWindow->GetName());
 	RecreateFrameResources(pWindow);
 	DrawWindow(pWindow);
 }
 
 
-
+static int loopCount = 0;
 void FeatureTestApplication::MainLoop() {
 	Context* c = &ctx;
 	while (ctx.mainWindow != nullptr) {
-		for (auto& window : ctx.windows) {DrawWindow(window);}
+		for (auto& window : ctx.windows) {LOG_INFO("Drawing window {}", window->GetName()); DrawWindow(window);}
 		WindowManager::WaitEvents();
+		
 		for (auto it = ctx.windows.begin(); it != ctx.windows.end();) {
 			auto window = *it;
 			window->ApplyChanges();
@@ -264,11 +267,13 @@ void FeatureTestApplication::MainLoop() {
 				delete window;
 				continue;
 			}
+			// LOG_INFO("RecreateFrameResources {}", window->GetName());
 			RecreateFrameResources(window);
 			++it;
 		}
 		// printf("Loop\n");
 		// fflush(stdout);
+		LOG_INFO("Loop {}", loopCount++);
 	}
 	vkw::WaitIdle();
 }
@@ -319,6 +324,7 @@ void RecreateFrameResources(Window* window) {
 	vkw::WaitIdle();
 	bool swapChainDirty = vkw::GetSwapChainDirty(window->GetGLFWwindow());
 	bool windowDirty = window->GetSwapchainDirty();
+	LOG_INFO("RecreateFrameResources {} {} {} {}", window->GetName(), (void*)window->GetGLFWwindow(), swapChainDirty, windowDirty);
 	if (swapChainDirty || windowDirty) {
 		LOG_INFO("DIRTY FRAME RESOURCES");
 		window->UpdateFramebufferSize();

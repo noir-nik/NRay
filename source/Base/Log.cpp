@@ -4,8 +4,8 @@
 #include <spdlog/sinks/basic_file_sink.h>
 
 std::shared_ptr<spdlog::logger> Logger::_logger;
-constexpr bool log_to_file = false;
-constexpr bool use_time_in_log_filename = false;
+constexpr bool log_to_file = 1;
+constexpr bool use_time_in_log_filename = 1;
 
 void Logger::Init(){
 	std::vector<spdlog::sink_ptr> sinks;
@@ -18,13 +18,16 @@ void Logger::Init(){
 		if (use_time_in_log_filename) {
 			auto now = std::time(nullptr);
 			auto tm = *std::localtime(&now);
-			std::strftime(filename, sizeof(filename), "logs/log-%F-%T.txt", &tm);
+			std::strftime(filename, sizeof(filename), "logs/log-%F-%H-%M-%S.txt", &tm);
+			// std::strftime(filename, sizeof(filename), "logs/log-%F-%T.txt", &tm);
 		}
 		else {
 			strcpy(filename, "logs/log.txt");
 		}
 		sinks.emplace_back(std::make_shared<spdlog::sinks::basic_file_sink_mt>(filename, true));
-		sinks[1]->set_pattern("[%T] [%L] %v");
+		sinks[1]->set_pattern("[%T.%e] [%L] %v");
+		// sinks[0]->set_pattern("%^[%T.%e] [%^%L%$] %v");
+
 		// sinks[1]->set_level(spdlog::level::warn);
 	}
 
