@@ -235,10 +235,7 @@ void MouseButtonCallback(Window* window, int button, int action, int mods) {
 }
 
 void FramebufferCallback(Window* window, int width, int height) {
-	window->SetSize(width, height);
-	window->SetSwapchainDirty(true);
-	window->SetDrawNeeded(true);
-	// DEBUG_TRACE("Window {} framebuffer resiznnned to {}x{}", window->GetName(), width, height);
+	// DEBUG_TRACE("Window {} framebuffer resized to {}x{}", window->GetName(), width, height);
 	if (width == 0 || height == 0) {return;}
 	// LOG_INFO("RecreateFrameResources {} callback", window->GetName());
 	RecreateFrameResources(window);
@@ -277,39 +274,7 @@ void FeatureTestApplication::MainLoop() {
 	}
 	vkw::WaitIdle();
 }
-/* 
-void FeatureTestApplication::Draw() {
-	Timer timer;
-	// constants.storageImageRID = ctx.renderImage.RID();
-	GLFWwindow* window = ctx.window->GetGLFWwindow();
 
-	auto cmd = vkw::GetCommandBuffer(window);
-	vkw::BeginCommandBuffer(cmd);
-	// vkw::CmdPushConstants(&constants, sizeof(constants));
-	// vkw::CmdBeginPresent();
-	vkw::AcquireImage(window);
-	vkw::Image& img = vkw::GetCurrentSwapchainImage(window);
-	
-	vkw::CmdCopy(cmd, ctx.vertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex));
-	vkw::CmdBarrier(cmd, ctx.renderImage, vkw::Layout::TransferDst);
-	vkw::CmdClearColorImage(cmd, ctx.renderImage, {0.7f, 0.0f, 0.4f, 1.0f});
-
-	vkw::CmdBeginRendering(cmd, {ctx.renderImage});
-	vkw::CmdBindPipeline(cmd, ctx.pipeline);
-	vkw::CmdBindVertexBuffer(cmd, ctx.vertexBuffer);
-	vkw::CmdDraw(cmd, 3, 1, 0, 0);
-	vkw::CmdEndRendering(cmd);
-	
-	vkw::CmdBarrier(cmd, ctx.renderImage, vkw::Layout::TransferSrc);
-	vkw::CmdBarrier(cmd, img, vkw::Layout::TransferDst);
-	vkw::CmdBlit(cmd, img, ctx.renderImage, {}, {});
-
-	vkw::CmdBarrier(cmd, img, vkw::Layout::Present);
-	vkw::SubmitAndPresent(window);
-	vkw::WaitQueue(vkw::Queue::Graphics);
-	sleep(3);
-}
- */
 void FeatureTestApplication::Finish() {
 	for (auto& window: ctx.windows) {vkw::DestroySwapChain(window->GetGLFWwindow()); delete window;}
 	ctx = {};

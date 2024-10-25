@@ -24,16 +24,6 @@ static Context ctx;
 
 namespace _WindowCallbacks {
 
-void WindowPosCallback          (GLFWwindow *window, int xpos, int ypos);
-void WindowSizeCallback         (GLFWwindow *window, int width, int height);
-void WindowCloseCallback        (GLFWwindow *window);
-void WindowRefreshCallback      (GLFWwindow *window);
-void WindowFocusCallback        (GLFWwindow *window, int focused);
-void WindowIconifyCallback      (GLFWwindow *window, int iconified);
-void WindowMaximizeCallback     (GLFWwindow *window, int maximized);
-void FramebufferSizeCallback    (GLFWwindow *window, int width, int height);
-void WindowContentScaleCallback (GLFWwindow *window, float xscale, float yscale);
-	
 void WindowPosCallback(GLFWwindow* window, int x, int y) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
 	pWindow->SetPos(x, y);
@@ -91,9 +81,10 @@ void WindowMaximizeCallback(GLFWwindow* window, int maximize) {
 
 void FramebufferSizeCallback(GLFWwindow* window, int width, int height) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
+	pWindow->SetSwapchainDirty(true);
 	pWindow->SetDrawNeeded(true);
 	// pWindow->SetFramebufferResized();
-	DEBUG_TRACE("Window {} framebuffer resized to {}x{}", pWindow->GetName(), width, height);
+	// DEBUG_TRACE("Window {} framebuffer resized to {}x{}", pWindow->GetName(), width, height);
 	
 	if (pWindow->framebufferSizeCallback) 
 		pWindow->framebufferSizeCallback(pWindow, width, height);
@@ -111,15 +102,6 @@ void WindowContentScaleCallback(GLFWwindow* window, float xscale, float yscale) 
 } // namespace WindowCallbacks
 
 namespace _InputCallbacks {
-// void MouseButtonCallback (GLFWwindow *window, int button, int action, int mods);
-// void CursorPosCallback   (GLFWwindow *window, double xpos, double ypos);
-// void CursorEnterCallback (GLFWwindow *window, int entered);
-// void ScrollCallback      (GLFWwindow *window, double xoffset, double yoffset);
-// void KeyCallback         (GLFWwindow *window, int key, int scancode, int action, int mods);
-// void CharCallback        (GLFWwindow *window, unsigned int codepoint);
-// void CharModsCallback    (GLFWwindow *window, unsigned int codepoint, int mods);
-// void DropCallback        (GLFWwindow *window, int path_count, const char *paths[]);
-
 
 void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
@@ -127,6 +109,22 @@ void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
 		pWindow->SetResizable(!pWindow->GetResizable());
 	}
 	
+	if (pWindow->mouseButtonCallback)
+		pWindow->mouseButtonCallback(pWindow, button, action, mods);
+}
+
+void CursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
+	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
+
+	if (pWindow->cursorPosCallback)
+		pWindow->cursorPosCallback(pWindow, xpos, ypos);
+}
+
+void CursorEnterCallback(GLFWwindow* window, int entered) {
+	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
+
+	if (pWindow->cursorEnterCallback)
+		pWindow->cursorEnterCallback(pWindow, entered);
 }
 
 void ScrollCallback(GLFWwindow* window, double x, double y) {
@@ -136,6 +134,24 @@ void ScrollCallback(GLFWwindow* window, double x, double y) {
 
 	if (pWindow->scrollCallback)
 		pWindow->scrollCallback(pWindow, x, y);
+}
+
+void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
+	if (pWindow->keyCallback)
+		pWindow->keyCallback(pWindow, key, scancode, action, mods);
+}
+
+void CharCallback(GLFWwindow* window, unsigned int codepoint) {
+	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
+	if (pWindow->charCallback)
+		pWindow->charCallback(pWindow, codepoint);
+}
+
+void CharModsCallback(GLFWwindow* window, unsigned int codepoint, int mods) {
+	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
+	if (pWindow->charModsCallback)
+		pWindow->charModsCallback(pWindow, codepoint, mods);
 }
 
 
@@ -152,35 +168,6 @@ void DropCallback (GLFWwindow *window, int path_count, const char *paths[]) {
 		pWindow->dropCallback(pWindow, path_count, paths);
 }
 }
-
-
-/* 
-===== Window Callbacks =====
-*/
-
-// void WindowPosCallback          (GLFWwindow *window, int xpos, int ypos);
-// void WindowSizeCallback         (GLFWwindow *window, int width, int height);
-// void WindowCloseCallback        (GLFWwindow *window);
-// void WindowRefreshCallback      (GLFWwindow *window);
-// void WindowFocusCallback        (GLFWwindow *window, int focused);
-// void WindowIconifyCallback      (GLFWwindow *window, int iconified);
-// void WindowMaximizeCallback     (GLFWwindow *window, int maximized);
-// void FramebufferSizeCallback    (GLFWwindow *window, int width, int height);
-// void WindowContentScaleCallback (GLFWwindow *window, float xscale, float yscale);
-
-/* 
-===== Input Callbacks =====
-*/
-
-// void MouseButtonCallback (GLFWwindow *window, int button, int action, int mods);
-// void CursorPosCallback   (GLFWwindow *window, double xpos, double ypos);
-// void CursorEnterCallback (GLFWwindow *window, int entered);
-// void ScrollCallback      (GLFWwindow *window, double xoffset, double yoffset);
-// void KeyCallback         (GLFWwindow *window, int key, int scancode, int action, int mods);
-// void CharCallback        (GLFWwindow *window, unsigned int codepoint);
-// void CharModsCallback    (GLFWwindow *window, unsigned int codepoint, int mods);
-// void DropCallback        (GLFWwindow *window, int path_count, const char *paths[]);
-
 
 
 static void errorCallback(int error, const char* description)
@@ -230,17 +217,29 @@ Window* WindowManager::NewWindow(int width, int height, const char* name) {
 	GLFWwindow* glfwWindow = glfwCreateWindow(width, height, name, nullptr, nullptr);
 	// LOG_INFO("Window::Create({}x{}):{}", width, height, name);
 	window->window = glfwWindow;
-	window->SetUserPointer(window);
 	window->GetPos();
+
+	glfwSetWindowUserPointer(glfwWindow, window);
+
+	glfwSetWindowPosCallback         (glfwWindow, _WindowCallbacks::WindowPosCallback         );
+	glfwSetWindowSizeCallback        (glfwWindow, _WindowCallbacks::WindowSizeCallback        );
+	glfwSetWindowCloseCallback       (glfwWindow, _WindowCallbacks::WindowCloseCallback       );
+	glfwSetWindowRefreshCallback     (glfwWindow, _WindowCallbacks::WindowRefreshCallback     );
+	glfwSetWindowFocusCallback       (glfwWindow, _WindowCallbacks::WindowFocusCallback       );
+	glfwSetWindowIconifyCallback     (glfwWindow, _WindowCallbacks::WindowIconifyCallback     );
+	glfwSetWindowMaximizeCallback    (glfwWindow, _WindowCallbacks::WindowMaximizeCallback    );
+	glfwSetFramebufferSizeCallback   (glfwWindow, _WindowCallbacks::FramebufferSizeCallback   );
+	glfwSetWindowContentScaleCallback(glfwWindow, _WindowCallbacks::WindowContentScaleCallback);
+
+	glfwSetMouseButtonCallback       (glfwWindow, _InputCallbacks::MouseButtonCallback);
+	glfwSetCursorPosCallback         (glfwWindow, _InputCallbacks::CursorPosCallback  );
+	glfwSetScrollCallback            (glfwWindow, _InputCallbacks::ScrollCallback     );
+	glfwSetKeyCallback               (glfwWindow, _InputCallbacks::KeyCallback        );
+	glfwSetCharCallback              (glfwWindow, _InputCallbacks::CharCallback       );
+	glfwSetCharModsCallback          (glfwWindow, _InputCallbacks::CharModsCallback   );
+	glfwSetDropCallback              (glfwWindow, _InputCallbacks::DropCallback       );
+
 	
-	glfwSetFramebufferSizeCallback( glfwWindow, _WindowCallbacks::FramebufferSizeCallback ); // Framebuffer
-	glfwSetWindowPosCallback      ( glfwWindow, _WindowCallbacks::WindowPosCallback       ); // Pos
-	glfwSetDropCallback           ( glfwWindow, _WindowCallbacks::WindowDropCallback      ); // Drop
-	glfwSetWindowCloseCallback    ( glfwWindow, _WindowCallbacks::WindowCloseCallback     ); // Close
-	glfwSetWindowIconifyCallback  ( glfwWindow, _WindowCallbacks::WindowIconifyCallback   ); // Minimize
-	glfwSetWindowMaximizeCallback ( glfwWindow, _WindowCallbacks::WindowMaximizeCallback  ); // Maximize
-	
-	glfwSetMouseButtonCallback    ( glfwWindow, _WindowCallbacks::MouseButtonCallback     ); // Mouse
 
 	// window->dirty = false;
 	window->ApplyChanges();
