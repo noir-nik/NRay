@@ -142,26 +142,24 @@ void NeuralSdfApplication::Compute() {
 	constants.outputImageRID = ctx.outputImage.RID();
 
 	auto cmd = vkw::GetCommandBuffer(vkw::Queue::Compute);
-	vkw::BeginCommandBuffer(cmd);
+	cmd.BeginCommandBuffer();
 
-	vkw::CmdCopy(cmd, ctx.weightsGPU, weights.data(), ctx.num_parameters * sizeof(float));
+	cmd.Copy(ctx.weightsGPU, weights.data(), ctx.num_parameters * sizeof(float));
 	// Glsl shader
-	vkw::CmdBindPipeline(cmd, ctx.glslPipeline);
+	cmd.BindPipeline(ctx.glslPipeline);
 	constants.outputImageRID = ctx.bufferCPUglsl.RID();
-	vkw::CmdPushConstants(cmd, &constants, sizeof(constants));
-	vkw::CmdDispatch(cmd, {(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
-	vkw::CmdBarrier(cmd);
-	// vkw::CmdCopy(cmd, ctx.bufferCPUglsl, ctx.outputImage, ctx.width * ctx.height * sizeof(Pixel));
-	// vkw::CmdBarrier(cmd, );
+	cmd.PushConstants(&constants, sizeof(constants));
+	cmd.Dispatch({(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
+	cmd.Barrier();
+
 	// Slang shader
-	vkw::CmdBindPipeline(cmd, ctx.slangPipeline);
+	cmd.BindPipeline(ctx.slangPipeline);
 	constants.outputImageRID = ctx.bufferCPUslang.RID();
-	vkw::CmdPushConstants(cmd, &constants, sizeof(constants));
-	vkw::CmdDispatch(cmd, {(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
-	// vkw::CmdBarrier(cmd, );
-	// vkw::CmdCopy(cmd, ctx.bufferCPUslang, ctx.outputImage, ctx.width * ctx.height * sizeof(Pixel));
+	cmd.PushConstants(&constants, sizeof(constants));
+	cmd.Dispatch({(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
+
 	timer.Start();
-	vkw::EndCommandBuffer(cmd);
+	cmd.EndCommandBuffer();
 	vkw::WaitQueue(vkw::Queue::Compute);
 	printf("Compute time: %fs\n", timer.Elapsed());
 	timer.Start();

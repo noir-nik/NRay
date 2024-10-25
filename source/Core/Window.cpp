@@ -42,7 +42,7 @@ void WindowSizeCallback(GLFWwindow* window, int width, int height) {
 
 void WindowCloseCallback(GLFWwindow* window) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
-	printf("Close callback triggered\n");
+	// printf("Close callback triggered\n");
 
 	if (pWindow->windowCloseCallback)
 		pWindow->windowCloseCallback(pWindow);

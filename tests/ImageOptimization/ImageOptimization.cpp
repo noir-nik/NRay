@@ -96,24 +96,24 @@ void ImageOptimizationApplication::Compute() {
 	fillUV(imageUV.data(), ctx.width, ctx.height);
 
 	auto cmd = vkw::GetCommandBuffer(vkw::Queue::Compute);
-	vkw::BeginCommandBuffer(cmd);
+	cmd.BeginCommandBuffer();
 	// Prepare BufferGT and BufferOpt
-	vkw::CmdCopy(cmd, ctx.BufferGT, imageUV.data(), ctx.width * ctx.height * sizeof(Pixel));
-	vkw::CmdBarrier(cmd, ctx.imageCPU, vkw::Layout::General);
-	vkw::CmdClearColorImage(cmd, ctx.imageCPU, {0.0f, 0.0f, 0.5f, 0.0f});
-	vkw::CmdBarrier(cmd, ctx.imageCPU, vkw::Layout::TransferSrc);
-	vkw::CmdCopy(cmd, ctx.BufferOpt, ctx.imageCPU);
-	vkw::CmdBarrier(cmd);
+	cmd.Copy(ctx.BufferGT, imageUV.data(), ctx.width * ctx.height * sizeof(Pixel));
+	cmd.Barrier(ctx.imageCPU, vkw::Layout::General);
+	cmd.ClearColorImage(ctx.imageCPU, {0.0f, 0.0f, 0.5f, 0.0f});
+	cmd.Barrier(ctx.imageCPU, vkw::Layout::TransferSrc);
+	cmd.Copy(ctx.BufferOpt, ctx.imageCPU);
+	cmd.Barrier();
 
-	vkw::CmdBindPipeline(cmd, ctx.pipeline);
-	vkw::CmdPushConstants(cmd, &constants, sizeof(constants));
+	cmd.BindPipeline(ctx.pipeline);
+	cmd.PushConstants(&constants, sizeof(constants));
 
-	vkw::CmdDispatch(cmd, {(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
-	vkw::CmdBarrier(cmd);
-	vkw::CmdCopy(cmd, ctx.bufferCPU, ctx.BufferOpt, ctx.width * ctx.height * sizeof(Pixel));
+	cmd.Dispatch({(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
+	cmd.Barrier();
+	cmd.Copy(ctx.bufferCPU, ctx.BufferOpt, ctx.width * ctx.height * sizeof(Pixel));
 
 	timer.Start();
-	vkw::EndCommandBuffer(cmd);
+	cmd.EndCommandBuffer();
 	vkw::WaitQueue(vkw::Queue::Compute);
 	printf("Compute time: %fs\n", timer.Elapsed());
 	timer.Start();

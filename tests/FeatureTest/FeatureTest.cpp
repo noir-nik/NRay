@@ -131,11 +131,11 @@ void FeatureTestApplication::Create() {
 
 void UploadBuffers() {
 	auto cmd = vkw::GetCommandBuffer(vkw::Queue::Transfer);
-	vkw::BeginCommandBuffer(cmd);
-	vkw::CmdCopy(cmd, ctx.vertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex));
-	vkw::CmdBarrier(cmd);
-	vkw::EndCommandBuffer(cmd);
-	vkw::QueueSubmit({cmd});
+	cmd.BeginCommandBuffer();
+	cmd.Copy(ctx.vertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex));
+	cmd.Barrier();
+	cmd.EndCommandBuffer();
+	cmd.QueueSubmit({});
 }
 
 void RecordCommands(Window* window) {
@@ -150,25 +150,25 @@ void RecordCommands(Window* window) {
 	// LOG_INFO("Viewport: {}, {}, {}, {}", viewport.x, viewport.y, viewport.z, viewport.w); 
 
 	auto cmd = vkw::GetCommandBuffer(glfwWindow);
-	vkw::BeginCommandBuffer(cmd);
+	cmd.BeginCommandBuffer();
 	if (!vkw::AcquireImage(glfwWindow)) return;
 	vkw::Image& img = vkw::GetCurrentSwapchainImage(glfwWindow);
 	
-	// vkw::CmdCopy(cmd, ctx.vertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex));
-	vkw::CmdBarrier(cmd, ctx.renderImages[window], vkw::Layout::TransferDst);
-	vkw::CmdClearColorImage(cmd, ctx.renderImages[window], {0.7f, 0.0f, 0.4f, 1.0f});
+	// cmd.Copy(ctx.vertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex));
+	cmd.Barrier(ctx.renderImages[window], vkw::Layout::TransferDst);
+	cmd.ClearColorImage(ctx.renderImages[window], {0.7f, 0.0f, 0.4f, 1.0f});
 
-	vkw::CmdBeginRendering(cmd, {ctx.renderImages[window]}, {}, 1, viewport);
-	vkw::CmdBindPipeline(cmd, ctx.pipeline);
-	vkw::CmdPushConstants(cmd, &constants, sizeof(constants));
-	vkw::CmdBindVertexBuffer(cmd, ctx.vertexBuffer);
-	vkw::CmdDraw(cmd, 3, 1, 0, 0);
-	vkw::CmdEndRendering(cmd);
+	cmd.BeginRendering({ctx.renderImages[window]}, {}, 1, viewport);
+	cmd.BindPipeline(ctx.pipeline);
+	cmd.PushConstants(&constants, sizeof(constants));
+	cmd.BindVertexBuffer(ctx.vertexBuffer);
+	cmd.Draw(3, 1, 0, 0);
+	cmd.EndRendering();
 	
-	vkw::CmdBarrier(cmd, ctx.renderImages[window], vkw::Layout::TransferSrc);
-	vkw::CmdBarrier(cmd, img, vkw::Layout::TransferDst);
-	vkw::CmdBlit(cmd, img, ctx.renderImages[window], {0, 0, size.x, size.y}, {0, 0, size.x, size.y});
-	vkw::CmdBarrier(cmd, img, vkw::Layout::Present);
+	cmd.Barrier(ctx.renderImages[window], vkw::Layout::TransferSrc);
+	cmd.Barrier(img, vkw::Layout::TransferDst);
+	cmd.Blit(img, ctx.renderImages[window], {0, 0, size.x, size.y}, {0, 0, size.x, size.y});
+	cmd.Barrier(img, vkw::Layout::Present);
 
 }
 

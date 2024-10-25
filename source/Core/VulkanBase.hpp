@@ -238,7 +238,6 @@ bool GetSwapChainDirty(GLFWwindow* window);
 
 
 struct SubmitInfo{
-	Command* commandBuffer   = nullptr;
 	Semaphore*       waitSemaphore   = nullptr;
 	uint64_t         waitStages      = PipelineStage::None;
 	Semaphore*       signalSemaphore = nullptr;
@@ -247,55 +246,55 @@ struct SubmitInfo{
 
 struct Command {
 	std::shared_ptr<CommandResource> resource;
+	Command();
 
-	void CmdCopy(Buffer& dst, void*   data, uint32_t size, uint32_t dstOfsset = 0);
-	void CmdCopy(Buffer& dst, Buffer& src,  uint32_t size, uint32_t dstOffset = 0, uint32_t srcOffset = 0);
-	void CmdCopy(Image&  dst, void*   data, uint32_t size);
-	void CmdCopy(Image&  dst, Buffer& src,  uint32_t srcOffset = 0); // size is a No OP
-	void CmdCopy(Buffer& dst, Image&  src,  uint32_t dstOffset = 0); // size is a No OP
-	void CmdCopy(Buffer& dst, Image&  src,  uint32_t dstOffset, ivec2 imageOffset, ivec2 imageExtent); // size is a No OP
-	void CmdBarrier(Image& img, Layout::ImageLayout newLayout, Layout::ImageLayout oldLayout = Layout::MaxEnum);
-	void CmdBarrier(Buffer& buf);
-	void CmdBarrier();
-	void CmdBlit (Image& dst, Image& src, ivec4 dstRegion = {}, ivec4 srcRegion = {});
-	void CmdClearColorImage(Image &image, float4 color);
+	void Copy(Buffer& dst, void*   data, uint32_t size, uint32_t dstOfsset = 0);
+	void Copy(Buffer& dst, Buffer& src,  uint32_t size, uint32_t dstOffset = 0, uint32_t srcOffset = 0);
+	void Copy(Image&  dst, void*   data, uint32_t size);
+	void Copy(Image&  dst, Buffer& src,  uint32_t srcOffset = 0); // size is a No OP
+	void Copy(Buffer& dst, Image&  src,  uint32_t dstOffset = 0); // size is a No OP
+	void Copy(Buffer& dst, Image&  src,  uint32_t dstOffset, ivec2 imageOffset, ivec2 imageExtent); // size is a No OP
+	void Barrier(Image& img, Layout::ImageLayout newLayout, Layout::ImageLayout oldLayout = Layout::MaxEnum);
+	void Barrier(Buffer& buf);
+	void Barrier();
+	void Blit (Image& dst, Image& src, ivec4 dstRegion = {}, ivec4 srcRegion = {});
+	void ClearColorImage(Image& image, const float4& color);
 
 
-	void CmdBeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach = {}, uint32_t layerCount = 1, vec4 viewport = {}, ivec4 scissor = {});
-	void CmdEndRendering();
-	// void CmdBeginPresent();
-	// void CmdEndPresent();
-	void CmdBindPipeline(Pipeline& pipeline);
-	void CmdPushConstants(void* data, uint32_t size);
+	void BeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach = {}, uint32_t layerCount = 1, vec4 viewport = {}, ivec4 scissor = {});
+	void EndRendering();
+	// void BeginPresent();
+	// void EndPresent();
+	void BindPipeline(Pipeline& pipeline);
+	void PushConstants(void* data, uint32_t size);
 
-	// void CmdBuildBLAS(BLAS& blas);
-	// void CmdBuildTLAS(TLAS& tlas, const std::vector<BLASInstance>& instances);
+	// void BuildBLAS(BLAS& blas);
+	// void BuildTLAS(TLAS& tlas, const std::vector<BLASInstance>& instances);
 
-	void CmdDraw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance);
-	void CmdBindVertexBuffer(Buffer& vertexBuffer);
-	void CmdDrawMesh(Buffer& vertexBuffer, Buffer& indexBuffer, uint32_t indexCount);
-	void CmdDrawLineStrip(const Buffer& pointsBuffer, uint32_t firstPoint, uint32_t pointCount, float thickness = 1.0f);
-	void CmdDrawPassThrough();
-	// void CmdDrawImGui(ImDrawData* data);
-	void CmdDispatch(const uvec3& groups);
+	void Draw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance);
+	void BindVertexBuffer(Buffer& vertexBuffer);
+	void DrawMesh(Buffer& vertexBuffer, Buffer& indexBuffer, uint32_t indexCount);
+	void DrawLineStrip(const Buffer& pointsBuffer, uint32_t firstPoint, uint32_t pointCount, float thickness = 1.0f);
+	void DrawPassThrough();
+	// void DrawImGui(ImDrawData* data);
+	void Dispatch(const uvec3& groups);
 
-	int CmdBeginTimeStamp(const std::string& name);
-	void CmdEndTimeStamp(int timeStampIndex);
+	int BeginTimeStamp(const std::string& name);
+	void EndTimeStamp(int timeStampIndex);
 	void BeginCommandBuffer();
 	void EndCommandBuffer();
 	void WaitQueue ();
-
+	void QueueSubmit (const SubmitInfo& submitInfo);
 };
 
-void QueueSubmit (const SubmitInfo& submitInfo);
 void WaitQueue(Queue queue);
 void WaitIdle();
 // void BeginImGui();
 
 void Init();
 void Init(GLFWwindow* window, uint32_t width, uint32_t height);
-Command* GetCommandBuffer(GLFWwindow* window);
-Command* GetCommandBuffer(Queue queue);
+Command& GetCommandBuffer(GLFWwindow* window);
+Command& GetCommandBuffer(Queue queue);
 Image& GetCurrentSwapchainImage(GLFWwindow* window);
 bool AcquireImage(GLFWwindow* window);
 void RecreateSwapChain(GLFWwindow* window, uint32_t width, uint32_t height);
@@ -307,10 +306,10 @@ void Destroy();
 
 
 // template<typename T>
-// void CmdTimeStamp(const std::string& name, T callback) {
-//     int id = CmdBeginTimeStamp(name);
+// void TimeStamp(const std::string& name, T callback) {
+//     int id = BeginTimeStamp(name);
 //     callback();
-//     CmdEndTimeStamp(id);
+//     EndTimeStamp(id);
 // }
 
 }

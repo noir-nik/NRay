@@ -115,15 +115,14 @@ void HelloTriangleApplication::Create() {
 // 		auto r = sinf(0.5f * i+ 1);
 // 		auto g = cosf(0.9f * i);
 // 		vkw::BeginCommandBuffer(vkw::Queue::Graphics);
-// 		// vkw::CmdBeginRendering(attachs, ctx.depth);
-// 		// vkw::CmdBindPipeline(ctx.pipeline);
-// 		// vkw::CmdPushConstants(&constants, sizeof(constants));
+// 		// cmd.BeginRendering(ctx.depth);
+// 		// cmd.BindPipeline(ipeline);
+// 		// cmd.PushConstants(nstants, sizeof(constants));
 // 		vkw::AcquireImage();
 // 		vkw::Image& img = vkw::GetCurrentSwapchainImage(ctx.window.get()->GetGLFWwindow());
-// 		vkw::CmdBarrier(img, vkw::Layout::TransferDst);
-// 		vkw::CmdClearColorImage(img, {std::abs(r), 0.5f, 0.0f, 1.0f});
-// 		vkw::CmdEndPresent();
-// 		// vkw::EndCommandBuffer();
+// 		cmd.Barrier(vkw::Layout::TransferDst);
+// 		cmd.ClearColorImage({std::abs(r), 0.5f, 0.0f, 1.0f});
+// 		cmd.EndPresent(/ 		// vkw::EndCommandBuffer();
 // 		timer.Start();
 // 		vkw::SubmitAndPresent();
 // 		// vkw::WaitQueue(vkw::Queue::Graphics);
@@ -144,31 +143,30 @@ void HelloTriangleApplication::Draw() {
 	constants.storageImageRID = ctx.renderImage.RID();
 	
 	auto cmd = vkw::GetCommandBuffer(ctx.window->GetGLFWwindow());
-	vkw::BeginCommandBuffer(cmd);
-	// vkw::CmdPushConstants(&constants, sizeof(constants));
+	cmd.BeginCommandBuffer();
+	// cmd.PushConstants(nstants, sizeof(constants));
 	GLFWwindow* window = ctx.window->GetGLFWwindow();
-	// vkw::CmdBeginPresent();
-	vkw::AcquireImage(window);
+	// cmd.BeginPresent(vkw::AcquireImage(window);
 	vkw::Image& img = vkw::GetCurrentSwapchainImage(window);
-	vkw::CmdBarrier(cmd, ctx.renderImage, vkw::Layout::ColorAttachment);
-	vkw::CmdCopy(cmd, ctx.vertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex));
-	// vkw::CmdClearColorImage(cmd, ctx.renderImage, {0.7f, 0.0f, 0.4f, 1.0f});
+	cmd.Barrier(ctx.renderImage, vkw::Layout::ColorAttachment);
+	cmd.Copy(ctx.vertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex));
+	// cmd.ClearColorImage(ctx.renderImage, {0.7f, 0.0f, 0.4f, 1.0f});
 
-	vkw::CmdBindPipeline(cmd, ctx.computePipeline);
-	vkw::CmdPushConstants(cmd, &constants, sizeof(constants));
-	vkw::CmdDispatch(cmd, {(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
+	cmd.BindPipeline(ctx.computePipeline);
+	cmd.PushConstants(&constants, sizeof(constants));
+	cmd.Dispatch({(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
 
-	vkw::CmdBeginRendering(cmd, {ctx.renderImage});
-	vkw::CmdBindPipeline(cmd, ctx.pipeline);
-	vkw::CmdBindVertexBuffer(cmd, ctx.vertexBuffer);
-	vkw::CmdDraw(cmd, 3, 1, 0, 0);
-	vkw::CmdEndRendering(cmd);
+	cmd.BeginRendering({ctx.renderImage});
+	cmd.BindPipeline(ctx.pipeline);
+	cmd.BindVertexBuffer(ctx.vertexBuffer);
+	cmd.Draw(3, 1, 0, 0);
+	cmd.EndRendering();
 	
-	vkw::CmdBarrier(cmd, ctx.renderImage, vkw::Layout::TransferSrc);
-	vkw::CmdBarrier(cmd, img, vkw::Layout::TransferDst);
-	vkw::CmdBlit(cmd, img, ctx.renderImage);
+	cmd.Barrier(ctx.renderImage, vkw::Layout::TransferSrc);
+	cmd.Barrier(img, vkw::Layout::TransferDst);
+	cmd.Blit(img, ctx.renderImage);
 
-	vkw::CmdBarrier(cmd, img, vkw::Layout::Present);
+	cmd.Barrier(img, vkw::Layout::Present);
 	vkw::SubmitAndPresent(window);
 	vkw::WaitQueue(vkw::Queue::Graphics);
 	sleep(3);
@@ -186,20 +184,19 @@ void HelloTriangleApplication::Draw() {
 	constants.outputImageRID = ctx.outputImage.RID();
 	
 	vkw::BeginCommandBuffer(vkw::Queue::Graphics);
-	// vkw::CmdPushConstants(&constants, sizeof(constants));
+	// cmd.PushConstants(nstants, sizeof(constants));
 
-	// vkw::CmdBeginPresent();
-	vkw::AcquireImage();
+	// cmd.BeginPresent(vkw::AcquireImage();
 	vkw::Image& img = vkw::GetCurrentSwapchainImage();
-	vkw::CmdBarrier(img, vkw::Layout::TransferDst);
+	cmd.Barrier(vkw::Layout::TransferDst);
 
-	vkw::CmdBarrier(ctx.renderImage, vkw::Layout::TransferDst);
-	vkw::CmdClearColorImage(ctx.renderImage, {0.7f, 0.0f, 0.4f, 1.0f});
-	vkw::CmdBarrier(ctx.renderImage, vkw::Layout::TransferSrc);
+	cmd.Barrier(enderImage, vkw::Layout::TransferDst);
+	cmd.ClearColorImage(enderImage, {0.7f, 0.0f, 0.4f, 1.0f});
+	cmd.Barrier(enderImage, vkw::Layout::TransferSrc);
 
-	vkw::CmdBlit(img, ctx.renderImage, {ctx.width, ctx.height}, {ctx.width, ctx.height});
+	cmd.Blit(ctx.renderImage, {ctx.width, ctx.height}, {ctx.width, ctx.height});
 
-	vkw::CmdBarrier(img, vkw::Layout::Present);
+	cmd.Barrier(vkw::Layout::Present);
 
 	// vkw::EndCommandBuffer();
 	vkw::SubmitAndPresent();
