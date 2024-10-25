@@ -4,7 +4,7 @@
 #include <spdlog/sinks/basic_file_sink.h>
 
 std::shared_ptr<spdlog::logger> Logger::_logger;
-constexpr bool log_to_file = 1;
+constexpr bool log_to_file = 0;
 constexpr bool use_time_in_log_filename = 1;
 
 void Logger::Init(){

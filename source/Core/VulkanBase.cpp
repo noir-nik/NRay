@@ -378,7 +378,7 @@ void RecreateSwapChain(GLFWwindow* window, uint32_t width, uint32_t height) {
 		swapChain.Destroy(true);
 		swapChain.Create(_ctx.device, window, width, height, true);
 	}
-	LOG_INFO("Swapchain recreated!");
+	// LOG_INFO("Swapchain recreated!");
 }
 
 void DestroySwapChain(GLFWwindow* window) {
@@ -2137,7 +2137,7 @@ void SwapChain::Create(VkDevice device, GLFWwindow* window, uint32_t width, uint
 		_ctx.CreateCommandBuffers(commandResources);
 	}
 
-	LOG_INFO("Created Swapchain {}", _ctx.swapChains.size());
+	// LOG_INFO("Created Swapchain {}", _ctx.swapChains.size());
 	currentFrame = 0;
 	currentImageIndex = 0;
 	dirty = false;

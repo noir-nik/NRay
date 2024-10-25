@@ -59,7 +59,7 @@ void Context::CreateShaders() {
 			{.stage = vkw::ShaderStage::Vertex, .path = "tests/FeatureTest/FeatureTest.vert"},
 			{.stage = vkw::ShaderStage::Fragment, .path = "tests/FeatureTest/FeatureTest.frag"},
 		},
-		.name = "Hello triangle pipeline",
+		.name = "Feature pipeline",
 		// pos2 + color3
 		.vertexAttributes = {vkw::Format::RG32_sfloat, vkw::Format::RGB32_sfloat},
 		// .colorFormats = {ctx.albedo.format, ctx.normal.format, ctx.material.format, ctx.emission.format},
@@ -103,9 +103,9 @@ void FeatureTestApplication::run(FeatureTestInfo* pFeatureTestInfo) {
 void RecreateFrameResources(Window* w);
 void UploadBuffers();
 
-void FramebufferCallback(GLFWwindow* window, int width, int height);
-void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
-void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
+void FramebufferCallback(Window* window, int width, int height);
+void MouseButtonCallback(Window* window, int button, int action, int mods);
+void KeyCallback(Window* window, int key, int scancode, int action, int mods);
 
 void FeatureTestApplication::Setup() {
 	ctx.width = info->width;
@@ -118,10 +118,10 @@ void FeatureTestApplication::Create() {
 	ctx.mainWindow = window;
 	// ctx.window1 = WindowManager::NewWindow(ctx.width, ctx.height, "w1");
 	vkw::Init(window->GetGLFWwindow(), window->GetWidth(), window->GetHeight());
-	window->SetFramebufferSizeCallback(FramebufferCallback);
-	window->SetMouseButtonCallback(MouseButtonCallback);
-	window->SetKeyCallback(KeyCallback);
-	window->SetMaxSize(3000, 3000);
+	window->AddFramebufferSizeCallback(FramebufferCallback);
+	window->AddMouseButtonCallback(MouseButtonCallback);
+	window->AddKeyCallback(KeyCallback);
+	// window->SetMaxSize(3000, 3000);
 	// ctx.CreateImages(window->GetMonitorWidth(), window->GetMonitorHeight());
 	CreateRenderImage(window);
 	ctx.vertexBuffer = vkw::CreateBuffer(vertices.size() * sizeof(Vertex), vkw::BufferUsage::Vertex, vkw::Memory::GPU, "Vertex Buffer");
@@ -189,23 +189,22 @@ void DrawWindow(Window* window) {
 	}
 }
 
-void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
+void KeyCallback(Window* window, int key, int scancode, int action, int mods)
 {
 	// printf("key: %d, scancode: %d, action: %d, mods: %d\n", key, scancode, action, mods);
-	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
 	if (action == GLFW_PRESS) {
 		switch (key) {
 		case GLFW_KEY_ESCAPE:
-			pWindow->SetShouldClose(true);
+			window->SetShouldClose(true);
 			break;
 		case GLFW_KEY_F11: {
-			auto moden = pWindow->GetMode();
-			// LOG_INFO("Window {} mode: {}", pWindow->GetName(), (int)mode);
-			if (pWindow->GetMode() == WindowMode::WindowedFullScreen) {
-				pWindow->SetMode(WindowMode::Windowed);
+			auto moden = window->GetMode();
+			// LOG_INFO("Window {} mode: {}", window->GetName(), (int)mode);
+			if (window->GetMode() == WindowMode::WindowedFullScreen) {
+				window->SetMode(WindowMode::Windowed);
 			} else {
-				pWindow->StoreWindowSize();
-				pWindow->SetMode(WindowMode::WindowedFullScreen);
+				window->StoreWindowSize();
+				window->SetMode(WindowMode::WindowedFullScreen);
 			}}
 			break;
 		case GLFW_KEY_N: {
@@ -214,10 +213,11 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 			auto window = WindowManager::NewWindow(ctx.width, ctx.height, name.c_str());
 			CreateRenderImage(window);
 			ctx.windows.emplace(window);
-			window->SetFramebufferSizeCallback(FramebufferCallback);
-			window->SetMouseButtonCallback(MouseButtonCallback);
-			window->SetKeyCallback(KeyCallback);
-			window->SetMaxSize(3000, 3000);
+			window->AddFramebufferSizeCallback(FramebufferCallback);
+			window->AddMouseButtonCallback(MouseButtonCallback);
+			window->AddKeyCallback(KeyCallback);
+
+            
 		}
 		default:
 			break;
@@ -226,24 +226,23 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 	}
 }
 
-void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
-	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
+
+void MouseButtonCallback(Window* window, int button, int action, int mods) {
 	if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS){
-		pWindow->SetResizable(!pWindow->GetResizable());
+		window->SetResizable(!window->GetResizable());
 	}
 	
 }
 
-void FramebufferCallback(GLFWwindow* window, int width, int height) {
-	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
-	pWindow->SetSize(width, height);
-	pWindow->SetSwapchainDirty(true);
-	pWindow->SetDrawNeeded(true);
-	DEBUG_TRACE("Window {} framebuffer resiznnned to {}x{}", pWindow->GetName(), width, height);
+void FramebufferCallback(Window* window, int width, int height) {
+	window->SetSize(width, height);
+	window->SetSwapchainDirty(true);
+	window->SetDrawNeeded(true);
+	// DEBUG_TRACE("Window {} framebuffer resiznnned to {}x{}", window->GetName(), width, height);
 	if (width == 0 || height == 0) {return;}
-	LOG_INFO("RecreateFrameResources {} callback", pWindow->GetName());
-	RecreateFrameResources(pWindow);
-	DrawWindow(pWindow);
+	// LOG_INFO("RecreateFrameResources {} callback", window->GetName());
+	RecreateFrameResources(window);
+	DrawWindow(window);
 }
 
 
@@ -251,9 +250,10 @@ static int loopCount = 0;
 void FeatureTestApplication::MainLoop() {
 	Context* c = &ctx;
 	while (ctx.mainWindow != nullptr) {
-		for (auto& window : ctx.windows) {LOG_INFO("Drawing window {}", window->GetName()); DrawWindow(window);}
+		for (auto& window : ctx.windows) {
+            DrawWindow(window);
+        }
 		WindowManager::WaitEvents();
-		
 		for (auto it = ctx.windows.begin(); it != ctx.windows.end();) {
 			auto window = *it;
 			window->ApplyChanges();
@@ -273,7 +273,7 @@ void FeatureTestApplication::MainLoop() {
 		}
 		// printf("Loop\n");
 		// fflush(stdout);
-		LOG_INFO("Loop {}", loopCount++);
+		// LOG_INFO("Loop {}", loopCount++);
 	}
 	vkw::WaitIdle();
 }
@@ -318,15 +318,15 @@ void FeatureTestApplication::Finish() {
 }
 
 void RecreateFrameResources(Window* window) {
-	if (!window->GetAlive()) { LOG_WARN("RecreateFrameResources: Window is dead"); return;} // important
-	if (window->GetIconified()) {LOG_TRACE("RecreateFrameResources: size = 0"); return;};
+	if (!window->GetAlive()) { /* LOG_WARN("RecreateFrameResources: Window is dead"); */ return;} // important
+	if (window->GetIconified()) {/* LOG_TRACE("RecreateFrameResources: size = 0"); */ return;};
 
 	vkw::WaitIdle();
 	bool swapChainDirty = vkw::GetSwapChainDirty(window->GetGLFWwindow());
 	bool windowDirty = window->GetSwapchainDirty();
-	LOG_INFO("RecreateFrameResources {} {} {} {}", window->GetName(), (void*)window->GetGLFWwindow(), swapChainDirty, windowDirty);
+	// LOG_INFO("RecreateFrameResources {} {} {} {}", window->GetName(), (void*)window->GetGLFWwindow(), swapChainDirty, windowDirty);
 	if (swapChainDirty || windowDirty) {
-		LOG_INFO("DIRTY FRAME RESOURCES");
+		// LOG_INFO("DIRTY FRAME RESOURCES");
 		window->UpdateFramebufferSize();
 		vkw::RecreateSwapChain(window->GetGLFWwindow(), window->GetWidth(), window->GetHeight());
 		window->SetSwapchainDirty(false);

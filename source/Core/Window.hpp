@@ -48,7 +48,23 @@ class Window {
 	bool decorated = true;
 	bool maximized = false;
 	bool alive = true;
+    bool swapchainAlive = false;
 	// bool shouldClose = false;
+
+    void (*createSwapchainFn )(GLFWwindow* window) = nullptr; // createSwapchainFn
+    void (*destroySwapchainFn)(GLFWwindow* window) = nullptr; // destroySwapchainFn
+
+    // struct FramebufferSizeCallback {
+    //     FramebufferSizeCallback* next = nullptr;
+    // };
+
+    void (*framebufferSizeCallback) (Window* window, int width, int height)                       = nullptr;
+    void (*keyCallback)             (Window* window, int key, int scancode, int action, int mods) = nullptr;
+    void (*mouseButtonCallback)     (Window* window, int button, int action, int mods)            = nullptr;
+    void (*scrollCallback)          (Window* window, double xoffset, double yoffset)              = nullptr;
+    void (*dropCallback)            (Window* window, int count, const char** paths)               = nullptr;
+    
+
 
 public:
 	Window(int width, int height, const char* name = "Engine"): width(width), height(height), name(name) {}
@@ -110,8 +126,15 @@ public:
 
 	inline bool        GetDrawNeeded()                     { return drawNeeded; }
 	inline void        SetDrawNeeded(bool value)           { drawNeeded = value; }
+
 	inline bool        GetSwapchainDirty()                 { return swapchainDirty; }
 	inline void        SetSwapchainDirty(bool value)       { swapchainDirty = value; }
+
+    inline void        CreateSwapchain()                   { if(createSwapchainFn) createSwapchainFn(window); }
+    inline void        DestroySwapchain()                  { if(destroySwapchainFn) destroySwapchainFn(window); }
+
+    inline void        SetCreateSwapchainFn (void(*fn)(GLFWwindow*)) { createSwapchainFn  = fn; }
+    inline void        SetDestroySwapchainFn(void(*fn)(GLFWwindow*)) { destroySwapchainFn = fn; }
 
 	inline bool        GetAlive()                          { return alive; }
 	inline void        SetAlive(bool value)                { alive = value; }
@@ -127,11 +150,28 @@ public:
 	inline void        SetMinSize(int w, int h)            { glfwSetWindowSizeLimits(window, w, h, GLFW_DONT_CARE, GLFW_DONT_CARE); }
 	inline void        SetMaxSize(int w, int h)            { glfwSetWindowSizeLimits(window, GLFW_DONT_CARE, GLFW_DONT_CARE, w, h); }
 
-	inline void        SetFramebufferSizeCallback(void(*callback)(GLFWwindow* window, int width, int height)) { glfwSetFramebufferSizeCallback(window, callback); }
-	inline void        SetDropCallback(void(*callback)(GLFWwindow* window, int count, const char** paths)) { glfwSetDropCallback(window, callback); }
-	inline void        SetKeyCallback(void(*callback)(GLFWwindow* window, int key, int scancode, int action, int mods)) { glfwSetKeyCallback(window, callback); }
-	inline void        SetMouseButtonCallback(void(*callback)(GLFWwindow* window, int button, int action, int mods)) { glfwSetMouseButtonCallback(window, callback); }
-	inline void        SetScrollCallback(void(*callback)(GLFWwindow* window, double xoffset, double yoffset)) { glfwSetScrollCallback(window, callback); }
+    inline void        AddFramebufferSizeCallback (void(*callback)(Window* window, int width, int height))                       { framebufferSizeCallback = callback; }
+	inline void        AddDropCallback            (void(*callback)(Window* window, int count, const char** paths))               { dropCallback = callback;            }
+	inline void        AddKeyCallback             (void(*callback)(Window* window, int key, int scancode, int action, int mods)) { keyCallback = callback;             }
+	inline void        AddMouseButtonCallback     (void(*callback)(Window* window, int button, int action, int mods))            { mouseButtonCallback = callback;     }
+	inline void        AddScrollCallback          (void(*callback)(Window* window, double xoffset, double yoffset))              { scrollCallback = callback;          }
+
+
+    friend void WindowCallbacks::ScrollCallback(GLFWwindow* window, double x, double y);
+    friend void WindowCallbacks::FramebufferSizeCallback(GLFWwindow* window, int width, int height);
+    friend void WindowCallbacks::WindowIconifyCallback(GLFWwindow* window, int iconified);
+    friend void WindowCallbacks::WindowMaximizeCallback(GLFWwindow* window, int maximized);
+    friend void WindowCallbacks::WindowPosCallback(GLFWwindow* window, int x, int y);
+    friend void WindowCallbacks::MouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
+    friend void WindowCallbacks::WindowDropCallback(GLFWwindow* window, int count, const char** paths);
+    friend void WindowCallbacks::WindowCloseCallback(GLFWwindow* window);
+    
+private:    
+	inline void        SetFramebufferSizeCallback(void(*callback)(GLFWwindow* window, int width, int height))                       { glfwSetFramebufferSizeCallback(window, callback); }
+	inline void        SetDropCallback           (void(*callback)(GLFWwindow* window, int count, const char** paths))               { glfwSetDropCallback(window, callback);            }
+	inline void        SetKeyCallback            (void(*callback)(GLFWwindow* window, int key, int scancode, int action, int mods)) { glfwSetKeyCallback(window, callback);             }
+	inline void        SetMouseButtonCallback    (void(*callback)(GLFWwindow* window, int button, int action, int mods))            { glfwSetMouseButtonCallback(window, callback);     }
+	inline void        SetScrollCallback         (void(*callback)(GLFWwindow* window, double xoffset, double yoffset))              { glfwSetScrollCallback(window, callback);          }
 
 
 	inline std::vector<std::string> GetAndClearPaths()     { auto paths = pathsDrop; pathsDrop.clear(); return paths; }
