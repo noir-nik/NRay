@@ -194,19 +194,6 @@ void KeyCallback(Window* window, int key, int scancode, int action, int mods)
 	// printf("key: %d, scancode: %d, action: %d, mods: %d\n", key, scancode, action, mods);
 	if (action == GLFW_PRESS) {
 		switch (key) {
-		case GLFW_KEY_ESCAPE:
-			window->SetShouldClose(true);
-			break;
-		case GLFW_KEY_F11: {
-			auto moden = window->GetMode();
-			// LOG_INFO("Window {} mode: {}", window->GetName(), (int)mode);
-			if (window->GetMode() == WindowMode::WindowedFullScreen) {
-				window->SetMode(WindowMode::Windowed);
-			} else {
-				window->StoreWindowSize();
-				window->SetMode(WindowMode::WindowedFullScreen);
-			}}
-			break;
 		case GLFW_KEY_N: {
 			static int windowCount = 1;
 			std::string name = "w" + std::to_string(windowCount++);
@@ -216,8 +203,6 @@ void KeyCallback(Window* window, int key, int scancode, int action, int mods)
 			window->AddFramebufferSizeCallback(FramebufferCallback);
 			window->AddMouseButtonCallback(MouseButtonCallback);
 			window->AddKeyCallback(KeyCallback);
-
-            
 		}
 		default:
 			break;
@@ -231,7 +216,6 @@ void MouseButtonCallback(Window* window, int button, int action, int mods) {
 	if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS){
 		window->SetResizable(!window->GetResizable());
 	}
-	
 }
 
 void FramebufferCallback(Window* window, int width, int height) {

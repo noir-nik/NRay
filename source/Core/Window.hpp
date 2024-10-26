@@ -39,7 +39,48 @@ void CharModsCallback    (GLFWwindow *window, unsigned int codepoint, int mods);
 void DropCallback        (GLFWwindow *window, int path_count, const char *paths[]);
 }
 
+enum class MouseButton {
+	Button1 = GLFW_MOUSE_BUTTON_1,
+	Button2 = GLFW_MOUSE_BUTTON_2,
+	Button3 = GLFW_MOUSE_BUTTON_3,
+	Button4 = GLFW_MOUSE_BUTTON_4,
+	Button5 = GLFW_MOUSE_BUTTON_5,
+	Button6 = GLFW_MOUSE_BUTTON_6,
+	Button7 = GLFW_MOUSE_BUTTON_7,
+	Button8 = GLFW_MOUSE_BUTTON_8,
+	Last    = GLFW_MOUSE_BUTTON_LAST,
+	Left    = GLFW_MOUSE_BUTTON_LEFT,
+	Right   = GLFW_MOUSE_BUTTON_RIGHT,
+	Middle  = GLFW_MOUSE_BUTTON_MIDDLE,
+};
 
+class Mouse {
+	float       scroll        = .0f;
+	float       deltaScroll   = .0f;
+	Lmath::vec2 pos      = Lmath::vec2(.0f, .0f);
+	Lmath::vec2 deltaPos = Lmath::vec2(.0f, .0f);
+
+public:
+	float GetScroll() const { return scroll; }
+	float GetDeltaScroll() const { return deltaScroll; }
+	Lmath::vec2 GetPos() const { return pos; }
+	Lmath::vec2 GetDeltaPos() const { return deltaPos; }
+
+	void ResetDeltaScroll() { deltaScroll = .0f; }
+
+	int GetButton(GLFWwindow* window, MouseButton button) { return glfwGetMouseButton(window, static_cast<int>(button)); }
+
+private:
+	friend void _InputCallbacks::MouseButtonCallback         (GLFWwindow *window, int button, int action, int mods);
+	friend void _InputCallbacks::CursorPosCallback           (GLFWwindow *window, double xpos, double ypos);
+	friend void _InputCallbacks::CursorEnterCallback         (GLFWwindow *window, int entered);
+	friend void _InputCallbacks::ScrollCallback              (GLFWwindow *window, double xoffset, double yoffset);
+	friend void _InputCallbacks::KeyCallback                 (GLFWwindow *window, int key, int scancode, int action, int mods);
+	friend void _InputCallbacks::CharCallback                (GLFWwindow *window, unsigned int codepoint);
+	friend void _InputCallbacks::CharModsCallback            (GLFWwindow *window, unsigned int codepoint, int mods);
+	friend void _InputCallbacks::DropCallback                (GLFWwindow *window, int path_count, const char *paths[]);
+};
+extern Mouse mouse;
 
 class Window {
 	friend class WindowManager;
@@ -47,8 +88,7 @@ class Window {
 	std::string   name               = "Engine";
 	int           width              = 640;
 	int           height             = 480;
-	int           posX               = 0;
-	int           posY               = 30;
+	Lmath::int2   pos                = { 0, 30 };
 	int           monitorIndex       = 0;
 	int           videoModeIndex     = 0;
 	float         scaleX             = 1.0f;
@@ -59,11 +99,6 @@ class Window {
 	float deltaTime = .0f;
 
 	std::vector<std::string> pathsDrop;
-
-	float       scroll        = .0f;
-	float       deltaScroll   = .0f;
-	Lmath::vec2 mousePos      = Lmath::vec2(.0f, .0f);
-	Lmath::vec2 deltaMousePos = Lmath::vec2(.0f, .0f);
 
 	char lastKeyState[GLFW_KEY_LAST + 1];
 	WindowMode mode = WindowMode::Windowed;
@@ -85,6 +120,13 @@ class Window {
 	void (*createSwapchainFn )(GLFWwindow* window) = nullptr; // createSwapchainFn
 	void (*destroySwapchainFn)(GLFWwindow* window) = nullptr; // destroySwapchainFn
 
+	enum Attrib {
+		Decorated = GLFW_DECORATED,
+		Resizable = GLFW_RESIZABLE,
+		Floating = GLFW_FLOATING,
+		AutoIconify = GLFW_AUTO_ICONIFY,
+		FocusOnShow = GLFW_FOCUS_ON_SHOW
+	};
 	
 	/* ================================ User Callbacks ===================================================== */
 
@@ -107,8 +149,6 @@ class Window {
 	void (*charModsCallback)           (Window *window, unsigned int codepoint, int mods)            = nullptr;
 	void (*dropCallback)               (Window *window, int path_count, const char *paths[])         = nullptr;
 		
-
-
 public:
 	Window(int width, int height, const char* name = "Engine"): width(width), height(height), name(name) {}
 	Window& operator=(const Window&) = delete;
@@ -126,7 +166,7 @@ public:
 	inline int         GetWidth()                          { return width;                                  }
 	inline int         GetHeight()                         { return height;                                 }
 	inline auto        GetSize()                           { return Lmath::ivec2(width, height);            }
-	inline void        StoreWindowSize()                   { windowedSize = {posX, posY, width, height};    }
+	inline void        StoreWindowSize()                   { windowedSize = {pos.x, pos.y, width, height};    }
 
 	inline int         GetMonitorIndex()                   { return monitorIndex;                           }
 	inline int         GetMonitorWidth()                   { vidMode = glfwGetVideoMode(glfwGetPrimaryMonitor()); return vidMode->width; }
@@ -137,10 +177,10 @@ public:
 	inline bool        GetShouldClose()                    { return glfwWindowShouldClose(window);          }
 	inline void        SetShouldClose(bool value)          { glfwSetWindowShouldClose(window, value);       }
 
-	inline float&      GetScroll()                         { return scroll;                                 }
-	inline float&      GetDeltaScroll()                    { return deltaScroll;                            }
+	// inline float&      GetScroll()                         { return scroll;                                 }
+	// inline float&      GetDeltaScroll()                    { return deltaScroll;                            }
 
-	inline Lmath::vec2 GetDeltaMouse()                     { return deltaMousePos;                          }
+	// inline Lmath::vec2 GetDeltaMouse()                     { return deltaMousePos;                          }
 
 	// inline bool        GetFramebufferResized()             { return framebufferResized;                     }
 	inline bool        IsKeyDown(uint16_t keyCode)         { return glfwGetKey(window, keyCode);            }
@@ -150,8 +190,8 @@ public:
 	inline void        CmdResizeTo(int width, int height)  { glfwSetWindowSize(window, width, height); drawNeeded = true; }
 	inline void        SetSize(int w, int h)               { width = w; height = h;}
 	
-	inline Lmath::int2 GetPos()                            { glfwGetWindowPos(window, &posX, &posY); return {posX, posY}; }
-	inline void        SetPos(int x, int y)                { posX = x; posY = y; }
+	inline Lmath::int2 GetPos()                            { glfwGetWindowPos(window, &pos.x, &pos.y); return {pos.x, pos.y}; }
+	inline void        SetPos(int x, int y)                { pos.x = x; pos.y = y; }
 
 	inline WindowMode  GetMode()                           { return mode; }
 	inline void        SetMode(WindowMode value)           { newMode = value; }
@@ -204,6 +244,7 @@ public:
 	inline void        CmdRestore()                        { glfwRestoreWindow(window); }
 	inline void        CmdMaximize()                       { glfwMaximizeWindow(window); }
 	inline void        CmdSetPos(int x, int y)             { glfwSetWindowPos(window, x, y); }
+	inline void        CmdSetPos(Lmath::int2 pos)          { glfwSetWindowPos(window, pos.x, pos.y); }
 
 
 

@@ -165,6 +165,10 @@ struct Context
 };
 static Context _ctx;
 
+struct Device {
+
+};
+
 struct SwapChain {
 	VkDevice device = VK_NULL_HANDLE;
 	VkSurfaceKHR surface = VK_NULL_HANDLE;	
@@ -1847,6 +1851,7 @@ void Context::CreateDevice() {
 	vulkanFunctions.vkGetDeviceProcAddr = &vkGetDeviceProcAddr;
 
 	VmaAllocatorCreateInfo allocatorCreateInfo = {};
+	// VMA_ALLOCATOR_CREATE_EXTERNALLY_SYNCHRONIZED_BIT 
 	allocatorCreateInfo.flags = VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT | VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
 	allocatorCreateInfo.vulkanApiVersion = VK_API_VERSION_1_3;
 	allocatorCreateInfo.physicalDevice = physicalDevice;
@@ -2519,7 +2524,8 @@ void Command::Copy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset) {
 		// todo: allocate additional buffer
 		return;
 	}
-	memcpy(resource->stagingCpu + resource->stagingOffset, data, size);
+	// memcpy(resource->stagingCpu + resource->stagingOffset, data, size);
+	vmaCopyMemoryToAllocation(_ctx.vmaAllocator, data, resource->staging.resource->allocation, resource->stagingOffset, size);
 	Copy(dst, resource->staging, size, dstOfsset, resource->stagingOffset);
 	DEBUG_TRACE("CmdCopy, size: {}, offset: {}", size, resource->stagingOffset);
 	resource->stagingOffset += size;

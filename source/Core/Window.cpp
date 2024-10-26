@@ -4,6 +4,19 @@
 // #include <imgui/imgui.h>
 
 #define WINDOW_ALIVE_GUARD if (!alive) {LOG_WARN("ALIVE_GUARD {}:{}", __FILE__, __LINE__) return;}
+#define TRACE_WINDOW 1
+#define TRACE_INPUT 1
+#if TRACE_WINDOW
+#define LOG_WINDOW(...) Logger::Get()->trace(__VA_ARGS__)
+#else
+#define LOG_WINDOW(...)
+#endif
+
+#if TRACE_INPUT
+#define LOG_INPUT(...) Logger::Get()->trace(__VA_ARGS__)
+#else
+#define LOG_INPUT(...)
+#endif
 
 namespace  {
 struct Context
@@ -11,7 +24,7 @@ struct Context
 	// static inline GLFWmonitor** monitors           = nullptr;
 	// static inline int           monitorCount       = 0;
 	std::vector<std::string> pathsDrop;
-	std::vector<Window>      windows;
+	// std::vector<Window>      windows;
 
 	~Context() {
 		WindowManager::Finish();
@@ -21,11 +34,13 @@ struct Context
 static Context ctx;
 
 }; // namespace WindowManager
+Mouse mouse;
 
 namespace _WindowCallbacks {
 
 void WindowPosCallback(GLFWwindow* window, int x, int y) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
+	LOG_WINDOW("Window {} moved to {}x{}", pWindow->GetName(), x, y);
 	pWindow->SetPos(x, y);
 
 	if (pWindow->windowPosCallback)
@@ -34,6 +49,7 @@ void WindowPosCallback(GLFWwindow* window, int x, int y) {
 
 void WindowSizeCallback(GLFWwindow* window, int width, int height) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
+	LOG_WINDOW("Window {} resized to {}x{}", pWindow->GetName(), width, height);
 	pWindow->SetSize(width, height);
 
 	if (pWindow->windowSizeCallback)
@@ -42,7 +58,7 @@ void WindowSizeCallback(GLFWwindow* window, int width, int height) {
 
 void WindowCloseCallback(GLFWwindow* window) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
-	// printf("Close callback triggered\n");
+	LOG_WINDOW("Window {} closed", pWindow->GetName());
 
 	if (pWindow->windowCloseCallback)
 		pWindow->windowCloseCallback(pWindow);
@@ -50,7 +66,7 @@ void WindowCloseCallback(GLFWwindow* window) {
 
 void WindowRefreshCallback(GLFWwindow* window) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
-	// pWindow->SetDrawNeeded(true);
+	LOG_WINDOW("Window {} refreshed", pWindow->GetName());
 
 	if (pWindow->windowRefreshCallback)
 		pWindow->windowRefreshCallback(pWindow);
@@ -58,6 +74,7 @@ void WindowRefreshCallback(GLFWwindow* window) {
 
 void WindowFocusCallback(GLFWwindow* window, int focused) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
+	LOG_WINDOW("Window {} focused {}", pWindow->GetName(), focused);
 
 	if (pWindow->windowFocusCallback)
 		pWindow->windowFocusCallback(pWindow, focused);
@@ -65,7 +82,7 @@ void WindowFocusCallback(GLFWwindow* window, int focused) {
 
 void WindowIconifyCallback(GLFWwindow* window, int iconified) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
-	// LOG_INFO("Window {} iconified {}", pWindow->GetName(), iconified);
+	LOG_WINDOW("Window {} iconified {}", pWindow->GetName(), iconified);
 
 	if (pWindow->windowIconifyCallback)
 		pWindow->windowIconifyCallback(pWindow, iconified);
@@ -73,6 +90,8 @@ void WindowIconifyCallback(GLFWwindow* window, int iconified) {
 
 void WindowMaximizeCallback(GLFWwindow* window, int maximize) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
+	LOG_WINDOW("Window {} maximized {}", pWindow->GetName(), maximize);
+
 	pWindow->SetMaximized(maximize);
 
 	if (pWindow->windowMaximizeCallback)
@@ -81,10 +100,12 @@ void WindowMaximizeCallback(GLFWwindow* window, int maximize) {
 
 void FramebufferSizeCallback(GLFWwindow* window, int width, int height) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
+	LOG_WINDOW("Window {} framebuffer resized to {}x{}", pWindow->GetName(), width, height);
+	
 	pWindow->SetSwapchainDirty(true);
 	pWindow->SetDrawNeeded(true);
 	// pWindow->SetFramebufferResized();
-	// DEBUG_TRACE("Window {} framebuffer resized to {}x{}", pWindow->GetName(), width, height);
+	// LOG_WINDOW("Window {} framebuffer resized to {}x{}", pWindow->GetName(), width, height);
 	
 	if (pWindow->framebufferSizeCallback) 
 		pWindow->framebufferSizeCallback(pWindow, width, height);
@@ -92,6 +113,7 @@ void FramebufferSizeCallback(GLFWwindow* window, int width, int height) {
 
 void WindowContentScaleCallback(GLFWwindow* window, float xscale, float yscale) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
+	LOG_WINDOW("Window {} content scale changed to {}x{}", pWindow->GetName(), xscale, yscale);
 
 	if (pWindow->windowContentScaleCallback)
 		pWindow->windowContentScaleCallback(pWindow, xscale, yscale);
@@ -105,6 +127,8 @@ namespace _InputCallbacks {
 
 void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
+	LOG_INPUT("Window {} mouse button: {}, action: {}, mods: {}", pWindow->GetName(), button, action, mods);
+
 	if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS){
 		pWindow->SetResizable(!pWindow->GetResizable());
 	}
@@ -115,6 +139,16 @@ void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
 
 void CursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
+	LOG_INPUT("Window {} cursor pos: {}, {}", pWindow->GetName(), xpos, ypos);
+
+	mouse.deltaPos = mouse.pos - Lmath::vec2(xpos, ypos);
+	mouse.pos = Lmath::vec2(xpos, ypos);
+	// LOG_INPUT("Window {} delta mouse pos: {}, {}", pWindow->GetName(), pWindow->deltaMousePos.x, pWindow->deltaMousePos.y);
+
+	if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
+		pWindow->CmdSetPos(pWindow->GetPos().x - mouse.deltaPos.x, pWindow->GetPos().y - mouse.deltaPos.y);
+		mouse.pos = mouse.pos + mouse.deltaPos;
+	}
 
 	if (pWindow->cursorPosCallback)
 		pWindow->cursorPosCallback(pWindow, xpos, ypos);
@@ -122,6 +156,7 @@ void CursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
 
 void CursorEnterCallback(GLFWwindow* window, int entered) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
+	LOG_INPUT("Window {} cursor entered: {}", pWindow->GetName(), entered);
 
 	if (pWindow->cursorEnterCallback)
 		pWindow->cursorEnterCallback(pWindow, entered);
@@ -129,8 +164,10 @@ void CursorEnterCallback(GLFWwindow* window, int entered) {
 
 void ScrollCallback(GLFWwindow* window, double x, double y) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
-	pWindow->GetScroll() += y;
-	pWindow->GetDeltaScroll() += y;
+	LOG_INPUT("Window {} scroll: {}, {}", pWindow->GetName(), x, y);
+
+	mouse.scroll += y;
+	mouse.deltaScroll += y;
 
 	if (pWindow->scrollCallback)
 		pWindow->scrollCallback(pWindow, x, y);
@@ -138,18 +175,49 @@ void ScrollCallback(GLFWwindow* window, double x, double y) {
 
 void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
+	LOG_INPUT("Window {} key: {}, scancode: {}, action: {}, mods: {}", pWindow->GetName(), key, scancode, action, mods);
+
+	if (action == GLFW_PRESS) {
+		switch (key) {
+		case GLFW_KEY_ESCAPE:
+			pWindow->SetShouldClose(true);
+			break;
+		case GLFW_KEY_F11: {
+			auto moden = pWindow->GetMode();
+			// LOG_INFO("Window {} mode: {}", pWindow->GetName(), (int)mode);
+			if (pWindow->GetMode() == WindowMode::WindowedFullScreen) {
+				pWindow->SetMode(WindowMode::Windowed);
+			} else {
+				pWindow->StoreWindowSize();
+				pWindow->SetMode(WindowMode::WindowedFullScreen);
+			}}
+			break;
+		// case GLFW_KEY_D : {
+		// 	pWindow->SetDecorated(!pWindow->GetDecorated());
+		// }
+			break;
+		default:
+			break;
+		}
+
+	}
+
 	if (pWindow->keyCallback)
 		pWindow->keyCallback(pWindow, key, scancode, action, mods);
 }
 
 void CharCallback(GLFWwindow* window, unsigned int codepoint) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
+	LOG_INPUT("Window {} char: {}", pWindow->GetName(), codepoint);
+
 	if (pWindow->charCallback)
 		pWindow->charCallback(pWindow, codepoint);
 }
 
 void CharModsCallback(GLFWwindow* window, unsigned int codepoint, int mods) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
+	LOG_INPUT("Window {} char: {}, mods: {}", pWindow->GetName(), codepoint, mods);
+
 	if (pWindow->charModsCallback)
 		pWindow->charModsCallback(pWindow, codepoint, mods);
 }
@@ -157,6 +225,8 @@ void CharModsCallback(GLFWwindow* window, unsigned int codepoint, int mods) {
 
 void DropCallback (GLFWwindow *window, int path_count, const char *paths[]) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
+	LOG_INPUT("Window {} drop: {}", pWindow->GetName(), path_count);
+	
 	for (int i = 0; i < path_count; i++) {
 		ctx.pathsDrop.push_back(paths[i]);
 	}
@@ -248,7 +318,7 @@ Window* WindowManager::NewWindow(int width, int height, const char* name) {
 }
 
 void Window::Destroy() {
-	glfwGetWindowPos(window, &posX, &posY);
+	glfwGetWindowPos(window, &pos.x, &pos.y);
 	glfwDestroyWindow(window);
 	alive = false;
 }
@@ -312,15 +382,15 @@ void Window::Update() {
 	// for (int i = GLFW_KEY_SPACE; i < GLFW_KEY_LAST + 1; i++) {
 	// 	lastKeyState[i] = glfwGetKey(window, i);
 	// }
-	deltaScroll = 0;
+	// deltaScroll = 0;
 	auto newTime = std::chrono::high_resolution_clock::now();
 	deltaTime = std::chrono::duration_cast<std::chrono::microseconds>(newTime - lastTime).count();
 	deltaTime /= 1000.0f;
 	lastTime = newTime;
-	double x, y;
-	glfwGetCursorPos(window, &x, &y);
-	deltaMousePos = mousePos - Lmath::vec2(x, y);
-	mousePos = Lmath::vec2(x, y);
+	// double x, y;
+	// glfwGetCursorPos(window, &x, &y);
+	// deltaMousePos = mousePos - Lmath::vec2(x, y);
+	// mousePos = Lmath::vec2(x, y);
 }
 
 std::string VideoModeText(GLFWvidmode mode) {
