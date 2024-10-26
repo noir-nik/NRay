@@ -16,15 +16,22 @@ using float4 = Lmath::float4;
 
 using vec4 = Lmath::vec4;
 using ivec4 = Lmath::ivec4;
-using ivec2 = Lmath::ivec2;
+using ivec = Lmath::ivec2;
 using uvec3 = Lmath::uvec3;
-using uvec2 = Lmath::uvec2;
+using uvec = Lmath::uvec2;
 
 using Flags = uint32_t;
+using Flags64 = uint64_t;
+
+using DeviceAddress = uint64_t;
+using DeviceSize = uint64_t;
+
+#define QueueFamilyIgnored (~0U)
+#define WholeSize          (~0ULL)
 
 enum Memory {
 	GPU = 0x00000001,
-	CPU = 0x00000002 | 0x00000004,
+	CPU = 0x0000000 | 0x00000004,
 };
 using MemoryFlags = Flags;
 
@@ -90,30 +97,30 @@ namespace Aspect {
 }
 using AspectFlags = Flags;
 
-namespace Layout {
-	// VK_IMAGE_LAYOUT_
-	enum ImageLayout {
-		Undefined = 0,
-		General = 1,
-		ColorAttachment = 2,
-		DepthStencilAttachment = 3,
-		DepthStencilRead = 4,
-		ShaderRead = 5,
-		TransferSrc = 6,
-		TransferDst = 7,
-		DepthReadStencilAttachment = 1000117000,
-		DepthAttachmentStencilRead = 1000117001,
-		DepthAttachment = 1000241000,
-		DepthRead = 1000241001,
-		StencilAttachment = 1000241002,
-		StencilRead = 1000241003,
-		Read = 1000314000,
-		Attachment = 1000314001,
-		Present = 1000001002,
+enum class ImageLayout {
+// VK_IMAGE_LAYOUT_
+	Undefined = 0,
+	General = 1,
+	ColorAttachment = 2,
+	DepthStencilAttachment = 3,
+	DepthStencilRead = 4,
+	ShaderRead = 5,
+	TransferSrc = 6,
+	TransferDst = 7,
+	Preinitialized = 8,
+	DepthReadOnlyStencilAttachment = 1000117000,
+	DepthAttachmentStencilRead = 1000117001,
+	DepthAttachment = 1000241000,
+	DepthReadOnly = 1000241001,
+	StencilAttachment = 1000241002,
+	StencilReadOnly = 1000241003,
+	ReadOnly = 1000314000,
+	Attachment = 1000314001,
+	Present = 1000001002,
 
-		MaxEnum = 0x7FFFFFFF
-	};
-}
+	MaxEnum = 0x7FFFFFFF
+};
+
 
 struct BufferResource;
 struct ImageResource;
@@ -136,7 +143,7 @@ struct Image {
 	uint32_t height = 0;
 	ImageUsageFlags usage;
 	Format format;
-	Layout::ImageLayout layout;
+	ImageLayout layout;
 	AspectFlags aspect;
 	uint32_t layers = 1;
 	uint32_t RID();
@@ -160,40 +167,40 @@ enum Queue {
 	Count = 3,
 };
 
-namespace PipelinePoint {
-	enum Point {
-		Graphics = 0,
-		Compute = 1,
-		RayTracing = 1000165000,
-	};
-}
+enum class PipelinePoint {
+	Graphics = 0,
+	Compute = 1,
+	RayTracing = 1000165000,
+};
 
-namespace ShaderStage {
-	enum Stage {
-		Vertex = 0x00000001,
-		Geometry = 0x00000008,
-		Fragment = 0x00000010,
-		Compute = 0x00000020,
-		AllGraphics = 0x0000001F,
-		All = 0x7FFFFFFF,
-	};
-}
+enum class ShaderStage {
+	Vertex = 0x00000001,
+	TessellationControl = 0x00000002,
+	TessellationEvaluation = 0x00000004,
+	Geometry = 0x00000008,
+	Fragment = 0x00000010,
+	Compute = 0x00000020,
+	AllGraphics = 0x0000001F,
+	All = 0x7FFFFFFF,
 
-namespace PipelineStage {
-	enum Stage {
-		None = 0ULL,
-		ColorAttachmentOutput = 0x00000400ULL,
-		AllCommands = 0x00010000ULL,
-	};
-}
+	Raygen = 0x00000100,
+	AnyHit = 0x00000200,
+	ClosestHit = 0x00000400,
+	Miss = 0x00000800,
+	Intersection = 0x00001000,
+	Callable = 0x00002000,
+
+	Task = 0x00000040,
+	Mesh = 0x00000080,
+};
 
 struct Pipeline {
 	struct Stage {
-		ShaderStage::Stage stage;
+		ShaderStage stage;
 		std::filesystem::path path;
 		std::string entryPoint = "main";
 	};
-	PipelinePoint::Point point;
+	PipelinePoint point;
 	std::shared_ptr<PipelineResource> resource;
 	std::vector<Stage> stages;
 	std::vector<std::vector<char>> stageBytes;
@@ -209,7 +216,7 @@ namespace CullMode {
 using CullModeFlags = Flags;
 
 struct PipelineDesc {
-	PipelinePoint::Point point;
+	PipelinePoint point;
 	std::vector<Pipeline::Stage> stages;
 	std::string name = "";
 	std::vector<Format> vertexAttributes;
@@ -219,6 +226,100 @@ struct PipelineDesc {
 	CullModeFlags cullMode = CullMode::None;
 	bool lineTopology = false;
 };
+
+
+/* ===== Synchronization  Stages ===== */
+namespace PipelineStage {
+	enum : Flags64 {
+		None = 0ULL,
+		TopOfPipe = 0x00000001ULL, // == None as src | AllCommands with AccessFlags set to 0 as dst
+		DrawIndirect = 0x00000002ULL,
+		VertexInput = 0x00000004ULL,
+		VertexShader = 0x00000008ULL,
+		TessellationControlShader = 0x00000010ULL,
+		TessellationEvaluationShader = 0x00000020ULL,
+		GeometryShader = 0x00000040ULL,
+		FragmentShader = 0x00000080ULL,
+		EarlyFragmentTests = 0x00000100ULL,
+		LateFragmentTests = 0x00000200ULL,
+		ColorAttachmentOutput = 0x00000400ULL,
+		ComputeShader = 0x00000800ULL,
+		AllTransfer = 0x00001000ULL,
+		Transfer = 0x00001000ULL,
+		BottomOfPipe = 0x00002000ULL, // == None as dst | AllCommands with AccessFlags set to 0 as src
+		Host = 0x00004000ULL,
+		AllGraphics = 0x00008000ULL,
+		AllCommands = 0x00010000ULL,
+		Copy = 0x100000000ULL,
+		Resolve = 0x200000000ULL,
+		Blit = 0x400000000ULL,
+		Clear = 0x800000000ULL,
+		IndexInput = 0x1000000000ULL,
+		VertexAttributeInput = 0x2000000000ULL,
+		PreRasterizationShaders = 0x4000000000ULL
+	};
+}
+using PipelineStageFlags = Flags64;
+
+
+/* ===== Synchronization  Access ===== */
+namespace Access {
+	enum : Flags64 {
+		None = 0ULL,
+		IndirectCommandRead = 0x00000001ULL,
+		IndexRead = 0x00000002ULL,
+		VertexAttributeRead = 0x00000004ULL,
+		UniformRead = 0x00000008ULL,
+		InputAttachmentRead = 0x00000010ULL,
+		ShaderRead = 0x00000020ULL,
+		ShaderWrite = 0x00000040ULL,
+		ColorAttachmentRead = 0x00000080ULL,
+		ColorAttachmentWrite = 0x00000100ULL,
+		DepthStencilAttachmentRead = 0x00000200ULL,
+		DepthStencilAttachmentWrite = 0x00000400ULL,
+		TransferRead = 0x00000800ULL,
+		TransferWrite = 0x00001000ULL,
+		HostRead = 0x00002000ULL,
+		HostWrite = 0x00004000ULL,
+		MemoryRead = 0x00008000ULL,
+		MemoryWrite = 0x00010000ULL,
+		ShaderSampledRead = 0x100000000ULL,
+		ShaderStorageRead = 0x200000000ULL,
+		ShaderStorageWrite = 0x400000000ULL,
+	};
+}
+using AccessFlags = Flags64;
+
+struct MemoryBarrier {
+    PipelineStageFlags    srcStageMask  = PipelineStage::AllCommands;
+    AccessFlags           srcAccessMask = Access::ShaderWrite;
+    PipelineStageFlags    dstStageMask  = PipelineStage::AllCommands;
+    AccessFlags           dstAccessMask = Access::ShaderRead;
+};
+
+struct BufferBarrier {
+    PipelineStageFlags    srcStageMask        = PipelineStage::AllCommands;
+    AccessFlags           srcAccessMask       = Access::ShaderWrite;
+    PipelineStageFlags    dstStageMask        = PipelineStage::AllCommands;
+    AccessFlags           dstAccessMask       = Access::ShaderRead;
+    uint32_t              srcQueueFamilyIndex = QueueFamilyIgnored;
+    uint32_t              dstQueueFamilyIndex = QueueFamilyIgnored;
+    DeviceSize            offset              = 0;
+    DeviceSize            size                = WholeSize;
+};
+
+struct ImageBarrier {
+	PipelineStageFlags srcStageMask        = PipelineStage::AllCommands;
+	AccessFlags        srcAccessMask       = Access::ShaderWrite;
+	PipelineStageFlags dstStageMask        = PipelineStage::AllCommands;
+	AccessFlags        dstAccessMask       = Access::ShaderRead;
+	ImageLayout        oldLayout           = ImageLayout::MaxEnum;
+	ImageLayout        newLayout           = ImageLayout::MaxEnum;
+	uint32_t           srcQueueFamilyIndex = QueueFamilyIgnored;
+	uint32_t           dstQueueFamilyIndex = QueueFamilyIgnored;
+};
+
+
 
 
 Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory = Memory::GPU, const std::string& name = "");
@@ -235,14 +336,16 @@ bool GetSwapChainDirty(GLFWwindow* window);
 
 // void GetTimeStamps(std::map<std::string, float>& timeTable);
 
-
-
 struct SubmitInfo{
-	Semaphore*       waitSemaphore   = nullptr;
-	uint64_t         waitStages      = PipelineStage::None;
-	Semaphore*       signalSemaphore = nullptr;
-	uint64_t         signalStages    = PipelineStage::None;
+	Semaphore* waitSemaphore   = nullptr;
+	Flags64    waitStages      = PipelineStage::None;
+	Semaphore* signalSemaphore = nullptr;
+	Flags64    signalStages    = PipelineStage::None;
 };
+
+
+
+
 
 struct Command {
 	std::shared_ptr<CommandResource> resource;
@@ -253,8 +356,8 @@ struct Command {
 	void Copy(Image&  dst, void*   data, uint32_t size);
 	void Copy(Image&  dst, Buffer& src,  uint32_t srcOffset = 0); // size is a No OP
 	void Copy(Buffer& dst, Image&  src,  uint32_t dstOffset = 0); // size is a No OP
-	void Copy(Buffer& dst, Image&  src,  uint32_t dstOffset, ivec2 imageOffset, ivec2 imageExtent); // size is a No OP
-	void Barrier(Image& img, Layout::ImageLayout newLayout, Layout::ImageLayout oldLayout = Layout::MaxEnum);
+	void Copy(Buffer& dst, Image&  src,  uint32_t dstOffset, ivec imageOffset, ivec imageExtent); // size is a No OP
+	void Barrier(Image& img, ImageLayout newLayout, ImageLayout oldLayout = ImageLayout::MaxEnum);
 	void Barrier(Buffer& buf);
 	void Barrier();
 	void Blit (Image& dst, Image& src, ivec4 dstRegion = {}, ivec4 srcRegion = {});

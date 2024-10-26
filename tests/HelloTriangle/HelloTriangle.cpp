@@ -120,7 +120,7 @@ void HelloTriangleApplication::Create() {
 // 		// cmd.PushConstants(nstants, sizeof(constants));
 // 		vkw::AcquireImage();
 // 		vkw::Image& img = vkw::GetCurrentSwapchainImage(ctx.window.get()->GetGLFWwindow());
-// 		cmd.Barrier(vkw::Layout::TransferDst);
+// 		cmd.Barrier(vkw::ImageLayout::TransferDst);
 // 		cmd.ClearColorImage({std::abs(r), 0.5f, 0.0f, 1.0f});
 // 		cmd.EndPresent(/ 		// vkw::EndCommandBuffer();
 // 		timer.Start();
@@ -148,7 +148,7 @@ void HelloTriangleApplication::Draw() {
 	GLFWwindow* window = ctx.window->GetGLFWwindow();
 	// cmd.BeginPresent(vkw::AcquireImage(window);
 	vkw::Image& img = vkw::GetCurrentSwapchainImage(window);
-	cmd.Barrier(ctx.renderImage, vkw::Layout::ColorAttachment);
+	cmd.Barrier(ctx.renderImage, vkw::ImageLayout::ColorAttachment);
 	cmd.Copy(ctx.vertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex));
 	// cmd.ClearColorImage(ctx.renderImage, {0.7f, 0.0f, 0.4f, 1.0f});
 
@@ -162,11 +162,11 @@ void HelloTriangleApplication::Draw() {
 	cmd.Draw(3, 1, 0, 0);
 	cmd.EndRendering();
 	
-	cmd.Barrier(ctx.renderImage, vkw::Layout::TransferSrc);
-	cmd.Barrier(img, vkw::Layout::TransferDst);
+	cmd.Barrier(ctx.renderImage, vkw::ImageLayout::TransferSrc);
+	cmd.Barrier(img, vkw::ImageLayout::TransferDst);
 	cmd.Blit(img, ctx.renderImage);
 
-	cmd.Barrier(img, vkw::Layout::Present);
+	cmd.Barrier(img, vkw::ImageLayout::Present);
 	vkw::SubmitAndPresent(window);
 	vkw::WaitQueue(vkw::Queue::Graphics);
 	sleep(3);
@@ -188,15 +188,15 @@ void HelloTriangleApplication::Draw() {
 
 	// cmd.BeginPresent(vkw::AcquireImage();
 	vkw::Image& img = vkw::GetCurrentSwapchainImage();
-	cmd.Barrier(vkw::Layout::TransferDst);
+	cmd.Barrier(vkw::ImageLayout::TransferDst);
 
-	cmd.Barrier(enderImage, vkw::Layout::TransferDst);
+	cmd.Barrier(enderImage, vkw::ImageLayout::TransferDst);
 	cmd.ClearColorImage(enderImage, {0.7f, 0.0f, 0.4f, 1.0f});
-	cmd.Barrier(enderImage, vkw::Layout::TransferSrc);
+	cmd.Barrier(enderImage, vkw::ImageLayout::TransferSrc);
 
 	cmd.Blit(ctx.renderImage, {ctx.width, ctx.height}, {ctx.width, ctx.height});
 
-	cmd.Barrier(vkw::Layout::Present);
+	cmd.Barrier(vkw::ImageLayout::Present);
 
 	// vkw::EndCommandBuffer();
 	vkw::SubmitAndPresent();

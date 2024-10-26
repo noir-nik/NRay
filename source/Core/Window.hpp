@@ -146,6 +146,7 @@ public:
 	inline bool        IsKeyDown(uint16_t keyCode)         { return glfwGetKey(window, keyCode);            }
 	inline bool        IsMouseDown(uint16_t buttonCode)    { return glfwGetMouseButton(window, buttonCode); }
 
+
 	inline void        CmdResizeTo(int width, int height)  { glfwSetWindowSize(window, width, height); drawNeeded = true; }
 	inline void        SetSize(int w, int h)               { width = w; height = h;}
 	
@@ -285,3 +286,16 @@ private:
 	static inline bool is_initialized = false;
 	// static inline int  windowCount = 0;
 };
+
+// typedef struct VkImageMemoryBarrier {
+//     VkStructureType            sType;
+//     const void*                pNext;
+//     VkAccessFlags              srcAccessMask;
+//     VkAccessFlags              dstAccessMask;
+//     VkImageLayout              oldLayout;
+//     VkImageLayout              newLayout;
+//     uint32_t                   srcQueueFamilyIndex;
+//     uint32_t                   dstQueueFamilyIndex;
+//     VkImage                    image;
+//     VkImageSubresourceRange    subresourceRange;
+// } VkImageMemoryBarrier;

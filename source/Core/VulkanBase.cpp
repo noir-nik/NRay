@@ -144,6 +144,9 @@ struct Context
 	void CreateCommandBuffers(std::vector<Command>& commands);
 	void DestroyCommandBuffers(std::vector<Command>& commands);
 
+	void AcquireStagingBuffer();
+	void ReleaseStagingBuffer();
+
 	VkSampleCountFlagBits numSamples  = VK_SAMPLE_COUNT_1_BIT;
 	VkSampler CreateSampler(VkDevice device, f32 maxLod);
 
@@ -559,7 +562,7 @@ Image CreateImage(const ImageDesc& desc) {
 		.height = desc.height,
 		.usage = desc.usage,
 		.format = desc.format,
-		.layout = Layout::Undefined,
+		.layout = ImageLayout::Undefined,
 		.aspect = aspect,
 		.layers = desc.layers,
 	};
@@ -570,11 +573,11 @@ Image CreateImage(const ImageDesc& desc) {
 	}
 
 	if (desc.usage & ImageUsage::Sampled) {
-		Layout::ImageLayout newLayout = Layout::ShaderRead;
+		ImageLayout newLayout = ImageLayout::ShaderRead;
 		if (aspect == (Aspect::Depth | Aspect::Stencil)) {
-			newLayout = Layout::DepthStencilRead;
+			newLayout = ImageLayout::DepthStencilRead;
 		} else if (aspect == Aspect::Depth) {
-			newLayout = Layout::DepthRead;
+			newLayout = ImageLayout::DepthReadOnly;
 		}
 		// res->imguiRIDs.resize(desc.layers);
 		// if (desc.layers > 1) {
@@ -1016,13 +1019,13 @@ void Command::EndRendering() {
 // Acquire + CmdBarrier + CmdBeginRendering
 // void Command::BeginPresent() {
 // 	vkw::AcquireImage();
-// 	vkw::Barrier(_ctx.GetCurrentSwapChainImage(), vkw::Layout::ColorAttachment);
+// 	vkw::Barrier(_ctx.GetCurrentSwapChainImage(), vkw::ImageLayoutColorAttachment);
 // 	vkw::BeginRendering({ _ctx.GetCurrentSwapChainImage() }, {});
 // }
 // CmdEndRendering + CmdBarrier
 // void Command::EndPresent() {
 // 	vkw::EndRendering();
-// 	vkw::Barrier(_ctx.GetCurrentSwapChainImage(), vkw::Layout::Present);
+// 	vkw::Barrier(_ctx.GetCurrentSwapChainImage(), vkw::ImageLayoutPresent);
 // }
 
 void Command::Draw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance) {
@@ -2028,7 +2031,7 @@ void SwapChain::Create(VkDevice device, GLFWwindow* window, uint32_t width, uint
 		swapChainImages[i].resource->fromSwapchain = true;
 		swapChainImages[i].resource->image = swapChainImageResources[i];
 		swapChainImages[i].resource->view = swapChainViews[i];
-		swapChainImages[i].layout = Layout::Undefined;
+		swapChainImages[i].layout = ImageLayout::Undefined;
 		swapChainImages[i].width = width;
 		swapChainImages[i].height = height;
 		swapChainImages[i].aspect = Aspect::Color;
@@ -2401,7 +2404,7 @@ void Context::destroyBindlessResources(){
 void Context::CreateCommandBuffers(std::vector<Command>& commands) {
 	VkCommandPoolCreateInfo poolInfo{};
 	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	poolInfo.flags = 0; // ?VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT
+	poolInfo.flags = 0; // do not use VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT
 	
 	VkCommandBufferAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -2596,8 +2599,8 @@ void Command::Copy(Buffer &dst, Image &src, uint32_t dstOffset, ivec2 imageOffse
 	vkCmdCopyImageToBuffer2(resource->buffer, &copyInfo);
 }
 
-void Command::Barrier(Image& img, Layout::ImageLayout newLayout, Layout::ImageLayout oldLayout) {
-	if (oldLayout == Layout::MaxEnum) {
+void Command::Barrier(Image& img, ImageBarrier& barrier) {
+	if (oldLayout == ImageLayout::MaxEnum) {
 		oldLayout = img.layout;
 	}
 	VkImageSubresourceRange range = {};
@@ -2607,22 +2610,50 @@ void Command::Barrier(Image& img, Layout::ImageLayout newLayout, Layout::ImageLa
 	range.baseArrayLayer = 0;
 	range.layerCount = VK_REMAINING_ARRAY_LAYERS;
 
-	VkAccessFlags srcAccess = VK_ACCESS_SHADER_WRITE_BIT;
-	VkAccessFlags dstAccess = VK_ACCESS_SHADER_READ_BIT;
-	VkPipelineStageFlags srcStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT; // Bottom
-	VkPipelineStageFlags dstStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT; // Top
+	// VkPipelineStageFlags srcStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT; // Bottom
+	// VkAccessFlags srcAccess = VK_ACCESS_SHADER_WRITE_BIT;
+	// VkPipelineStageFlags dstStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT; // Top
+	// VkAccessFlags dstAccess = VK_ACCESS_SHADER_READ_BIT;
 
-	VkImageMemoryBarrier barrier{};
-	barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	barrier.srcAccessMask = srcAccess;
-	barrier.dstAccessMask = dstAccess;
-	barrier.oldLayout = (VkImageLayout)oldLayout;
-	barrier.newLayout = (VkImageLayout)newLayout;
-	barrier.image = img.resource->image;
-	barrier.subresourceRange = range;
-	vkCmdPipelineBarrier(resource->buffer, srcStage, dstStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+	// VkImageMemoryBarrier barrier{};
+	// barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+	// barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	// barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	// barrier.srcAccessMask = srcAccess;
+	// barrier.dstAccessMask = dstAccess;
+	// barrier.oldLayout = (VkImageLayout)oldLayout;
+	// barrier.newLayout = (VkImageLayout)newLayout;
+	// barrier.image = img.resource->image;
+	// barrier.subresourceRange = range;
+	// vkCmdPipelineBarrier(resource->buffer, srcStage, dstStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+	VkImageMemoryBarrier2 barrier2 = {
+		.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		.pNext               = nullptr,
+		.srcStageMask        = (VkPipelineStageFlags2) barrier.srcStageMask,
+		.srcAccessMask       = (VkAccessFlags2) barrier.srcAccessMask,
+		.dstStageMask        = 
+		.dstAccessMask       = 
+		.oldLayout           = 
+		.newLayout           = 
+		.srcQueueFamilyIndex = 
+		.dstQueueFamilyIndex = 
+		.image               = 
+		.subresourceRange    = 
+	}
+
+	VkDependencyInfo dependency = {
+		    VkStructureType                  sType;
+		const void*                      pNext;
+		VkDependencyFlags                dependencyFlags;
+		uint32_t                         memoryBarrierCount;
+		const VkMemoryBarrier2*          pMemoryBarriers;
+		uint32_t                         bufferMemoryBarrierCount;
+		const VkBufferMemoryBarrier2*    pBufferMemoryBarriers;
+		uint32_t                         imageMemoryBarrierCount;
+		const VkImageMemoryBarrier2*     pImageMemoryBarriers;
+
+	vkCmdPipelineBarrier2(resource->buffer, nullptr);
 	img.layout = newLayout;
 }
 
