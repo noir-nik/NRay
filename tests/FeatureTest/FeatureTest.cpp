@@ -133,7 +133,7 @@ void UploadBuffers() {
 	auto cmd = vkw::GetCommandBuffer(vkw::Queue::Transfer);
 	cmd.BeginCommandBuffer();
 	cmd.Copy(ctx.vertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex));
-	cmd.Barrier();
+	cmd.Barrier({});
 	cmd.EndCommandBuffer();
 	cmd.QueueSubmit({});
 }
@@ -155,7 +155,7 @@ void RecordCommands(Window* window) {
 	vkw::Image& img = vkw::GetCurrentSwapchainImage(glfwWindow);
 	
 	// cmd.Copy(ctx.vertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex));
-	cmd.Barrier(ctx.renderImages[window], vkw::ImageLayout::TransferDst);
+	cmd.Barrier(ctx.renderImages[window], {vkw::ImageLayout::TransferDst});
 	cmd.ClearColorImage(ctx.renderImages[window], {0.7f, 0.0f, 0.4f, 1.0f});
 
 	cmd.BeginRendering({ctx.renderImages[window]}, {}, 1, viewport);
@@ -165,10 +165,10 @@ void RecordCommands(Window* window) {
 	cmd.Draw(3, 1, 0, 0);
 	cmd.EndRendering();
 	
-	cmd.Barrier(ctx.renderImages[window], vkw::ImageLayout::TransferSrc);
-	cmd.Barrier(img, vkw::ImageLayout::TransferDst);
+	cmd.Barrier(ctx.renderImages[window], {vkw::ImageLayout::TransferSrc});
+	cmd.Barrier(img, {vkw::ImageLayout::TransferDst});
 	cmd.Blit(img, ctx.renderImages[window], {0, 0, size.x, size.y}, {0, 0, size.x, size.y});
-	cmd.Barrier(img, vkw::ImageLayout::Present);
+	cmd.Barrier(img, {vkw::ImageLayout::Present});
 
 }
 

@@ -99,17 +99,17 @@ void ImageOptimizationApplication::Compute() {
 	cmd.BeginCommandBuffer();
 	// Prepare BufferGT and BufferOpt
 	cmd.Copy(ctx.BufferGT, imageUV.data(), ctx.width * ctx.height * sizeof(Pixel));
-	cmd.Barrier(ctx.imageCPU, vkw::ImageLayout::General);
+	cmd.Barrier(ctx.imageCPU, {vkw::ImageLayout::General});
 	cmd.ClearColorImage(ctx.imageCPU, {0.0f, 0.0f, 0.5f, 0.0f});
-	cmd.Barrier(ctx.imageCPU, vkw::ImageLayout::TransferSrc);
+	cmd.Barrier(ctx.imageCPU, {vkw::ImageLayout::TransferSrc});
 	cmd.Copy(ctx.BufferOpt, ctx.imageCPU);
-	cmd.Barrier();
+	cmd.Barrier({});
 
 	cmd.BindPipeline(ctx.pipeline);
 	cmd.PushConstants(&constants, sizeof(constants));
 
 	cmd.Dispatch({(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
-	cmd.Barrier();
+	cmd.Barrier({});
 	cmd.Copy(ctx.bufferCPU, ctx.BufferOpt, ctx.width * ctx.height * sizeof(Pixel));
 
 	timer.Start();

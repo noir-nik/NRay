@@ -150,7 +150,7 @@ void NeuralSdfApplication::Compute() {
 	constants.outputImageRID = ctx.bufferCPUglsl.RID();
 	cmd.PushConstants(&constants, sizeof(constants));
 	cmd.Dispatch({(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
-	cmd.Barrier();
+	cmd.Barrier({});
 
 	// Slang shader
 	cmd.BindPipeline(ctx.slangPipeline);

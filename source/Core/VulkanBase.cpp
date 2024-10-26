@@ -2599,10 +2599,7 @@ void Command::Copy(Buffer &dst, Image &src, uint32_t dstOffset, ivec2 imageOffse
 	vkCmdCopyImageToBuffer2(resource->buffer, &copyInfo);
 }
 
-void Command::Barrier(Image& img, ImageBarrier& barrier) {
-	if (oldLayout == ImageLayout::MaxEnum) {
-		oldLayout = img.layout;
-	}
+void Command::Barrier(Image& img, const ImageBarrier& barrier) {
 	VkImageSubresourceRange range = {};
 	range.aspectMask = (VkImageAspectFlags)img.aspect;
 	range.baseMipLevel = 0;
@@ -2610,81 +2607,76 @@ void Command::Barrier(Image& img, ImageBarrier& barrier) {
 	range.baseArrayLayer = 0;
 	range.layerCount = VK_REMAINING_ARRAY_LAYERS;
 
-	// VkPipelineStageFlags srcStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT; // Bottom
-	// VkAccessFlags srcAccess = VK_ACCESS_SHADER_WRITE_BIT;
-	// VkPipelineStageFlags dstStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT; // Top
-	// VkAccessFlags dstAccess = VK_ACCESS_SHADER_READ_BIT;
-
-	// VkImageMemoryBarrier barrier{};
-	// barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-	// barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	// barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-	// barrier.srcAccessMask = srcAccess;
-	// barrier.dstAccessMask = dstAccess;
-	// barrier.oldLayout = (VkImageLayout)oldLayout;
-	// barrier.newLayout = (VkImageLayout)newLayout;
-	// barrier.image = img.resource->image;
-	// barrier.subresourceRange = range;
-	// vkCmdPipelineBarrier(resource->buffer, srcStage, dstStage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
-
 	VkImageMemoryBarrier2 barrier2 = {
 		.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 		.pNext               = nullptr,
-		.srcStageMask        = (VkPipelineStageFlags2) barrier.srcStageMask,
-		.srcAccessMask       = (VkAccessFlags2) barrier.srcAccessMask,
-		.dstStageMask        = 
-		.dstAccessMask       = 
-		.oldLayout           = 
-		.newLayout           = 
-		.srcQueueFamilyIndex = 
-		.dstQueueFamilyIndex = 
-		.image               = 
-		.subresourceRange    = 
-	}
+		.srcStageMask        = (VkPipelineStageFlags2) barrier.memoryBarrier.srcStageMask,
+		.srcAccessMask       = (VkAccessFlags2)        barrier.memoryBarrier.srcAccessMask,
+		.dstStageMask        = (VkPipelineStageFlags2) barrier.memoryBarrier.dstStageMask,
+		.dstAccessMask       = (VkAccessFlags2)        barrier.memoryBarrier.dstAccessMask,
+		.oldLayout           = (VkImageLayout)         (barrier.oldLayout == ImageLayout::MaxEnum ? img.layout : barrier.oldLayout),
+		.newLayout           = (VkImageLayout)         barrier.newLayout,
+		.srcQueueFamilyIndex = barrier.srcQueueFamilyIndex,
+		.dstQueueFamilyIndex = barrier.dstQueueFamilyIndex,
+		.image               = img.resource->image,
+		.subresourceRange    = range
+	};
 
 	VkDependencyInfo dependency = {
-		    VkStructureType                  sType;
-		const void*                      pNext;
-		VkDependencyFlags                dependencyFlags;
-		uint32_t                         memoryBarrierCount;
-		const VkMemoryBarrier2*          pMemoryBarriers;
-		uint32_t                         bufferMemoryBarrierCount;
-		const VkBufferMemoryBarrier2*    pBufferMemoryBarriers;
-		uint32_t                         imageMemoryBarrierCount;
-		const VkImageMemoryBarrier2*     pImageMemoryBarriers;
+		.sType                    = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+		.pNext                    = nullptr,
+		.dependencyFlags          = 0,
+		.memoryBarrierCount       = 0,
+		.pMemoryBarriers          = nullptr,
+		.bufferMemoryBarrierCount = 0,
+		.pBufferMemoryBarriers    = nullptr,
+		.imageMemoryBarrierCount  = 1,
+		.pImageMemoryBarriers     = &barrier2
+	};
 
-	vkCmdPipelineBarrier2(resource->buffer, nullptr);
-	img.layout = newLayout;
+	vkCmdPipelineBarrier2(resource->buffer, &dependency);
+	img.layout = barrier.newLayout;
 }
 
-void Command::Barrier(Buffer& buf) {
-	VkBufferMemoryBarrier2 barrier = {
-		.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-		.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-		.srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
-		.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-		.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
+void Command::Barrier(Buffer& buf, const BufferBarrier& barrier) {
+
+	VkBufferMemoryBarrier2 barrier2 {
+		.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		.pNext               = nullptr,
+		.srcStageMask        = (VkPipelineStageFlags2) barrier.memoryBarrier.srcStageMask,
+		.srcAccessMask       = (VkAccessFlags2)        barrier.memoryBarrier.srcAccessMask,
+		.dstStageMask        = (VkPipelineStageFlags2) barrier.memoryBarrier.dstStageMask,
+		.dstAccessMask       = (VkAccessFlags2)        barrier.memoryBarrier.dstAccessMask,
+		.srcQueueFamilyIndex =                         barrier.srcQueueFamilyIndex,
+		.dstQueueFamilyIndex =                         barrier.dstQueueFamilyIndex,
+		.buffer              =                         buf.resource->buffer,
+		.offset              = (VkDeviceSize)          barrier.offset,
+		.size                = (VkDeviceSize)          barrier.size
 	};
+
 	VkDependencyInfo dependency = {
-		.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+		.sType                    = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+		.pNext                    = nullptr,
+		.dependencyFlags          = 0,
 		.bufferMemoryBarrierCount = 1,
-		.pBufferMemoryBarriers = &barrier,
+		.pBufferMemoryBarriers    = &barrier2,
 	};
 	vkCmdPipelineBarrier2(resource->buffer, &dependency);
 }
 
-void Command::Barrier() {
-	VkMemoryBarrier2 barrier = {
-		.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-		.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-		.srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
-		.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-		.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
+void Command::Barrier(const MemoryBarrier& barrier) {
+	VkMemoryBarrier2 barrier2 = {
+		.sType         = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+		.pNext         = nullptr,
+		.srcStageMask  = (VkPipelineStageFlags2) barrier.srcStageMask,
+		.srcAccessMask = (VkAccessFlags2)        barrier.srcAccessMask,
+		.dstStageMask  = (VkPipelineStageFlags2) barrier.dstStageMask,
+		.dstAccessMask = (VkAccessFlags2)        barrier.dstAccessMask
 	};
 	VkDependencyInfo dependency = {
 		.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
 		.memoryBarrierCount = 1,
-		.pMemoryBarriers = &barrier,
+		.pMemoryBarriers = &barrier2,
 	};
 	vkCmdPipelineBarrier2(resource->buffer, &dependency);
 }

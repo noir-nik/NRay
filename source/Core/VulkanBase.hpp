@@ -16,9 +16,9 @@ using float4 = Lmath::float4;
 
 using vec4 = Lmath::vec4;
 using ivec4 = Lmath::ivec4;
-using ivec = Lmath::ivec2;
+using ivec2 = Lmath::ivec2;
 using uvec3 = Lmath::uvec3;
-using uvec = Lmath::uvec2;
+using uvec2 = Lmath::uvec2;
 
 using Flags = uint32_t;
 using Flags64 = uint64_t;
@@ -228,7 +228,7 @@ struct PipelineDesc {
 };
 
 
-/* ===== Synchronization  Stages ===== */
+/* ===== Synchronization 2 Stages ===== */
 namespace PipelineStage {
 	enum : Flags64 {
 		None = 0ULL,
@@ -262,7 +262,7 @@ namespace PipelineStage {
 using PipelineStageFlags = Flags64;
 
 
-/* ===== Synchronization  Access ===== */
+/* ===== Synchronization 2 Access ===== */
 namespace Access {
 	enum : Flags64 {
 		None = 0ULL,
@@ -290,51 +290,30 @@ namespace Access {
 }
 using AccessFlags = Flags64;
 
+
+/* ===== Synchronization 2 Barriers ===== */
 struct MemoryBarrier {
-    PipelineStageFlags    srcStageMask  = PipelineStage::AllCommands;
-    AccessFlags           srcAccessMask = Access::ShaderWrite;
-    PipelineStageFlags    dstStageMask  = PipelineStage::AllCommands;
-    AccessFlags           dstAccessMask = Access::ShaderRead;
+	PipelineStageFlags    srcStageMask  = PipelineStage::AllCommands;
+	AccessFlags           srcAccessMask = Access::ShaderWrite;
+	PipelineStageFlags    dstStageMask  = PipelineStage::AllCommands;
+	AccessFlags           dstAccessMask = Access::ShaderRead;
 };
 
-struct BufferBarrier {
-    PipelineStageFlags    srcStageMask        = PipelineStage::AllCommands;
-    AccessFlags           srcAccessMask       = Access::ShaderWrite;
-    PipelineStageFlags    dstStageMask        = PipelineStage::AllCommands;
-    AccessFlags           dstAccessMask       = Access::ShaderRead;
-    uint32_t              srcQueueFamilyIndex = QueueFamilyIgnored;
-    uint32_t              dstQueueFamilyIndex = QueueFamilyIgnored;
-    DeviceSize            offset              = 0;
-    DeviceSize            size                = WholeSize;
+struct BufferBarrier/* : MemoryBarrier */ {
+	uint32_t      srcQueueFamilyIndex = QueueFamilyIgnored;
+	uint32_t      dstQueueFamilyIndex = QueueFamilyIgnored;
+	DeviceSize    offset              = 0;
+	DeviceSize    size                = WholeSize;
+	MemoryBarrier memoryBarrier;
 };
 
-struct ImageBarrier {
-	PipelineStageFlags srcStageMask        = PipelineStage::AllCommands;
-	AccessFlags        srcAccessMask       = Access::ShaderWrite;
-	PipelineStageFlags dstStageMask        = PipelineStage::AllCommands;
-	AccessFlags        dstAccessMask       = Access::ShaderRead;
-	ImageLayout        oldLayout           = ImageLayout::MaxEnum;
-	ImageLayout        newLayout           = ImageLayout::MaxEnum;
-	uint32_t           srcQueueFamilyIndex = QueueFamilyIgnored;
-	uint32_t           dstQueueFamilyIndex = QueueFamilyIgnored;
+struct ImageBarrier/* : MemoryBarrier */ {
+	ImageLayout   newLayout           = ImageLayout::MaxEnum;
+	ImageLayout   oldLayout           = ImageLayout::MaxEnum;
+	uint32_t      srcQueueFamilyIndex = QueueFamilyIgnored;
+	uint32_t      dstQueueFamilyIndex = QueueFamilyIgnored;
+	MemoryBarrier memoryBarrier;
 };
-
-
-
-
-Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory = Memory::GPU, const std::string& name = "");
-Image CreateImage(const ImageDesc& desc);
-Pipeline CreatePipeline(const PipelineDesc& desc);
-// TLAS CreateTLAS(uint32_t maxInstances, const std::string& name);
-// BLAS CreateBLAS(const BLASDesc& desc);
-
-void* MapBuffer(Buffer& buffer);
-void UnmapBuffer(Buffer& buffer);
-
-void SubmitAndPresent(GLFWwindow* window);
-bool GetSwapChainDirty(GLFWwindow* window);
-
-// void GetTimeStamps(std::map<std::string, float>& timeTable);
 
 struct SubmitInfo{
 	Semaphore* waitSemaphore   = nullptr;
@@ -342,9 +321,6 @@ struct SubmitInfo{
 	Semaphore* signalSemaphore = nullptr;
 	Flags64    signalStages    = PipelineStage::None;
 };
-
-
-
 
 
 struct Command {
@@ -356,10 +332,10 @@ struct Command {
 	void Copy(Image&  dst, void*   data, uint32_t size);
 	void Copy(Image&  dst, Buffer& src,  uint32_t srcOffset = 0); // size is a No OP
 	void Copy(Buffer& dst, Image&  src,  uint32_t dstOffset = 0); // size is a No OP
-	void Copy(Buffer& dst, Image&  src,  uint32_t dstOffset, ivec imageOffset, ivec imageExtent); // size is a No OP
-	void Barrier(Image& img, ImageLayout newLayout, ImageLayout oldLayout = ImageLayout::MaxEnum);
-	void Barrier(Buffer& buf);
-	void Barrier();
+	void Copy(Buffer& dst, Image& src, uint32_t dstOffset, ivec2 imageOffset, ivec2 imageExtent);// size is a No OP
+	void Barrier(Image& img, const ImageBarrier& barrier);
+	void Barrier(Buffer& buf, const BufferBarrier& barrier);
+	void Barrier(const MemoryBarrier& barrier);
 	void Blit (Image& dst, Image& src, ivec4 dstRegion = {}, ivec4 srcRegion = {});
 	void ClearColorImage(Image& image, const float4& color);
 
@@ -390,6 +366,21 @@ struct Command {
 	void QueueSubmit (const SubmitInfo& submitInfo);
 };
 
+
+Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory = Memory::GPU, const std::string& name = "");
+Image CreateImage(const ImageDesc& desc);
+Pipeline CreatePipeline(const PipelineDesc& desc);
+// TLAS CreateTLAS(uint32_t maxInstances, const std::string& name);
+// BLAS CreateBLAS(const BLASDesc& desc);
+
+void* MapBuffer(Buffer& buffer);
+void UnmapBuffer(Buffer& buffer);
+
+void SubmitAndPresent(GLFWwindow* window);
+bool GetSwapChainDirty(GLFWwindow* window);
+
+// void GetTimeStamps(std::map<std::string, float>& timeTable);
+
 void WaitQueue(Queue queue);
 void WaitIdle();
 // void BeginImGui();
@@ -404,9 +395,6 @@ void RecreateSwapChain(GLFWwindow* window, uint32_t width, uint32_t height);
 void DestroySwapChain(GLFWwindow* window);
 
 void Destroy();
-
-
-
 
 // template<typename T>
 // void TimeStamp(const std::string& name, T callback) {
