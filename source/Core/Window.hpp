@@ -115,6 +115,7 @@ class Window {
 	bool maximized = false;
 	
 	bool alive = true;
+	bool swapChainAlive = false;
 
 	bool focused = true;
 
@@ -207,6 +208,7 @@ public:
 	inline bool        GetDrawNeeded()                     { return drawNeeded; }
 	inline void        SetDrawNeeded(bool value)           { drawNeeded = value; }
 
+	inline void        CreateSwapchain()                   { if (!swapChainAlive) swapChain.Create(window, width, height); swapChainAlive = true; }
 	inline bool        GetSwapchainDirty()                 { return swapChain.GetDirty(); }
 	inline auto&       GetSwapchain()                      { return swapChain; }
 
@@ -292,7 +294,7 @@ friend class Window;
 public:
 	WindowManager() = delete;
 	static void Init();
-	static Window* NewWindow(int width, int height, const char* name);
+	static Window* NewWindow(int width, int height, const char* name, bool createSwapchain = true);
 	static void PollEvents(){ glfwPollEvents(); }
 	static void WaitEvents(){ glfwWaitEvents(); }
 	// void OnImgui();

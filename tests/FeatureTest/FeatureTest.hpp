@@ -6,8 +6,9 @@
 
 #include "Lmath.hpp"
 
-using mat2  = Lmath::float4;
-using vec2  = Lmath::float2;
+using mat2 = Lmath::float4;
+using mat4 = Lmath::float4x4;
+using vec2 = Lmath::float2;
 
 struct FeatureTestInfo
 {
@@ -33,8 +34,11 @@ private:
 
 
 struct FeatureTestConstants {
-	mat2 transform;
+	mat4 model;
+	mat4 view;
+	mat4 proj;
+	// mat4 viewproj;
 
-	vec2 offset;
-	int pad[2];
+	// vec2 offset;
+	// int pad[2];
 };

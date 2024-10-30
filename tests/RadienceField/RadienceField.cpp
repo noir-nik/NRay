@@ -76,7 +76,7 @@ void RadienceFieldApplication::Setup() {
 	float3 pos = float3(0.0, 0.0, 1.3);
 	ctx.viewMat = lookAt(pos, float3(0.0, 0.0, 0.0), float3(0.0, 1.0, 0.0)) * rotate4x4Y(-float(360.0 / 7 * k) * DEG_TO_RAD) * translate4x4(float3(-0.5, -0.5, -0.5));
 	ctx.worldViewInv = inverse4x4(ctx.viewMat);
-	ctx.worldViewProjInv = inverse4x4(perspectiveMatrix(45, 1, 0.1, 100));
+	ctx.worldViewProjInv = inverse4x4(perspective(45, 1, 0.1, 100));
 }
 
 void RadienceFieldApplication::Create() {

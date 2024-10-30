@@ -40,16 +40,25 @@ struct Context {
 };
 static Context ctx;
 
+struct Camera {
+    vec3 velocity;
+    vec3 position;
+
+    mat4 view = float4x4();
+	mat4 proj = perspective(60.0f, 1.0f, 0.1f, 100.0f);
+
+};
+static Camera camera;
 
 struct Vertex {
-	vec2 pos;
+	vec3 pos;
 	vec3 color;
 };
 
 const std::vector<Vertex> vertices = {
-	{{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-	{{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-	{{0.5f, 0.5f},  {0.0f, 1.0f, 0.0f}},
+	{{0.0f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
+	{{-0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+	{{0.5f, 0.5f, 0.3f},  {0.0f, 1.0f, 0.0f}},
 };
 
 void Context::CreateShaders() {
@@ -61,7 +70,7 @@ void Context::CreateShaders() {
 		},
 		.name = "Feature pipeline",
 		// pos2 + color3
-		.vertexAttributes = {vkw::Format::RG32_sfloat, vkw::Format::RGB32_sfloat},
+		.vertexAttributes = {vkw::Format::RGB32_sfloat, vkw::Format::RGB32_sfloat},
 		// .colorFormats = {ctx.albedo.format, ctx.normal.format, ctx.material.format, ctx.emission.format},
 		.colorFormats = {vkw::Format::RGBA16_sfloat},
 		// .colorFormats = {vkw::Format::RGBA8_unorm},
@@ -113,9 +122,9 @@ void RecordCommands(Window* window) {
 	auto glfwWindow = window->GetGLFWwindow();
 	vec4 viewport = {0, 0, (float)size.x, (float)size.y};
 	FeatureTestConstants constants{};
-	constants.transform = float4((float)size.y / size.x, 0.0f,
-								0.0f, float(size.y) / size.x);
-	constants.offset = {0.0f, 0.0f};
+	constants.model = float4x4();
+	constants.view = camera.view;
+	constants.proj = perspective(60.0f, size.x / size.y, 0.01f, 100.0f);
 
 	// LOG_INFO("Viewport: {}, {}, {}, {}", viewport.x, viewport.y, viewport.z, viewport.w); 
 
@@ -158,10 +167,10 @@ void DrawWindow(Window* window) {
 	}
 }
 
-void KeyCallback(Window* window, int key, int scancode, int action, int mods)
-{
+void KeyCallback(Window* window, int key, int scancode, int action, int mods) {
 	// printf("key: %d, scancode: %d, action: %d, mods: %d\n", key, scancode, action, mods);
-	if (action == GLFW_PRESS) {
+	switch (action){
+	case GLFW_PRESS:
 		switch (key) {
 		case GLFW_KEY_N: {
 			static int windowCount = 1;
@@ -173,12 +182,35 @@ void KeyCallback(Window* window, int key, int scancode, int action, int mods)
 			window->AddMouseButtonCallback(MouseButtonCallback);
 			window->AddKeyCallback(KeyCallback);
 		}
+		case GLFW_KEY_W:
+			camera.view = translate4x4({0, 0, -0.02f}) * camera.view;
+			break;
+		case GLFW_KEY_S:
+			camera.view = translate4x4({0, 0, 0.02f}) * camera.view;
+			break;
+		case GLFW_KEY_A:
+			camera.view = translate4x4({0.02f, 0, 0}) * camera.view;
+			break;
+		case GLFW_KEY_D:
+			camera.view = translate4x4({-0.02f, 0, 0}) * camera.view;
+			break;
+		default:
+			break;
+		}
+		break;
+	case GLFW_RELEASE:
+		break;
+	case GLFW_REPEAT:
+		switch (key) {
+		
 		default:
 			break;
 		}
 
 	}
 }
+
+
 
 
 void MouseButtonCallback(Window* window, int button, int action, int mods) {
@@ -219,7 +251,59 @@ void RecreateFrameResources(Window* window) {
 	// camera->extent = {viewportSize.x, viewportSize.y};
 }
 
-}
+} // namespace
+
+
+// namespace {
+// using mat4 = Lmath::float4x4;
+// enum class MaterialPass :uint8_t {
+//     MainColor,
+//     Transparent,
+//     Other
+// };
+
+// struct MaterialInstance {
+//     vkw::Pipeline pipeline;
+//     MaterialPass passType;
+// };
+// struct RenderObject {
+//     uint32_t indexCount;
+//     uint32_t firstIndex;
+//     vkw::Buffer indexBuffer;
+    
+//     MaterialInstance* material;
+
+//     mat4 transform;
+//     VkDeviceAddress vertexBufferAddress;
+// };
+
+// struct GLTFMetallic_Roughness {
+// 	vkw::Pipeline opaquePipeline;
+// 	vkw::Pipeline transparentPipeline;
+
+// 	// VkDescriptorSetLayout materialLayout;
+
+// 	struct MaterialConstants {
+// 		vec4 colorFactors;
+// 		vec4 metal_rough_factors;
+// 		//padding, we need it anyway for uniform buffers
+// 		vec4 extra[14];
+// 	};
+
+// 	struct MaterialResources {
+// 		vkw::Image colorImage;
+// 		// VkSampler colorSampler;
+// 		vkw::Image metalRoughImage;
+// 		// VkSampler metalRoughSampler;
+// 		vkw::Buffer dataBuffer;
+// 		uint32_t dataBufferOffset;
+// 	};
+
+
+// 	MaterialInstance write_material(VkDevice device, MaterialPass pass, const MaterialResources& resources, DescriptorAllocatorGrowable& descriptorAllocator);
+// };
+
+// } // namespace
 
 void FeatureTestApplication::run(FeatureTestInfo* pFeatureTestInfo) {
 	info = pFeatureTestInfo;
@@ -236,8 +320,9 @@ void FeatureTestApplication::Setup() {
 }
 
 void FeatureTestApplication::Create() {
-	vkw::Init();
-	auto window = WindowManager::NewWindow(ctx.width, ctx.height, "wm");
+	auto window = WindowManager::NewWindow(ctx.width, ctx.height, "wm", false);
+	vkw::Init(window->GetGLFWwindow(), window->GetWidth(), window->GetHeight());
+	window->CreateSwapchain();
 	ctx.windows.emplace(window);
 	ctx.mainWindow = window;
 	// ctx.window1 = WindowManager::NewWindow(ctx.width, ctx.height, "w1");

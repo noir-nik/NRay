@@ -550,7 +550,7 @@ static inline float4x4 lookAt(float3 eye, float3 center, float3 up)
 	return M;
 }
 
-static inline float4x4 perspectiveMatrix(float fovy, float aspect, float zNear, float zFar)
+static inline float4x4 perspective(float fovy, float aspect, float zNear, float zFar)
 {
 	const float ymax = zNear * tanf(fovy * 3.14159265358979323846f / 360.0f);
 	const float xmax = ymax * aspect;

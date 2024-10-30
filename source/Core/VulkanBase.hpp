@@ -420,7 +420,8 @@ void WaitQueue(Queue queue);
 void WaitIdle();
 // void BeginImGui();
 
-void Init(bool presentRequested = true);
+void Init();
+void Init(GLFWwindow* window, uint32_t width, uint32_t height);
 Command& GetCommandBuffer(Queue queue);
 void Destroy();
 

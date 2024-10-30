@@ -187,7 +187,7 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 				pWindow->SetMode(WindowMode::WindowedFullScreen);
 			}}
 			break;
-		case GLFW_KEY_D : {
+		case GLFW_KEY_F8 : {
 			pWindow->SetDecorated(!pWindow->GetDecorated());
 		}
 			break;
@@ -272,7 +272,7 @@ void WindowManager::Finish() {
 }
 
 // Window factory
-Window* WindowManager::NewWindow(int width, int height, const char* name/* , void (*SwapchainCreateFn)() */) {
+Window* WindowManager::NewWindow(int width, int height, const char* name, bool createSwapchain) {
 	if (!is_initialized) {
 		Init();
 	}
@@ -305,7 +305,9 @@ Window* WindowManager::NewWindow(int width, int height, const char* name/* , voi
 	glfwSetDropCallback              (glfwWindow, _InputCallbacks::DropCallback       );
 
 	window->ApplyChanges();
-	window->swapChain.Create(glfwWindow, width, height);
+	if (createSwapchain) {
+		window->swapChain.Create(glfwWindow, width, height);
+	}
 	return window;
 }
 

@@ -9,10 +9,10 @@ OPT_LEVEL := 0
 INCLUDES := -Isource/Core -Isource/Base -Isource/Shaders
 CXXFLAGS := -MMD -MP $(INCLUDES) -O$(OPT_LEVEL) -DENGINE -std=c++17
 LDFLAGS := -O$(OPT_LEVEL)
-LIBS := spdlog imgui
+LIBS := spdlog 
 
 ifeq ($(OS),Windows_NT)
-	LIBS := $(LIBS) vulkan-1 glfw3 gdi32
+	LIBS := $(LIBS) vulkan-1 glfw3 gdi32 imgui
 	OBJ_DIR := build
 	BUILD_DIR := build
 	MKDIR := cmd /c if not exist $(BUILD_DIR) mkdir
@@ -43,6 +43,11 @@ SRC_MAIN := .
 SRC_CORE := source/core
 SRC_BASE := source/base
 SRC_TEST := tests
+
+ifneq ($(OS),Windows_NT)
+	SRC_IMGUI := deps/imgui
+endif
+
 # Tests
 TST_NEURALSFD := tests/NeuralSdf
 TST_IMAGEOPT := tests/ImageOptimization
@@ -63,6 +68,7 @@ OBJS := \
 	$(patsubst $(SRC_BASE)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(SRC_BASE)/*.cpp)) \
 	$(patsubst $(SRC_TEST)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(SRC_TEST)/*.cpp)) \
 	$(patsubst %.cpp, $(OBJ_DIR)/%.o, $(TST_CPP_RAW)) \
+	$(patsubst $(SRC_IMGUI)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(SRC_IMGUI)/*.cpp)) \
 
 # $(patsubst $(TST_NEURALSFD)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(TST_NEURALSFD)/*.cpp)) \
 # $(patsubst $(TST_SLANG)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(TST_SLANG)/*.cpp)) \
@@ -123,6 +129,9 @@ $(OBJ_DIR)/%.o: $(TST_HELLOTRIANGLE)/%.cpp # tests/HelloTriangle
 	@echo "Compiling $<"
 	@$(CC) $(CXXFLAGS) -c $< -o $@
 $(OBJ_DIR)/%.o: $(TST_WINDOW)/%.cpp # tests/Window
+	@echo "Compiling $<"
+	@$(CC) $(CXXFLAGS) -c $< -o $@
+$(OBJ_DIR)/%.o: $(SRC_IMGUI)/%.cpp # imgui/
 	@echo "Compiling $<"
 	@$(CC) $(CXXFLAGS) -c $< -o $@
 # Run

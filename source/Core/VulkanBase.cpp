@@ -93,7 +93,6 @@ struct Context
 	InternalQueue* queues[Queue::Count]; // Pointers to uniqueQueues
 	// Queue currentQueue = Queue::Count;
 
-	std::shared_ptr<PipelineResource> currentPipeline;
 	const uint32_t stagingBufferSize = 2 * 1024 * 1024;
 
 	VkPhysicalDeviceMemoryProperties memoryProperties;
@@ -308,12 +307,17 @@ uint32_t Image::RID() {
 	return uint32_t(resource->rid);
 }
 
-void Init(bool presentRequested){
+void InitImpl(GLFWwindow* window, uint32_t width, uint32_t height){
+	auto presentRequested = window != nullptr;
 	_ctx.presentRequested = presentRequested;
-	if (presentRequested) {
-		glfwInit();
-	}
 	_ctx.CreateInstance();
+
+	if (presentRequested) {
+		auto res = glfwCreateWindowSurface(_ctx.instance, window, _ctx.allocator, &_ctx._dummySurface);
+		DEBUG_VK(res, "Failed to create window surface!");
+		DEBUG_TRACE("Created surface.");
+	}
+
 	_ctx.CreatePhysicalDevice();
 	_ctx.CreateDevice();
 
@@ -338,6 +342,14 @@ void Init(bool presentRequested){
 		// resource->stagingCpu = (u8*)resource->staging.resource->allocation->GetMappedData();
 	}
 	_ctx.CreateCommandBuffers(_ctx.queuesCommands);
+}
+
+void Init(GLFWwindow* window, uint32_t width, uint32_t height){
+	InitImpl(window, width, height);
+}
+
+void Init(){
+	InitImpl(nullptr, 0, 0);
 }
 
 void Destroy() {
@@ -1103,7 +1115,6 @@ void Command::BeginCommandBuffer() {
 void Command::EndCommandBuffer() {
 	vkEndCommandBuffer(resource->buffer); 
 	// _ctx.currentQueue = vkw::Queue::Count;
-	resource->currentPipeline = nullptr;
 }
 
 void Command::WaitQueue() {
@@ -1484,18 +1495,7 @@ void Context::CreateInstance(){
 		DEBUG_TRACE("Created debug report callback.");
 	}
 
-	if (presentRequested) {
-		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-		glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-		glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
-		glfwWindowHint(GLFW_FOCUSED, GLFW_FALSE);
-		glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
-		_dummyWindow = glfwCreateWindow(64, 64, "_dummyWindow", nullptr, nullptr);
-		glfwDefaultWindowHints();
-		res = glfwCreateWindowSurface(instance, _dummyWindow, allocator, &_dummySurface);
-		DEBUG_VK(res, "Failed to create window surface!");
-		DEBUG_TRACE("Created surface.");
-	}
+	
 	LOG_INFO("Created VulkanInstance.");
 }
 
@@ -1857,7 +1857,6 @@ void Context::CreateDevice() {
 
 void Context::DestroyDevice() {
 	// dummyVertexBuffer = {};
-	currentPipeline = {};
 	// asScratchBuffer = {};
 	// vkDestroyDescriptorPool(device, imguiDescriptorPool, allocator);
 	vmaDestroyAllocator(vmaAllocator);
