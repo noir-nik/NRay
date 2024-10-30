@@ -44,7 +44,7 @@ struct Camera {
     vec3 velocity;
     vec3 position;
 
-    mat4 view = float4x4();
+    mat4 view = lookAt(vec3(0.0f, 0.0f, -1.0f), vec3(0.0f, 0.0f, 0.0f), vec3(0.0f, 1.0f, 0.0f));
 	mat4 proj = perspective(60.0f, 1.0f, 0.1f, 100.0f);
 
 };
@@ -106,6 +106,7 @@ void UploadBuffers();
 void FramebufferCallback(Window* window, int width, int height);
 void MouseButtonCallback(Window* window, int button, int action, int mods);
 void KeyCallback(Window* window, int key, int scancode, int action, int mods);
+void CursorPosCallback(Window *window, double xpos, double ypos);
 
 
 void UploadBuffers() {
@@ -134,8 +135,8 @@ void RecordCommands(Window* window) {
 	vkw::Image& img = window->swapChain.GetCurrentImage();
 	
 	// cmd.Copy(ctx.vertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex));
-	cmd.Barrier(ctx.renderImages[window], {vkw::ImageLayout::TransferDst});
-	cmd.ClearColorImage(ctx.renderImages[window], {0.7f, 0.0f, 0.4f, 1.0f});
+	// cmd.Barrier(ctx.renderImages[window], {vkw::ImageLayout::TransferDst});
+	// cmd.ClearColorImage(ctx.renderImages[window], {0.7f, 0.0f, 0.4f, 1.0f});
 
 	cmd.BeginRendering({ctx.renderImages[window]}, {}, 1, viewport);
 	cmd.BindPipeline(ctx.pipeline);
@@ -171,6 +172,7 @@ void KeyCallback(Window* window, int key, int scancode, int action, int mods) {
 	// printf("key: %d, scancode: %d, action: %d, mods: %d\n", key, scancode, action, mods);
 	switch (action){
 	case GLFW_PRESS:
+		window->SetDrawNeeded(true);
 		switch (key) {
 		case GLFW_KEY_N: {
 			static int windowCount = 1;
@@ -181,6 +183,8 @@ void KeyCallback(Window* window, int key, int scancode, int action, int mods) {
 			window->AddFramebufferSizeCallback(FramebufferCallback);
 			window->AddMouseButtonCallback(MouseButtonCallback);
 			window->AddKeyCallback(KeyCallback);
+			window->AddCursorPosCallback(CursorPosCallback);
+			break;
 		}
 		case GLFW_KEY_W:
 			camera.view = translate4x4({0, 0, -0.02f}) * camera.view;
@@ -211,12 +215,19 @@ void KeyCallback(Window* window, int key, int scancode, int action, int mods) {
 }
 
 
-
+void CursorPosCallback (Window *window, double xpos, double ypos) {
+	if (mouse.buttons[GLFW_MOUSE_BUTTON_RIGHT]) {
+		camera.view = rotate4x4Y(mouse.deltaPos.x * 0.003f) * rotate4x4X(mouse.deltaPos.y * -0.003f) * camera.view;
+		window->SetDrawNeeded(true);
+	}
+	if (mouse.buttons[GLFW_MOUSE_BUTTON_LEFT]) {
+		camera.view = translate4x4({mouse.deltaPos.x * -0.01f, mouse.deltaPos.y * -0.01f, 0}) * camera.view;
+		window->SetDrawNeeded(true);
+	}
+}
 
 void MouseButtonCallback(Window* window, int button, int action, int mods) {
-	if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS){
-		window->SetResizable(!window->GetResizable());
-	}
+
 }
 
 void FramebufferCallback(Window* window, int width, int height) {
@@ -329,6 +340,7 @@ void FeatureTestApplication::Create() {
 	window->AddFramebufferSizeCallback(FramebufferCallback);
 	window->AddMouseButtonCallback(MouseButtonCallback);
 	window->AddKeyCallback(KeyCallback);
+	window->AddCursorPosCallback(CursorPosCallback);
 	// window->SetMaxSize(3000, 3000);
 	// ctx.CreateImages(window->GetMonitorWidth(), window->GetMonitorHeight());
 	CreateRenderImage(window);

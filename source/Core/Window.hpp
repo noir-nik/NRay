@@ -55,13 +55,15 @@ enum class MouseButton {
 	Middle  = GLFW_MOUSE_BUTTON_MIDDLE,
 };
 
-class Mouse {
-	float       scroll        = .0f;
-	float       deltaScroll   = .0f;
-	Lmath::vec2 pos      = Lmath::vec2(.0f, .0f);
-	Lmath::vec2 deltaPos = Lmath::vec2(.0f, .0f);
+struct Mouse {
+	float       scroll      = .0f;
+	float       deltaScroll = .0f;
+	Lmath::vec2 pos         = Lmath::vec2(.0f, .0f);
+	Lmath::vec2 deltaPos    = Lmath::vec2(.0f, .0f);
 
-public:
+	u8          buttons[8]  = { GLFW_RELEASE, GLFW_RELEASE, GLFW_RELEASE, GLFW_RELEASE, GLFW_RELEASE, GLFW_RELEASE, GLFW_RELEASE, GLFW_RELEASE };
+	u8          mods        = 0;
+	
 	float GetScroll() const { return scroll; }
 	float GetDeltaScroll() const { return deltaScroll; }
 	Lmath::vec2 GetPos() const { return pos; }
@@ -72,14 +74,14 @@ public:
 	int GetButton(GLFWwindow* window, MouseButton button) { return glfwGetMouseButton(window, static_cast<int>(button)); }
 
 private:
-	friend void _InputCallbacks::MouseButtonCallback         (GLFWwindow *window, int button, int action, int mods);
-	friend void _InputCallbacks::CursorPosCallback           (GLFWwindow *window, double xpos, double ypos);
-	friend void _InputCallbacks::CursorEnterCallback         (GLFWwindow *window, int entered);
-	friend void _InputCallbacks::ScrollCallback              (GLFWwindow *window, double xoffset, double yoffset);
-	friend void _InputCallbacks::KeyCallback                 (GLFWwindow *window, int key, int scancode, int action, int mods);
-	friend void _InputCallbacks::CharCallback                (GLFWwindow *window, unsigned int codepoint);
-	friend void _InputCallbacks::CharModsCallback            (GLFWwindow *window, unsigned int codepoint, int mods);
-	friend void _InputCallbacks::DropCallback                (GLFWwindow *window, int path_count, const char *paths[]);
+	friend void _InputCallbacks::MouseButtonCallback (GLFWwindow *window, int button, int action, int mods);
+	friend void _InputCallbacks::CursorPosCallback   (GLFWwindow *window, double xpos, double ypos);
+	friend void _InputCallbacks::CursorEnterCallback (GLFWwindow *window, int entered);
+	friend void _InputCallbacks::ScrollCallback      (GLFWwindow *window, double xoffset, double yoffset);
+	friend void _InputCallbacks::KeyCallback         (GLFWwindow *window, int key, int scancode, int action, int mods);
+	friend void _InputCallbacks::CharCallback        (GLFWwindow *window, unsigned int codepoint);
+	friend void _InputCallbacks::CharModsCallback    (GLFWwindow *window, unsigned int codepoint, int mods);
+	friend void _InputCallbacks::DropCallback        (GLFWwindow *window, int path_count, const char *paths[]);
 };
 extern Mouse mouse;
 

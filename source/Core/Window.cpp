@@ -4,8 +4,8 @@
 // #include <imgui/imgui.h>
 
 #define WINDOW_ALIVE_GUARD if (!alive) {LOG_WARN("ALIVE_GUARD {}:{}", __FILE__, __LINE__) return;}
-#define TRACE_WINDOW 1
-#define TRACE_INPUT 1
+#define TRACE_WINDOW 0
+#define TRACE_INPUT 0
 #if TRACE_WINDOW
 #define LOG_WINDOW(...) Logger::Get()->trace(__VA_ARGS__)
 #else
@@ -128,6 +128,9 @@ void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
 	LOG_INPUT("Window {} mouse button: {}, action: {}, mods: {}", pWindow->GetName(), button, action, mods);
 
+	mouse.buttons[button] = action;
+	mouse.mods = mods;
+
 	if (pWindow->mouseButtonCallback)
 		pWindow->mouseButtonCallback(pWindow, button, action, mods);
 }
@@ -140,10 +143,11 @@ void CursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
 	mouse.pos = Lmath::vec2(xpos, ypos);
 	// LOG_INPUT("Window {} delta mouse pos: {}, {}", pWindow->GetName(), pWindow->deltaMousePos.x, pWindow->deltaMousePos.y);
 
-	if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
-		pWindow->CmdSetPos(pWindow->GetPos().x - mouse.deltaPos.x, pWindow->GetPos().y - mouse.deltaPos.y);
-		mouse.pos = mouse.pos + mouse.deltaPos;
-	}
+	// Drag window
+	// if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
+	// 	pWindow->CmdSetPos(pWindow->GetPos().x - mouse.deltaPos.x, pWindow->GetPos().y - mouse.deltaPos.y);
+	// 	mouse.pos = mouse.pos + mouse.deltaPos;
+	// }
 
 	if (pWindow->cursorPosCallback)
 		pWindow->cursorPosCallback(pWindow, xpos, ypos);

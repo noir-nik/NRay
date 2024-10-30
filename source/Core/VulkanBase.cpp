@@ -935,10 +935,10 @@ void Command::BeginRendering(const std::vector<Image>& colorAttachs, Image depth
 		colorAttachInfos[i].imageView = colorAttachs[i].resource->view;
 		colorAttachInfos[i].imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 		colorAttachInfos[i].resolveMode = VK_RESOLVE_MODE_NONE;
-		// colorAttachInfos[i].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-		colorAttachInfos[i].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+		colorAttachInfos[i].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+		// colorAttachInfos[i].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 		colorAttachInfos[i].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-		colorAttachInfos[i].clearValue.color = { 0.1f, 0.4f, 0.1f, 0.0f };
+		colorAttachInfos[i].clearValue.color = { 0.1f, 0.1f, 0.1f, 0.0f };
 	}
 
 	renderingInfo.colorAttachmentCount = colorAttachInfos.size();
