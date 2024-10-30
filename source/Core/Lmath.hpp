@@ -27,6 +27,8 @@ typedef struct int4
 	
 	inline int& operator[](int i)			 { return M[i]; }
 	inline int	operator[](int i) const { return M[i]; }
+	
+
 	union
 	{
 		struct { int x, y, z, w; };
@@ -36,6 +38,8 @@ typedef struct int4
 } ivec4;
 
 static inline bool operator==(const ivec4& a, const ivec4& b) { return a.x == b.x && a.y == b.y && a.z == b.z && a.w == b.w; }
+
+
 
 typedef struct int3
 {
@@ -86,6 +90,7 @@ typedef struct uint4
 	
 	inline uint& operator[](int i)			 { return M[i]; }
 	inline uint	operator[](int i) const { return M[i]; }
+	// inline explicit operator bool() { return x > 0 || y > 0 || z > 0 || w > 0; }
 	union
 	{
 		struct { uint x, y, z, w; };
@@ -180,6 +185,9 @@ static inline float4& operator += (float4& a, const float4 b) { a.x += b.x; a.y 
 static inline float4& operator -= (float4& a, const float4 b) { a.x -= b.x; a.y -= b.y; a.z -= b.z; a.w -= b.w;  return a; }
 static inline float4& operator += (float4& a, float b) { a.x += b; a.y += b; a.z += b; a.w += b;  return a; }
 static inline float4& operator -= (float4& a, float b) { a.x -= b; a.y -= b; a.z -= b; a.w -= b;  return a; }
+
+static inline bool operator==(const float4 a, const float4 b) { return a.x == b.x && a.y == b.y && a.z == b.z && a.w == b.w; }
+
 
 static inline void store  (float* p, const float4 a_val) { memcpy((void*)p, (void*)&a_val, sizeof(float)*4); }
 static inline void store_u(float* p, const float4 a_val) { memcpy((void*)p, (void*)&a_val, sizeof(float)*4); }  

@@ -188,8 +188,8 @@ void RecordCommands(Window* window) {
 	vkw::Image& img = window->swapChain.GetCurrentImage();
 	
 	// cmd.Copy(ctx.vertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex));
-	cmd.Barrier(ctx.renderImages[window], {vkw::ImageLayout::TransferDst});
-	cmd.ClearColorImage(ctx.renderImages[window], {0.7f, 0.0f, 0.4f, 1.0f});
+	// cmd.Barrier(ctx.renderImages[window], {vkw::ImageLayout::TransferDst});
+	// cmd.ClearColorImage(ctx.renderImages[window], {0.7f, 0.0f, 0.4f, 1.0f});
 
 	cmd.BeginRendering({ctx.renderImages[window]}, {ctx.depth}, 1, viewport);
 	cmd.BindPipeline(ctx.pipeline);
@@ -329,7 +329,7 @@ void RecreateFrameResources(Window* window) {
 	if (swapChainDirty || framebufferResized) {
 		// LOG_INFO("DIRTY FRAME RESOURCES");
 		window->UpdateFramebufferSize();
-		window->GetSwapchain().Recreate(window->GetWidth(), window->GetHeight());
+		window->RecreateSwapchain();
 		window->SetFramebufferResized(false);
 		window->SetDrawNeeded(true);
 	}

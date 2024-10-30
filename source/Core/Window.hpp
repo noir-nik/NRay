@@ -63,7 +63,7 @@ struct Mouse {
 
 	u8          buttons[8]  = { GLFW_RELEASE, GLFW_RELEASE, GLFW_RELEASE, GLFW_RELEASE, GLFW_RELEASE, GLFW_RELEASE, GLFW_RELEASE, GLFW_RELEASE };
 	u8          mods        = 0;
-	
+
 	float GetScroll() const { return scroll; }
 	float GetDeltaScroll() const { return deltaScroll; }
 	Lmath::vec2 GetPos() const { return pos; }
@@ -211,6 +211,7 @@ public:
 	inline void        SetDrawNeeded(bool value)           { drawNeeded = value; }
 
 	inline void        CreateSwapchain()                   { if (!swapChainAlive) swapChain.Create(window, width, height); swapChainAlive = true; }
+	inline void        RecreateSwapchain()                 { swapChain.Recreate(width, height);} 
 	inline bool        GetSwapchainDirty()                 { return swapChain.GetDirty(); }
 	inline auto&       GetSwapchain()                      { return swapChain; }
 
