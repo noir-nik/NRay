@@ -5,6 +5,7 @@
 #include <string>
 #include "Lmath.hpp"
 
+#include "VulkanBase.hpp"
 
 class WindowManager;
 enum class WindowMode {
@@ -94,31 +95,28 @@ class Window {
 	float         scaleX             = 1.0f;
 	float         scaleY             = 1.0f;
 	Lmath::ivec4  windowedSize        = { 30, 30, 640, 480 };
+	static inline bool          framebufferResized = false;
 
 	std::chrono::high_resolution_clock::time_point lastTime;
 	float deltaTime = .0f;
 
 	std::vector<std::string> pathsDrop;
 
-	char lastKeyState[GLFW_KEY_LAST + 1];
+	// char lastKeyState[GLFW_KEY_LAST + 1];
 	WindowMode mode = WindowMode::Windowed;
 	WindowMode newMode = WindowMode::Windowed;
 	const GLFWvidmode* vidMode = nullptr;
 
 	bool drawNeeded = true;
-	bool swapchainDirty = false;
+	// bool swapchainDirty = false;
 
 	bool resizable = true;
 	bool decorated = true;
 	bool maximized = false;
 	
 	bool alive = true;
-	bool swapchainAlive = false;
 
 	bool focused = true;
-
-	void (*createSwapchainFn )(GLFWwindow* window) = nullptr; // createSwapchainFn
-	void (*destroySwapchainFn)(GLFWwindow* window) = nullptr; // destroySwapchainFn
 
 	enum Attrib {
 		Decorated = GLFW_DECORATED,
@@ -150,6 +148,8 @@ class Window {
 	void (*dropCallback)               (Window *window, int path_count, const char *paths[])         = nullptr;
 		
 public:
+	vkw::SwapChain swapChain;
+
 	Window(int width, int height, const char* name = "Engine"): width(width), height(height), name(name) {}
 	Window& operator=(const Window&) = delete;
 	Window(const Window&) = delete;
@@ -182,7 +182,6 @@ public:
 
 	// inline Lmath::vec2 GetDeltaMouse()                     { return deltaMousePos;                          }
 
-	// inline bool        GetFramebufferResized()             { return framebufferResized;                     }
 	inline bool        IsKeyDown(uint16_t keyCode)         { return glfwGetKey(window, keyCode);            }
 	inline bool        IsMouseDown(uint16_t buttonCode)    { return glfwGetMouseButton(window, buttonCode); }
 
@@ -196,10 +195,8 @@ public:
 	inline WindowMode  GetMode()                           { return mode; }
 	inline void        SetMode(WindowMode value)           { newMode = value; }
 
-	// inline bool        GetFullscreen()                     { return mode == WindowMode::FullScreen; }
-
-
-	// inline void        SetFramebufferResized()             { framebufferResized = true; }
+	inline bool        GetFramebufferResized()             { return framebufferResized; }
+	inline void        SetFramebufferResized(bool value)   { framebufferResized = value; }
 
 	inline const char* GetName()                           { return name.c_str(); }
 	inline void        SetName(const char* name)           { glfwSetWindowTitle(window, name);               }
@@ -210,14 +207,11 @@ public:
 	inline bool        GetDrawNeeded()                     { return drawNeeded; }
 	inline void        SetDrawNeeded(bool value)           { drawNeeded = value; }
 
-	inline bool        GetSwapchainDirty()                 { return swapchainDirty; }
-	inline void        SetSwapchainDirty(bool value)       { swapchainDirty = value; }
+	inline bool        GetSwapchainDirty()                 { return swapChain.GetDirty(); }
+	inline auto&       GetSwapchain()                      { return swapChain; }
 
-	inline void        CreateSwapchain()                   { if(createSwapchainFn) createSwapchainFn(window); }
-	inline void        DestroySwapchain()                  { if(destroySwapchainFn) destroySwapchainFn(window); }
-
-	inline void        SetCreateSwapchainFn (void(*fn)(GLFWwindow*)) { createSwapchainFn  = fn; }
-	inline void        SetDestroySwapchainFn(void(*fn)(GLFWwindow*)) { destroySwapchainFn = fn; }
+	// inline void        SetCreateSwapchainFn (void(*fn)(GLFWwindow*)) { createSwapchainFn  = fn; }
+	// inline void        SetDestroySwapchainFn(void(*fn)(GLFWwindow*)) { destroySwapchainFn = fn; }
 
 	inline bool        GetAlive()                          { return alive; }
 	inline void        SetAlive(bool value)                { alive = value; }

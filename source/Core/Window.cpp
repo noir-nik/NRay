@@ -102,9 +102,8 @@ void FramebufferSizeCallback(GLFWwindow* window, int width, int height) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
 	LOG_WINDOW("Window {} framebuffer resized to {}x{}", pWindow->GetName(), width, height);
 	
-	pWindow->SetSwapchainDirty(true);
 	pWindow->SetDrawNeeded(true);
-	// pWindow->SetFramebufferResized();
+	pWindow->SetFramebufferResized(true);
 	// LOG_WINDOW("Window {} framebuffer resized to {}x{}", pWindow->GetName(), width, height);
 	
 	if (pWindow->framebufferSizeCallback) 
@@ -305,15 +304,13 @@ Window* WindowManager::NewWindow(int width, int height, const char* name/* , voi
 	glfwSetCharModsCallback          (glfwWindow, _InputCallbacks::CharModsCallback   );
 	glfwSetDropCallback              (glfwWindow, _InputCallbacks::DropCallback       );
 
-	
-
-	// window->dirty = false;
 	window->ApplyChanges();
-	// windowCount++;
+	window->swapChain.Create(glfwWindow, width, height);
 	return window;
 }
 
 void Window::Destroy() {
+	swapChain.Destroy();
 	glfwGetWindowPos(window, &pos.x, &pos.y);
 	glfwDestroyWindow(window);
 	alive = false;
@@ -330,7 +327,7 @@ void Window::ApplyChanges() {
 	// Change mode
 	if (newMode != mode) {
 		mode = newMode;
-		swapchainDirty = true;
+		framebufferResized = true;
 		drawNeeded = true;
 		int monitorCount;
 		auto monitors = glfwGetMonitors(&monitorCount);
@@ -401,6 +398,6 @@ void Window::UpdateFramebufferSize() {
 	glfwGetFramebufferSize(window, &width, &height);
 }
 
-bool Window::IsKeyPressed(uint16_t keyCode) {
-	return lastKeyState[keyCode] && !glfwGetKey(window, keyCode);
-}
+// bool Window::IsKeyPressed(uint16_t keyCode) {
+// 	return lastKeyState[keyCode] && !glfwGetKey(window, keyCode);
+// }

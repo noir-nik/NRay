@@ -103,8 +103,8 @@ void HelloTriangleApplication::Setup() {
 }
 
 void HelloTriangleApplication::Create() {
+	vkw::Init();
 	ctx.window = WindowManager::NewWindow(ctx.width, ctx.height, "Feature Test");
-	vkw::Init(ctx.window->GetGLFWwindow(), ctx.window->GetWidth(), ctx.window->GetHeight());
 	ctx.CreateImages(ctx.width, ctx.height);
 	ctx.CreateShaders();
 }
@@ -142,12 +142,12 @@ void HelloTriangleApplication::Draw() {
 	constants.height = ctx.height;
 	constants.storageImageRID = ctx.renderImage.RID();
 	
-	auto cmd = vkw::GetCommandBuffer(ctx.window->GetGLFWwindow());
+	auto cmd = ctx.window->swapChain.GetCommandBuffer();
 	cmd.BeginCommandBuffer();
 	// cmd.PushConstants(nstants, sizeof(constants));
 	GLFWwindow* window = ctx.window->GetGLFWwindow();
 	// cmd.BeginPresent(vkw::AcquireImage(window);
-	vkw::Image& img = vkw::GetCurrentSwapchainImage(window);
+	vkw::Image& img = ctx.window->swapChain.GetCurrentImage();
 	cmd.Barrier(ctx.renderImage, {vkw::ImageLayout::ColorAttachment});
 	cmd.Copy(ctx.vertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex));
 	// cmd.ClearColorImage(ctx.renderImage, {0.7f, 0.0f, 0.4f, 1.0f});
@@ -167,7 +167,7 @@ void HelloTriangleApplication::Draw() {
 	cmd.Blit(img, ctx.renderImage);
 
 	cmd.Barrier(img, {vkw::ImageLayout::Present});
-	vkw::SubmitAndPresent(window);
+	ctx.window->swapChain.SubmitAndPresent();
 	vkw::WaitQueue(vkw::Queue::Graphics);
 	sleep(3);
 	// timer.Start();

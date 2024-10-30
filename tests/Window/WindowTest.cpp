@@ -118,10 +118,10 @@ void RecordCommands(Window* window) {
 
 	// LOG_INFO("Viewport: {}, {}, {}, {}", viewport.x, viewport.y, viewport.z, viewport.w); 
 
-	auto cmd = vkw::GetCommandBuffer(glfwWindow);
+	auto cmd = window->swapChain.GetCommandBuffer();
 	cmd.BeginCommandBuffer();
-	if (!vkw::AcquireImage(glfwWindow)) return;
-	vkw::Image& img = vkw::GetCurrentSwapchainImage(glfwWindow);
+	if (!window->swapChain.AcquireImage()) return;
+	vkw::Image& img = window->swapChain.GetCurrentImage();
 	
 	// cmd.Copy(ctx.vertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex));
 	cmd.Barrier(ctx.renderImages[window], {vkw::ImageLayout::TransferDst});
@@ -144,13 +144,12 @@ void RecordCommands(Window* window) {
 static int frameCount = 0;
 void DrawWindow(Window* window) {
 	if (window->GetDrawNeeded() && !window->GetIconified()) {
-		auto glfwWindow = window->GetGLFWwindow();
 		RecordCommands(window);
-		if (vkw::GetSwapChainDirty(glfwWindow)) {
+		if (window->swapChain.GetDirty()) {
 			LOG_WARN("RecordCommands: Swapchain dirty");
 		}
-		vkw::SubmitAndPresent(glfwWindow);
-		if (vkw::GetSwapChainDirty(glfwWindow)) {
+		window->swapChain.SubmitAndPresent();
+		if (window->swapChain.GetDirty()) {
 			LOG_WARN("SubmitAndPresent: Swapchain dirty");
 		}
 		window->SetDrawNeeded(false);
@@ -200,14 +199,14 @@ void RecreateFrameResources(Window* window) {
 	if (window->GetIconified()) {/* LOG_TRACE("RecreateFrameResources: size = 0"); */ return;};
 
 	vkw::WaitIdle();
-	bool swapChainDirty = vkw::GetSwapChainDirty(window->GetGLFWwindow());
-	bool windowDirty = window->GetSwapchainDirty();
-	// LOG_INFO("RecreateFrameResources {} {} {} {}", window->GetName(), (void*)window->GetGLFWwindow(), swapChainDirty, windowDirty);
-	if (swapChainDirty || windowDirty) {
+	bool swapChainDirty = window->GetSwapchainDirty();
+	bool framebufferResized = window->GetFramebufferResized();
+	// LOG_INFO("RecreateFrameResources {} {} {} {}", window->GetName(), (void*)window->GetGLFWwindow(), swapChainDirty, framebufferResized);
+	if (swapChainDirty || framebufferResized) {
 		// LOG_INFO("DIRTY FRAME RESOURCES");
 		window->UpdateFramebufferSize();
-		vkw::RecreateSwapChain(window->GetGLFWwindow(), window->GetWidth(), window->GetHeight());
-		window->SetSwapchainDirty(false);
+		window->GetSwapchain().Recreate(window->GetWidth(), window->GetHeight());
+		window->SetFramebufferResized(false);
 		window->SetDrawNeeded(true);
 	}
 
@@ -236,11 +235,11 @@ void WindowTestApplication::Setup() {
 }
 
 void WindowTestApplication::Create() {
+	vkw::Init();
 	auto window = WindowManager::NewWindow(ctx.width, ctx.height, "wm");
 	ctx.windows.emplace(window);
 	ctx.mainWindow = window;
 	// ctx.window1 = WindowManager::NewWindow(ctx.width, ctx.height, "w1");
-	vkw::Init(window->GetGLFWwindow(), window->GetWidth(), window->GetHeight());
 	window->AddFramebufferSizeCallback(FramebufferCallback);
 	window->AddMouseButtonCallback(MouseButtonCallback);
 	window->AddKeyCallback(KeyCallback);
@@ -266,7 +265,6 @@ void WindowTestApplication::MainLoop() {
 				if (window == ctx.mainWindow) {
 					ctx.mainWindow = nullptr;
 				}
-				vkw::DestroySwapChain(window->GetGLFWwindow());
 				delete window;
 				continue;
 			}
@@ -282,10 +280,7 @@ void WindowTestApplication::MainLoop() {
 }
 
 void WindowTestApplication::Finish() {
-	for (auto& window: ctx.windows) {vkw::DestroySwapChain(window->GetGLFWwindow()); delete window;}
 	ctx = {};
 	vkw::Destroy();
 	WindowManager::Finish();
 }
-
-

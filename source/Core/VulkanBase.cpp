@@ -28,6 +28,7 @@ struct Context
 	void CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipeline);
 
 	VkInstance instance = VK_NULL_HANDLE;
+	GLFWwindow* _dummyWindow = nullptr;
 	VkSurfaceKHR _dummySurface = VK_NULL_HANDLE; // for querying present support
 	VkAllocationCallbacks* allocator = VK_NULL_HANDLE;
 	VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
@@ -127,17 +128,14 @@ struct Context
 
 	// std::map<std::string, float> timeStampTable;
 
-	void CreateInstance(GLFWwindow* window);
+	void CreateInstance();
 	void DestroyInstance();
 
 	void CreatePhysicalDevice();
 
 	void CreateDevice();
 	void DestroyDevice();
-
-	void CreateImGui(GLFWwindow* window);
-	void DestroyImGui();
-
+	
 	void createDescriptorSetLayout();
 	void createDescriptorPool();
 	void createDescriptorSet();
@@ -201,10 +199,9 @@ struct SwapChainResource {
 	void Create(std::vector<Image>& swapChainImages, uint32_t width, uint32_t height, bool is_recreation = false);
 	void Destroy(bool is_recreation = false);
 
-	// inline VkSemaphore GetImageAvailableSemaphore() { return imageAvailableSemaphores[currentFrame]; }
-	// inline VkSemaphore GetRenderFinishedSemaphore() { return renderFinishedSemaphores[currentFrame]; }
+	inline VkSemaphore GetImageAvailableSemaphore(uint32_t currentFrame) { return imageAvailableSemaphores[currentFrame]; }
+	inline VkSemaphore GetRenderFinishedSemaphore(uint32_t currentFrame) { return renderFinishedSemaphores[currentFrame]; }
 	bool SupportFormat(VkFormat format, VkImageTiling tiling, VkFormatFeatureFlags features);
-	void ChooseExtent(uint32_t width, uint32_t height);
 	void ChooseExtent(uint32_t width, uint32_t height);
 	void ChoosePresentMode();
 	void ChooseSurfaceFormat();
@@ -311,9 +308,12 @@ uint32_t Image::RID() {
 	return uint32_t(resource->rid);
 }
 
-static void InitImpl(GLFWwindow* window, uint32_t width, uint32_t height){
-
-	_ctx.CreateInstance(window);
+void Init(bool presentRequested){
+	_ctx.presentRequested = presentRequested;
+	if (presentRequested) {
+		glfwInit();
+	}
+	_ctx.CreateInstance();
 	_ctx.CreatePhysicalDevice();
 	_ctx.CreateDevice();
 
@@ -339,18 +339,6 @@ static void InitImpl(GLFWwindow* window, uint32_t width, uint32_t height){
 	}
 	_ctx.CreateCommandBuffers(_ctx.queuesCommands);
 }
-
-void Init() {
-	InitImpl(nullptr, 0, 0);
-}
-
-void Init(GLFWwindow* window, uint32_t width, uint32_t height) {
-	_ctx.presentRequested = true;
-	InitImpl(window, width, height);
-}
-
-
-
 
 void Destroy() {
 	// ImGui_ImplVulkan_Shutdown();
@@ -1076,11 +1064,6 @@ void Command::PushConstants(void* data, uint32_t size) {
 
 // for swapchain
 
-Command& GetCommandBuffer(GLFWwindow* window) {
-	auto& swapChain = _ctx.swapChains[window];
-	return swapChain.GetCommandBuffer();
-}
-
 Command& GetCommandBuffer (Queue queue) {
 	return *_ctx.queues[queue]->commands;
 }
@@ -1336,7 +1319,7 @@ void PopulateDebugReportCreateInfo(VkDebugReportCallbackCreateInfoEXT& createInf
 
 } // vulkan debug callbacks
 
-void Context::CreateInstance(GLFWwindow* glfwWindow){
+void Context::CreateInstance(){
 	// optional data, provides useful info to the driver
 	VkApplicationInfo appInfo{};
 	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -1501,8 +1484,15 @@ void Context::CreateInstance(GLFWwindow* glfwWindow){
 		DEBUG_TRACE("Created debug report callback.");
 	}
 
-	if (_ctx.presentRequested) {
-		res = glfwCreateWindowSurface(instance, glfwWindow, allocator, &_dummySurface);
+	if (presentRequested) {
+		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+		glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+		glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+		glfwWindowHint(GLFW_FOCUSED, GLFW_FALSE);
+		glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
+		_dummyWindow = glfwCreateWindow(64, 64, "_dummyWindow", nullptr, nullptr);
+		glfwDefaultWindowHints();
+		res = glfwCreateWindowSurface(instance, _dummyWindow, allocator, &_dummySurface);
 		DEBUG_VK(res, "Failed to create window surface!");
 		DEBUG_TRACE("Created surface.");
 	}
@@ -1859,6 +1849,10 @@ void Context::CreateDevice() {
 		vkDestroySurfaceKHR(instance, _dummySurface, nullptr);
 		_dummySurface = VK_NULL_HANDLE;
 	}
+	if (_dummyWindow != nullptr) {
+		glfwDestroyWindow(_dummyWindow);
+		_dummyWindow = nullptr;
+	}
 }
 
 void Context::DestroyDevice() {
@@ -1906,7 +1900,7 @@ void SwapChainResource::CreateSurfaceFormats() {
 }
 
 void SwapChainResource::Create(std::vector<Image>& swapChainImages, uint32_t width, uint32_t height, bool is_recreation) {
-	auto device = _ctx.device;
+	this->device = _ctx.device; // TODO: make this a parameter
 	
 	CreateSurfaceFormats();
 
@@ -2069,6 +2063,9 @@ void SwapChainResource::Destroy(bool is_recreation) {
 
 void SwapChain::Create(GLFWwindow* window, uint32_t width, uint32_t height) {
 	this->window = window;
+
+	resource = std::make_shared<SwapChainResource>();
+
 	VkResult res = glfwCreateWindowSurface(_ctx.instance, window, _ctx.allocator, &resource->surface);
 	DEBUG_VK(res, "Failed to create window surface!");
 	DEBUG_TRACE("Created surface.");
@@ -2128,21 +2125,16 @@ void SwapChain::DestroyImGui() {
 
 void SwapChain::Recreate(uint32_t width, uint32_t height) {
 	DEBUG_ASSERT(!(width == 0 || height == 0), "Window size is 0, swapchain NOT recreated");
-	if (isActive) {
-		resource->Create(swapChainImages, width, height, false);
-	} else {
-		resource->Destroy(true);
-		resource->Create(swapChainImages, width, height, true);
-	}
+	resource->Destroy(true);
+	resource->Create(swapChainImages, width, height, true);
 }
 
-bool AcquireImage(GLFWwindow* window) {
-	auto& swapChain = _ctx.swapChains[window];
-	auto res = vkAcquireNextImageKHR(_ctx.device, swapChain.swapChain, UINT64_MAX, swapChain.GetImageAvailableSemaphore(), VK_NULL_HANDLE, &swapChain.currentImageIndex);
+bool SwapChain::AcquireImage() {
+	auto res = vkAcquireNextImageKHR(_ctx.device, resource->swapChain, UINT64_MAX, resource->GetImageAvailableSemaphore(currentFrame), VK_NULL_HANDLE, &currentImageIndex);
 
 	if (res == VK_ERROR_OUT_OF_DATE_KHR) {
 		LOG_WARN("AcquireImage: Out of date");
-		swapChain.dirty = true;
+		dirty = true;
 	} else if (res != VK_SUCCESS && res != VK_SUBOPTIMAL_KHR) {
 		DEBUG_VK(res, "Failed to acquire swap chain image!");
 	}
@@ -2154,25 +2146,18 @@ bool AcquireImage(GLFWwindow* window) {
 	}
 }
 
-bool GetSwapChainDirty(GLFWwindow* window) {
-	if  (_ctx.swapChains.find(window) == _ctx.swapChains.end()) {
-		// DEBUG_TRACE("GetSwapChainDirty s={}: Window not found", _ctx.swapChains.size());
-		return true;
-	};
-	auto& swapChain = _ctx.swapChains[window];
-	// DEBUG_TRACE("GetSwapChainDirty: s={} {} {}", _ctx.swapChains.size(), (void*)window, swapChain.dirty);	
-	return swapChain.dirty;
+bool SwapChain::GetDirty() {
+	return dirty;
 }
 
 // EndCommandBuffer + vkQueuePresentKHR
-void SubmitAndPresent(GLFWwindow* window) {
-	auto& swapChain = _ctx.swapChains[window];
+void SwapChain::SubmitAndPresent() {
 
 	SubmitInfo submitInfo{};
-	submitInfo.waitSemaphore   = (Semaphore*)swapChain.GetImageAvailableSemaphore();
-	submitInfo.signalSemaphore = (Semaphore*)swapChain.GetRenderFinishedSemaphore();
+	submitInfo.waitSemaphore   = (Semaphore*)resource->GetImageAvailableSemaphore(currentFrame);
+	submitInfo.signalSemaphore = (Semaphore*)resource->GetRenderFinishedSemaphore(currentFrame);
 	
-	auto cmd = swapChain.GetCommandBuffer();
+	auto cmd = GetCommandBuffer();
 	cmd.EndCommandBuffer();
 	cmd.QueueSubmit(submitInfo);
 
@@ -2181,24 +2166,24 @@ void SubmitAndPresent(GLFWwindow* window) {
 	presentInfo.waitSemaphoreCount = 1; // TODO: pass with info
 	presentInfo.pWaitSemaphores = (VkSemaphore*)&submitInfo.signalSemaphore;
 	presentInfo.swapchainCount = 1;
-	presentInfo.pSwapchains = &swapChain.swapChain;
-	presentInfo.pImageIndices = &swapChain.currentImageIndex;
+	presentInfo.pSwapchains = &resource->swapChain;
+	presentInfo.pImageIndices = &currentImageIndex;
 	presentInfo.pResults = nullptr;
 
-	auto res = vkQueuePresentKHR(swapChain.GetCommandBuffer().resource->queue->queue, &presentInfo); // TODO: use present queue
+	auto res = vkQueuePresentKHR(GetCommandBuffer().resource->queue->queue, &presentInfo); // TODO: use present queue
 
 	if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR) {
 		if (res == VK_ERROR_OUT_OF_DATE_KHR) { LOG_WARN("vkQueuePresentKHR: Out of date") }
 		if (res == VK_SUBOPTIMAL_KHR) { LOG_WARN("vkQueuePresentKHR: Suboptimal") }
 
-		swapChain.dirty = true;
+		dirty = true;
 		return;
 	}
 	else if (res != VK_SUCCESS) {
 		DEBUG_VK(res, "Failed to present swap chain image!");
 	}
 
-	swapChain.currentFrame = (swapChain.currentFrame + 1) % swapChain.framesInFlight;
+	currentFrame = (currentFrame + 1) % framesInFlight;
 }
 
 
@@ -2494,8 +2479,6 @@ void SwapChainResource::ChooseSurfaceFormat() {
 	for (const auto& availableFormat : this->availableSurfaceFormats) {
 		if (availableFormat.format == colorFormat
 			&& availableFormat.colorSpace == colorSpace) {
-			this->colorFormat = colorFormat;
-			this->colorSpace = colorSpace;
 			return;
 		}
 	}
@@ -2800,13 +2783,6 @@ VkSampler Context::CreateSampler(VkDevice device, f32 maxLod) {
 
 	return sampler;
 }
-
-
-Image& GetCurrentSwapchainImage(GLFWwindow* window) {
-	auto& swapChain = _ctx.swapChains[window];
-	return swapChain.GetCurrentSwapChainImage();
-}
-
 
 }
 static const char *VK_ERROR_STRING(VkResult result) {

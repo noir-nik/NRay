@@ -6,10 +6,10 @@ TARGET := app
 
 OPT_LEVEL := 0
 
-INCLUDES := -Isource/Core -Isource/Base -Isource/Shaders -IR:/Code_R/imgui-1.91.4
+INCLUDES := -Isource/Core -Isource/Base -Isource/Shaders
 CXXFLAGS := -MMD -MP $(INCLUDES) -O$(OPT_LEVEL) -DENGINE -std=c++17
 LDFLAGS := -O$(OPT_LEVEL)
-LIBS := spdlog 
+LIBS := spdlog imgui
 
 ifeq ($(OS),Windows_NT)
 	LIBS := $(LIBS) vulkan-1 glfw3 gdi32

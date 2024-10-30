@@ -381,24 +381,27 @@ class SwapChain {
 	uint32_t currentImageIndex = 0;
 
 	// SwapChain() = default;
-	SwapChain(GLFWwindow* window, uint32_t width, uint32_t height);
-	SwapChain(const SwapChain&) = delete;
-	SwapChain& operator=(const SwapChain&) = delete;
-	~SwapChain() { // TODO: check if this is possible
-		// printf("~SwapChain\n");
-	}
-
-	inline Image&      GetCurrentSwapChainImage()   { return swapChainImages[currentImageIndex];     }
-	Command&           GetCommandBuffer()           { return commands[currentFrame];        }
 
 	void CreateImGui(GLFWwindow* window);
 	void DestroyImGui();
 
-
 public:
+	SwapChain() = default;
+	SwapChain(const SwapChain&) = delete;
+	SwapChain& operator=(const SwapChain&) = delete;
+	~SwapChain() {
+		printf("~SwapChain\n");
+	}
+
+	inline Image&      GetCurrentImage()   { return swapChainImages[currentImageIndex]; }
+	inline Command&    GetCommandBuffer()           { return commands[currentFrame];             }
+
 	void Create(GLFWwindow* window, uint32_t width, uint32_t height);
 	void Destroy();
 	void Recreate(uint32_t width, uint32_t height);
+	bool AcquireImage();
+	bool GetDirty();
+	void SubmitAndPresent();
 };
 
 
@@ -411,24 +414,14 @@ Pipeline CreatePipeline(const PipelineDesc& desc);
 void* MapBuffer(Buffer& buffer);
 void UnmapBuffer(Buffer& buffer);
 
-void SubmitAndPresent(GLFWwindow* window);
-bool GetSwapChainDirty(GLFWwindow* window);
-
 // void GetTimeStamps(std::map<std::string, float>& timeTable);
 
 void WaitQueue(Queue queue);
 void WaitIdle();
 // void BeginImGui();
 
-void Init();
-void Init(GLFWwindow* window, uint32_t width, uint32_t height);
-Command& GetCommandBuffer(GLFWwindow* window);
+void Init(bool presentRequested = true);
 Command& GetCommandBuffer(Queue queue);
-Image& GetCurrentSwapchainImage(GLFWwindow* window);
-bool AcquireImage(GLFWwindow* window);
-void RecreateSwapChain(GLFWwindow* window, uint32_t width, uint32_t height);
-void DestroySwapChain(GLFWwindow* window);
-
 void Destroy();
 
 // template<typename T>
