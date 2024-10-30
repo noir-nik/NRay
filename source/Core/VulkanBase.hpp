@@ -128,6 +128,7 @@ struct PipelineResource;
 struct CommandResource;
 struct Semaphore;
 struct Command;
+struct SwapChainResource;
 
 struct Buffer {
 	std::shared_ptr<BufferResource> resource;
@@ -364,6 +365,40 @@ struct Command {
 	void EndCommandBuffer();
 	void WaitQueue ();
 	void QueueSubmit (const SubmitInfo& submitInfo);
+};
+
+class SwapChain {
+	std::shared_ptr<SwapChainResource> resource;
+
+	std::vector<Image> swapChainImages;
+	std::vector<Command> commands; // Owns all command resources
+
+	GLFWwindow* window = nullptr;	
+	uint32_t framesInFlight = 2;
+	uint32_t additionalImages = 0;
+	uint32_t currentFrame = 0;
+	bool dirty = true;
+	uint32_t currentImageIndex = 0;
+
+	// SwapChain() = default;
+	SwapChain(GLFWwindow* window, uint32_t width, uint32_t height);
+	SwapChain(const SwapChain&) = delete;
+	SwapChain& operator=(const SwapChain&) = delete;
+	~SwapChain() { // TODO: check if this is possible
+		// printf("~SwapChain\n");
+	}
+
+	inline Image&      GetCurrentSwapChainImage()   { return swapChainImages[currentImageIndex];     }
+	Command&           GetCommandBuffer()           { return commands[currentFrame];        }
+
+	void CreateImGui(GLFWwindow* window);
+	void DestroyImGui();
+
+
+public:
+	void Create(GLFWwindow* window, uint32_t width, uint32_t height);
+	void Destroy();
+	void Recreate(uint32_t width, uint32_t height);
 };
 
 

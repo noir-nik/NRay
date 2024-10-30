@@ -179,8 +179,8 @@ struct SwapChainResource {
 	VkDevice device = VK_NULL_HANDLE;
 	VkSurfaceKHR surface = VK_NULL_HANDLE;	
 	VkSwapchainKHR swapChain = VK_NULL_HANDLE;
-	std::vector<VkImage> swapChainImageResources;
-	std::vector<VkImageView> swapChainViews;
+	std::vector<VkImage> ImageResources;
+	std::vector<VkImageView> ImageViews;
 	std::vector<VkSemaphore> imageAvailableSemaphores;
 	std::vector<VkSemaphore> renderFinishedSemaphores;
 	VkSurfaceCapabilitiesKHR surfaceCapabilities;
@@ -193,47 +193,23 @@ struct SwapChainResource {
 	VkPresentModeKHR presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
 	VkExtent2D extent;
 
+	uint32_t framesInFlight = 2;
+	uint32_t additionalImages = 0;
+
+	void CreateSurfaceFormats();
+
+	void Create(std::vector<Image>& swapChainImages, uint32_t width, uint32_t height, bool is_recreation = false);
+	void Destroy(bool is_recreation = false);
+
 	// inline VkSemaphore GetImageAvailableSemaphore() { return imageAvailableSemaphores[currentFrame]; }
 	// inline VkSemaphore GetRenderFinishedSemaphore() { return renderFinishedSemaphores[currentFrame]; }
 	bool SupportFormat(VkFormat format, VkImageTiling tiling, VkFormatFeatureFlags features);
-	VkExtent2D ChooseExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32_t width, uint32_t height);
-	VkPresentModeKHR ChoosePresentMode(const std::vector<VkPresentModeKHR>& presentModes);
-	VkSurfaceFormatKHR ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats);
+	void ChooseExtent(uint32_t width, uint32_t height);
+	void ChooseExtent(uint32_t width, uint32_t height);
+	void ChoosePresentMode();
+	void ChooseSurfaceFormat();
 };
-class SwapChain {
-	std::shared_ptr<SwapChainResource> resource;
 
-	std::vector<Image> swapChainImages;
-	std::vector<Command> commands; // Owns all command resources
-
-	GLFWwindow* window = nullptr;	
-	uint32_t framesInFlight = 2;
-	uint32_t additionalImages = 0;
-	uint32_t currentFrame = 0;
-	bool dirty = true;
-	uint32_t currentImageIndex = 0;
-
-	// SwapChain() = default;
-	SwapChain(GLFWwindow* window, uint32_t width, uint32_t height);
-	SwapChain(const SwapChain&) = delete;
-	SwapChain& operator=(const SwapChain&) = delete;
-	~SwapChain() { // TODO: check if this is possible
-		// printf("~SwapChain\n");
-	}
-
-	inline Image&      GetCurrentSwapChainImage()   { return swapChainImages[currentImageIndex];     }
-	Command&           GetCommandBuffer()           { return commands[currentFrame];        }
-
-	void CreateImGui(GLFWwindow* window);
-	void DestroyImGui();
-
-	void Recreate(uint32_t width, uint32_t height);
-
-	void CreateSurfaceFormats();
-public:
-	void Create(GLFWwindow* window, uint32_t width, uint32_t height, bool is_recreation = false);
-	void Destroy(bool is_recreation = false);
-};
 
 struct Resource {
 	std::string name;
@@ -373,66 +349,8 @@ void Init(GLFWwindow* window, uint32_t width, uint32_t height) {
 	InitImpl(window, width, height);
 }
 
-void ImGuiCheckVulkanResult(VkResult res) {
-    if (res == 0) {
-        return;
-    }
-    std::cerr << "vulkan error during some imgui operation: " << res << '\n';
-    if (res < 0) {
-        throw std::runtime_error("");
-    }
-}
 
-void SwapChain::CreateImGui(GLFWwindow* window) {
-    ImGui_ImplVulkan_InitInfo initInfo{};
-    initInfo.Instance = _ctx.instance;
-    initInfo.PhysicalDevice = _ctx.physicalDevice;
-    initInfo.Device = _ctx.device;
-    initInfo.QueueFamily = _ctx.queues[vkw::Queue::Graphics]->family;
-    initInfo.Queue = _ctx.queues[vkw::Queue::Graphics]->queue;
-    initInfo.DescriptorPool = _ctx.imguiDescriptorPool;
-    initInfo.MinImageCount = resource->surfaceCapabilities.minImageCount;
-    initInfo.ImageCount = (uint32_t)swapChainImages.size();
-    initInfo.MSAASamples = _ctx.numSamples;
-    initInfo.PipelineCache = VK_NULL_HANDLE;
-    initInfo.UseDynamicRendering = true;
-    initInfo.Allocator = _ctx.allocator;
-    initInfo.CheckVkResultFn = ImGuiCheckVulkanResult;
-    ImGui_ImplVulkan_Init(&initInfo);
-    ImGui_ImplVulkan_CreateFontsTexture();
-    ImGui_ImplGlfw_InitForVulkan(window, true);
-}
 
-void SwapChain::DestroyImGui() {
-	ImGui_ImplVulkan_Shutdown();
-	ImGui_ImplGlfw_Shutdown();
-}
-
-void SwapChain::Recreate(GLFWwindow* window, uint32_t width, uint32_t height) {
-	DEBUG_ASSERT(!(width == 0 || height == 0), "Window size is 0, swapchain NOT recreated");
-	if (_ctx.swapChains.find(window) == _ctx.swapChains.end()) {
-		// DEBUG_TRACE("RecreateSwapChain: {} not found", (void*)window);
-		_ctx.swapChains.try_emplace(window);
-		_ctx.swapChains[window].Create(_ctx.device, window, width, height);
-	} else {
-		auto& swapChain = _ctx.swapChains.at(window);
-		// DEBUG_TRACE("RecreateSwapChain: {}", (void*)window);
-		swapChain.Destroy(true);
-		swapChain.Create(_ctx.device, window, width, height, true);
-	}
-	// LOG_INFO("Swapchain recreated!");
-}
-
-void DestroySwapChain(GLFWwindow* window) {
-	if (_ctx.swapChains.find(window) == _ctx.swapChains.end()){
-		LOG_WARN("DestroySwapChain: Swapchain not found!");
-		return;
-	}
-	auto& swapChain = _ctx.swapChains[window];
-	swapChain.Destroy();
-	_ctx.swapChains.erase(window);
-	// DEBUG_TRACE("DestroySwapChain {} size =  {}", (void*)window, _ctx.swapChains.size());
-}
 
 void Destroy() {
 	// ImGui_ImplVulkan_Shutdown();
@@ -1956,8 +1874,7 @@ void Context::DestroyDevice() {
 }
 
 
-void SwapChain::CreateSurfaceFormats() {
-
+void SwapChainResource::CreateSurfaceFormats() {
 	// get capabilities
 	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(_ctx.physicalDevice, surface, &surfaceCapabilities);
 
@@ -1988,25 +1905,17 @@ void SwapChain::CreateSurfaceFormats() {
 	}
 }
 
-void SwapChain::Create(GLFWwindow* window, uint32_t width, uint32_t height, bool is_recreation) {
-	this->device = _ctx.device;
-	this->window = window;
-	if (!is_recreation) {
-		VkResult res = glfwCreateWindowSurface(_ctx.instance, window, _ctx.allocator, &surface);
-		DEBUG_VK(res, "Failed to create window surface!");
-		DEBUG_TRACE("Created surface.");
-	}
+void SwapChainResource::Create(std::vector<Image>& swapChainImages, uint32_t width, uint32_t height, bool is_recreation) {
+	auto device = _ctx.device;
 	
 	CreateSurfaceFormats();
 
 	// create swapchain
 	{
 		const auto& capabilities = surfaceCapabilities;
-		VkSurfaceFormatKHR surfaceFormat = ChooseSurfaceFormat(availableSurfaceFormats);
-		colorFormat = surfaceFormat.format;
-		colorSpace = surfaceFormat.colorSpace;
-		presentMode = ChoosePresentMode(availablePresentModes);
-		extent = ChooseExtent(capabilities, width, height);
+		ChooseSurfaceFormat();
+		ChoosePresentMode();
+		ChooseExtent(width, height);
 
 		// acquire additional images to prevent waiting for driver's internal operations
 		uint32_t imageCount = framesInFlight + additionalImages;
@@ -2026,8 +1935,8 @@ void SwapChain::Create(GLFWwindow* window, uint32_t width, uint32_t height, bool
 		createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
 		createInfo.surface = surface;
 		createInfo.minImageCount = imageCount;
-		createInfo.imageFormat = surfaceFormat.format;
-		createInfo.imageColorSpace = surfaceFormat.colorSpace;
+		createInfo.imageFormat = colorFormat;
+		createInfo.imageColorSpace = colorSpace;
 		createInfo.imageExtent = extent;
 		// amount of layers each image consist of
 		// it's 1 unless we are developing some 3D stereoscopic app
@@ -2060,18 +1969,18 @@ void SwapChain::Create(GLFWwindow* window, uint32_t width, uint32_t height, bool
 		
 		// DEBUG_TRACE("Creating swapchain with {} images.", imageCount);
 		vkGetSwapchainImagesKHR(device, swapChain, &imageCount, nullptr);
-		swapChainImageResources.resize(imageCount);
-		vkGetSwapchainImagesKHR(device, swapChain, &imageCount, swapChainImageResources.data());
-		// DEBUG_TRACE("Created swapchain with {} images.", swapChainImageResources.size());
+		ImageResources.resize(imageCount);
+		vkGetSwapchainImagesKHR(device, swapChain, &imageCount, ImageResources.data());
+		// DEBUG_TRACE("Created swapchain with {} images.", ImageResources.size());
 	}
 
 	// create image views
-	swapChainViews.resize(swapChainImageResources.size());
-	swapChainImages.resize(swapChainImageResources.size());
+	ImageViews.resize(ImageResources.size());
+	swapChainImages.resize(ImageResources.size());
 	for (size_t i = 0; i < swapChainImages.size(); i++) {
 		VkImageViewCreateInfo viewInfo{};
 		viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-		viewInfo.image = swapChainImageResources[i];
+		viewInfo.image = ImageResources[i];
 		viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
 		viewInfo.format = colorFormat;
 		viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -2080,13 +1989,13 @@ void SwapChain::Create(GLFWwindow* window, uint32_t width, uint32_t height, bool
 		viewInfo.subresourceRange.baseArrayLayer = 0;
 		viewInfo.subresourceRange.layerCount = 1;
 
-		auto res = vkCreateImageView(device, &viewInfo, _ctx.allocator, &swapChainViews[i]);
+		auto res = vkCreateImageView(device, &viewInfo, _ctx.allocator, &ImageViews[i]);
 		DEBUG_VK(res, "Failed to create SwapChain image view!");
 
 		swapChainImages[i].resource = std::make_shared<ImageResource>();
 		swapChainImages[i].resource->fromSwapchain = true;
-		swapChainImages[i].resource->image = swapChainImageResources[i];
-		swapChainImages[i].resource->view = swapChainViews[i];
+		swapChainImages[i].resource->image = ImageResources[i];
+		swapChainImages[i].resource->view = ImageViews[i];
 		swapChainImages[i].layout = ImageLayout::Undefined;
 		swapChainImages[i].width = width;
 		swapChainImages[i].height = height;
@@ -2098,7 +2007,7 @@ void SwapChain::Create(GLFWwindow* window, uint32_t width, uint32_t height, bool
 		VkDebugUtilsObjectNameInfoEXT name = {
 			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
 			.objectType = VkObjectType::VK_OBJECT_TYPE_IMAGE,
-			.objectHandle = (uint64_t)(VkImage)swapChainImageResources[i],
+			.objectHandle = (uint64_t)(VkImage)ImageResources[i],
 			.pObjectName = strName.c_str(),
 		};
 		_ctx.vkSetDebugUtilsObjectNameEXT(device, &name);
@@ -2107,7 +2016,7 @@ void SwapChain::Create(GLFWwindow* window, uint32_t width, uint32_t height, bool
 		name = {
 			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
 			.objectType = VkObjectType::VK_OBJECT_TYPE_IMAGE_VIEW,
-			.objectHandle = (uint64_t)(VkImageView)swapChainViews[i],
+			.objectHandle = (uint64_t)(VkImageView)ImageViews[i],
 			.pObjectName = strName.c_str(),
 		};
 		_ctx.vkSetDebugUtilsObjectNameEXT(device, &name);
@@ -2129,23 +2038,13 @@ void SwapChain::Create(GLFWwindow* window, uint32_t width, uint32_t height, bool
 			DEBUG_VK(res, "Failed to create semaphore!");
 		}
 
-		// command buffers
-		commands.resize(framesInFlight);
-		for (auto& cmd: commands) {
-			cmd.resource->queue = _ctx.queues[Queue::Graphics]; // TODO: make configurable
-		}
-		_ctx.CreateCommandBuffers(commands);
-	}
 
-	// LOG_INFO("Created Swapchain {}", _ctx.swapChains.size());
-	currentFrame = 0;
-	currentImageIndex = 0;
-	dirty = false;
+	}
 }
 
-void SwapChain::Destroy(bool is_recreation) {
-	for (size_t i = 0; i < swapChainImages.size(); i++) {
-		vkDestroyImageView(device, swapChainViews[i], _ctx.allocator);
+void SwapChainResource::Destroy(bool is_recreation) {
+	for (size_t i = 0; i < ImageViews.size(); i++) {
+		vkDestroyImageView(device, ImageViews[i], _ctx.allocator);
 	}
 	
 	if (!is_recreation) {
@@ -2162,14 +2061,80 @@ void SwapChain::Destroy(bool is_recreation) {
 	vkDestroySwapchainKHR(device, swapChain, _ctx.allocator);
 	if (!is_recreation) {
 		vkDestroySurfaceKHR(_ctx.instance, surface, _ctx.allocator);
-		_ctx.DestroyCommandBuffers(commands);
 	}
 
-	swapChainViews.clear();
-	swapChainImages.clear();
+	ImageViews.clear();
 	swapChain = VK_NULL_HANDLE;
 }
 
+void SwapChain::Create(GLFWwindow* window, uint32_t width, uint32_t height) {
+	this->window = window;
+	VkResult res = glfwCreateWindowSurface(_ctx.instance, window, _ctx.allocator, &resource->surface);
+	DEBUG_VK(res, "Failed to create window surface!");
+	DEBUG_TRACE("Created surface.");
+	resource->Create(swapChainImages, width, height, false);
+		// command buffers
+	commands.resize(framesInFlight);
+	for (auto& cmd: commands) {
+		cmd.resource->queue = _ctx.queues[Queue::Graphics]; // TODO: make configurable
+	}
+	_ctx.CreateCommandBuffers(commands);
+		// LOG_INFO("Created Swapchain {}", _ctx.swapChains.size());
+	currentFrame = 0;
+	currentImageIndex = 0;
+	dirty = false;
+}
+
+void SwapChain::Destroy(){
+	_ctx.DestroyCommandBuffers(commands);
+	swapChainImages.clear();
+	resource->Destroy();
+}
+
+void ImGuiCheckVulkanResult(VkResult res) {
+    if (res == 0) {
+        return;
+    }
+    std::cerr << "vulkan error during some imgui operation: " << res << '\n';
+    if (res < 0) {
+        throw std::runtime_error("");
+    }
+}
+
+void SwapChain::CreateImGui(GLFWwindow* window) {
+    ImGui_ImplVulkan_InitInfo initInfo{};
+    initInfo.Instance = _ctx.instance;
+    initInfo.PhysicalDevice = _ctx.physicalDevice;
+    initInfo.Device = _ctx.device;
+    initInfo.QueueFamily = _ctx.queues[vkw::Queue::Graphics]->family;
+    initInfo.Queue = _ctx.queues[vkw::Queue::Graphics]->queue;
+    initInfo.DescriptorPool = _ctx.imguiDescriptorPool;
+    initInfo.MinImageCount = resource->surfaceCapabilities.minImageCount;
+    initInfo.ImageCount = (uint32_t)swapChainImages.size();
+    initInfo.MSAASamples = _ctx.numSamples;
+    initInfo.PipelineCache = VK_NULL_HANDLE;
+    initInfo.UseDynamicRendering = true;
+    initInfo.Allocator = _ctx.allocator;
+    initInfo.CheckVkResultFn = ImGuiCheckVulkanResult;
+    ImGui_ImplVulkan_Init(&initInfo);
+    ImGui_ImplVulkan_CreateFontsTexture();
+    ImGui_ImplGlfw_InitForVulkan(window, true);
+}
+
+void SwapChain::DestroyImGui() {
+	ImGui_ImplVulkan_Shutdown();
+	ImGui_ImplGlfw_Shutdown();
+}
+
+void SwapChain::Recreate(uint32_t width, uint32_t height) {
+	DEBUG_ASSERT(!(width == 0 || height == 0), "Window size is 0, swapchain NOT recreated");
+	if (isActive) {
+		resource->Create(swapChainImages, width, height, false);
+	} else {
+		resource->Destroy(true);
+		resource->Create(swapChainImages, width, height, true);
+	}
+}
 
 bool AcquireImage(GLFWwindow* window) {
 	auto& swapChain = _ctx.swapChains[window];
@@ -2512,7 +2477,7 @@ void Context::DestroyCommandBuffers(std::vector<Command>& commands) {
 	commands.clear();
 }
 
-bool SwapChain::SupportFormat(VkFormat format, VkImageTiling tiling, VkFormatFeatureFlags features) {
+bool SwapChainResource::SupportFormat(VkFormat format, VkImageTiling tiling, VkFormatFeatureFlags features) {
 	VkFormatProperties props;
 	vkGetPhysicalDeviceFormatProperties(_ctx.physicalDevice, format, &props);
 
@@ -2525,45 +2490,48 @@ bool SwapChain::SupportFormat(VkFormat format, VkImageTiling tiling, VkFormatFea
 	return false;
 }
 
-VkSurfaceFormatKHR SwapChain::ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats) {
-	for (const auto& availableFormat : formats) {
+void SwapChainResource::ChooseSurfaceFormat() {
+	for (const auto& availableFormat : this->availableSurfaceFormats) {
 		if (availableFormat.format == colorFormat
 			&& availableFormat.colorSpace == colorSpace) {
-			return availableFormat;
+			this->colorFormat = colorFormat;
+			this->colorSpace = colorSpace;
+			return;
 		}
 	}
 	LOG_WARN("Preferred surface format not available!");
-	return formats[0];
+	this->colorFormat = this->availableSurfaceFormats[0].format;
+	this->colorSpace = this->availableSurfaceFormats[0].colorSpace;
 }
 
-VkPresentModeKHR SwapChain::ChoosePresentMode(const std::vector<VkPresentModeKHR>& presentModes) {
-	for (const auto& mode : presentModes) {
+void SwapChainResource::ChoosePresentMode() {
+	for (const auto& mode : this->availablePresentModes) {
 		if (mode == presentMode) {
-			return mode;
+			this->presentMode =  mode;
+			return;
 		}
 	}
 	LOG_WARN("Preferred present mode not available!");
 	// FIFO is guaranteed to be available
-	return VK_PRESENT_MODE_FIFO_KHR;
+	this->presentMode =  VK_PRESENT_MODE_FIFO_KHR;
 }
 
-VkExtent2D SwapChain::ChooseExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32_t width, uint32_t height) {
-	if (capabilities.currentExtent.width != UINT32_MAX) {
-		return capabilities.currentExtent;
-	}
-	else {
+void SwapChainResource::ChooseExtent(uint32_t width, uint32_t height) {
+	if (this->surfaceCapabilities.currentExtent.width != UINT32_MAX) {
+		this->extent = this->surfaceCapabilities.currentExtent;
+	} else {
 		VkExtent2D actualExtent = { width, height };
 
 		actualExtent.width = std::max (
-			capabilities.minImageExtent.width,
-			std::min(capabilities.maxImageExtent.width, actualExtent.width)
+			this->surfaceCapabilities.minImageExtent.width,
+			std::min(this->surfaceCapabilities.maxImageExtent.width, actualExtent.width)
 		);
 		actualExtent.height = std::max (
-			capabilities.minImageExtent.height,
-			std::min(capabilities.maxImageExtent.height, actualExtent.height)
+			this->surfaceCapabilities.minImageExtent.height,
+			std::min(this->surfaceCapabilities.maxImageExtent.height, actualExtent.height)
 		);
 		DEBUG_TRACE("ChooseExtent: {0}, {1}", actualExtent.width, actualExtent.height);
-		return actualExtent;
+		this->extent = actualExtent;
 	}
 }
 
