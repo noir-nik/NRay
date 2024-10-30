@@ -156,8 +156,30 @@ typedef struct float4
 	};
 } vec4;
 
+static inline float4 operator+(const float4 a, const float4 b) { return float4{a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w}; }
+static inline float4 operator-(const float4 a, const float4 b) { return float4{a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w}; }
 static inline float4 operator*(const float4 a, const float4 b) { return float4{a.x * b.x, a.y * b.y, a.z * b.z, a.w * b.w}; }
-static inline bool operator==(const float4 a, const float4 b) { return a.x == b.x && a.y == b.y && a.z == b.z && a.w == b.w; }
+static inline float4 operator/(const float4 a, const float4 b) { return float4{a.x / b.x, a.y / b.y, a.z / b.z, a.w / b.w}; }
+
+static inline float4 operator * (const float4 a, float b) { return float4{a.x * b, a.y * b, a.z * b, a.w * b}; }
+static inline float4 operator / (const float4 a, float b) { return float4{a.x / b, a.y / b, a.z / b, a.w / b}; }
+static inline float4 operator * (float a, const float4 b) { return float4{a * b.x, a * b.y, a * b.z, a * b.w}; }
+static inline float4 operator / (float a, const float4 b) { return float4{a / b.x, a / b.y, a / b.z, a / b.w}; }
+
+static inline float4 operator + (const float4 a, float b) { return float4{a.x + b, a.y + b, a.z + b, a.w + b}; }
+static inline float4 operator - (const float4 a, float b) { return float4{a.x - b, a.y - b, a.z - b, a.w - b}; }
+static inline float4 operator + (float a, const float4 b) { return float4{a + b.x, a + b.y, a + b.z, a + b.w}; }
+static inline float4 operator - (float a, const float4 b) { return float4{a - b.x, a - b.y, a - b.z, a - b.w}; }
+
+static inline float4& operator *= (float4& a, const float4 b) { a.x *= b.x; a.y *= b.y; a.z *= b.z; a.w *= b.w;  return a; }
+static inline float4& operator /= (float4& a, const float4 b) { a.x /= b.x; a.y /= b.y; a.z /= b.z; a.w /= b.w;  return a; }
+static inline float4& operator *= (float4& a, float b) { a.x *= b; a.y *= b; a.z *= b; a.w *= b;  return a; }
+static inline float4& operator /= (float4& a, float b) { a.x /= b; a.y /= b; a.z /= b; a.w /= b;  return a; }
+
+static inline float4& operator += (float4& a, const float4 b) { a.x += b.x; a.y += b.y; a.z += b.z; a.w += b.w;  return a; }
+static inline float4& operator -= (float4& a, const float4 b) { a.x -= b.x; a.y -= b.y; a.z -= b.z; a.w -= b.w;  return a; }
+static inline float4& operator += (float4& a, float b) { a.x += b; a.y += b; a.z += b; a.w += b;  return a; }
+static inline float4& operator -= (float4& a, float b) { a.x -= b; a.y -= b; a.z -= b; a.w -= b;  return a; }
 
 static inline void store  (float* p, const float4 a_val) { memcpy((void*)p, (void*)&a_val, sizeof(float)*4); }
 static inline void store_u(float* p, const float4 a_val) { memcpy((void*)p, (void*)&a_val, sizeof(float)*4); }  
@@ -185,10 +207,30 @@ typedef struct float3
 	};
 
 } vec3;
+static inline float3 operator+(const float3 a, const float3 b) { return float3{a.x + b.x, a.y + b.y, a.z + b.z}; }
 static inline float3 operator-(const float3 a, const float3 b) { return float3{a.x - b.x, a.y - b.y, a.z - b.z}; }
 static inline float3 operator*(const float3 a, const float3 b) { return float3{a.x * b.x, a.y * b.y, a.z * b.z}; }
+static inline float3 operator/(const float3 a, const float3 b) { return float3{a.x / b.x, a.y / b.y, a.z / b.z}; }
 
 static inline float3 operator * (const float3 a, float b) { return float3{a.x * b, a.y * b, a.z * b}; }
+static inline float3 operator / (const float3 a, float b) { return float3{a.x / b, a.y / b, a.z / b}; }
+static inline float3 operator * (float a, const float3 b) { return float3{a * b.x, a * b.y, a * b.z}; }
+static inline float3 operator / (float a, const float3 b) { return float3{a / b.x, a / b.y, a / b.z}; }
+
+static inline float3 operator + (const float3 a, float b) { return float3{a.x + b, a.y + b, a.z + b}; }
+static inline float3 operator - (const float3 a, float b) { return float3{a.x - b, a.y - b, a.z - b}; }
+static inline float3 operator + (float a, const float3 b) { return float3{a + b.x, a + b.y, a + b.z}; }
+static inline float3 operator - (float a, const float3 b) { return float3{a - b.x, a - b.y, a - b.z}; }
+
+static inline float3& operator *= (float3& a, const float3 b) { a.x *= b.x; a.y *= b.y; a.z *= b.z;  return a; }
+static inline float3& operator /= (float3& a, const float3 b) { a.x /= b.x; a.y /= b.y; a.z /= b.z;  return a; }
+static inline float3& operator *= (float3& a, float b) { a.x *= b; a.y *= b; a.z *= b;  return a; }
+static inline float3& operator /= (float3& a, float b) { a.x /= b; a.y /= b; a.z /= b;  return a; }
+
+static inline float3& operator += (float3& a, const float3 b) { a.x += b.x; a.y += b.y; a.z += b.z;  return a; }
+static inline float3& operator -= (float3& a, const float3 b) { a.x -= b.x; a.y -= b.y; a.z -= b.z;  return a; }
+static inline float3& operator += (float3& a, float b) { a.x += b; a.y += b; a.z += b;  return a; }
+static inline float3& operator -= (float3& a, float b) { a.x -= b; a.y -= b; a.z -= b;  return a; }
 
 static inline  float dot(const float3 a, const float3 b)  { return a.x*b.x + a.y*b.y + a.z*b.z; }
 
@@ -396,6 +438,32 @@ static inline float4x4 rotate4x4Z(float phi)
 	res.set_col(1, float4{-sinf(phi), cosf(phi), 0.0f, 0.0f});
 	res.set_col(2, float4{     0.0f,     0.0f, 1.0f, 0.0f  });
 	res.set_col(3, float4{     0.0f,     0.0f, 0.0f, 1.0f  });
+	return res;
+}
+
+static inline float4x4 rotate4x4(float3 axis, float angle)
+{
+	axis = normalize(axis);
+	float c = cosf(angle);
+	float s = sinf(angle);
+	float omc = 1.0f - c;
+	float4x4 res;
+	res.set_col(0, float4{
+		axis.x * axis.x * omc + c,
+		axis.y * axis.x * omc + axis.z * s,
+		axis.z * axis.x * omc - axis.y * s,
+		0.0f});
+	res.set_col(1, float4{
+		axis.x * axis.y * omc - axis.z * s,
+		axis.y * axis.y * omc + c,
+		axis.z * axis.y * omc + axis.x * s,
+		0.0f});
+	res.set_col(2, float4{
+		axis.x * axis.z * omc + axis.y * s,
+		axis.y * axis.z * omc - axis.x * s,
+		axis.z * axis.z * omc + c,
+		0.0f});
+	res.set_col(3, float4{0.0f, 0.0f, 0.0f, 1.0f});
 	return res;
 }
 

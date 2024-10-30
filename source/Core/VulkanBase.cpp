@@ -486,12 +486,18 @@ Image CreateImage(const ImageDesc& desc) {
 	DEBUG_VK(result, "Failed to create image!");
 	LOG_INFO("Created image {}", desc.name);
 
-	AspectFlags aspect = Aspect::Color;
-	if (desc.format == Format::D24_unorm_S8_uint || desc.format == Format::D32_sfloat) {
-		aspect = Aspect::Depth;
-	}
-	if (desc.format == Format::D24_unorm_S8_uint) {
-		aspect |= Aspect::Stencil;
+	AspectFlags aspect{};
+	switch (desc.format) {
+		case D24_unorm_S8_uint:
+			aspect = Aspect::Stencil; // Invalid, cannot be both stencil and depth, todo: create separate imageview
+		case D32_sfloat:
+		case D16_unorm:
+			aspect |= Aspect::Depth;
+			break;
+		
+		default:
+			aspect = Aspect::Color;
+			break;
 	}
 
 	res->name = desc.name;
@@ -923,7 +929,8 @@ void Command::BeginRendering(const std::vector<Image>& colorAttachs, Image depth
 	renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR;
 	renderingInfo.viewMask = 0;
 	renderingInfo.layerCount = layerCount;
-	renderingInfo.renderArea.extent = { uint32_t(extent.x), uint32_t(extent.y)};
+	// renderingInfo.renderArea.extent = { uint32_t(extent.x), uint32_t(extent.y)};
+	renderingInfo.renderArea.extent = { uint32_t(viewport.z), uint32_t(viewport.w)};
 	renderingInfo.renderArea.offset = { offset.x, offset.y };
 	renderingInfo.flags = 0;
 
@@ -953,7 +960,7 @@ void Command::BeginRendering(const std::vector<Image>& colorAttachs, Image depth
 		depthAttachInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 		depthAttachInfo.resolveMode = VK_RESOLVE_MODE_NONE;
 		depthAttachInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-		depthAttachInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+		depthAttachInfo.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 		depthAttachInfo.clearValue.depthStencil = { 1.0f, 0 };
 		renderingInfo.pDepthAttachment = &depthAttachInfo;
 	}

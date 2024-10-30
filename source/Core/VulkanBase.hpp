@@ -72,6 +72,7 @@ enum Format {
 	RG32_sfloat = 103,       // |)
 	RGB32_sfloat = 106,	     // ||}  VertexAttribute
 	RGBA32_sfloat = 109,     // |)
+	D16_unorm = 124,         // DepthStencilAttachment
 	D32_sfloat = 126,	     // DepthAttachment
 	D24_unorm_S8_uint = 129, // DepthStencilAttachment
 };
@@ -83,7 +84,9 @@ namespace ImageUsage {
 		Sampled = 0x00000004,
 		Storage = 0x00000008,
 		ColorAttachment = 0x00000010,
-		DepthAttachment = 0x00000020,
+		DepthStencilAttachment = 0x00000020,
+		TransientAttachment = 0x00000040,
+		InputAttachment = 0x00000080,
 	};
 }
 using ImageUsageFlags = Flags;

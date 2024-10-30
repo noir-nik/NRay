@@ -28,6 +28,8 @@ struct Context {
 
 	// vkw::Buffer outputImage;
 	vkw::Buffer vertexBuffer;
+
+	vkw::Image depth;
 	
 	// vkw::Image renderImage;
 
@@ -44,7 +46,7 @@ struct Camera {
     vec3 velocity;
     vec3 position;
 
-    mat4 view = lookAt(vec3(0.0f, 0.0f, -1.0f), vec3(0.0f, 0.0f, 0.0f), vec3(0.0f, 1.0f, 0.0f));
+    mat4 view = lookAt(vec3(0.0f, 0.0f, -3.0f), vec3(0.0f, 0.0f, 0.0f), vec3(0.0f, 1.0f, 0.0f));
 	mat4 proj = perspective(60.0f, 1.0f, 0.1f, 100.0f);
 
 };
@@ -55,10 +57,55 @@ struct Vertex {
 	vec3 color;
 };
 
+// const std::vector<Vertex> vertices = {
+// 	{{0.0f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
+// 	{{-0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+// 	{{0.5f, 0.5f, 0.0f},  {0.0f, 1.0f, 0.0f}},
+
+// 	{{0.0f, -0.5f, 1.0f}, {1.0f, 0.0f, 0.0f}},
+// 	{{-0.5f, 0.5f, 1.0f}, {0.0f, 0.0f, 1.0f}},
+// 	{{0.5f, 0.5f, 1.0f},  {0.0f, 1.0f, 0.0f}},
+
+// };
+
+// Cube
 const std::vector<Vertex> vertices = {
-	{{0.0f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
-	{{-0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}},
-	{{0.5f, 0.5f, 0.3f},  {0.0f, 1.0f, 0.0f}},
+	{{-0.5f, -0.5f, -0.5f}, { 0.0f, 0.0f, 0.0f}},
+	{{0.5f, -0.5f, -0.5f}, { 1.0f, 0.0f, 0.0f}},
+	{{0.5f,  0.5f, -0.5f}, { 1.0f, 1.0f, 0.0f}},
+	{{0.5f,  0.5f, -0.5f}, { 1.0f, 1.0f, 0.0f}},
+	{{-0.5f,  0.5f, -0.5f}, { 0.0f, 1.0f, 0.0f}},
+	{{-0.5f, -0.5f, -0.5f}, { 0.0f, 0.0f, 0.0f}},
+	{{-0.5f, -0.5f,  0.5f}, { 0.0f, 0.0f, 0.0f}},
+	{{0.5f, -0.5f,  0.5f}, { 1.0f, 0.0f, 0.0f}},
+	{{0.5f,  0.5f,  0.5f}, { 1.0f, 1.0f, 0.0f}},
+	{{0.5f,  0.5f,  0.5f}, { 1.0f, 1.0f, 0.0f}},
+	{{-0.5f,  0.5f,  0.5f}, { 0.0f, 1.0f, 0.0f}},
+	{{-0.5f, -0.5f,  0.5f}, { 0.0f, 0.0f, 0.0f}},
+	{{-0.5f,  0.5f,  0.5f}, { 1.0f, 0.0f, 0.0f}},
+	{{-0.5f,  0.5f, -0.5f}, { 1.0f, 1.0f, 0.0f}},
+	{{-0.5f, -0.5f, -0.5f}, { 0.0f, 1.0f, 0.0f}},
+	{{-0.5f, -0.5f, -0.5f}, { 0.0f, 1.0f, 0.0f}},
+	{{-0.5f, -0.5f,  0.5f}, { 0.0f, 0.0f, 0.0f}},
+	{{-0.5f,  0.5f,  0.5f}, { 1.0f, 0.0f, 0.0f}},
+	{{0.5f,  0.5f,  0.5f}, { 1.0f, 0.0f, 0.0f}},
+	{{0.5f,  0.5f, -0.5f}, { 1.0f, 1.0f, 0.0f}},
+	{{0.5f, -0.5f, -0.5f}, { 0.0f, 1.0f, 0.0f}},
+	{{0.5f, -0.5f, -0.5f}, { 0.0f, 1.0f, 0.0f}},
+	{{0.5f, -0.5f,  0.5f}, { 0.0f, 0.0f, 0.0f}},
+	{{0.5f,  0.5f,  0.5f}, { 1.0f, 0.0f, 0.0f}},
+	{{-0.5f, -0.5f, -0.5f}, { 0.0f, 1.0f, 0.0f}},
+	{{0.5f, -0.5f, -0.5f}, { 1.0f, 1.0f, 0.0f}},
+	{{0.5f, -0.5f,  0.5f}, { 1.0f, 0.0f, 0.0f}},
+	{{0.5f, -0.5f,  0.5f}, { 1.0f, 0.0f, 0.0f}},
+	{{-0.5f, -0.5f,  0.5f}, { 0.0f, 0.0f, 0.0f}},
+	{{-0.5f, -0.5f, -0.5f}, { 0.0f, 1.0f, 0.0f}},
+	{{-0.5f,  0.5f, -0.5f}, { 0.0f, 1.0f, 0.0f}},
+	{{0.5f,  0.5f, -0.5f}, { 1.0f, 1.0f, 0.0f}},
+	{{0.5f,  0.5f,  0.5f}, { 1.0f, 0.0f, 0.0f}},
+	{{0.5f,  0.5f,  0.5f}, { 1.0f, 0.0f, 0.0f}},
+	{{-0.5f,  0.5f,  0.5f}, { 0.0f, 0.0f, 0.0f}},
+	{{-0.5f,  0.5f, -0.5f},  {0.0f, 1.0f, 0.0f}},
 };
 
 void Context::CreateShaders() {
@@ -74,15 +121,21 @@ void Context::CreateShaders() {
 		// .colorFormats = {ctx.albedo.format, ctx.normal.format, ctx.material.format, ctx.emission.format},
 		.colorFormats = {vkw::Format::RGBA16_sfloat},
 		// .colorFormats = {vkw::Format::RGBA8_unorm},
-		.useDepth = false,
-		// .depthFormat = {ctx.depth.format}
+		.useDepth = true,
+		.depthFormat = ctx.depth.format
 	});
 
 }
 
-// void Context::CreateImages(uint32_t width, uint32_t height) {
-	
-// }
+void Context::CreateImages(uint32_t width, uint32_t height) {
+	ctx.depth = vkw::CreateImage({
+        .width = 3000,
+        .height = 3000,
+        .format = vkw::Format::D32_sfloat,
+        .usage = vkw::ImageUsage::DepthStencilAttachment | vkw::ImageUsage::TransientAttachment,
+        .name = "Depth Attachment"
+    });
+}
 
 void CreateRenderImage(Window* window) {
 	// uint32_t width = window->GetMonitorWidth();
@@ -125,7 +178,7 @@ void RecordCommands(Window* window) {
 	FeatureTestConstants constants{};
 	constants.model = float4x4();
 	constants.view = camera.view;
-	constants.proj = perspective(60.0f, size.x / size.y, 0.01f, 100.0f);
+	constants.proj = perspective(60.0f, (float)size.x / size.y, 0.01f, 100.0f);
 
 	// LOG_INFO("Viewport: {}, {}, {}, {}", viewport.x, viewport.y, viewport.z, viewport.w); 
 
@@ -135,14 +188,14 @@ void RecordCommands(Window* window) {
 	vkw::Image& img = window->swapChain.GetCurrentImage();
 	
 	// cmd.Copy(ctx.vertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex));
-	// cmd.Barrier(ctx.renderImages[window], {vkw::ImageLayout::TransferDst});
-	// cmd.ClearColorImage(ctx.renderImages[window], {0.7f, 0.0f, 0.4f, 1.0f});
+	cmd.Barrier(ctx.renderImages[window], {vkw::ImageLayout::TransferDst});
+	cmd.ClearColorImage(ctx.renderImages[window], {0.7f, 0.0f, 0.4f, 1.0f});
 
-	cmd.BeginRendering({ctx.renderImages[window]}, {}, 1, viewport);
+	cmd.BeginRendering({ctx.renderImages[window]}, {ctx.depth}, 1, viewport);
 	cmd.BindPipeline(ctx.pipeline);
 	cmd.PushConstants(&constants, sizeof(constants));
 	cmd.BindVertexBuffer(ctx.vertexBuffer);
-	cmd.Draw(3, 1, 0, 0);
+	cmd.Draw(vertices.size(), 1, 0, 0);
 	cmd.EndRendering();
 	
 	cmd.Barrier(ctx.renderImages[window], {vkw::ImageLayout::TransferSrc});
@@ -217,7 +270,34 @@ void KeyCallback(Window* window, int key, int scancode, int action, int mods) {
 
 void CursorPosCallback (Window *window, double xpos, double ypos) {
 	if (mouse.buttons[GLFW_MOUSE_BUTTON_RIGHT]) {
-		camera.view = rotate4x4Y(mouse.deltaPos.x * 0.003f) * rotate4x4X(mouse.deltaPos.y * -0.003f) * camera.view;
+		switch (mouse.mods)
+		{
+		case GLFW_MOD_ALT:
+				camera.view = translate4x4({0,0, mouse.deltaPos.x * -0.01f}) * camera.view;
+			break;
+		
+		default:
+			// trackball
+			{
+				auto v0 = camera.view.get_row(0);
+				auto v1 = camera.view.get_row(1);
+				vec3 camera_right = {v0.x, v0.y, v0.z};
+				vec3 camera_up = {v1.x, v1.y, v1.z};
+				camera.view = inverse4x4(rotate4x4(camera_right, -mouse.deltaPos.y * 0.003f) * rotate4x4(camera_up, mouse.deltaPos.x * 0.003f)* inverse4x4(camera.view)); // trackball
+			}
+			{
+				auto viewInv = inverse4x4(camera.view);
+				auto v0 = viewInv.get_row(0);
+				auto v1 = viewInv.get_row(1);
+				auto v2 = viewInv.get_row(2);
+				vec3 camera_right = {v0.x, v0.y, v0.z};
+				vec3 camera_up = {v1.x, v1.y, v1.z};
+				vec3 camera_forward = {v2.x, v2.y, v2.z};
+				// camera.view = rotate4x4(camera_up, mouse.deltaPos.x * 0.003f) * rotate4x4(camera_right, -mouse.deltaPos.y * 0.003f) * camera.view;
+				// camera.view = inverse4x4(rotate4x4(camera_right, -mouse.deltaPos.y * 0.003f) * rotate4x4(camera_up, mouse.deltaPos.x * 0.003f)* inverse4x4(camera.view));
+			}
+			break;
+		}
 		window->SetDrawNeeded(true);
 	}
 	if (mouse.buttons[GLFW_MOUSE_BUTTON_LEFT]) {
@@ -342,7 +422,7 @@ void FeatureTestApplication::Create() {
 	window->AddKeyCallback(KeyCallback);
 	window->AddCursorPosCallback(CursorPosCallback);
 	// window->SetMaxSize(3000, 3000);
-	// ctx.CreateImages(window->GetMonitorWidth(), window->GetMonitorHeight());
+	ctx.CreateImages(window->GetMonitorWidth(), window->GetMonitorHeight());
 	CreateRenderImage(window);
 	ctx.vertexBuffer = vkw::CreateBuffer(vertices.size() * sizeof(Vertex), vkw::BufferUsage::Vertex, vkw::Memory::GPU, "Vertex Buffer");
 	UploadBuffers();
