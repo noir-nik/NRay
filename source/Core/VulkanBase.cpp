@@ -8,6 +8,9 @@
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
 
+#define IMGUI_VULKAN_DEBUG_REPORT
+#include <imgui/imgui_impl_vulkan.h>
+#include <imgui/imgui_impl_glfw.h>
 #include <GLFW/glfw3.h>
 
 static const char *VK_ERROR_STRING(VkResult result);
@@ -96,7 +99,7 @@ struct Context
 
 
 	// bindless resources
-	// VkDescriptorPool imguiDescriptorPool = VK_NULL_HANDLE;
+	VkDescriptorPool imguiDescriptorPool = VK_NULL_HANDLE;
 	VkDescriptorSet bindlessDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorPool bindlessDescriptorPool = VK_NULL_HANDLE;
 	VkDescriptorSetLayout bindlessDescriptorLayout = VK_NULL_HANDLE;
@@ -104,7 +107,7 @@ struct Context
 	VkDevice device = VK_NULL_HANDLE;
 
 	GLFWwindow* currentWindow = nullptr;
-	std::unordered_map<GLFWwindow*, SwapChain> swapChains;
+	// std::unordered_map<GLFWwindow*, SwapChain> swapChains;
 
 	// VkFormat depthFormat;
 	
@@ -131,6 +134,9 @@ struct Context
 
 	void CreateDevice();
 	void DestroyDevice();
+
+	void CreateImGui(GLFWwindow* window);
+	void DestroyImGui();
 
 	void createDescriptorSetLayout();
 	void createDescriptorPool();
@@ -169,37 +175,46 @@ struct Device {
 
 };
 
-struct SwapChain {
+struct SwapChainResource {
 	VkDevice device = VK_NULL_HANDLE;
 	VkSurfaceKHR surface = VK_NULL_HANDLE;	
 	VkSwapchainKHR swapChain = VK_NULL_HANDLE;
-	std::vector<Image> swapChainImages;
 	std::vector<VkImage> swapChainImageResources;
 	std::vector<VkImageView> swapChainViews;
 	std::vector<VkSemaphore> imageAvailableSemaphores;
 	std::vector<VkSemaphore> renderFinishedSemaphores;
-
-	
 	VkSurfaceCapabilitiesKHR surfaceCapabilities;
 	std::vector<VkPresentModeKHR> availablePresentModes;
 	std::vector<VkSurfaceFormatKHR> availableSurfaceFormats;
-
-	std::vector<Command> commands; // Owns all command resources
-
 	// // preferred, warn if not available
 	VkFormat colorFormat = VK_FORMAT_B8G8R8A8_UNORM;
 	// VkFormat colorFormat = VK_FORMAT_B8G8R8A8_SRGB;
 	VkColorSpaceKHR colorSpace  = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
 	VkPresentModeKHR presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
-	
+	VkExtent2D extent;
+
+	// inline VkSemaphore GetImageAvailableSemaphore() { return imageAvailableSemaphores[currentFrame]; }
+	// inline VkSemaphore GetRenderFinishedSemaphore() { return renderFinishedSemaphores[currentFrame]; }
+	bool SupportFormat(VkFormat format, VkImageTiling tiling, VkFormatFeatureFlags features);
+	VkExtent2D ChooseExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32_t width, uint32_t height);
+	VkPresentModeKHR ChoosePresentMode(const std::vector<VkPresentModeKHR>& presentModes);
+	VkSurfaceFormatKHR ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats);
+};
+class SwapChain {
+	std::shared_ptr<SwapChainResource> resource;
+
+	std::vector<Image> swapChainImages;
+	std::vector<Command> commands; // Owns all command resources
+
+	GLFWwindow* window = nullptr;	
 	uint32_t framesInFlight = 2;
 	uint32_t additionalImages = 0;
-	VkExtent2D extent;
 	uint32_t currentFrame = 0;
 	bool dirty = true;
 	uint32_t currentImageIndex = 0;
 
-	SwapChain() = default;
+	// SwapChain() = default;
+	SwapChain(GLFWwindow* window, uint32_t width, uint32_t height);
 	SwapChain(const SwapChain&) = delete;
 	SwapChain& operator=(const SwapChain&) = delete;
 	~SwapChain() { // TODO: check if this is possible
@@ -207,18 +222,16 @@ struct SwapChain {
 	}
 
 	inline Image&      GetCurrentSwapChainImage()   { return swapChainImages[currentImageIndex];     }
-	inline VkSemaphore GetImageAvailableSemaphore() { return imageAvailableSemaphores[currentFrame]; }
-	inline VkSemaphore GetRenderFinishedSemaphore() { return renderFinishedSemaphores[currentFrame]; }
 	Command&           GetCommandBuffer()           { return commands[currentFrame];        }
 
+	void CreateImGui(GLFWwindow* window);
+	void DestroyImGui();
+
+	void Recreate(uint32_t width, uint32_t height);
+
 	void CreateSurfaceFormats();
-
-	bool SupportFormat(VkFormat format, VkImageTiling tiling, VkFormatFeatureFlags features);
-	VkExtent2D ChooseExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32_t width, uint32_t height);
-	VkPresentModeKHR ChoosePresentMode(const std::vector<VkPresentModeKHR>& presentModes);
-	VkSurfaceFormatKHR ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats);
-
-	void Create(VkDevice device, GLFWwindow* window, uint32_t width, uint32_t height, bool is_recreation = false);
+public:
+	void Create(GLFWwindow* window, uint32_t width, uint32_t height, bool is_recreation = false);
 	void Destroy(bool is_recreation = false);
 };
 
@@ -331,11 +344,11 @@ static void InitImpl(GLFWwindow* window, uint32_t width, uint32_t height){
 	_ctx.createBindlessResources();
 	// _ctx.createDescriptorResources();
 
-	if (_ctx.presentRequested) {
-		_ctx.swapChains.try_emplace(window);
-		_ctx.swapChains[window].Create(_ctx.device, window, width, height, false);
-		// _ctx.CreateImGui(window);
-	}
+	// if (_ctx.presentRequested) {
+	// 	_ctx.swapChains.try_emplace(window);
+	// 	_ctx.swapChains[window].Create(window, width, height, false);
+	// 	// _ctx.CreateImGui(window);
+	// }
 	
 	// Command pools and buffers just for queues
 	_ctx.queuesCommands.resize(_ctx.uniqueQueues.size());
@@ -360,7 +373,42 @@ void Init(GLFWwindow* window, uint32_t width, uint32_t height) {
 	InitImpl(window, width, height);
 }
 
-void RecreateSwapChain(GLFWwindow* window, uint32_t width, uint32_t height) {
+void ImGuiCheckVulkanResult(VkResult res) {
+    if (res == 0) {
+        return;
+    }
+    std::cerr << "vulkan error during some imgui operation: " << res << '\n';
+    if (res < 0) {
+        throw std::runtime_error("");
+    }
+}
+
+void SwapChain::CreateImGui(GLFWwindow* window) {
+    ImGui_ImplVulkan_InitInfo initInfo{};
+    initInfo.Instance = _ctx.instance;
+    initInfo.PhysicalDevice = _ctx.physicalDevice;
+    initInfo.Device = _ctx.device;
+    initInfo.QueueFamily = _ctx.queues[vkw::Queue::Graphics]->family;
+    initInfo.Queue = _ctx.queues[vkw::Queue::Graphics]->queue;
+    initInfo.DescriptorPool = _ctx.imguiDescriptorPool;
+    initInfo.MinImageCount = resource->surfaceCapabilities.minImageCount;
+    initInfo.ImageCount = (uint32_t)swapChainImages.size();
+    initInfo.MSAASamples = _ctx.numSamples;
+    initInfo.PipelineCache = VK_NULL_HANDLE;
+    initInfo.UseDynamicRendering = true;
+    initInfo.Allocator = _ctx.allocator;
+    initInfo.CheckVkResultFn = ImGuiCheckVulkanResult;
+    ImGui_ImplVulkan_Init(&initInfo);
+    ImGui_ImplVulkan_CreateFontsTexture();
+    ImGui_ImplGlfw_InitForVulkan(window, true);
+}
+
+void SwapChain::DestroyImGui() {
+	ImGui_ImplVulkan_Shutdown();
+	ImGui_ImplGlfw_Shutdown();
+}
+
+void SwapChain::Recreate(GLFWwindow* window, uint32_t width, uint32_t height) {
 	DEBUG_ASSERT(!(width == 0 || height == 0), "Window size is 0, swapchain NOT recreated");
 	if (_ctx.swapChains.find(window) == _ctx.swapChains.end()) {
 		// DEBUG_TRACE("RecreateSwapChain: {} not found", (void*)window);
@@ -376,8 +424,10 @@ void RecreateSwapChain(GLFWwindow* window, uint32_t width, uint32_t height) {
 }
 
 void DestroySwapChain(GLFWwindow* window) {
-	auto& c = _ctx;
-	DEBUG_ASSERT(_ctx.swapChains.find(window) != _ctx.swapChains.end(), "Swapchain not found!");
+	if (_ctx.swapChains.find(window) == _ctx.swapChains.end()){
+		LOG_WARN("DestroySwapChain: Swapchain not found!");
+		return;
+	}
 	auto& swapChain = _ctx.swapChains[window];
 	swapChain.Destroy();
 	_ctx.swapChains.erase(window);
@@ -1938,8 +1988,9 @@ void SwapChain::CreateSurfaceFormats() {
 	}
 }
 
-void SwapChain::Create(VkDevice device, GLFWwindow* window, uint32_t width, uint32_t height, bool is_recreation) {
-	this->device = device;
+void SwapChain::Create(GLFWwindow* window, uint32_t width, uint32_t height, bool is_recreation) {
+	this->device = _ctx.device;
+	this->window = window;
 	if (!is_recreation) {
 		VkResult res = glfwCreateWindowSurface(_ctx.instance, window, _ctx.allocator, &surface);
 		DEBUG_VK(res, "Failed to create window surface!");
@@ -2737,10 +2788,8 @@ void Command::Blit(Image& dst, Image& src, ivec4 dstRegion, ivec4 srcRegion) {
 
 	VkBlitImageInfo2 blitInfo{ .sType = VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2, .pNext = nullptr };
 	blitInfo.dstImage = dst.resource->image;
-	// blitInfo.dstImageLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL; // TODO: change
 	blitInfo.dstImageLayout = (VkImageLayout)dst.layout;
 	blitInfo.srcImage = src.resource->image;
-	// blitInfo.srcImageLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL; // TODO: change
 	blitInfo.srcImageLayout = (VkImageLayout)src.layout;
 	blitInfo.filter = VK_FILTER_LINEAR;
 	blitInfo.regionCount = 1;

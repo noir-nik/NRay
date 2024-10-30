@@ -129,10 +129,6 @@ void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
 	LOG_INPUT("Window {} mouse button: {}, action: {}, mods: {}", pWindow->GetName(), button, action, mods);
 
-	if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS){
-		pWindow->SetResizable(!pWindow->GetResizable());
-	}
-	
 	if (pWindow->mouseButtonCallback)
 		pWindow->mouseButtonCallback(pWindow, button, action, mods);
 }
@@ -192,9 +188,9 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 				pWindow->SetMode(WindowMode::WindowedFullScreen);
 			}}
 			break;
-		// case GLFW_KEY_D : {
-		// 	pWindow->SetDecorated(!pWindow->GetDecorated());
-		// }
+		case GLFW_KEY_D : {
+			pWindow->SetDecorated(!pWindow->GetDecorated());
+		}
 			break;
 		default:
 			break;
@@ -277,7 +273,7 @@ void WindowManager::Finish() {
 }
 
 // Window factory
-Window* WindowManager::NewWindow(int width, int height, const char* name) {
+Window* WindowManager::NewWindow(int width, int height, const char* name/* , void (*SwapchainCreateFn)() */) {
 	if (!is_initialized) {
 		Init();
 	}

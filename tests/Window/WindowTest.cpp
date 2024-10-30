@@ -4,7 +4,7 @@
 #include "ShaderCommon.h"
 #include "FileManager.hpp"
 
-#include "FeatureTest.hpp"
+#include "WindowTest.hpp"
 #include "../TestCommon.hpp"
 #include "Timer.hpp"
 
@@ -39,7 +39,7 @@ struct Context {
 	void CreateShaders();
 };
 static Context ctx;
-}
+
 
 struct Vertex {
 	vec2 pos;
@@ -56,10 +56,10 @@ void Context::CreateShaders() {
 	pipeline = vkw::CreatePipeline({
 		.point = vkw::PipelinePoint::Graphics,
 		.stages = {
-			{.stage = vkw::ShaderStage::Vertex, .path = "tests/FeatureTest/FeatureTest.vert"},
-			{.stage = vkw::ShaderStage::Fragment, .path = "tests/FeatureTest/FeatureTest.frag"},
+			{.stage = vkw::ShaderStage::Vertex, .path = "tests/WindowTest/WindowTest.vert"},
+			{.stage = vkw::ShaderStage::Fragment, .path = "tests/WindowTest/WindowTest.frag"},
 		},
-		.name = "Feature pipeline",
+		.name = "Window pipeline",
 		// pos2 + color3
 		.vertexAttributes = {vkw::Format::RG32_sfloat, vkw::Format::RGB32_sfloat},
 		// .colorFormats = {ctx.albedo.format, ctx.normal.format, ctx.material.format, ctx.emission.format},
@@ -71,9 +71,6 @@ void Context::CreateShaders() {
 
 }
 
-// void Context::CreateImages(uint32_t width, uint32_t height) {
-	
-// }
 
 void CreateRenderImage(Window* window) {
 	// uint32_t width = window->GetMonitorWidth();
@@ -91,14 +88,6 @@ void CreateRenderImage(Window* window) {
 	}));
 }
 
-void FeatureTestApplication::run(FeatureTestInfo* pFeatureTestInfo) {
-	info = pFeatureTestInfo;
-	Setup();
-	Create();
-	MainLoop();
-	// Draw();
-	Finish();
-}
 
 void RecreateFrameResources(Window* w);
 void UploadBuffers();
@@ -107,27 +96,7 @@ void FramebufferCallback(Window* window, int width, int height);
 void MouseButtonCallback(Window* window, int button, int action, int mods);
 void KeyCallback(Window* window, int key, int scancode, int action, int mods);
 
-void FeatureTestApplication::Setup() {
-	ctx.width = info->width;
-	ctx.height = info->height;
-}
 
-void FeatureTestApplication::Create() {
-	auto window = WindowManager::NewWindow(ctx.width, ctx.height, "wm");
-	ctx.windows.emplace(window);
-	ctx.mainWindow = window;
-	// ctx.window1 = WindowManager::NewWindow(ctx.width, ctx.height, "w1");
-	vkw::Init(window->GetGLFWwindow(), window->GetWidth(), window->GetHeight());
-	window->AddFramebufferSizeCallback(FramebufferCallback);
-	window->AddMouseButtonCallback(MouseButtonCallback);
-	window->AddKeyCallback(KeyCallback);
-	// window->SetMaxSize(3000, 3000);
-	// ctx.CreateImages(window->GetMonitorWidth(), window->GetMonitorHeight());
-	CreateRenderImage(window);
-	ctx.vertexBuffer = vkw::CreateBuffer(vertices.size() * sizeof(Vertex), vkw::BufferUsage::Vertex, vkw::Memory::GPU, "Vertex Buffer");
-	UploadBuffers();
-	ctx.CreateShaders();
-}
 
 void UploadBuffers() {
 	auto cmd = vkw::GetCommandBuffer(vkw::Queue::Transfer);
@@ -142,7 +111,7 @@ void RecordCommands(Window* window) {
 	auto size = window->GetSize();
 	auto glfwWindow = window->GetGLFWwindow();
 	vec4 viewport = {0, 0, (float)size.x, (float)size.y};
-	FeatureTestConstants constants{};
+	WindowTestConstants constants{};
 	constants.transform = float4((float)size.y / size.x, 0.0f,
 								0.0f, float(size.y) / size.x);
 	constants.offset = {0.0f, 0.0f};
@@ -226,9 +195,65 @@ void FramebufferCallback(Window* window, int width, int height) {
 	DrawWindow(window);
 }
 
+void RecreateFrameResources(Window* window) {
+	if (!window->GetAlive()) { /* LOG_WARN("RecreateFrameResources: Window is dead"); */ return;} // important
+	if (window->GetIconified()) {/* LOG_TRACE("RecreateFrameResources: size = 0"); */ return;};
+
+	vkw::WaitIdle();
+	bool swapChainDirty = vkw::GetSwapChainDirty(window->GetGLFWwindow());
+	bool windowDirty = window->GetSwapchainDirty();
+	// LOG_INFO("RecreateFrameResources {} {} {} {}", window->GetName(), (void*)window->GetGLFWwindow(), swapChainDirty, windowDirty);
+	if (swapChainDirty || windowDirty) {
+		// LOG_INFO("DIRTY FRAME RESOURCES");
+		window->UpdateFramebufferSize();
+		vkw::RecreateSwapChain(window->GetGLFWwindow(), window->GetWidth(), window->GetHeight());
+		window->SetSwapchainDirty(false);
+		window->SetDrawNeeded(true);
+	}
+
+	// }
+	// ivec2 size = w->GetSize();
+	// if (size.x > ctx.renderImage.width || size.y > ctx.renderImage.height) {
+	// 	ctx.CreateImages(size.x, size.y);
+	// }
+	// camera->extent = {viewportSize.x, viewportSize.y};
+}
+
+} // namespace
+
+void WindowTestApplication::run(WindowTestInfo* pWindowTestInfo) {
+	info = pWindowTestInfo;
+	Setup();
+	Create();
+	MainLoop();
+	// Draw();
+	Finish();
+}
+
+void WindowTestApplication::Setup() {
+	ctx.width = info->width;
+	ctx.height = info->height;
+}
+
+void WindowTestApplication::Create() {
+	auto window = WindowManager::NewWindow(ctx.width, ctx.height, "wm");
+	ctx.windows.emplace(window);
+	ctx.mainWindow = window;
+	// ctx.window1 = WindowManager::NewWindow(ctx.width, ctx.height, "w1");
+	vkw::Init(window->GetGLFWwindow(), window->GetWidth(), window->GetHeight());
+	window->AddFramebufferSizeCallback(FramebufferCallback);
+	window->AddMouseButtonCallback(MouseButtonCallback);
+	window->AddKeyCallback(KeyCallback);
+	// window->SetMaxSize(3000, 3000);
+	// ctx.CreateImages(window->GetMonitorWidth(), window->GetMonitorHeight());
+	CreateRenderImage(window);
+	ctx.vertexBuffer = vkw::CreateBuffer(vertices.size() * sizeof(Vertex), vkw::BufferUsage::Vertex, vkw::Memory::GPU, "Vertex Buffer");
+	UploadBuffers();
+	ctx.CreateShaders();
+}
 
 static int loopCount = 0;
-void FeatureTestApplication::MainLoop() {
+void WindowTestApplication::MainLoop() {
 	Context* c = &ctx;
 	while (ctx.mainWindow != nullptr) {
 		WindowManager::WaitEvents();
@@ -256,33 +281,11 @@ void FeatureTestApplication::MainLoop() {
 	vkw::WaitIdle();
 }
 
-void FeatureTestApplication::Finish() {
+void WindowTestApplication::Finish() {
 	for (auto& window: ctx.windows) {vkw::DestroySwapChain(window->GetGLFWwindow()); delete window;}
 	ctx = {};
 	vkw::Destroy();
 	WindowManager::Finish();
 }
 
-void RecreateFrameResources(Window* window) {
-	if (!window->GetAlive()) { /* LOG_WARN("RecreateFrameResources: Window is dead"); */ return;} // important
-	if (window->GetIconified()) {/* LOG_TRACE("RecreateFrameResources: size = 0"); */ return;};
 
-	vkw::WaitIdle();
-	bool swapChainDirty = vkw::GetSwapChainDirty(window->GetGLFWwindow());
-	bool windowDirty = window->GetSwapchainDirty();
-	// LOG_INFO("RecreateFrameResources {} {} {} {}", window->GetName(), (void*)window->GetGLFWwindow(), swapChainDirty, windowDirty);
-	if (swapChainDirty || windowDirty) {
-		// LOG_INFO("DIRTY FRAME RESOURCES");
-		window->UpdateFramebufferSize();
-		hvkw::RecreateSwapCain(window->GetGLFWwindow(), window->GetWidth(), window->GetHeight());
-		window->SetSwapchainDirty(false);
-		window->SetDrawNeeded(true);
-	}
-
-	// }
-	// ivec2 size = w->GetSize();
-	// if (size.x > ctx.renderImage.width || size.y > ctx.renderImage.height) {
-	// 	ctx.CreateImages(size.x, size.y);
-	// }
-	// camera->extent = {viewportSize.x, viewportSize.y};
-}

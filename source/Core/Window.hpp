@@ -228,12 +228,13 @@ public:
 	inline bool        GetDecorated()                      { return decorated; }
 	inline void        SetDecorated(bool value)            { decorated = value; glfwSetWindowAttrib(window, GLFW_DECORATED, value); }
 
+	inline void        GetFocused()                        { glfwGetWindowAttrib(window, GLFW_FOCUSED); }
+
 	inline bool        GetIconified()                      { glfwGetWindowSize(window, &width, &height); return width == 0 || height == 0; }
 
 	inline void        SetMinSize(int w, int h)            { glfwSetWindowSizeLimits(window, w, h, GLFW_DONT_CARE, GLFW_DONT_CARE); }
 	inline void        SetMaxSize(int w, int h)            { glfwSetWindowSizeLimits(window, GLFW_DONT_CARE, GLFW_DONT_CARE, w, h); }
 
-	inline void        GetFocused()                        { glfwGetWindowAttrib(window, GLFW_FOCUSED); }
 	inline Lmath::vec2 GetContentScale()                   { glfwGetWindowContentScale(window, &scaleX, &scaleY); return {scaleX, scaleY}; }
 
 	inline void        CmdShow()                           { glfwShowWindow(window); }
@@ -292,26 +293,6 @@ private:
 	inline std::vector<std::string> GetAndClearPaths()     { auto paths = pathsDrop; pathsDrop.clear(); return paths; }
 };
 
-/* 
-class MainWindow : public Window {
-	std::set<Window*> children;
-public:
-	MainWindow(int width, int height, const char* name) : Window(width, height, name) {}
-
-	~MainWindow() {
-		for (auto child : children) {
-			delete child;
-		}
-	}
-};
-*/
-
-	// inline void        AddFramebufferSizeCallback (void(*callback)(Window* window, int width, int height))                       { framebufferSizeCallback = callback; }
-	// inline void        AddDropCallback            (void(*callback)(Window* window, int count, const char** paths))               { dropCallback = callback;            }
-	// inline void        AddKeyCallback             (void(*callback)(Window* window, int key, int scancode, int action, int mods)) { keyCallback = callback;             }
-	// inline void        AddMouseButtonCallback     (void(*callback)(Window* window, int button, int action, int mods))            { mouseButtonCallback = callback;     }
-	// inline void        AddScrollCallback          (void(*callback)(Window* window, double xoffset, double yoffset))              { scrollCallback = callback;          }
-
 class WindowManager {
 friend class Window;
 public:
@@ -327,16 +308,3 @@ private:
 	static inline bool is_initialized = false;
 	// static inline int  windowCount = 0;
 };
-
-// typedef struct VkImageMemoryBarrier {
-//     VkStructureType            sType;
-//     const void*                pNext;
-//     VkAccessFlags              srcAccessMask;
-//     VkAccessFlags              dstAccessMask;
-//     VkImageLayout              oldLayout;
-//     VkImageLayout              newLayout;
-//     uint32_t                   srcQueueFamilyIndex;
-//     uint32_t                   dstQueueFamilyIndex;
-//     VkImage                    image;
-//     VkImageSubresourceRange    subresourceRange;
-// } VkImageMemoryBarrier;

@@ -6,7 +6,7 @@ TARGET := app
 
 OPT_LEVEL := 0
 
-INCLUDES := -Isource/Core -Isource/Base -Isource/Shaders 
+INCLUDES := -Isource/Core -Isource/Base -Isource/Shaders -IR:/Code_R/imgui-1.91.4
 CXXFLAGS := -MMD -MP $(INCLUDES) -O$(OPT_LEVEL) -DENGINE -std=c++17
 LDFLAGS := -O$(OPT_LEVEL)
 LIBS := spdlog 
@@ -50,6 +50,7 @@ TST_SLANG := tests/SlangTest
 TST_FEATURE := tests/FeatureTest
 TST_RADIENCE := tests/RadienceField
 TST_HELLOTRIANGLE := tests/HelloTriangle
+TST_WINDOW := tests/Window
 # TST_ALL := $(TST_NEURALSFD) $(TST_IMAGEOPT) $(TST_SLANG) $(TST_FEATURE) $(TST_RADIENCE)
 tst_dirs := $(wildcard tests/*)
 files := $(foreach dir,$(tst_dirs),$(wildcard $(dir)/*.cpp))
@@ -119,6 +120,9 @@ $(OBJ_DIR)/%.o: $(TST_RADIENCE)/%.cpp # tests/RadienceField
 	@echo "Compiling $<"
 	@$(CC) $(CXXFLAGS) -c $< -o $@
 $(OBJ_DIR)/%.o: $(TST_HELLOTRIANGLE)/%.cpp # tests/HelloTriangle
+	@echo "Compiling $<"
+	@$(CC) $(CXXFLAGS) -c $< -o $@
+$(OBJ_DIR)/%.o: $(TST_WINDOW)/%.cpp # tests/Window
 	@echo "Compiling $<"
 	@$(CC) $(CXXFLAGS) -c $< -o $@
 # Run
