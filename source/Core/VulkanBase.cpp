@@ -1,5 +1,8 @@
 #include "Pch.hpp"
 
+#include <array>
+
+#include "Util.hpp"
 #include "VulkanBase.hpp"
 #include "ShaderCommon.h"
 
@@ -26,6 +29,8 @@ struct Context
 	void LoadShaders(Pipeline& pipeline);
 	std::vector<char> CompileShader(const std::filesystem::path& path, const char* entryPoint);
 	void CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipeline);
+
+	void CreatePipelineLibrary(const PipelineDesc& desc, Pipeline& pipeline);
 
 	VkInstance instance = VK_NULL_HANDLE;
 	GLFWwindow* _dummyWindow = nullptr;
@@ -116,6 +121,15 @@ struct Context
 	std::vector<int32_t> availableImageRID;
 	std::vector<int32_t> availableTLASRID;
 	VkSampler genericSampler;
+
+	struct {
+		std::unordered_map<Hash64, VkPipeline> vertexInputInterface;
+		std::unordered_map<Hash64, VkPipeline> preRasterizationShaders;
+		std::unordered_map<Hash64, VkPipeline> fragmentOutputInterface;
+		std::vector<VkPipeline> fragmentShaders;
+	} pipelineLibrary;
+
+	VkPipelineCache pipelineCache = VK_NULL_HANDLE;
 
 	
 
@@ -758,20 +772,20 @@ void Context::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipeline) {
 		ASSERT(vkRes == VK_SUCCESS, "Failed to create compute pipeline!");
 	} else {
 		// graphics pipeline
-		VkPipelineRasterizationStateCreateInfo rasterizer = {};
-		rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+		VkPipelineRasterizationStateCreateInfo rasterizationState = {};
+		rasterizationState.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
 		// fragments beyond near and far planes are clamped to them
-		rasterizer.depthClampEnable = VK_FALSE;
-		rasterizer.rasterizerDiscardEnable = VK_FALSE;
-		rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+		rasterizationState.depthClampEnable = VK_FALSE;
+		rasterizationState.rasterizerDiscardEnable = VK_FALSE;
+		rasterizationState.polygonMode = VK_POLYGON_MODE_FILL;
 		// line thickness in terms of number of fragments
-		rasterizer.lineWidth = 1.0f;
-		rasterizer.cullMode = (VkCullModeFlags)desc.cullMode;
-		rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
-		rasterizer.depthBiasEnable = VK_FALSE;
-		rasterizer.depthBiasConstantFactor = 0.0f;
-		rasterizer.depthBiasClamp = 0.0f;
-		rasterizer.depthBiasSlopeFactor = 0.0f;
+		rasterizationState.lineWidth = 1.0f;
+		rasterizationState.cullMode = (VkCullModeFlags)desc.cullMode;
+		rasterizationState.frontFace = VK_FRONT_FACE_CLOCKWISE;
+		rasterizationState.depthBiasEnable = VK_FALSE;
+		rasterizationState.depthBiasConstantFactor = 0.0f;
+		rasterizationState.depthBiasClamp = 0.0f;
+		rasterizationState.depthBiasSlopeFactor = 0.0f;
 
 		VkPipelineMultisampleStateCreateInfo multisampling = {};
 		multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
@@ -889,7 +903,7 @@ void Context::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipeline) {
 		pipelineInfo.pVertexInputState = &vertexInputInfo;
 		pipelineInfo.pInputAssemblyState = &inputAssembly;
 		pipelineInfo.pViewportState = &viewportState;
-		pipelineInfo.pRasterizationState = &rasterizer;
+		pipelineInfo.pRasterizationState = &rasterizationState;
 		pipelineInfo.pMultisampleState = &multisampling;
 		pipelineInfo.pDepthStencilState = &depthStencil;
 		pipelineInfo.pColorBlendState = &colorBlendState;
@@ -911,6 +925,158 @@ void Context::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipeline) {
 	for (int i = 0; i < shaderModules.size(); i++) {
 		vkDestroyShaderModule(device, shaderModules[i], allocator);
 	}
+}
+
+namespace GraphicsPipelineLibraryFlags {
+	enum : Flags {
+		VertexInputInterface = 0x00000001,
+		PreRasterizationShaders = 0x00000002,
+		FragmentShader = 0x00000004,
+		FragmentOutputInterface = 0x00000008,
+		MaxEnum = 0x7FFFFFFF
+	};
+}
+
+Hash64 HashFromFormats(std::vector<Format> const& vec) const {
+  Hash64 seed = vec.size();
+  for(auto x : vec) {
+    x = ((x >> 16) ^ x) * 0x45d9f3b;
+    x = ((x >> 16) ^ x) * 0x45d9f3b;
+    x = (x >> 16) ^ x;
+    seed ^= x + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+  }
+  return seed;
+}
+
+void Context::CreateVertexInputInterface(const PipelineDesc& desc, Pipeline& pipeline) {
+	VkGraphicsPipelineLibraryCreateInfoEXT libraryInfo{};
+	libraryInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT;
+	libraryInfo.flags = VK_GRAPHICS_PIPELINE_LIBRARY_VERTEX_INPUT_INTERFACE_BIT_EXT;
+
+	VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
+	inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+	if (desc.lineTopology) {
+		inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP;
+		dynamicStates.push_back(VK_DYNAMIC_STATE_LINE_WIDTH);
+	} else {
+		inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+	}
+	// with this parameter true we can break up lines and triangles in _STRIP topology modes
+	inputAssembly.primitiveRestartEnable = VK_FALSE;
+
+	std::vector<VkVertexInputAttributeDescription> attributeDescs(desc.vertexAttributes.size());
+	uint32_t attributeSize = 0;
+	for (int i = 0; i < desc.vertexAttributes.size(); i++) {
+		attributeDescs[i].binding = 0;
+		attributeDescs[i].location = i;
+		attributeDescs[i].format = (VkFormat)desc.vertexAttributes[i];
+		attributeDescs[i].offset = attributeSize;
+		if (desc.vertexAttributes[i] == Format::RG32_sfloat) {
+			attributeSize += 2 * sizeof(float);
+		} else if (desc.vertexAttributes[i] == Format::RGB32_sfloat) {
+			attributeSize += 3 * sizeof(float);
+		} else if (desc.vertexAttributes[i] == Format::RGBA32_sfloat) {
+			attributeSize += 4 * sizeof(float);
+		} else {
+			DEBUG_ASSERT(false, "Invalid Vertex Attribute");
+		}
+	}
+
+	VkVertexInputBindingDescription bindingDescription{};
+	bindingDescription.binding = 0;
+	bindingDescription.stride = attributeSize;
+	bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+	vertexInputInfo.vertexBindingDescriptionCount = 1;
+	vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+	vertexInputInfo.vertexAttributeDescriptionCount = (uint32_t)(attributeDescs.size());
+	vertexInputInfo.pVertexAttributeDescriptions = attributeDescs.data();
+
+	VkGraphicsPipelineCreateInfo pipelineInfo{};
+	pipelineInfo.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pipelineInfo.flags               = VK_PIPELINE_CREATE_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT;
+	pipelineInfo.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pipelineInfo.pNext               = &libraryInfo;
+	pipelineInfo.pInputAssemblyState = &inputAssembly;
+	pipelineInfo.pVertexInputState   = &vertexInputInfo;
+	
+	auto res = vkCreateGraphicsPipelines(_ctx.device, _ctx.pipelineCache, 1, &pipelineInfo, _ctx.allocator, &_ctx.pipelineLibrary.vertexInputInterface);
+	DEBUG_VK(res, "Failed to create vertex input interface!");
+}
+
+void Context::CreatePreRasterizationShaders(const PipelineDesc& desc, Pipeline& pipeline) {
+	VkGraphicsPipelineLibraryCreateInfoEXT libraryInfo{};
+	libraryInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT;
+	libraryInfo.flags = VK_GRAPHICS_PIPELINE_LIBRARY_PRE_RASTERIZATION_SHADERS_BIT_EXT;
+
+
+	VkDynamicState dynamicStates[] = {
+		VK_DYNAMIC_STATE_VIEWPORT,
+		VK_DYNAMIC_STATE_SCISSOR
+	};
+
+	VkPipelineDynamicStateCreateInfo dynamicInfo{};
+	dynamicInfo.sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+	dynamicInfo.dynamicStateCount = (uint32_t)ARRAY_SIZE(dynamicStates);
+	dynamicInfo.pDynamicStates    = dynamicStates;
+
+	VkPipelineViewportStateCreateInfo viewportState{};
+	viewportState.sType           = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	viewportState.viewportCount   = 1;
+	viewportState.pViewports      = nullptr;
+	viewportState.scissorCount    = 1;
+	viewportState.pScissors       = nullptr;
+
+	VkPipelineRasterizationStateCreateInfo rasterizationState = {};
+	rasterizationState.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+	// fragments beyond near and far planes are clamped to them
+	rasterizationState.depthClampEnable = VK_FALSE;
+	rasterizationState.rasterizerDiscardEnable = VK_FALSE;
+	rasterizationState.polygonMode = VK_POLYGON_MODE_FILL;
+	// line thickness in terms of number of fragments
+	rasterizationState.lineWidth = 1.0f;
+	rasterizationState.cullMode = (VkCullModeFlags)desc.cullMode;
+	rasterizationState.frontFace = VK_FRONT_FACE_CLOCKWISE;
+	rasterizationState.depthBiasEnable = VK_FALSE;
+	rasterizationState.depthBiasConstantFactor = 0.0f;
+	rasterizationState.depthBiasClamp = 0.0f;
+	rasterizationState.depthBiasSlopeFactor = 0.0f;
+
+	// Using the pipeline library extension, we can skip the pipeline shader module creation and directly pass the shader code to the pipeline
+	std::vector<uint32_t> spirv;
+	load_shader("shared.vert", VK_SHADER_STAGE_VERTEX_BIT, spirv);
+
+	VkShaderModuleCreateInfo shaderModuleInfo{};
+	shaderModuleInfo.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	shaderModuleInfo.codeSize = static_cast<uint32_t>(spirv.size()) * sizeof(uint32_t);
+	shaderModuleInfo.pCode    = spirv.data();
+
+	VkPipelineShaderStageCreateInfo shaderStageInfo{};
+	shaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	shaderStageInfo.pNext = &shaderModuleInfo;
+	shaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+	shaderStageInfo.pName = "main";
+
+	VkGraphicsPipelineCreateInfo pipelineInfo{};
+	pipelineInfo.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pipelineInfo.pNext               = &libraryInfo;
+	pipelineInfo.renderPass          = VK_NULL_HANDLE;
+	pipelineInfo.flags               = VK_PIPELINE_CREATE_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT;
+	pipelineInfo.stageCount          = 1;
+	pipelineInfo.pStages             = &shaderStageInfo;
+	pipelineInfo.layout              = pipeline.resource->layout;
+	pipelineInfo.pDynamicState       = &dynamicInfo;
+	pipelineInfo.pViewportState      = &viewportState;
+	pipelineInfo.pRasterizationState = &rasterizationState;
+
+	VK_CHECK(vkCreateGraphicsPipelines(get_device().get_handle(), _ctx.pipelineCache, 1, &pipelineInfo, nullptr, &pipeline_library.pre_rasterization_shaders));
+
+}
+
+void Context::CreateFragmentOutputInterface(const PipelineDesc& desc, Pipeline& pipeline) {
+	
 }
 
 Command::Command() {
