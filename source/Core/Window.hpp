@@ -96,7 +96,8 @@ class Window {
 	int           videoModeIndex     = 0;
 	float         scaleX             = 1.0f;
 	float         scaleY             = 1.0f;
-	Lmath::ivec4  windowedSize        = { 30, 30, 640, 480 };
+	Lmath::ivec4  windowedSize       = { 30, 30, 640, 480 };
+	Lmath::ivec4  sizeLimits         = { 30, 30, 1920, 1080 };
 	static inline bool          framebufferResized = false;
 
 	std::chrono::high_resolution_clock::time_point lastTime;
@@ -231,8 +232,9 @@ public:
 
 	inline bool        GetIconified()                      { glfwGetWindowSize(window, &width, &height); return width == 0 || height == 0; }
 
-	inline void        SetMinSize(int w, int h)            { glfwSetWindowSizeLimits(window, w, h, GLFW_DONT_CARE, GLFW_DONT_CARE); }
-	inline void        SetMaxSize(int w, int h)            { glfwSetWindowSizeLimits(window, GLFW_DONT_CARE, GLFW_DONT_CARE, w, h); }
+	inline void        SetMinSize(int w, int h)            { sizeLimits.x = w; sizeLimits.y = h; glfwSetWindowSizeLimits(window, w, h, GLFW_DONT_CARE, GLFW_DONT_CARE); }
+	inline void        SetMaxSize(int w, int h)            { sizeLimits.z = w; sizeLimits.w = h; glfwSetWindowSizeLimits(window, GLFW_DONT_CARE, GLFW_DONT_CARE, w, h); }
+	inline auto        GetSizeLimits()                     { return sizeLimits; }
 
 	inline Lmath::vec2 GetContentScale()                   { glfwGetWindowContentScale(window, &scaleX, &scaleY); return {scaleX, scaleY}; }
 

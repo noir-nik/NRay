@@ -287,6 +287,10 @@ Window* WindowManager::NewWindow(int width, int height, const char* name, bool c
 	// LOG_INFO("Window::Create({}x{}):{}", width, height, name);
 	window->window = glfwWindow;
 	window->GetPos();
+	auto vidMode = glfwGetVideoMode(glfwGetPrimaryMonitor());
+	// window->SetMaxSize(vidMode->width, vidMode->height);
+	window->sizeLimits = { 30, 30, vidMode->width, vidMode->height };
+	glfwSetWindowSizeLimits(glfwWindow, window->sizeLimits.x, window->sizeLimits.y, window->sizeLimits.z, window->sizeLimits.w);
 
 	glfwSetWindowUserPointer(glfwWindow, window);
 
@@ -335,17 +339,14 @@ void Window::ApplyChanges() {
 		mode = newMode;
 		framebufferResized = true;
 		drawNeeded = true;
+		
 		int monitorCount;
 		auto monitors = glfwGetMonitors(&monitorCount);
 		ASSERT(monitorIndex < monitorCount, "Invalid monitorIndex inside Window creation!", monitorIndex);
 		auto monitor = monitors[monitorIndex];
-		auto monitorMode = glfwGetVideoMode(monitor);
 
-		int modesCount;
-		const GLFWvidmode* videoModes = glfwGetVideoModes(monitors[monitorIndex], &modesCount);
-		if (videoModeIndex >= modesCount) {
-			videoModeIndex = modesCount - 1;
-		}
+		auto monitorMode = glfwGetVideoMode(monitor);
+		
 		switch (newMode) {
 		case WindowMode::Windowed:
 			// posY = std::max(posY, 31);
@@ -357,7 +358,8 @@ void Window::ApplyChanges() {
 			glfwSetWindowAttrib(window, GLFW_RESIZABLE, resizable);
 			glfwSetWindowAttrib(window, GLFW_DECORATED, decorated);
 			break;
-		case WindowMode::WindowedFullScreen:
+			case WindowMode::WindowedFullScreen:
+			
 			glfwWindowHint(GLFW_RED_BITS, monitorMode->redBits);
 			glfwWindowHint(GLFW_GREEN_BITS, monitorMode->greenBits);
 			glfwWindowHint(GLFW_BLUE_BITS, monitorMode->blueBits);
@@ -365,6 +367,11 @@ void Window::ApplyChanges() {
 			glfwSetWindowMonitor(window, monitor, 0, 0, monitorMode->width, monitorMode->height, monitorMode->refreshRate);
 			break;
 		case WindowMode::FullScreen:
+			int modesCount;
+			const GLFWvidmode* videoModes = glfwGetVideoModes(monitors[monitorIndex], &modesCount);
+			if (videoModeIndex >= modesCount) {
+				videoModeIndex = modesCount - 1;
+			}
 			GLFWvidmode videoMode = videoModes[videoModeIndex];
 			glfwSetWindowMonitor(window, monitor, 0, 0, videoMode.width, videoMode.height, videoMode.refreshRate);
 			break;

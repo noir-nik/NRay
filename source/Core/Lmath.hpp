@@ -16,7 +16,21 @@ namespace Lmath
 typedef unsigned int uint;
 typedef unsigned char	uchar;
 
+static inline float clamp(float u, float a, float b) { return std::min(std::max(a, u), b); }
+static inline uint  clamp(uint u,  uint a,  uint b)  { return std::min(std::max(a, u), b); }
+static inline int   clamp(int u,   int a,   int b)   { return std::min(std::max(a, u), b); }
+
 constexpr float DEG_TO_RAD   = float(3.14159265358979323846f) / 180.0f;
+
+struct uint4;
+struct int4;
+struct float4;
+struct uint3;
+struct int3;
+struct float3;
+struct uint2;
+struct int2;
+struct float2;
 
 typedef struct int4
 {
@@ -149,15 +163,16 @@ typedef struct float4
 	inline float& operator[](int i)			 { return M[i]; }
 	inline float	operator[](int i) const { return M[i]; }
 
+	inline float2& xy() { return reinterpret_cast<float2&>(M); }
+	inline float3& xyz() { return reinterpret_cast<float3&>(M); }
+	inline const float2& xy() const { return reinterpret_cast<const float2&>(M); }
+	inline const float3& xyz() const { return reinterpret_cast<const float3&>(M); }
+	
 	union
 	{
 	struct { float x, y, z, w; };
 	struct { float r, g, b, a; };
-	#ifdef LAYOUT_STD140
 	float M[4];
-	#else
-	float M[3];
-	#endif
 	};
 } vec4;
 
@@ -188,9 +203,30 @@ static inline float4& operator -= (float4& a, float b) { a.x -= b; a.y -= b; a.z
 
 static inline bool operator==(const float4 a, const float4 b) { return a.x == b.x && a.y == b.y && a.z == b.z && a.w == b.w; }
 
-
 static inline void store  (float* p, const float4 a_val) { memcpy((void*)p, (void*)&a_val, sizeof(float)*4); }
 static inline void store_u(float* p, const float4 a_val) { memcpy((void*)p, (void*)&a_val, sizeof(float)*4); }  
+
+static inline float4 min  (const float4 a, const float4 b) { return float4{std::min(a.x, b.x), std::min(a.y, b.y), std::min(a.z, b.z), std::min(a.w, b.w)}; }
+static inline float4 max  (const float4 a, const float4 b) { return float4{std::max(a.x, b.x), std::max(a.y, b.y), std::max(a.z, b.z), std::max(a.w, b.w)}; }
+static inline float4 clamp(const float4 u, const float4 a, const float4 b) { return float4{clamp(u.x, a.x, b.x), clamp(u.y, a.y, b.y), clamp(u.z, a.z, b.z), clamp(u.w, a.w, b.w)}; }
+static inline float4 clamp(const float4 u, float a, float b) { return float4{clamp(u.x, a, b), clamp(u.y, a, b), clamp(u.z, a, b), clamp(u.w, a, b)}; }
+
+static inline float4 abs (const float4 a) { return float4{std::abs(a.x), std::abs(a.y), std::abs(a.z), std::abs(a.w)}; } 
+// static inline float4 sign(const float4 a) { return float4{sign(a.x), sign(a.y), sign(a.z), sign(a.w)}; }
+
+static inline float4 lerp(const float4 a, const float4 b, float t) { return a + t * (b - a); }
+static inline float4 mix (const float4 a, const float4 b, float t) { return a + t * (b - a); }
+static inline float4 floor(const float4 a)                { return float4{std::floor(a.x), std::floor(a.y), std::floor(a.z), std::floor(a.w)}; }
+static inline float4 ceil(const float4 a)                 { return float4{std::ceil(a.x), std::ceil(a.y), std::ceil(a.z), std::ceil(a.w)}; }
+static inline float4 rcp (const float4 a)                 { return float4{1.0f/a.x, 1.0f/a.y, 1.0f/a.z, 1.0f/a.w}; }
+static inline float4 mod (const float4 x, const float4 y) { return x - y * floor(x/y); }
+static inline float4 fract(const float4 x)                { return x - floor(x); }
+static inline float4 sqrt(const float4 a)                 { return float4{std::sqrt(a.x), std::sqrt(a.y), std::sqrt(a.z), std::sqrt(a.w)}; }
+static inline float4 inversesqrt(const float4 a)          { return 1.0f/sqrt(a); }
+
+static inline  float dot(const float4 a, const float4 b)  { return a.x*b.x + a.y*b.y + a.z*b.z + a.w*b.w; }
+
+static inline  float length(const float4 a) { return std::sqrt(dot(a,a)); }
 
 
 typedef struct float3
@@ -215,30 +251,38 @@ typedef struct float3
 	};
 
 } vec3;
-static inline float3 operator+(const float3 a, const float3 b) { return float3{a.x + b.x, a.y + b.y, a.z + b.z}; }
-static inline float3 operator-(const float3 a, const float3 b) { return float3{a.x - b.x, a.y - b.y, a.z - b.z}; }
-static inline float3 operator*(const float3 a, const float3 b) { return float3{a.x * b.x, a.y * b.y, a.z * b.z}; }
-static inline float3 operator/(const float3 a, const float3 b) { return float3{a.x / b.x, a.y / b.y, a.z / b.z}; }
+  static inline float3 operator+(const float3 a, const float3 b) { return float3{a.x + b.x, a.y + b.y, a.z + b.z}; }
+  static inline float3 operator-(const float3 a, const float3 b) { return float3{a.x - b.x, a.y - b.y, a.z - b.z}; }
+  static inline float3 operator*(const float3 a, const float3 b) { return float3{a.x * b.x, a.y * b.y, a.z * b.z}; }
+  static inline float3 operator/(const float3 a, const float3 b) { return float3{a.x / b.x, a.y / b.y, a.z / b.z}; }
 
-static inline float3 operator * (const float3 a, float b) { return float3{a.x * b, a.y * b, a.z * b}; }
-static inline float3 operator / (const float3 a, float b) { return float3{a.x / b, a.y / b, a.z / b}; }
-static inline float3 operator * (float a, const float3 b) { return float3{a * b.x, a * b.y, a * b.z}; }
-static inline float3 operator / (float a, const float3 b) { return float3{a / b.x, a / b.y, a / b.z}; }
+  static inline float3 operator * (const float3 a, float b) { return float3{a.x * b, a.y * b, a.z * b}; }
+  static inline float3 operator / (const float3 a, float b) { return float3{a.x / b, a.y / b, a.z / b}; }
+  static inline float3 operator * (float a, const float3 b) { return float3{a * b.x, a * b.y, a * b.z}; }
+  static inline float3 operator / (float a, const float3 b) { return float3{a / b.x, a / b.y, a / b.z}; }
 
-static inline float3 operator + (const float3 a, float b) { return float3{a.x + b, a.y + b, a.z + b}; }
-static inline float3 operator - (const float3 a, float b) { return float3{a.x - b, a.y - b, a.z - b}; }
-static inline float3 operator + (float a, const float3 b) { return float3{a + b.x, a + b.y, a + b.z}; }
-static inline float3 operator - (float a, const float3 b) { return float3{a - b.x, a - b.y, a - b.z}; }
+  static inline float3 operator + (const float3 a, float b) { return float3{a.x + b, a.y + b, a.z + b}; }
+  static inline float3 operator - (const float3 a, float b) { return float3{a.x - b, a.y - b, a.z - b}; }
+  static inline float3 operator + (float a, const float3 b) { return float3{a + b.x, a + b.y, a + b.z}; }
+  static inline float3 operator - (float a, const float3 b) { return float3{a - b.x, a - b.y, a - b.z}; }
 
-static inline float3& operator *= (float3& a, const float3 b) { a.x *= b.x; a.y *= b.y; a.z *= b.z;  return a; }
-static inline float3& operator /= (float3& a, const float3 b) { a.x /= b.x; a.y /= b.y; a.z /= b.z;  return a; }
-static inline float3& operator *= (float3& a, float b) { a.x *= b; a.y *= b; a.z *= b;  return a; }
-static inline float3& operator /= (float3& a, float b) { a.x /= b; a.y /= b; a.z /= b;  return a; }
+  static inline float3& operator *= (float3& a, const float3 b) { a.x *= b.x; a.y *= b.y; a.z *= b.z;  return a; }
+  static inline float3& operator /= (float3& a, const float3 b) { a.x /= b.x; a.y /= b.y; a.z /= b.z;  return a; }
+  static inline float3& operator *= (float3& a, float b) { a.x *= b; a.y *= b; a.z *= b;  return a; }
+  static inline float3& operator /= (float3& a, float b) { a.x /= b; a.y /= b; a.z /= b;  return a; }
 
-static inline float3& operator += (float3& a, const float3 b) { a.x += b.x; a.y += b.y; a.z += b.z;  return a; }
-static inline float3& operator -= (float3& a, const float3 b) { a.x -= b.x; a.y -= b.y; a.z -= b.z;  return a; }
-static inline float3& operator += (float3& a, float b) { a.x += b; a.y += b; a.z += b;  return a; }
-static inline float3& operator -= (float3& a, float b) { a.x -= b; a.y -= b; a.z -= b;  return a; }
+  static inline float3& operator += (float3& a, const float3 b) { a.x += b.x; a.y += b.y; a.z += b.z;  return a; }
+  static inline float3& operator -= (float3& a, const float3 b) { a.x -= b.x; a.y -= b.y; a.z -= b.z;  return a; }
+  static inline float3& operator += (float3& a, float b) { a.x += b; a.y += b; a.z += b;  return a; }
+  static inline float3& operator -= (float3& a, float b) { a.x -= b; a.y -= b; a.z -= b;  return a; }
+
+  static inline void store  (float* p, const float3 a_val) { memcpy((void*)p, (void*)&a_val, sizeof(float)*3); }
+  static inline void store_u(float* p, const float3 a_val) { memcpy((void*)p, (void*)&a_val, sizeof(float)*3); }  
+
+  static inline float3 min  (const float3 a, const float3 b) { return float3{std::min(a.x, b.x), std::min(a.y, b.y), std::min(a.z, b.z)}; }
+  static inline float3 max  (const float3 a, const float3 b) { return float3{std::max(a.x, b.x), std::max(a.y, b.y), std::max(a.z, b.z)}; }
+  static inline float3 clamp(const float3 u, const float3 a, const float3 b) { return float3{clamp(u.x, a.x, b.x), clamp(u.y, a.y, b.y), clamp(u.z, a.z, b.z)}; }
+  static inline float3 clamp(const float3 u, float a, float b) { return float3{clamp(u.x, a, b), clamp(u.y, a, b), clamp(u.z, a, b)}; }
 
 static inline  float dot(const float3 a, const float3 b)  { return a.x*b.x + a.y*b.y + a.z*b.z; }
 

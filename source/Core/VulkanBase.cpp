@@ -779,6 +779,8 @@ void Context::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipeline) {
 		multisampling.sampleShadingEnable = VK_FALSE;
 		multisampling.minSampleShading = 0.5f;
 		multisampling.pSampleMask = nullptr;
+		multisampling.alphaToCoverageEnable = VK_FALSE;
+		multisampling.alphaToOneEnable = VK_FALSE;
 
 		VkPipelineDepthStencilStateCreateInfo depthStencil = {};
 		depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
@@ -963,7 +965,7 @@ void Command::BeginRendering(const std::vector<Image>& colorAttachs, Image depth
 		depthAttachInfo.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 		depthAttachInfo.resolveMode = VK_RESOLVE_MODE_NONE;
 		depthAttachInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-		depthAttachInfo.storeOp = depthAttach.usage & ImageUsage::TransientAttachment ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE;
+		depthAttachInfo.storeOp = depthAttach.usage & ImageUsage::TransientAttachment ? VK_ATTACHMENT_STORE_OP_DONT_CARE: VK_ATTACHMENT_STORE_OP_STORE;
 		depthAttachInfo.clearValue.depthStencil = { 1.0f, 0 };
 		renderingInfo.pDepthAttachment = &depthAttachInfo;
 	}
@@ -2092,7 +2094,10 @@ void SwapChain::Create(GLFWwindow* window, uint32_t width, uint32_t height) {
 }
 
 void SwapChain::Destroy(){
-	vkWaitForFences(resource->device, 1, &GetCommandBuffer().resource->fence, VK_TRUE, UINT_MAX);
+	for (auto& cmd: commands) {
+		vkWaitForFences(resource->device, 1, &cmd.resource->fence, VK_TRUE, UINT_MAX);
+	}
+	// vkWaitForFences(resource->device, 1, &commands[currentFrame].resource->fence, VK_TRUE, UINT_MAX);
 
 	_ctx.DestroyCommandBuffers(commands);
 	swapChainImages.clear();

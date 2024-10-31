@@ -44,10 +44,15 @@ static Context ctx;
 
 struct Camera {
     vec3 velocity;
-    vec3 position;
 
-    mat4 view = lookAt(vec3(0.0f, 0.0f, -3.0f), vec3(0.0f, 0.0f, 0.0f), vec3(0.0f, 1.0f, 0.0f));
+	vec3 focus = {0.0f, 0.0f, 0.0f};
+	float rotation_factor = 0.0025f;
+	float zoom_factor = 0.01f;
+	float move_factor = 0.002f;
+
+    mat4 view = lookAt(vec3(0.0f, 0.0f, -3.0f), focus, vec3(0.0f, 1.0f, 0.0f));
 	mat4 proj = perspective(60.0f, 1.0f, 0.1f, 100.0f);
+
 
 };
 static Camera camera;
@@ -157,6 +162,7 @@ void RecreateFrameResources(Window* w);
 void UploadBuffers();
 
 void FramebufferCallback(Window* window, int width, int height);
+void RefreshCallback(Window* window);
 void MouseButtonCallback(Window* window, int button, int action, int mods);
 void KeyCallback(Window* window, int key, int scancode, int action, int mods);
 void CursorPosCallback(Window *window, double xpos, double ypos);
@@ -177,7 +183,7 @@ void RecordCommands(Window* window) {
 	vec4 viewport = {0, 0, (float)size.x, (float)size.y};
 	FeatureTestConstants constants{};
 	constants.model = float4x4();
-	constants.view = camera.view;
+	constants.view = inverse4x4(camera.view);
 	constants.proj = perspective(60.0f, (float)size.x / size.y, 0.01f, 100.0f);
 
 	// LOG_INFO("Viewport: {}, {}, {}, {}", viewport.x, viewport.y, viewport.z, viewport.w); 
@@ -235,6 +241,7 @@ void KeyCallback(Window* window, int key, int scancode, int action, int mods) {
 			ctx.windows.emplace(window);
 			window->AddFramebufferSizeCallback(FramebufferCallback);
 			window->AddMouseButtonCallback(MouseButtonCallback);
+			window->AddWindowRefreshCallback(RefreshCallback);
 			window->AddKeyCallback(KeyCallback);
 			window->AddCursorPosCallback(CursorPosCallback);
 			break;
@@ -269,39 +276,37 @@ void KeyCallback(Window* window, int key, int scancode, int action, int mods) {
 
 
 void CursorPosCallback (Window *window, double xpos, double ypos) {
+	vec3 camera_pos = camera.view.col(3).xyz();
+	vec3 camera_right = camera.view.get_col(0).xyz();
+	vec3 camera_up = camera.view.get_col(1).xyz();
+	vec3 camera_forward = camera.view.get_col(2).xyz();
+
 	if (mouse.buttons[GLFW_MOUSE_BUTTON_RIGHT]) {
 		switch (mouse.mods)
 		{
-		case GLFW_MOD_ALT:
-				camera.view = translate4x4({0,0, mouse.deltaPos.x * -0.01f}) * camera.view;
+		case GLFW_MOD_ALT: {
+			auto zoom_factor = camera.zoom_factor * length(camera_pos - camera.focus);
+			auto movement =  (zoom_factor * mouse.deltaPos.x) * camera_forward;
+			camera.view = translate4x4(movement) * camera.view;
+			// camera.focus += movement;
 			break;
+		}
 		
 		default:
-			// trackball
-			{
-				auto v0 = camera.view.get_row(0);
-				auto v1 = camera.view.get_row(1);
-				vec3 camera_right = {v0.x, v0.y, v0.z};
-				vec3 camera_up = {v1.x, v1.y, v1.z};
-				camera.view = inverse4x4(rotate4x4(camera_right, -mouse.deltaPos.y * 0.003f) * rotate4x4(camera_up, mouse.deltaPos.x * 0.003f)* inverse4x4(camera.view)); // trackball
-			}
-			{
-				auto viewInv = inverse4x4(camera.view);
-				auto v0 = viewInv.get_row(0);
-				auto v1 = viewInv.get_row(1);
-				auto v2 = viewInv.get_row(2);
-				vec3 camera_right = {v0.x, v0.y, v0.z};
-				vec3 camera_up = {v1.x, v1.y, v1.z};
-				vec3 camera_forward = {v2.x, v2.y, v2.z};
-				// camera.view = rotate4x4(camera_up, mouse.deltaPos.x * 0.003f) * rotate4x4(camera_right, -mouse.deltaPos.y * 0.003f) * camera.view;
-				// camera.view = inverse4x4(rotate4x4(camera_right, -mouse.deltaPos.y * 0.003f) * rotate4x4(camera_up, mouse.deltaPos.x * 0.003f)* inverse4x4(camera.view));
-			}
+			camera_pos -= camera.focus;
+			// camera.view = rotate4x4(camera_up, mouse.deltaPos.x * camera.rotation_factor) * rotate4x4(camera_right, -mouse.deltaPos.y * camera.rotation_factor)  * camera.view; // trackball
+			camera.view = rotate4x4Y(mouse.deltaPos.x * camera.rotation_factor) * rotate4x4(camera_right, -mouse.deltaPos.y * camera.rotation_factor)  * camera.view;
+			camera_pos += camera.focus;
+
 			break;
 		}
 		window->SetDrawNeeded(true);
 	}
-	if (mouse.buttons[GLFW_MOUSE_BUTTON_LEFT]) {
-		camera.view = translate4x4({mouse.deltaPos.x * -0.01f, mouse.deltaPos.y * -0.01f, 0}) * camera.view;
+	if (mouse.buttons[GLFW_MOUSE_BUTTON_MIDDLE]) {
+		auto move_factor = camera.move_factor * length(camera_pos - camera.focus);
+		auto movement =  move_factor * (camera_up * mouse.deltaPos.y + camera_right * mouse.deltaPos.x); 
+		camera.focus += movement;
+		camera.view = translate4x4(movement) * camera.view;
 		window->SetDrawNeeded(true);
 	}
 }
@@ -315,6 +320,11 @@ void FramebufferCallback(Window* window, int width, int height) {
 	if (width == 0 || height == 0) {return;}
 	// LOG_INFO("RecreateFrameResources {} callback", window->GetName());
 	RecreateFrameResources(window);
+}
+
+void RefreshCallback(Window* window) {
+	DEBUG_TRACE("Window {} refresh callback", window->GetName());
+	window->SetDrawNeeded(true);
 	DrawWindow(window);
 }
 
@@ -418,10 +428,10 @@ void FeatureTestApplication::Create() {
 	ctx.mainWindow = window;
 	// ctx.window1 = WindowManager::NewWindow(ctx.width, ctx.height, "w1");
 	window->AddFramebufferSizeCallback(FramebufferCallback);
+	window->AddWindowRefreshCallback(RefreshCallback);
 	window->AddMouseButtonCallback(MouseButtonCallback);
 	window->AddKeyCallback(KeyCallback);
 	window->AddCursorPosCallback(CursorPosCallback);
-	// window->SetMaxSize(3000, 3000);
 	ctx.CreateImages(window->GetMonitorWidth(), window->GetMonitorHeight());
 	CreateRenderImage(window);
 	ctx.vertexBuffer = vkw::CreateBuffer(vertices.size() * sizeof(Vertex), vkw::BufferUsage::Vertex, vkw::Memory::GPU, "Vertex Buffer");
