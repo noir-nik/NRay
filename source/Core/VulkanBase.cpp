@@ -1,8 +1,10 @@
 #include "Pch.hpp"
-
+#include "Base.hpp"
 #include "Util.hpp"
 #include "VulkanBase.hpp"
 #include "ShaderCommon.h"
+#include <memory>
+#include <unordered_map>
 
 #define SHADER_ALWAYS_COMPILE 0
 
@@ -16,6 +18,7 @@
 
 static const char *VK_ERROR_STRING(VkResult result);
 namespace vkw {
+struct Instance;
 struct PhysicalDevice;
 struct Device;
 struct InternalQueue;
@@ -31,60 +34,41 @@ struct Context
 
 	void CreatePipelineLibrary(const PipelineDesc& desc, Pipeline& pipeline);
 
-	VkInstance instance = VK_NULL_HANDLE;
-	GLFWwindow* _dummyWindow = nullptr;
-	VkSurfaceKHR _dummySurface = VK_NULL_HANDLE; // for querying present support
-	VkAllocationCallbacks* allocator = VK_NULL_HANDLE;
-	VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
-	VkDebugReportCallbackEXT debugReport = VK_NULL_HANDLE;
-	std::string applicationName = "Vulkan Slang Compute";
-	std::string engineName = "Vulkan Compute";
-	VmaAllocator vmaAllocator;
-
-	// VkPhysicalDeviceProperties physicalDeviceProperties;
-	// VkPhysicalDeviceFeatures physicalDeviceFeatures;
-	// uint32_t presentQueueFamilyIndex;
-	// VkDevice device = VK_NULL_HANDLE;
-	// VkCommandPool commandPool;
-	// VkCommandBuffer *commandBuffers;
-	// VkFence *fences;
-
-	uint32_t apiVersion;
 	bool presentRequested = false;
 	bool enableValidationLayers = true;
-	bool linkTimeOptimization = true; // Pipeline library link
-
-	// bool enableValidationLayers = false;
 	bool enableDebugReport = false;
-	std::vector<bool> activeLayers; // Available layers
-	std::vector<const char*> activeLayersNames;
-	std::vector<VkLayerProperties> layers;
-	std::vector<bool> activeExtensions;                    // Instance Extensions
-	std::vector<const char*> activeExtensionsNames;	       // Instance Extensions
-	std::vector<VkExtensionProperties> instanceExtensions; // Instance Extensions
+	bool linkTimeOptimization = true; // Pipeline library link
 
 	std::vector<const char*> requiredInstanceExtensions {
 		VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
 	};
 
-	std::vector<PhysicalDevice> physicalDevices;
+	std::vector<const char*> requiredExtensions = { // Physical Device Extensions
+		// VK_KHR_SWAPCHAIN_EXTENSION_NAME, 
+		// VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
+		// VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
+		// VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
+		// VK_KHR_RAY_QUERY_EXTENSION_NAME,
+		// VK_EXT_SHADER_ATOMIC_FLOAT_EXTENSION_NAME,
+	};
+
+	std::vector<const char*> preferredExtensions = {
+		VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME,
+		VK_EXT_GRAPHICS_PIPELINE_LIBRARY_EXTENSION_NAME,
+	};
+
+
+	std::unordered_map<UID, PhysicalDevice> physicalDevices;
+	std::unordered_map<UID, Device> devices;
+
+	std::shared_ptr<Instance> instance;
+	std::shared_ptr<PhysicalDevice> activePhysicalDevice;
+	std::shared_ptr<Device> activeDevice;
 
 	const uint32_t timeStampPerPool = 64;
 		
 	bool requestSeparate[Queue::Count] = {false};
-
-
-	struct {
-		std::unordered_map<Hash64, VkPipeline> vertexInputInterface;
-		std::unordered_map<Hash64, VkPipeline> preRasterizationShaders;
-		std::unordered_map<Hash64, VkPipeline> fragmentOutputInterface;
-		std::vector<VkPipeline> fragmentShaders;
-	} pipelineLibrary;
-
-
-
 	
-
 	// const uint32_t initialScratchBufferSize = 64*1024*1024;
 	// Buffer asScratchBuffer;
 	// VkDeviceAddress asScratchAddress;
@@ -128,21 +112,43 @@ struct Context
 };
 static Context _ctx;
 
-struct PhysicalDevice {
-	std::vector<const char*> requiredExtensions = { // Physical Device Extensions
-		// VK_KHR_SWAPCHAIN_EXTENSION_NAME, 
-		// VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
-		// VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
-		// VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
-		// VK_KHR_RAY_QUERY_EXTENSION_NAME,
-		// VK_EXT_SHADER_ATOMIC_FLOAT_EXTENSION_NAME,
-	};
+struct DeleteCopyMove {
+	DeleteCopyMove() = default;
+	DeleteCopyMove(const DeleteCopyMove&) = delete;
+	DeleteCopyMove& operator=(const DeleteCopyMove&) = delete;
+	DeleteCopyMove(DeleteCopyMove&&) = default;
+	DeleteCopyMove& operator=(DeleteCopyMove&&) = default;
+	virtual ~DeleteCopyMove() = default;
+};
 
-	std::vector<const char*> preferredExtensions = {
-		VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME,
-		VK_EXT_GRAPHICS_PIPELINE_LIBRARY_EXTENSION_NAME,
-	};
+struct Instance: DeleteCopyMove {
+	VkInstance instance = VK_NULL_HANDLE;
+	GLFWwindow* _dummyWindow = nullptr;
+	VkSurfaceKHR _dummySurface = VK_NULL_HANDLE; // for querying present support
+	VkAllocationCallbacks* allocator = VK_NULL_HANDLE;
+	VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
+	VkDebugReportCallbackEXT debugReport = VK_NULL_HANDLE;
+	std::string applicationName = "Vulkan Slang Compute";
+	std::string engineName = "Vulkan Compute";
+	VmaAllocator vmaAllocator;
 
+	uint32_t apiVersion;
+
+	std::vector<bool> activeLayers; // Available layers
+	std::vector<const char*> activeLayersNames;
+	std::vector<VkLayerProperties> layers;
+
+	std::vector<bool> activeExtensions;                    // Instance Extensions
+	std::vector<const char*> activeExtensionsNames;	       // Instance Extensions
+	std::vector<VkExtensionProperties> instanceExtensions; // Instance Extensions
+
+	void Create();
+	void Destroy();
+
+};
+
+struct PhysicalDevice: DeleteCopyMove {
+	UID uid;
 	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
 	VkSampleCountFlagBits maxSamples = VK_SAMPLE_COUNT_1_BIT;
 	VkSampleCountFlagBits numSamples  = VK_SAMPLE_COUNT_1_BIT;
@@ -157,7 +163,7 @@ struct PhysicalDevice {
 
 	VkPhysicalDeviceGraphicsPipelineLibraryPropertiesEXT graphicsPipelineLibraryProperties{};
 
-	VkPhysicalDeviceProperties2 physicalProperties{};
+	VkPhysicalDeviceProperties2 physicalProperties;
 	// VkPhysicalDeviceImageFormatInfo2 imageFormatInfo2{};
 	// VkImageFormatProperties2 imageFormatProperties2{};
 
@@ -165,10 +171,12 @@ struct PhysicalDevice {
 	
 	std::vector<VkExtensionProperties> availableExtensions; // Physical Device Extensions
 	std::vector<VkQueueFamilyProperties> availableFamilies;
-		
+	
+	void Create(UID uid, VkPhysicalDevice device);
 };
 
-struct Device {
+struct Device: DeleteCopyMove {
+	UID uid;
 	void Create();
 	void Destroy();
 	VkDevice device = VK_NULL_HANDLE;
@@ -178,26 +186,28 @@ struct Device {
 	// Do not resize after creation!
 	std::vector<Command> queuesCommands;
 	InternalQueue* queues[Queue::Count]; // Pointers to uniqueQueues
-	// Queue currentQueue = Queue::Count;
 
 	const uint32_t stagingBufferSize = 2 * 1024 * 1024;
-
 
 	// bindless resources
 	VkDescriptorPool imguiDescriptorPool = VK_NULL_HANDLE;
 	VkDescriptorSet bindlessDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorPool bindlessDescriptorPool = VK_NULL_HANDLE;
 	VkDescriptorSetLayout bindlessDescriptorLayout = VK_NULL_HANDLE;
-
-	// VkFormat depthFormat;
 	
-
 	std::vector<int32_t> availableBufferRID;
 	std::vector<int32_t> availableImageRID;
 	std::vector<int32_t> availableTLASRID;
 	VkSampler genericSampler;
 
 	VkPipelineCache pipelineCache = VK_NULL_HANDLE;
+
+	struct {
+	std::unordered_map<UID, VkPipeline> vertexInputInterface;
+	std::unordered_map<UID, VkPipeline> preRasterizationShaders;
+	std::unordered_map<UID, VkPipeline> fragmentOutputInterface;
+	std::vector<VkPipeline> fragmentShaders;
+	} pipelineLibrary;
 };
 
 struct SwapChainResource {
@@ -346,7 +356,7 @@ void InitImpl(GLFWwindow* window, uint32_t width, uint32_t height){
 		DEBUG_TRACE("Created surface.");
 	}
 
-	_ctx.CreatePhysicalDevice();
+	CreatePhysicalDevices();
 	_ctx.CreateDevice();
 
 	_ctx.createBindlessResources();
@@ -1657,7 +1667,7 @@ void PopulateDebugReportCreateInfo(VkDebugReportCallbackCreateInfoEXT& createInf
 
 } // vulkan debug callbacks
 
-void Context::CreateInstance(){
+void Instance::Create(){
 	// optional data, provides useful info to the driver
 	VkApplicationInfo appInfo{};
 	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -1675,7 +1685,7 @@ void Context::CreateInstance(){
 	vkEnumerateInstanceVersion(&apiVersion);
 
 	// Validation layers
-	if (enableValidationLayers) {
+	if (_ctx.enableValidationLayers) {
 		// get all available layers
 		uint32_t layerCount;
 		vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
@@ -1705,18 +1715,18 @@ void Context::CreateInstance(){
 	
 	
 	uint32_t glfwExtensionCount = 0;
-	if (presentRequested) {
+	if (_ctx.presentRequested) {
 		// get all extensions required by glfw
 		const char** glfwExtensions;
 		glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-		requiredInstanceExtensions.insert(requiredInstanceExtensions.end(), glfwExtensions, glfwExtensions + glfwExtensionCount);
+		_ctx.requiredInstanceExtensions.insert(_ctx.requiredInstanceExtensions.end(), glfwExtensions, glfwExtensions + glfwExtensionCount);
 	}
 
 	// Extensions
-	if (enableValidationLayers) {
-		requiredInstanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-		if (enableDebugReport) {
-			requiredInstanceExtensions.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
+	if (_ctx.enableValidationLayers) {
+		_ctx.requiredInstanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+		if (_ctx.enableDebugReport) {
+			_ctx.requiredInstanceExtensions.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
 		}
 	}
 
@@ -1728,9 +1738,9 @@ void Context::CreateInstance(){
 	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, instanceExtensions.data());
 
 	// set to active all extensions that we enabled //TODO: Rewrite loop
-	for (size_t i = 0; i < requiredInstanceExtensions.size(); i++) {
+	for (size_t i = 0; i < _ctx.requiredInstanceExtensions.size(); i++) {
 		for (size_t j = 0; j < extensionCount; j++) {
-			if (strcmp(requiredInstanceExtensions[i], instanceExtensions[j].extensionName) == 0) {
+			if (strcmp(_ctx.requiredInstanceExtensions[i], instanceExtensions[j].extensionName) == 0) {
 				activeExtensions[j] = true;
 				break;
 			}
@@ -1739,7 +1749,7 @@ void Context::CreateInstance(){
 
 	// Enable validation features if available
 	bool validation_features = false;
-	if (enableValidationLayers){
+	if (_ctx.enableValidationLayers){
 		for (size_t i = 0; i < extensionCount; i++) {
 			if (strcmp(VK_EXT_VALIDATION_FEATURES_EXTENSION_NAME, instanceExtensions[i].extensionName) == 0) {
 				validation_features = true;
@@ -1780,7 +1790,7 @@ void Context::CreateInstance(){
 
 	// which validation layers we need
 	VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo;
-	if (enableValidationLayers) {
+	if (_ctx.enableValidationLayers) {
 		createInfo.enabledLayerCount = static_cast<uint32_t>(activeLayersNames.size());
 		createInfo.ppEnabledLayerNames = activeLayersNames.data();
 
@@ -1804,7 +1814,7 @@ void Context::CreateInstance(){
 	DEBUG_TRACE("Created instance.");
 	
 	// Debug Utils
-	if (enableValidationLayers) {
+	if (_ctx.enableValidationLayers) {
 		VkDebugUtilsMessengerCreateInfoEXT messengerInfo;
 		PopulateDebugMessengerCreateInfo(messengerInfo);
 		res = CreateDebugUtilsMessengerEXT(instance, &messengerInfo, allocator, &debugMessenger);
@@ -1813,7 +1823,7 @@ void Context::CreateInstance(){
 	}
 
 	// Debug Report
-	if (enableValidationLayers && enableDebugReport) {
+	if (_ctx.enableValidationLayers && _ctx.enableDebugReport) {
 		VkDebugReportCallbackCreateInfoEXT debugReportInfo;
 		PopulateDebugReportCreateInfo(debugReportInfo);
 		// Create the callback handle
@@ -1826,7 +1836,7 @@ void Context::CreateInstance(){
 	LOG_INFO("Created VulkanInstance.");
 }
 
-void Context::DestroyInstance() {
+void Instance::Destroy() {
 	activeLayersNames.clear();
 	activeExtensionsNames.clear();
 	if (debugMessenger) {
@@ -1844,27 +1854,32 @@ void Context::DestroyInstance() {
 	LOG_INFO("Destroyed VulkanInstance");
 }
 
-void PhysicalDevice::Create() {
+void CreatePhysicalDevices() {
 	// get all devices with Vulkan support
 	uint32_t count = 0;
-	vkEnumeratePhysicalDevices(_ctx.instance, &count, nullptr);
+	vkEnumeratePhysicalDevices(_ctx.instance->instance, &count, nullptr);
 	ASSERT(count != 0, "no GPUs with Vulkan support!");
 	std::vector<VkPhysicalDevice> devices(count);
-	vkEnumeratePhysicalDevices(_ctx.instance, &count, devices.data());
+	vkEnumeratePhysicalDevices(_ctx.instance->instance, &count, devices.data());
 	DEBUG_TRACE("Found {0} physical device(s).", count);
-
-	for (const auto& device : devices) {
-		// get all available extensions
-		uint32_t extensionCount;
-		vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
-		availableExtensions.resize(extensionCount);
-		vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
-
-		// get all available families
-		uint32_t familyCount = 0;
-		vkGetPhysicalDeviceQueueFamilyProperties(device, &familyCount, nullptr);
-		availableFamilies.resize(familyCount);
-		vkGetPhysicalDeviceQueueFamilyProperties(device, &familyCount, availableFamilies.data());
+	_ctx.physicalDevices.reserve(count);
+	for (const auto& device: devices) {
+		// _ctx.physicalDevices.insert({UIDGenerator::Next(), PhysicalDevice()});
+		auto uid = UIDGenerator::Next();
+		auto res = _ctx.physicalDevices.try_emplace(uid, PhysicalDevice());
+		auto& physicalDevice = res.first->second;
+		physicalDevice.Create(uid, device);
+		
+		// check if all required extensions are available
+		if (_ctx.presentRequested) _ctx.requiredExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+		bool suitable = std::all_of(_ctx.requiredExtensions.begin(), _ctx.requiredExtensions.end(), [&](const char* extension) {
+			auto it = std::find(physicalDevice.availableExtensions.begin(), physicalDevice.availableExtensions.end(), extension);
+			if (it == physicalDevice.availableExtensions.end()) {
+				LOG_ERROR("Required extension {} not available on device: {}", extension, physicalDevice.physicalProperties.properties.deviceName);
+				return false;
+			}
+			return true;
+		});
 
 		bool graphicsAvailable = false; // TODO: if (presentRequested)
 		bool computeAvailable = false;
@@ -1872,80 +1887,81 @@ void PhysicalDevice::Create() {
 		VkBool32 presentAvailable = false;
 
 		// select the family for each type of queue that we want
-		for (int i = 0; i < familyCount; i++) {
-			auto& family = availableFamilies[i];
+		for (int i = 0; i < physicalDevice.availableFamilies.size(); i++) {
+			auto& family = physicalDevice.availableFamilies[i];
 			if (family.queueFlags & VK_QUEUE_GRAPHICS_BIT) graphicsAvailable = true;
 			if (family.queueFlags & VK_QUEUE_COMPUTE_BIT) computeAvailable = true;
 			if (family.queueFlags & VK_QUEUE_TRANSFER_BIT) transferAvailable = true;
 			if (_ctx.presentRequested){
 				if (presentAvailable == false){
 					VkBool32 present = false;
-					vkGetPhysicalDeviceSurfaceSupportKHR(device, i, _ctx._dummySurface, &present);
+					vkGetPhysicalDeviceSurfaceSupportKHR(device, i, _ctx.instance->_dummySurface, &present);
 					if (present) presentAvailable = true;
 				}
 			}
 		}
-
-		graphicsPipelineLibraryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_FEATURES_EXT;
-		graphicsPipelineLibraryFeatures.pNext = nullptr;
-		bufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
-		bufferDeviceAddressFeatures.pNext = &graphicsPipelineLibraryFeatures;
-		indexingFeatures.sType	= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT;
-		indexingFeatures.pNext = &bufferDeviceAddressFeatures;
-		physicalFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-		physicalFeatures2.pNext = &indexingFeatures;
-		vkGetPhysicalDeviceFeatures2(device, &physicalFeatures2);
-
 		
-		graphicsPipelineLibraryProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_PROPERTIES_EXT;
-		graphicsPipelineLibraryProperties.pNext = nullptr;
-		physicalProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
-		physicalProperties.pNext = &graphicsPipelineLibraryProperties;
-		vkGetPhysicalDeviceProperties2(device, &physicalProperties);
-		vkGetPhysicalDeviceMemoryProperties(device, &memoryProperties);
-		// imageFormatProperties2.sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2;
-		// imageFormatInfo2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2;
-		// vkGetPhysicalDeviceImageFormatProperties2(device, &imageFormatInfo2, &imageFormatProperties2);
-
-		VkSampleCountFlags counts = physicalProperties.properties.limits.framebufferColorSampleCounts;
-		counts &= physicalProperties.properties.limits.framebufferDepthSampleCounts;
-
-		// get max number of samples
-		maxSamples = VK_SAMPLE_COUNT_1_BIT;
-		if (counts & VK_SAMPLE_COUNT_64_BIT) { maxSamples = VK_SAMPLE_COUNT_64_BIT; }
-		else if (counts & VK_SAMPLE_COUNT_32_BIT) { maxSamples = VK_SAMPLE_COUNT_32_BIT; }
-		else if (counts & VK_SAMPLE_COUNT_16_BIT) { maxSamples = VK_SAMPLE_COUNT_16_BIT; }
-		else if (counts & VK_SAMPLE_COUNT_8_BIT) { maxSamples = VK_SAMPLE_COUNT_8_BIT; }
-		else if (counts & VK_SAMPLE_COUNT_4_BIT) { maxSamples = VK_SAMPLE_COUNT_4_BIT; }
-		else if (counts & VK_SAMPLE_COUNT_2_BIT) { maxSamples = VK_SAMPLE_COUNT_2_BIT; }
-
-		// check if all required extensions are available
-		if (_ctx.presentRequested) requiredExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
-		std::set<std::string_view> required(requiredExtensions.begin(), requiredExtensions.end());
-		for (const auto& extension : availableExtensions) {
-			required.erase(extension.extensionName);
-		}
-		
-		// check if all required queues are supported
-		bool suitable = required.empty();
-		if (!suitable) LOG_ERROR("Required extensions not available: {0}", required.begin()->data());
 		suitable &= (graphicsAvailable && computeAvailable && transferAvailable);
 		if (_ctx.presentRequested) {
 			suitable &= presentAvailable;
 		}
 		if (!suitable) LOG_ERROR("Required queue not available");
 		// suitable &= graphicsFamily != -1;
-		if (suitable) {
-			physicalDevice = device;
-			break;
-		}
+		
+		ASSERT(physicalDevice.physicalDevice != VK_NULL_HANDLE, "no device with Vulkan support!");
+		DEBUG_TRACE("Created physical device: {0}", physicalProperties.deviceName);
 	}
+}
+
+void PhysicalDevice::Create(UID uid, VkPhysicalDevice device) {
+	this->uid = uid;
+	this->physicalDevice = device;
+	// get all available extensions
+	uint32_t extensionCount;
+	vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
+	availableExtensions.resize(extensionCount);
+	vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions.data());
+
+	// get all available families
+	uint32_t familyCount = 0;
+	vkGetPhysicalDeviceQueueFamilyProperties(device, &familyCount, nullptr);
+	availableFamilies.resize(familyCount);
+	vkGetPhysicalDeviceQueueFamilyProperties(device, &familyCount, availableFamilies.data());
+
+	graphicsPipelineLibraryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_FEATURES_EXT;
+	graphicsPipelineLibraryFeatures.pNext = nullptr;
+	bufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
+	bufferDeviceAddressFeatures.pNext = &graphicsPipelineLibraryFeatures;
+	indexingFeatures.sType	= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT;
+	indexingFeatures.pNext = &bufferDeviceAddressFeatures;
+	physicalFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+	physicalFeatures2.pNext = &indexingFeatures;
+	vkGetPhysicalDeviceFeatures2(device, &physicalFeatures2);
+
 	
-	ASSERT(physicalDevice != VK_NULL_HANDLE, "no device with Vulkan support!");
-	DEBUG_TRACE("Created physical device: {0}", physicalProperties.deviceName);
-	if (numSamples > maxSamples) {
-		numSamples = maxSamples;
-	}
+	graphicsPipelineLibraryProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_PROPERTIES_EXT;
+	graphicsPipelineLibraryProperties.pNext = nullptr;
+	physicalProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+	physicalProperties.pNext = &graphicsPipelineLibraryProperties;
+	vkGetPhysicalDeviceProperties2(device, &physicalProperties);
+	vkGetPhysicalDeviceMemoryProperties(device, &memoryProperties);
+	// imageFormatProperties2.sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2;
+	// imageFormatInfo2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2;
+	// vkGetPhysicalDeviceImageFormatProperties2(device, &imageFormatInfo2, &imageFormatProperties2);
+
+	VkSampleCountFlags counts = physicalProperties.properties.limits.framebufferColorSampleCounts;
+	counts &= physicalProperties.properties.limits.framebufferDepthSampleCounts;
+
+	// get max number of samples
+	maxSamples = VK_SAMPLE_COUNT_1_BIT;
+	if (counts & VK_SAMPLE_COUNT_64_BIT) { maxSamples = VK_SAMPLE_COUNT_64_BIT; }
+	else if (counts & VK_SAMPLE_COUNT_32_BIT) { maxSamples = VK_SAMPLE_COUNT_32_BIT; }
+	else if (counts & VK_SAMPLE_COUNT_16_BIT) { maxSamples = VK_SAMPLE_COUNT_16_BIT; }
+	else if (counts & VK_SAMPLE_COUNT_8_BIT) { maxSamples = VK_SAMPLE_COUNT_8_BIT; }
+	else if (counts & VK_SAMPLE_COUNT_4_BIT) { maxSamples = VK_SAMPLE_COUNT_4_BIT; }
+	else if (counts & VK_SAMPLE_COUNT_2_BIT) { maxSamples = VK_SAMPLE_COUNT_2_BIT; }
+
+	if (numSamples > maxSamples) {numSamples = maxSamples;}
 }
 
 void Device::Create() {
@@ -2166,7 +2182,7 @@ VkPhysicalDeviceGraphicsPipelineLibraryPropertiesEXT
 	// DEBUG_VK(result, "Failed to create imgui descriptor pool!");
 	
 	if (_dummySurface != VK_NULL_HANDLE) {
-		vkDestroySurfaceKHR(instance, _dummySurface, nullptr);
+		vkDestroySurfaceKHR(_ctx.instance->instance, _dummySurface, nullptr);
 		_dummySurface = VK_NULL_HANDLE;
 	}
 	if (_dummyWindow != nullptr) {
@@ -2175,7 +2191,7 @@ VkPhysicalDeviceGraphicsPipelineLibraryPropertiesEXT
 	}
 }
 
-void Context::DestroyDevice() {
+void Device::Destroy() {
 	// dummyVertexBuffer = {};
 	// asScratchBuffer = {};
 	// vkDestroyDescriptorPool(device, imguiDescriptorPool, allocator);

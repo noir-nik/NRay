@@ -1,2 +1,2 @@
 CompileFlags:
-  Add: [-std=c++17, -DENGINE, -Isource/Core, -Isource/Base, -Isource/Shaders]
+  Add: [-std=c++17, -DENGINE, -I./source/Core, -I./source/Base, -I./source/Shaders]
