@@ -1,7 +1,5 @@
 #include "Pch.hpp"
 
-#include <array>
-
 #include "Util.hpp"
 #include "VulkanBase.hpp"
 #include "ShaderCommon.h"
@@ -18,7 +16,8 @@
 
 static const char *VK_ERROR_STRING(VkResult result);
 namespace vkw {
-
+struct PhysicalDevice;
+struct Device;
 struct InternalQueue;
 struct SwapChain;
 struct Context
@@ -53,6 +52,8 @@ struct Context
 	uint32_t apiVersion;
 	bool presentRequested = false;
 	bool enableValidationLayers = true;
+	bool linkTimeOptimization = true; // Pipeline library link
+
 	// bool enableValidationLayers = false;
 	bool enableDebugReport = false;
 	std::vector<bool> activeLayers; // Available layers
@@ -62,65 +63,16 @@ struct Context
 	std::vector<const char*> activeExtensionsNames;	       // Instance Extensions
 	std::vector<VkExtensionProperties> instanceExtensions; // Instance Extensions
 
-
-	std::vector<const char*> requiredExtensions = { // Physical Device Extensions
-		// VK_KHR_SWAPCHAIN_EXTENSION_NAME, 
-		// VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
-		// VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
-		// VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
-		// VK_KHR_RAY_QUERY_EXTENSION_NAME,
-		// VK_EXT_SHADER_ATOMIC_FLOAT_EXTENSION_NAME,
+	std::vector<const char*> requiredInstanceExtensions {
+		VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
 	};
 
-	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
-	VkSampleCountFlagBits maxSamples = VK_SAMPLE_COUNT_1_BIT;
-	VkSampleCountFlags sampleCounts;
-
-	bool descriptorIndexingAvailable = false;
-	
-	VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddressFeatures;
-	VkPhysicalDeviceDescriptorIndexingFeatures indexingFeatures;
-	VkPhysicalDeviceFeatures2 physicalFeatures2{};
-	VkPhysicalDeviceProperties physicalProperties{};
-	// VkPhysicalDeviceImageFormatInfo2 imageFormatInfo2{};
-	// VkImageFormatProperties2 imageFormatProperties2{};
-	
-	std::vector<VkExtensionProperties> availableExtensions; // Physical Device Extensions
-	std::vector<VkQueueFamilyProperties> availableFamilies;
+	std::vector<PhysicalDevice> physicalDevices;
 
 	const uint32_t timeStampPerPool = 64;
 		
 	bool requestSeparate[Queue::Count] = {false};
-	std::unordered_map<uint32_t, InternalQueue> uniqueQueues;
-	// Owns all command resources outside swapchains
-	// Do not resize after creation!
-	std::vector<Command> queuesCommands;
-	InternalQueue* queues[Queue::Count]; // Pointers to uniqueQueues
-	// Queue currentQueue = Queue::Count;
 
-	const uint32_t stagingBufferSize = 2 * 1024 * 1024;
-
-	VkPhysicalDeviceMemoryProperties memoryProperties;
-
-
-	// bindless resources
-	VkDescriptorPool imguiDescriptorPool = VK_NULL_HANDLE;
-	VkDescriptorSet bindlessDescriptorSet = VK_NULL_HANDLE;
-	VkDescriptorPool bindlessDescriptorPool = VK_NULL_HANDLE;
-	VkDescriptorSetLayout bindlessDescriptorLayout = VK_NULL_HANDLE;
-
-	VkDevice device = VK_NULL_HANDLE;
-
-	GLFWwindow* currentWindow = nullptr;
-	// std::unordered_map<GLFWwindow*, SwapChain> swapChains;
-
-	// VkFormat depthFormat;
-	
-
-	std::vector<int32_t> availableBufferRID;
-	std::vector<int32_t> availableImageRID;
-	std::vector<int32_t> availableTLASRID;
-	VkSampler genericSampler;
 
 	struct {
 		std::unordered_map<Hash64, VkPipeline> vertexInputInterface;
@@ -129,7 +81,7 @@ struct Context
 		std::vector<VkPipeline> fragmentShaders;
 	} pipelineLibrary;
 
-	VkPipelineCache pipelineCache = VK_NULL_HANDLE;
+
 
 	
 
@@ -143,11 +95,6 @@ struct Context
 
 	void CreateInstance();
 	void DestroyInstance();
-
-	void CreatePhysicalDevice();
-
-	void CreateDevice();
-	void DestroyDevice();
 	
 	void createDescriptorSetLayout();
 	void createDescriptorPool();
@@ -164,7 +111,6 @@ struct Context
 	void AcquireStagingBuffer();
 	void ReleaseStagingBuffer();
 
-	VkSampleCountFlagBits numSamples  = VK_SAMPLE_COUNT_1_BIT;
 	VkSampler CreateSampler(VkDevice device, f32 maxLod);
 
 	PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT;
@@ -182,8 +128,76 @@ struct Context
 };
 static Context _ctx;
 
-struct Device {
+struct PhysicalDevice {
+	std::vector<const char*> requiredExtensions = { // Physical Device Extensions
+		// VK_KHR_SWAPCHAIN_EXTENSION_NAME, 
+		// VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
+		// VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
+		// VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
+		// VK_KHR_RAY_QUERY_EXTENSION_NAME,
+		// VK_EXT_SHADER_ATOMIC_FLOAT_EXTENSION_NAME,
+	};
 
+	std::vector<const char*> preferredExtensions = {
+		VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME,
+		VK_EXT_GRAPHICS_PIPELINE_LIBRARY_EXTENSION_NAME,
+	};
+
+	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+	VkSampleCountFlagBits maxSamples = VK_SAMPLE_COUNT_1_BIT;
+	VkSampleCountFlagBits numSamples  = VK_SAMPLE_COUNT_1_BIT;
+	VkSampleCountFlags sampleCounts;
+
+	bool descriptorIndexingAvailable = false;
+	
+	VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddressFeatures{};
+	VkPhysicalDeviceDescriptorIndexingFeatures indexingFeatures{};
+	VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT graphicsPipelineLibraryFeatures{};
+	VkPhysicalDeviceFeatures2 physicalFeatures2{};
+
+	VkPhysicalDeviceGraphicsPipelineLibraryPropertiesEXT graphicsPipelineLibraryProperties{};
+
+	VkPhysicalDeviceProperties2 physicalProperties{};
+	// VkPhysicalDeviceImageFormatInfo2 imageFormatInfo2{};
+	// VkImageFormatProperties2 imageFormatProperties2{};
+
+	VkPhysicalDeviceMemoryProperties memoryProperties;
+	
+	std::vector<VkExtensionProperties> availableExtensions; // Physical Device Extensions
+	std::vector<VkQueueFamilyProperties> availableFamilies;
+		
+};
+
+struct Device {
+	void Create();
+	void Destroy();
+	VkDevice device = VK_NULL_HANDLE;
+
+	std::unordered_map<uint32_t, InternalQueue> uniqueQueues;
+	// Owns all command resources outside swapchains
+	// Do not resize after creation!
+	std::vector<Command> queuesCommands;
+	InternalQueue* queues[Queue::Count]; // Pointers to uniqueQueues
+	// Queue currentQueue = Queue::Count;
+
+	const uint32_t stagingBufferSize = 2 * 1024 * 1024;
+
+
+	// bindless resources
+	VkDescriptorPool imguiDescriptorPool = VK_NULL_HANDLE;
+	VkDescriptorSet bindlessDescriptorSet = VK_NULL_HANDLE;
+	VkDescriptorPool bindlessDescriptorPool = VK_NULL_HANDLE;
+	VkDescriptorSetLayout bindlessDescriptorLayout = VK_NULL_HANDLE;
+
+	// VkFormat depthFormat;
+	
+
+	std::vector<int32_t> availableBufferRID;
+	std::vector<int32_t> availableImageRID;
+	std::vector<int32_t> availableTLASRID;
+	VkSampler genericSampler;
+
+	VkPipelineCache pipelineCache = VK_NULL_HANDLE;
 };
 
 struct SwapChainResource {
@@ -405,7 +419,7 @@ Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, c
 
 	if (usage & BufferUsage::Storage) {
 		usage |= BufferUsage::Address;
-		size += size % _ctx.physicalProperties.limits.minStorageBufferOffsetAlignment;
+		size += size % _ctx.physicalDevicesProperties.limits.minStorageBufferOffsetAlignment;
 	}
 
 	if (usage & BufferUsage::AccelerationStructureInput) {
@@ -787,26 +801,26 @@ void Context::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipeline) {
 		rasterizationState.depthBiasClamp = 0.0f;
 		rasterizationState.depthBiasSlopeFactor = 0.0f;
 
-		VkPipelineMultisampleStateCreateInfo multisampling = {};
-		multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-		multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-		multisampling.sampleShadingEnable = VK_FALSE;
-		multisampling.minSampleShading = 0.5f;
-		multisampling.pSampleMask = nullptr;
-		multisampling.alphaToCoverageEnable = VK_FALSE;
-		multisampling.alphaToOneEnable = VK_FALSE;
+		VkPipelineMultisampleStateCreateInfo multisampleState = {};
+		multisampleState.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+		multisampleState.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+		multisampleState.sampleShadingEnable = VK_FALSE;
+		multisampleState.minSampleShading = 0.5f;
+		multisampleState.pSampleMask = nullptr;
+		multisampleState.alphaToCoverageEnable = VK_FALSE;
+		multisampleState.alphaToOneEnable = VK_FALSE;
 
-		VkPipelineDepthStencilStateCreateInfo depthStencil = {};
-		depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-		depthStencil.depthTestEnable = VK_TRUE;
-		depthStencil.depthWriteEnable = VK_TRUE;
-		depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
-		depthStencil.depthBoundsTestEnable = VK_FALSE;
-		depthStencil.minDepthBounds = 0.0f;
-		depthStencil.maxDepthBounds = 1.0f;
-		depthStencil.stencilTestEnable = VK_FALSE;
-		depthStencil.front = {};
-		depthStencil.back = {};
+		VkPipelineDepthStencilStateCreateInfo depthStencilState = {};
+		depthStencilState.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+		depthStencilState.depthTestEnable = VK_TRUE;
+		depthStencilState.depthWriteEnable = VK_TRUE;
+		depthStencilState.depthCompareOp = VK_COMPARE_OP_LESS;
+		depthStencilState.depthBoundsTestEnable = VK_FALSE;
+		depthStencilState.minDepthBounds = 0.0f;
+		depthStencilState.maxDepthBounds = 1.0f;
+		depthStencilState.stencilTestEnable = VK_FALSE;
+		depthStencilState.front = {};
+		depthStencilState.back = {};
 
 		std::vector<VkVertexInputAttributeDescription> attributeDescs(desc.vertexAttributes.size());
 		uint32_t attributeSize = 0;
@@ -904,8 +918,8 @@ void Context::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipeline) {
 		pipelineInfo.pInputAssemblyState = &inputAssembly;
 		pipelineInfo.pViewportState = &viewportState;
 		pipelineInfo.pRasterizationState = &rasterizationState;
-		pipelineInfo.pMultisampleState = &multisampling;
-		pipelineInfo.pDepthStencilState = &depthStencil;
+		pipelineInfo.pMultisampleState = &multisampleState;
+		pipelineInfo.pDepthStencilState = &depthStencilState;
 		pipelineInfo.pColorBlendState = &colorBlendState;
 		pipelineInfo.pDynamicState = &dynamicCreate;
 		pipelineInfo.layout = pipeline.resource->layout;
@@ -937,7 +951,7 @@ namespace GraphicsPipelineLibraryFlags {
 	};
 }
 
-Hash64 HashFromFormats(std::vector<Format> const& vec) const {
+Hash64 HashFromFormats(std::vector<Format> const& vec) {
   Hash64 seed = vec.size();
   for(auto x : vec) {
     x = ((x >> 16) ^ x) * 0x45d9f3b;
@@ -948,7 +962,7 @@ Hash64 HashFromFormats(std::vector<Format> const& vec) const {
   return seed;
 }
 
-void Context::CreateVertexInputInterface(const PipelineDesc& desc, Pipeline& pipeline) {
+void CreateVertexInputInterface(const PipelineDesc& desc, Pipeline& pipeline) {
 	VkGraphicsPipelineLibraryCreateInfoEXT libraryInfo{};
 	libraryInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT;
 	libraryInfo.flags = VK_GRAPHICS_PIPELINE_LIBRARY_VERTEX_INPUT_INTERFACE_BIT_EXT;
@@ -994,23 +1008,22 @@ void Context::CreateVertexInputInterface(const PipelineDesc& desc, Pipeline& pip
 	vertexInputInfo.vertexAttributeDescriptionCount = (uint32_t)(attributeDescs.size());
 	vertexInputInfo.pVertexAttributeDescriptions = attributeDescs.data();
 
-	VkGraphicsPipelineCreateInfo pipelineInfo{};
-	pipelineInfo.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-	pipelineInfo.flags               = VK_PIPELINE_CREATE_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT;
-	pipelineInfo.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-	pipelineInfo.pNext               = &libraryInfo;
-	pipelineInfo.pInputAssemblyState = &inputAssembly;
-	pipelineInfo.pVertexInputState   = &vertexInputInfo;
+	VkGraphicsPipelineCreateInfo pipelineLibraryInfo{};
+	pipelineLibraryInfo.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pipelineLibraryInfo.flags               = VK_PIPELINE_CREATE_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT;
+	pipelineLibraryInfo.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pipelineLibraryInfo.pNext               = &libraryInfo;
+	pipelineLibraryInfo.pInputAssemblyState = &inputAssembly;
+	pipelineLibraryInfo.pVertexInputState   = &vertexInputInfo;
 	
-	auto res = vkCreateGraphicsPipelines(_ctx.device, _ctx.pipelineCache, 1, &pipelineInfo, _ctx.allocator, &_ctx.pipelineLibrary.vertexInputInterface);
+	auto res = vkCreateGraphicsPipelines(_ctx.device, _ctx.pipelineCache, 1, &pipelineLibraryInfo, _ctx.allocator, &_ctx.pipelineLibrary.vertexInputInterface);
 	DEBUG_VK(res, "Failed to create vertex input interface!");
 }
 
-void Context::CreatePreRasterizationShaders(const PipelineDesc& desc, Pipeline& pipeline) {
+void CreatePreRasterizationShaders(const PipelineDesc& desc, Pipeline& pipeline) {
 	VkGraphicsPipelineLibraryCreateInfoEXT libraryInfo{};
 	libraryInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT;
 	libraryInfo.flags = VK_GRAPHICS_PIPELINE_LIBRARY_PRE_RASTERIZATION_SHADERS_BIT_EXT;
-
 
 	VkDynamicState dynamicStates[] = {
 		VK_DYNAMIC_STATE_VIEWPORT,
@@ -1059,24 +1072,160 @@ void Context::CreatePreRasterizationShaders(const PipelineDesc& desc, Pipeline& 
 	shaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
 	shaderStageInfo.pName = "main";
 
-	VkGraphicsPipelineCreateInfo pipelineInfo{};
-	pipelineInfo.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-	pipelineInfo.pNext               = &libraryInfo;
-	pipelineInfo.renderPass          = VK_NULL_HANDLE;
-	pipelineInfo.flags               = VK_PIPELINE_CREATE_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT;
-	pipelineInfo.stageCount          = 1;
-	pipelineInfo.pStages             = &shaderStageInfo;
-	pipelineInfo.layout              = pipeline.resource->layout;
-	pipelineInfo.pDynamicState       = &dynamicInfo;
-	pipelineInfo.pViewportState      = &viewportState;
-	pipelineInfo.pRasterizationState = &rasterizationState;
+	VkGraphicsPipelineCreateInfo pipelineLibraryInfo{};
+	pipelineLibraryInfo.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pipelineLibraryInfo.pNext               = &libraryInfo;
+	pipelineLibraryInfo.renderPass          = VK_NULL_HANDLE;
+	pipelineLibraryInfo.flags               = VK_PIPELINE_CREATE_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT;
+	pipelineLibraryInfo.stageCount          = 1;
+	pipelineLibraryInfo.pStages             = &shaderStageInfo;
+	pipelineLibraryInfo.layout              = pipeline.resource->layout;
+	pipelineLibraryInfo.pDynamicState       = &dynamicInfo;
+	pipelineLibraryInfo.pViewportState      = &viewportState;
+	pipelineLibraryInfo.pRasterizationState = &rasterizationState;
 
-	VK_CHECK(vkCreateGraphicsPipelines(get_device().get_handle(), _ctx.pipelineCache, 1, &pipelineInfo, nullptr, &pipeline_library.pre_rasterization_shaders));
+	auto res = vkCreateGraphicsPipelines(_ctx.device, _ctx.pipelineCache, 1, &pipelineLibraryInfo, nullptr, &pipeline_library.pre_rasterization_shaders);
+	DEBUG_VK(res, "Failed to create vertex input interface!");
+}
+
+void CreateFragmentShader(const PipelineDesc& desc, Pipeline& pipeline) {
+	VkGraphicsPipelineLibraryCreateInfoEXT libraryInfo{};
+	libraryInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT;
+	libraryInfo.flags = VK_GRAPHICS_PIPELINE_LIBRARY_FRAGMENT_SHADER_BIT_EXT;
+
+	VkPipelineDepthStencilStateCreateInfo depthStencilState = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+		.depthTestEnable = VK_TRUE,
+		.depthWriteEnable = VK_TRUE,
+		.depthCompareOp = VK_COMPARE_OP_LESS,
+		.depthBoundsTestEnable = VK_FALSE,
+		.stencilTestEnable = VK_FALSE,
+		.front = {},
+		.back = {},
+		.minDepthBounds = 0.0f,
+		.maxDepthBounds = 1.0f,
+	};
+
+	VkPipelineMultisampleStateCreateInfo multisampleState = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+		.sampleShadingEnable = VK_FALSE,
+		.minSampleShading = 0.5f,
+		.pSampleMask = nullptr,
+		.alphaToCoverageEnable = VK_FALSE,
+		.alphaToOneEnable = VK_FALSE,
+	};
+
+	std::vector<uint32_t> spirv;
+	load_shader("uber.frag", VK_SHADER_STAGE_FRAGMENT_BIT, spirv);
+
+	VkShaderModuleCreateInfo shader_module_create_info{};
+	shader_module_create_info.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	shader_module_create_info.codeSize = static_cast<uint32_t>(spirv.size()) * sizeof(uint32_t);
+	shader_module_create_info.pCode    = spirv.data();
+
+	VkPipelineShaderStageCreateInfo shader_Stage_create_info{};
+	shader_Stage_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	shader_Stage_create_info.pNext = &shader_module_create_info;
+	shader_Stage_create_info.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+	shader_Stage_create_info.pName = "main";
+
+	VkGraphicsPipelineCreateInfo pipelineLibraryInfo = {
+		.sType              = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+		.pNext              = &libraryInfo,
+		.flags              = VK_PIPELINE_CREATE_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT,
+		.stageCount         = 1,
+		.pStages            = &shader_Stage_create_info,
+		.layout             = pipeline.resource->layout,
+		.pDepthStencilState = &depthStencilState,
+		.pMultisampleState  = &multisampleState,
+	};
+
+	VkPipeline fragment_shader = VK_NULL_HANDLE;
+	auto res = vkCreateGraphicsPipelines(_ctx.device, _ctx.pipelineCache, 1, &pipelineLibraryInfo, nullptr, &fragment_shader); //todo: Thread pipeline cache
+	DEBUG_VK(res, "Failed to create vertex input interface!");
 
 }
 
-void Context::CreateFragmentOutputInterface(const PipelineDesc& desc, Pipeline& pipeline) {
-	
+void CreateFragmentOutputInterface(const PipelineDesc& desc, Pipeline& pipeline) {
+	VkGraphicsPipelineLibraryCreateInfoEXT libraryInfo{};
+	libraryInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT;
+	libraryInfo.flags = VK_GRAPHICS_PIPELINE_LIBRARY_FRAGMENT_OUTPUT_INTERFACE_BIT_EXT;
+
+	std::vector<VkPipelineColorBlendAttachmentState> blendAttachments(desc.colorFormats.size());
+	for (int i = 0; i < desc.colorFormats.size(); i++) {
+		blendAttachments[i].colorWriteMask  = VK_COLOR_COMPONENT_R_BIT;
+		blendAttachments[i].colorWriteMask |= VK_COLOR_COMPONENT_G_BIT;
+		blendAttachments[i].colorWriteMask |= VK_COLOR_COMPONENT_B_BIT;
+		blendAttachments[i].colorWriteMask |= VK_COLOR_COMPONENT_A_BIT;
+		blendAttachments[i].blendEnable     = VK_FALSE;
+	}
+
+	VkPipelineColorBlendStateCreateInfo colorBlendState{};
+	colorBlendState.sType                   = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+	colorBlendState.logicOpEnable           = VK_FALSE;
+	colorBlendState.logicOp                 = VK_LOGIC_OP_COPY;
+	colorBlendState.attachmentCount         = blendAttachments.size();
+	colorBlendState.pAttachments            = blendAttachments.data();
+	colorBlendState.blendConstants[0]       = 0.0f;
+	colorBlendState.blendConstants[1]       = 0.0f;
+	colorBlendState.blendConstants[2]       = 0.0f;
+	colorBlendState.blendConstants[3]       = 0.0f;
+
+	VkPipelineMultisampleStateCreateInfo multisampleState = {};
+	multisampleState.sType                  = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+	multisampleState.rasterizationSamples   = VK_SAMPLE_COUNT_1_BIT;
+	multisampleState.sampleShadingEnable    = VK_FALSE;
+	multisampleState.minSampleShading       = 0.5f;
+	multisampleState.pSampleMask            = nullptr;
+	multisampleState.alphaToCoverageEnable  = VK_FALSE;
+	multisampleState.alphaToOneEnable       = VK_FALSE;
+
+	VkGraphicsPipelineCreateInfo pipelineLibraryInfo{};
+	pipelineLibraryInfo.sType                      = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pipelineLibraryInfo.pNext                      = &libraryInfo;
+	pipelineLibraryInfo.layout                     = pipeline.resource->layout;
+	pipelineLibraryInfo.flags                      = VK_PIPELINE_CREATE_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT;
+	pipelineLibraryInfo.pColorBlendState           = &colorBlendState;
+	pipelineLibraryInfo.pMultisampleState          = &multisampleState;
+
+	auto res = vkCreateGraphicsPipelines(_ctx.device, _ctx.pipelineCache, 1, &pipelineLibraryInfo, nullptr, &pipeline_library.fragment_output_interface);
+	DEBUG_VK(res, "Failed to create fragment output interface!");
+}
+
+void LinkPipeline(Pipeline& pipeline) {
+	// Create the pipeline using the pre-built pipeline library parts
+	// Except for above fragment shader part all parts have been pre-built and will be re-used
+	std::vector<VkPipeline> libraries = {
+	    pipeline_library.vertex_input_interface,
+	    pipeline_library.pre_rasterization_shaders,
+	    fragment_shader,
+	    pipeline_library.fragment_output_interface
+	};
+
+	// Link the library parts into a graphics pipeline
+	VkPipelineLibraryCreateInfoKHR linkingInfo{};
+	linkingInfo.sType        = VK_STRUCTURE_TYPE_PIPELINE_LIBRARY_CREATE_INFO_KHR;
+	linkingInfo.libraryCount = static_cast<uint32_t>(libraries.size());
+	linkingInfo.pLibraries   = libraries.data();
+
+	VkGraphicsPipelineCreateInfo pipelineInfo{};
+	pipelineInfo.sType      = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pipelineInfo.pNext      = &linkingInfo;
+	pipelineInfo.layout     = pipeline.resource->layout;
+
+	if (_ctx.linkTimeOptimization) {
+		pipelineInfo.flags = VK_PIPELINE_CREATE_LINK_TIME_OPTIMIZATION_BIT_EXT;
+	}
+
+	VkPipeline executable = VK_NULL_HANDLE;
+	auto res = vkCreateGraphicsPipelines(_ctx.device, _ctx.pipelineCache, 1, &pipelineInfo, nullptr, &executable); //todo: Thread pipeline cache
+	DEBUG_VK(res, "Failed to create vertex input interface!");
+
+	// pipelines.push_back(executable);
+
+	// Add the fragment shader we created to a deletion list
+	pipeline_library.fragment_shaders.push_back(fragment_shader);
 }
 
 Command::Command() {
@@ -1132,7 +1281,7 @@ void Command::BeginRendering(const std::vector<Image>& colorAttachs, Image depth
 		depthAttachInfo.resolveMode = VK_RESOLVE_MODE_NONE;
 		depthAttachInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 		depthAttachInfo.storeOp = depthAttach.usage & ImageUsage::TransientAttachment ? VK_ATTACHMENT_STORE_OP_DONT_CARE: VK_ATTACHMENT_STORE_OP_STORE;
-		depthAttachInfo.clearValue.depthStencil = { 1.0f, 0 };
+		depthAttachInfo.clearValue.depthStencilState = { 1.0f, 0 };
 		renderingInfo.pDepthAttachment = &depthAttachInfo;
 	}
 	
@@ -1554,13 +1703,13 @@ void Context::CreateInstance(){
 		}
 	}
 	
-	std::vector<const char*> requiredInstanceExtensions;
+	
 	uint32_t glfwExtensionCount = 0;
 	if (presentRequested) {
 		// get all extensions required by glfw
 		const char** glfwExtensions;
 		glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-		requiredInstanceExtensions.assign(glfwExtensions, glfwExtensions + glfwExtensionCount);
+		requiredInstanceExtensions.insert(requiredInstanceExtensions.end(), glfwExtensions, glfwExtensions + glfwExtensionCount);
 	}
 
 	// Extensions
@@ -1695,13 +1844,13 @@ void Context::DestroyInstance() {
 	LOG_INFO("Destroyed VulkanInstance");
 }
 
-void Context::CreatePhysicalDevice() {
+void PhysicalDevice::Create() {
 	// get all devices with Vulkan support
 	uint32_t count = 0;
-	vkEnumeratePhysicalDevices(instance, &count, nullptr);
+	vkEnumeratePhysicalDevices(_ctx.instance, &count, nullptr);
 	ASSERT(count != 0, "no GPUs with Vulkan support!");
 	std::vector<VkPhysicalDevice> devices(count);
-	vkEnumeratePhysicalDevices(instance, &count, devices.data());
+	vkEnumeratePhysicalDevices(_ctx.instance, &count, devices.data());
 	DEBUG_TRACE("Found {0} physical device(s).", count);
 
 	for (const auto& device : devices) {
@@ -1728,29 +1877,38 @@ void Context::CreatePhysicalDevice() {
 			if (family.queueFlags & VK_QUEUE_GRAPHICS_BIT) graphicsAvailable = true;
 			if (family.queueFlags & VK_QUEUE_COMPUTE_BIT) computeAvailable = true;
 			if (family.queueFlags & VK_QUEUE_TRANSFER_BIT) transferAvailable = true;
-			if (presentRequested){
+			if (_ctx.presentRequested){
 				if (presentAvailable == false){
 					VkBool32 present = false;
-					vkGetPhysicalDeviceSurfaceSupportKHR(device, i, _dummySurface, &present);
+					vkGetPhysicalDeviceSurfaceSupportKHR(device, i, _ctx._dummySurface, &present);
 					if (present) presentAvailable = true;
 				}
 			}
 		}
-		
+
+		graphicsPipelineLibraryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_FEATURES_EXT;
+		graphicsPipelineLibraryFeatures.pNext = nullptr;
 		bufferDeviceAddressFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES;
+		bufferDeviceAddressFeatures.pNext = &graphicsPipelineLibraryFeatures;
 		indexingFeatures.sType	= VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT;
 		indexingFeatures.pNext = &bufferDeviceAddressFeatures;
 		physicalFeatures2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
 		physicalFeatures2.pNext = &indexingFeatures;
 		vkGetPhysicalDeviceFeatures2(device, &physicalFeatures2);
-		vkGetPhysicalDeviceProperties(device, &physicalProperties);
+
+		
+		graphicsPipelineLibraryProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_PROPERTIES_EXT;
+		graphicsPipelineLibraryProperties.pNext = nullptr;
+		physicalProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+		physicalProperties.pNext = &graphicsPipelineLibraryProperties;
+		vkGetPhysicalDeviceProperties2(device, &physicalProperties);
 		vkGetPhysicalDeviceMemoryProperties(device, &memoryProperties);
 		// imageFormatProperties2.sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2;
 		// imageFormatInfo2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2;
 		// vkGetPhysicalDeviceImageFormatProperties2(device, &imageFormatInfo2, &imageFormatProperties2);
 
-		VkSampleCountFlags counts = physicalProperties.limits.framebufferColorSampleCounts;
-		counts &= physicalProperties.limits.framebufferDepthSampleCounts;
+		VkSampleCountFlags counts = physicalProperties.properties.limits.framebufferColorSampleCounts;
+		counts &= physicalProperties.properties.limits.framebufferDepthSampleCounts;
 
 		// get max number of samples
 		maxSamples = VK_SAMPLE_COUNT_1_BIT;
@@ -1762,7 +1920,7 @@ void Context::CreatePhysicalDevice() {
 		else if (counts & VK_SAMPLE_COUNT_2_BIT) { maxSamples = VK_SAMPLE_COUNT_2_BIT; }
 
 		// check if all required extensions are available
-		if (presentRequested) requiredExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+		if (_ctx.presentRequested) requiredExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 		std::set<std::string_view> required(requiredExtensions.begin(), requiredExtensions.end());
 		for (const auto& extension : availableExtensions) {
 			required.erase(extension.extensionName);
@@ -1772,7 +1930,7 @@ void Context::CreatePhysicalDevice() {
 		bool suitable = required.empty();
 		if (!suitable) LOG_ERROR("Required extensions not available: {0}", required.begin()->data());
 		suitable &= (graphicsAvailable && computeAvailable && transferAvailable);
-		if (presentRequested) {
+		if (_ctx.presentRequested) {
 			suitable &= presentAvailable;
 		}
 		if (!suitable) LOG_ERROR("Required queue not available");
@@ -1790,7 +1948,7 @@ void Context::CreatePhysicalDevice() {
 	}
 }
 
-void Context::CreateDevice() {
+void Device::Create() {
 	uint32_t familyCount = availableFamilies.size();
 
 	std::unordered_map<uint32_t, uint32_t> numActiveQueuesInFamilies; // <queueFamilyIndex, queueCount>
@@ -1885,23 +2043,7 @@ void Context::CreateDevice() {
 	// if (supportedFeatures.wideLines)         { features2.features.wideLines         = VK_TRUE; }
 	// if (supportedFeatures.depthClamp)        { features2.features.depthClamp        = VK_TRUE; }
 	// if (supportedFeatures.multiViewport)     { features2.features.multiViewport     = VK_TRUE; }
-
-
-	// DELETE LATER (already checked in CreatePhysicalDevice)
-	auto requiredExtensions = _ctx.requiredExtensions;
-	auto allExtensions = _ctx.availableExtensions;
-	for (auto req : requiredExtensions) {
-		bool available = false;
-		for (size_t i = 0; i < allExtensions.size(); i++) {
-			if (strcmp(allExtensions[i].extensionName, req) == 0) { 
-				available = true; 
-				break;
-			}
-		}
-		if(!available) {
-			LOG_ERROR("Required extension {0} not available!", req);
-		}
-	}
+VkPhysicalDeviceGraphicsPipelineLibraryPropertiesEXT
 
 	// ask for features if available
 	// ref: https://dev.to/gasim/implementing-bindless-design-in-vulkan-34no

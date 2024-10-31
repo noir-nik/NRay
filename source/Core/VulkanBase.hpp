@@ -7,6 +7,8 @@
 
 #include <vector>
 #include <filesystem>
+#include <memory>
+#include <string>
 
 struct GLFWwindow;
 
@@ -397,7 +399,7 @@ public:
 	}
 
 	inline Image&      GetCurrentImage()   { return swapChainImages[currentImageIndex]; }
-	inline Command&    GetCommandBuffer()           { return commands[currentFrame];             }
+	inline Command&    GetCommandBuffer()  { return commands[currentFrame];             }
 
 	void Create(GLFWwindow* window, uint32_t width, uint32_t height);
 	void Destroy();
