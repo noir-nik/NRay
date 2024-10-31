@@ -34,8 +34,8 @@ LDFLAGS += $(foreach lib,$(LIBS),-l$(lib))
 
 
 ifeq ($(findstring clang,$(CC)),clang)
-	CXXFLAGS += -target x86_64-w64-mingw32
-	LDFLAGS += -target x86_64-w64-mingw32 -fuse-ld=lld -pthread
+	CXXFLAGS += -target x86_64-w64-gnu
+	LDFLAGS += -target x86_64-w64-gnu -fuse-ld=lld -pthread
 endif
 
 # Folders
