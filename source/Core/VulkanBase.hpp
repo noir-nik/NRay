@@ -166,7 +166,22 @@ struct ImageDesc {
 	uint32_t layers = 1;
 };
 
-enum Queue {
+namespace QueueFlags {
+	enum {
+		Graphics = 0x00000001,
+		Compute = 0x00000002,
+		Transfer = 0x00000004,
+		SparseBinding = 0x00000008,
+		Protected = 0x00000010,
+		VideoDecode = 0x00000020,
+		VideoEncode = 0x00000040,
+		OpticalFlow = 0x00000100,
+		MaxEnum = 0x7FFFFFFF
+	};
+}
+using QueueFlagsMask = Flags;
+
+enum class Queue {
 	Graphics = 0,
 	Compute = 1,
 	Transfer = 2,
@@ -213,7 +228,7 @@ struct Pipeline {
 };
 
 namespace CullMode {
-	enum CullMode : Flags {
+	enum {
 		None = 0,
 		Front = 1,
 		Back = 2,
