@@ -433,9 +433,7 @@ public:
 };
 
 
-Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory = Memory::GPU, const std::string& name = "");
-Image CreateImage(const ImageDesc& desc);
-Pipeline CreatePipeline(const PipelineDesc& desc);
+
 // TLAS CreateTLAS(uint32_t maxInstances, const std::string& name);
 // BLAS CreateBLAS(const BLASDesc& desc);
 
