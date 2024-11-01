@@ -181,6 +181,14 @@ namespace Queue {
 }
 using QueueFlags = Flags;
 
+struct QueueRequest {
+	QueueFlags flags = 0;
+	uint32_t count = 1;
+	bool presentSupported = false;
+	bool preferSeparateFamily = false;
+};
+
+
 // enum class Queue {
 // 	Graphics = 0,
 // 	Compute = 1,
@@ -436,13 +444,13 @@ void UnmapBuffer(Buffer& buffer);
 
 // void GetTimeStamps(std::map<std::string, float>& timeTable);
 
-void WaitQueue(Queue queue);
+void WaitQueue(QueueFlags queue);
 void WaitIdle();
 // void BeginImGui();
 
 void Init();
 void Init(GLFWwindow* window, uint32_t width, uint32_t height);
-Command& GetCommandBuffer(Queue queue);
+Command& GetCommandBuffer(QueueFlags queue);
 void Destroy();
 
 // template<typename T>

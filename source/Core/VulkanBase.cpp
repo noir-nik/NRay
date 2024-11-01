@@ -9,7 +9,6 @@
 #include <tuple>
 #include <unordered_map>
 #include <utility>
-#include <vulkan/vulkan_core.h>
 
 #define SHADER_ALWAYS_COMPILE 0
 
@@ -27,7 +26,6 @@ struct Instance;
 struct PhysicalDevice;
 struct Device;
 struct InternalQueue;
-struct QueueRequest;
 struct SwapChain;
 struct Context
 {	
@@ -87,25 +85,12 @@ struct Context
 
 	void GetPhysicalDevices();
 	std::vector<UID> SelectPhysicalDevices(QueueFlags requiredQueueFlags, bool requirePresent = false, QueueFlags requiredSeparateQueues = {});
-	
-	void createDescriptorSetLayout();
-	void createDescriptorPool();
-	void createDescriptorSet();
-	void createDescriptorResources(); // ALL:pool+layout+set
-	void destroyDescriptorResources();
-
-	void createBindlessResources();
-	void destroyBindlessResources();
 
 	void CreateCommandBuffers(std::vector<Command>& commands);
 	void DestroyCommandBuffers(std::vector<Command>& commands);
 
 	void AcquireStagingBuffer();
 	void ReleaseStagingBuffer();
-
-	VkDescriptorPool      descriptorPool = VK_NULL_HANDLE;
-	VkDescriptorSet       descriptorSet = VK_NULL_HANDLE;
-	VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
 
 };
 static Context _ctx;
@@ -171,11 +156,18 @@ struct PhysicalDevice: DeleteCopyMove {
 	
 	PhysicalDevice(UID uid, VkPhysicalDevice device): uid(uid), handle(device) {}
 	void GetDetails();
-	uint32_t GetQueueFamilyIndex(VkQueueFlags desiredFlags, VkQueueFlags undesiredFlags, VkQueueFlags avoidIfPossible = 0, VkSurfaceKHR surfaceToSupport = VK_NULL_HANDLE);
+	// @param desiredFlags: required queue flags (strict)
+	// @param undesiredFlags: undesired queue flags (strict)
+	// @param avoidIfPossible: vector of pairs (flags, priority to avoid)
+	// @param surfaceToSupport: surface to support (strict)
+	// @return best queue family index or QUEUE_NOT_FOUND if strict requirements not met
+	uint32_t GetQueueFamilyIndex(VkQueueFlags desiredFlags, VkQueueFlags undesiredFlags, const std::vector<std::pair<VkQueueFlags, float>>& avoidIfPossible, VkSurfaceKHR surfaceToSupport);
 };
+
 
 struct Device: DeleteCopyMove {
 	UID uid;
+	Device(UID uid): uid(uid){}
 	void Create(PhysicalDevice& physicalDevice, std::vector<QueueRequest> queueRequests);
 
 	void Destroy();
@@ -183,6 +175,7 @@ struct Device: DeleteCopyMove {
 	VkDevice handle = VK_NULL_HANDLE;
 	VmaAllocator vmaAllocator;
 
+	std::unordered_map<uint32_t, InternalQueue> uniqueQueues;
 
 	// std::unordered_map<uint32_t, InternalQueue> uniqueQueues;
 	// Owns all command resources outside swapchains
@@ -197,6 +190,11 @@ struct Device: DeleteCopyMove {
 	VkDescriptorSet bindlessDescriptorSet = VK_NULL_HANDLE;
 	VkDescriptorPool bindlessDescriptorPool = VK_NULL_HANDLE;
 	VkDescriptorSetLayout bindlessDescriptorLayout = VK_NULL_HANDLE;
+
+	VkDescriptorPool      descriptorPool = VK_NULL_HANDLE;
+	VkDescriptorSet       descriptorSet = VK_NULL_HANDLE;
+	VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
+
 	
 	std::vector<int32_t> availableBufferRID;
 	std::vector<int32_t> availableImageRID;
@@ -211,6 +209,16 @@ struct Device: DeleteCopyMove {
 	std::unordered_map<UID, VkPipeline> fragmentOutputInterface;
 	std::vector<VkPipeline> fragmentShaders;
 	} pipelineLibrary;
+
+		
+	void createDescriptorSetLayout();
+	void createDescriptorPool();
+	void createDescriptorSet();
+	void createDescriptorResources(); // ALL:pool+layout+set
+	void destroyDescriptorResources();
+
+	void CreateBindlessDescriptorResources();
+	void DestroyBindlessDescriptorResources();
 
 	VkSampler CreateSampler(VkDevice device, f32 maxLod);
 
@@ -337,7 +345,7 @@ struct CommandResource {
 };
 
 struct InternalQueue {
-	int family = -1;
+	uint32_t family = ~0;
 	uint32_t indexInFamily = 0;
 	VkQueue queue = VK_NULL_HANDLE;
 	Command* commands = nullptr;
@@ -374,33 +382,18 @@ void InitImpl(GLFWwindow* window, uint32_t width, uint32_t height){
 
 	_ctx.GetPhysicalDevices();
 	auto physicalDevices = _ctx.SelectPhysicalDevices(Queue::Graphics | Queue::Compute | Queue::Transfer, presentRequested);
-		
 	ASSERT(!physicalDevices.empty(), "no device with Vulkan support!");
-
 	_ctx.activePhysicalDevice = std::make_shared<PhysicalDevice>(&_ctx.physicalDevices[physicalDevices[0]]);
-	_ctx.CreateDevice();
 
-	_ctx.createBindlessResources();
+	auto uid = UIDGenerator::Next();
+	auto res = _ctx.devices.try_emplace(uid, Device(uid));
+	auto& device = res.first->second;
+	device.Create(*_ctx.activePhysicalDevice, {{Queue::Graphics | Queue::Compute | Queue::Transfer, 1, presentRequested}});
+	_ctx.activeDevice = std::make_shared<Device>(&device);
+
+	_ctx.activeDevice->CreateBindlessDescriptorResources();
 	// _ctx.createDescriptorResources();
 
-	// if (_ctx.presentRequested) {
-	// 	_ctx.swapChains.try_emplace(window);
-	// 	_ctx.swapChains[window].Create(window, width, height, false);
-	// 	// _ctx.CreateImGui(window);
-	// }
-	
-	// Command pools and buffers just for queues
-	_ctx.queuesCommands.resize(_ctx.uniqueQueues.size());
-	uint32_t i = 0;
-	for (auto& [key, q]: _ctx.uniqueQueues) {
-		q.commands = _ctx.queuesCommands.data() + i;
-		q.commands->resource->queue = &q;
-		i++;
-		auto& cmd = *(q.commands);
-		// resource->staging = CreateBuffer(_ctx.stagingBufferSize, BufferUsage::TransferSrc, Memory::CPU, "StagingBuffer[" + std::to_string(resource->queueFamilyIndex) + "]");
-		// resource->stagingCpu = (u8*)resource->staging.resource->allocation->GetMappedData();
-	}
-	_ctx.CreateCommandBuffers(_ctx.queuesCommands);
 }
 
 void Init(GLFWwindow* window, uint32_t width, uint32_t height){
@@ -414,16 +407,11 @@ void Init(){
 void Destroy() {
 	// ImGui_ImplVulkan_Shutdown();
 	// ImGui_ImplGlfw_Shutdown();
-	// for (auto& [key, swapChain] : _ctx.swapChains) {
-	// 	swapChain.Destroy();
-	// }
 
-	_ctx.destroyBindlessResources();
-	// _ctx.destroyDescriptorResources();
-
-	_ctx.DestroyCommandBuffers(_ctx.queuesCommands);
-	_ctx.DestroyDevice();
-	_ctx.DestroyInstance();
+	for (auto& [uid, device] : _ctx.devices) {
+		device.Destroy();
+	}
+	_ctx.instance->Destroy();
 }
 
 void* MapBuffer(Buffer& buffer) {
@@ -1954,8 +1942,8 @@ void PhysicalDevice::GetDetails() {
 
 constexpr uint32_t QUEUE_NOT_FOUND = ~0u;
 
-uint32_t PhysicalDevice::GetQueueFamilyIndex(VkQueueFlags desiredFlags, VkQueueFlags undesiredFlags, VkQueueFlags avoidIfPossible, VkSurfaceKHR surfaceToSupport) {
-	uint32_t index = QUEUE_NOT_FOUND;
+uint32_t PhysicalDevice::GetQueueFamilyIndex(VkQueueFlags desiredFlags, VkQueueFlags undesiredFlags, const std::vector<std::pair<VkQueueFlags, float>>& avoidIfPossible, VkSurfaceKHR surfaceToSupport) {
+	std::vector<std::pair<uint32_t, float>> candidates;
 	auto& families = availableFamilies;
 	for (auto i = 0; i < families.size(); i++) {
 		bool suitable = ((families[i].queueFlags & desiredFlags) == desiredFlags && ((families[i].queueFlags & undesiredFlags) == 0));
@@ -1965,16 +1953,26 @@ uint32_t PhysicalDevice::GetQueueFamilyIndex(VkQueueFlags desiredFlags, VkQueueF
 			if (res != VK_SUCCESS) {LOG_ERROR("vkGetPhysicalDeviceSurfaceSupportKHR failed with error code: {}", (uint32_t)res) continue;}
 			suitable = suitable && presentSupport;
 		}
-		if ((families[i].queueFlags & avoidIfPossible) == 0) {
-			return i;
-		} else {
-			index = i;
+		if (!suitable) continue; 
+		if (avoidIfPossible.empty()) return i;
+		std::pair<uint32_t, float> candidate(i, 0.0f);
+		// Prefer family with least number of VkQueueFlags
+		for (VkQueueFlags bit = 1; bit != 0; bit <<= 1) {
+			if (families[i].queueFlags & bit) { candidate.second += 0.01f; }
 		}
+		// Add weight for supporting unwanted VkQueueFlags
+		for (auto& avoid: avoidIfPossible) {
+			if ((families[i].queueFlags & avoid.first) == avoid.first) {
+				candidate.second += avoid.second;
+			}
+		}
+		candidates.push_back(candidate);
 	}
-	return index;
+	if (candidates.empty()) { return QUEUE_NOT_FOUND; }
+	auto bestFamily = std::min_element(candidates.begin(), candidates.end(), [](auto& l, auto& r) {return l.second < r.second;})->first;
+	return bestFamily;
+
 }
-
-
 
 std::vector<UID> SelectPhysicalDevices(QueueFlags requiredQueueFlags, bool requirePresent = false, QueueFlags requiredSeparateQueues = {}) {
 	std::vector<UID> selectedDevices;
@@ -2007,7 +2005,7 @@ std::vector<UID> SelectPhysicalDevices(QueueFlags requiredQueueFlags, bool requi
 		}
 
 		// Check present support
-		if (requirePresent && physicalDevice.GetQueueFamilyIndex(0, 0, 0, _ctx.instance->_dummySurface) == QUEUE_NOT_FOUND) {
+		if (requirePresent && physicalDevice.GetQueueFamilyIndex(0, 0, {}, _ctx.instance->_dummySurface) == QUEUE_NOT_FOUND) {
 			LOG_WARN("Required present queue not available on device: {}", physicalDevice.physicalProperties2.properties.deviceName);
 			continue;
 		}
@@ -2016,7 +2014,7 @@ std::vector<UID> SelectPhysicalDevices(QueueFlags requiredQueueFlags, bool requi
 		if (requiredSeparateQueues) {
 			for (QueueFlags bit = 1; bit != 0; bit <<= 1) {
 				if ((requiredSeparateQueues & bit) == 0) continue;
-				if (physicalDevice.GetQueueFamilyIndex(bit, VK_QUEUE_GRAPHICS_BIT, 0, _ctx.instance->_dummySurface) == QUEUE_NOT_FOUND) {
+				if (physicalDevice.GetQueueFamilyIndex(bit, VK_QUEUE_GRAPHICS_BIT, {}, nullptr) == QUEUE_NOT_FOUND) {
 					LOG_WARN("Required separate queue for bit {} not available on device: {}", (uint32_t)bit, physicalDevice.physicalProperties2.properties.deviceName);
 					continue;
 				}
@@ -2026,23 +2024,37 @@ std::vector<UID> SelectPhysicalDevices(QueueFlags requiredQueueFlags, bool requi
 	return selectedDevices;
 }
 
-struct QueueRequest {
-	QueueFlags flags = 0;
-	uint32_t count = 1;
-	bool presentSupported = false;
-	bool preferSeparateFamily = false;
-};
-
 void Device::Create(PhysicalDevice& physicalDevice, std::vector<QueueRequest> queueRequests) {
 	std::vector<std::pair<uint32_t, uint32_t>> queuesToCreate;
+	std::vector<std::pair<VkQueueFlags, float>> avoidIfPossible;
 	// queuesToCreate.reserve(requiredQueues.size() + separateQueues.size());
 	for (auto& request: queueRequests) {
-		// queuesToCreate.push_back({getFirstQueueFamilyIndex(physicalDevice.availableFamilies, queueFlags), count});
-		if (request.preferSeparateFamily) {
-			queuesToCreate.push_back({getSeparateQueueFamilyIndex(physicalDevice.availableFamilies, request.flags, VK_QUEUE_GRAPHICS_BIT), request.count});
-		} else {
-			queuesToCreate.push_back({getFirstQueueFamilyIndex(physicalDevice.availableFamilies, request.flags), request.count});
+		if (request.count == 0) {LOG_WARN("Requested queue count is zero") continue;}
+		uint32_t index;
+		uint32_t count = request.count;
+		if(request.preferSeparateFamily) {
+			switch (request.flags) {
+			case VK_QUEUE_COMPUTE_BIT: 
+				avoidIfPossible = {{VK_QUEUE_GRAPHICS_BIT, 1.0f}, {VK_QUEUE_TRANSFER_BIT, 0.5f}};
+				break;
+			case VK_QUEUE_TRANSFER_BIT:
+				avoidIfPossible = {{VK_QUEUE_GRAPHICS_BIT, 1.0f}, {VK_QUEUE_COMPUTE_BIT, 0.5f}};
+				break;
+			default:
+				avoidIfPossible = {{VK_QUEUE_GRAPHICS_BIT, 1.0f}};
+				break;
+			}
 		}
+		index = physicalDevice.GetQueueFamilyIndex(request.flags, 0, avoidIfPossible, request.presentSupported? _ctx.instance->_dummySurface : VK_NULL_HANDLE);
+		if (index == QUEUE_NOT_FOUND) {
+			LOG_WARN("Requested queue flags {} not available on device: {}", (uint32_t)request.flags, physicalDevice.physicalProperties2.properties.deviceName);
+			continue; // TODO: Assert queue is present
+		}
+		if (physicalDevice.availableFamilies[index].queueCount < request.count) {
+			LOG_WARN("Requested more queues: {} than available {} on device: {}", request.count, physicalDevice.availableFamilies[index].queueCount, physicalDevice.physicalProperties2.properties.deviceName);
+			count = physicalDevice.availableFamilies[index].queueCount;
+		}
+		queuesToCreate.push_back({index, count});
 	}
 
 	uint32_t maxQueuesInFamily = std::max_element(physicalDevice.availableFamilies.begin(), physicalDevice.availableFamilies.end(), [](const auto& a, const auto& b) {
@@ -2176,13 +2188,18 @@ void Device::Create(PhysicalDevice& physicalDevice, std::vector<QueueRequest> qu
 	allocatorCreateInfo.pVulkanFunctions = &vulkanFunctions;
 	vmaCreateAllocator(&allocatorCreateInfo, &vmaAllocator);
 
-	for (auto& [key, q]: queuesToCreate) {
-		vkGetDeviceQueue(handle, q.family, q.indexInFamily, &q.queue);
+	for (auto& [family, count]: queuesToCreate) {
+		for (uint32_t index = 0; index < count; index++) {
+			auto key = family*maxQueuesInFamily + index;
+			InternalQueue q { family, index};
+			vkGetDeviceQueue(handle, q.family, q.indexInFamily, &q.queue);
+			uniqueQueues.try_emplace(key, std::move(q));
+		}
 	}
 
-	genericSampler = CreateSampler(device, 1.0);
-	if (enableValidationLayers) {
-		vkSetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetDeviceProcAddr(device, "vkSetDebugUtilsObjectNameEXT");
+	genericSampler = CreateSampler(handle, 1.0);
+	if (_ctx.enableValidationLayers) {
+		vkSetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetDeviceProcAddr(handle, "vkSetDebugUtilsObjectNameEXT");
 	} else {
 		vkSetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)SetDebugUtilsObjectNameEXT;
 	}
@@ -2202,19 +2219,18 @@ void Device::Create(PhysicalDevice& physicalDevice, std::vector<QueueRequest> qu
 
 	// VkResult result = vkCreateDescriptorPool(device, &imguiPoolInfo, allocator, &imguiDescriptorPool);
 	// DEBUG_VK(result, "Failed to create imgui descriptor pool!");
-	
-	
 }
 
 void Device::Destroy() {
 	// dummyVertexBuffer = {};
 	// asScratchBuffer = {};
-	// vkDestroyDescriptorPool(device, imguiDescriptorPool, allocator);
+	// vkDestroyDescriptorPool(handle, imguiDescriptorPool, _ctx.allocator);
+	DestroyBindlessDescriptorResources();
 	vmaDestroyAllocator(vmaAllocator);
-	vkDestroySampler(device, genericSampler, allocator);
-	vkDestroyDevice(device, allocator);
+	vkDestroySampler(handle, genericSampler, _ctx.allocator);
+	vkDestroyDevice(handle, _ctx.allocator);
 	DEBUG_TRACE("Destroyed logical device");
-	device = VK_NULL_HANDLE;
+	handle = VK_NULL_HANDLE;
 }
 
 
@@ -2548,7 +2564,7 @@ const u32 MAX_SAMPLEDIMAGES = 64;
 const u32 MAX_STORAGE_IMAGES = 8192;
 
 
-void Context::createDescriptorPool(){
+void Device::createDescriptorPool(){
 	// type                                     descriptorCount
 	std::vector<VkDescriptorPoolSize> poolSizes = { 
 		{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,        MAX_SAMPLEDIMAGES},
@@ -2563,12 +2579,12 @@ void Context::createDescriptorPool(){
 	descriptorPoolCreateInfo.maxSets	   = 1; 
 	descriptorPoolCreateInfo.poolSizeCount = poolSizes.size();
 	descriptorPoolCreateInfo.pPoolSizes    = poolSizes.data();
-	VkResult result = vkCreateDescriptorPool(device, &descriptorPoolCreateInfo, NULL, &descriptorPool);
+	VkResult result = vkCreateDescriptorPool(_ctx.activeDevice->handle, &descriptorPoolCreateInfo, NULL, &descriptorPool);
 	DEBUG_VK(result, "Failed to create descriptor pool!");
 	ASSERT(result == VK_SUCCESS, "Failed to create descriptor pool!");
 }
 
-void Context::createDescriptorSetLayout(){
+void Device::createDescriptorSetLayout(){
 	const int bindingCount = 3;
 	std::vector<VkDescriptorSetLayoutBinding> bindings(bindingCount);
 	std::vector<VkDescriptorBindingFlags> bindingFlags(bindingCount);
@@ -2605,12 +2621,12 @@ void Context::createDescriptorSetLayout(){
 	// descriptorSetLayoutCreateInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 	// descriptorSetLayoutCreateInfo.pNext = &setLayoutBindingFlags;
 
-	VkResult result = vkCreateDescriptorSetLayout(device, &descriptorSetLayoutCreateInfo, NULL, &descriptorSetLayout);
+	VkResult result = vkCreateDescriptorSetLayout(_ctx.activeDevice->handle, &descriptorSetLayoutCreateInfo, NULL, &descriptorSetLayout);
 	DEBUG_VK(result, "Failed to allocate descriptor set!");
 	ASSERT(result == VK_SUCCESS, "Failed to allocate descriptor set!");
 }
 
-void Context::createDescriptorSet(){
+void Device::createDescriptorSet(){
 	// Descriptor Set
 	VkDescriptorSetAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -2618,27 +2634,27 @@ void Context::createDescriptorSet(){
 	allocInfo.descriptorSetCount = 1;
 	allocInfo.pSetLayouts = &descriptorSetLayout;
 
-	VkResult result = vkAllocateDescriptorSets(device, &allocInfo, &descriptorSet);
+	VkResult result = vkAllocateDescriptorSets(_ctx.activeDevice->handle, &allocInfo, &descriptorSet);
 	DEBUG_VK(result, "Failed to allocate descriptor set!");
 	ASSERT(result == VK_SUCCESS, "Failed to allocate descriptor set!");
 }
 
-void Context::createDescriptorResources(){
+void Device::createDescriptorResources(){
 	createDescriptorSetLayout();
 	createDescriptorPool();
 	createDescriptorSet();
 }
 
 // vkDestroyDescriptorPool + vkDestroyDescriptorSetLayout
-void Context::destroyDescriptorResources(){
-	vkDestroyDescriptorPool(device, descriptorPool, allocator);
-	vkDestroyDescriptorSetLayout(device, descriptorSetLayout, allocator);
+void Device::destroyDescriptorResources(){
+	vkDestroyDescriptorPool(_ctx.activeDevice->handle, descriptorPool, allocator);
+	vkDestroyDescriptorSetLayout(_ctx.activeDevice->handle, descriptorSetLayout, allocator);
 	descriptorSet = VK_NULL_HANDLE;
 	descriptorPool = VK_NULL_HANDLE;
 	descriptorSetLayout = VK_NULL_HANDLE;
 }
 
-void Context::createBindlessResources(){
+void Device::CreateBindlessDescriptorResources(){
 	// create bindless resources
 	{
 
@@ -2671,7 +2687,7 @@ void Context::createBindlessResources(){
 		bindlessPoolInfo.poolSizeCount = bindlessPoolSizes.size();
 		bindlessPoolInfo.pPoolSizes = bindlessPoolSizes.data();
 
-		VkResult result = vkCreateDescriptorPool(device, &bindlessPoolInfo, allocator, &bindlessDescriptorPool);
+		VkResult result = vkCreateDescriptorPool(handle, &bindlessPoolInfo, _ctx.allocator, &bindlessDescriptorPool);
 		DEBUG_VK(result, "Failed to create bindless descriptor pool!");
 		ASSERT(result == VK_SUCCESS, "Failed to create bindless descriptor pool!");
 
@@ -2724,7 +2740,7 @@ void Context::createBindlessResources(){
 		descriptorLayoutInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 		descriptorLayoutInfo.pNext = &setLayoutBindingFlags;
 
-		result = vkCreateDescriptorSetLayout(device, &descriptorLayoutInfo, allocator, &bindlessDescriptorLayout);
+		result = vkCreateDescriptorSetLayout(handle, &descriptorLayoutInfo, _ctx.allocator, &bindlessDescriptorLayout);
 		DEBUG_VK(result, "Failed to create bindless descriptor set layout!");
 		
 		// create Descriptor Set for bindless resources
@@ -2734,7 +2750,7 @@ void Context::createBindlessResources(){
 		allocInfo.descriptorSetCount = 1;
 		allocInfo.pSetLayouts = &bindlessDescriptorLayout;
 
-		result = vkAllocateDescriptorSets(device, &allocInfo, &bindlessDescriptorSet);
+		result = vkAllocateDescriptorSets(handle, &allocInfo, &bindlessDescriptorSet);
 		DEBUG_VK(result, "Failed to allocate bindless descriptor set!");
 		ASSERT(result == VK_SUCCESS, "Failed to allocate bindless descriptor set!");
 	}
@@ -2743,7 +2759,7 @@ void Context::createBindlessResources(){
 	// VkBufferDeviceAddressInfo scratchInfo{};
 	// scratchInfo.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
 	// scratchInfo.buffer = asScratchBuffer.resource->buffer;
-	// asScratchAddress = vkGetBufferDeviceAddress(device, &scratchInfo);
+	// asScratchAddress = vkGetBufferDeviceAddress(handle, &scratchInfo);
 
 	// dummyVertexBuffer = vkw::CreateBuffer(
 	// 	6 * 3 * sizeof(float),
@@ -2753,9 +2769,9 @@ void Context::createBindlessResources(){
 	// );
 }
 
-void Context::destroyBindlessResources(){
-	vkDestroyDescriptorPool(device, bindlessDescriptorPool, allocator);
-	vkDestroyDescriptorSetLayout(device, bindlessDescriptorLayout, allocator);
+void Device::DestroyBindlessDescriptorResources(){
+	vkDestroyDescriptorPool(handle, bindlessDescriptorPool, _ctx.allocator);
+	vkDestroyDescriptorSetLayout(handle, bindlessDescriptorLayout, _ctx.allocator);
 	bindlessDescriptorSet = VK_NULL_HANDLE;
 	bindlessDescriptorPool = VK_NULL_HANDLE;
 	bindlessDescriptorLayout = VK_NULL_HANDLE;
