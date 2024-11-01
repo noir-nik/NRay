@@ -1,7 +1,9 @@
 #pragma once
 
 #include "Lmath.hpp"
+#include <cstdint>
 #include <span>
+#include <tuple>
 
 #define GLSL_VALIDATOR "glslangValidator"
 #define SLANGC "slangc"
@@ -186,9 +188,9 @@ using QueueFlags = Flags;
 struct Queue {
 	QueueFlags flags = 0;
 	// bool presentSupported = false;
-	std::span<GLFWwindow*> supportedWindows = {};
+	GLFWwindow* supportedWindow = {};
 	bool preferSeparateFamily = false;
-	std::unique_ptr<QueueResource> resource;
+	std::shared_ptr<QueueResource> resource;
 };
 
 
@@ -405,7 +407,9 @@ struct Device {
 	Pipeline CreatePipeline(const PipelineDesc& desc);
 
 	Queue& GetQueue(uint32_t familyIndex, uint32_t queueIndex);
-	Command& GetCommandBuffer(Queue* queue);
+	Command& GetCommandBuffer(const Queue& queue);
+	
+	void WaitIdle();
 
 
 	void* MapBuffer(Buffer& buffer);
@@ -460,12 +464,11 @@ void UnmapBuffer(Buffer& buffer);
 
 // void GetTimeStamps(std::map<std::string, float>& timeTable);
 
-void WaitQueue(QueueFlags queue);
-void WaitIdle();
+void WaitQueue(Queue* queue);
 // void BeginImGui();
 
 void Init();
-Device& GetDevice(std::span<Queue*> queues);
+Device* CreateDevice(const std::vector<Queue*>& queues);
 void Destroy();
 
 // template<typename T>

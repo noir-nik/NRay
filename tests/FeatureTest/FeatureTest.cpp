@@ -1,13 +1,10 @@
-#include "Pch.hpp"
+#include "Log.hpp"
 
 #include "VulkanBase.hpp"
 #include "ShaderCommon.h"
-#include "FileManager.hpp"
 
 #include "FeatureTest.hpp"
-#include "../TestCommon.hpp"
-#include "Timer.hpp"
-
+#include <set>
 #include "Window.hpp"
 
 #include <unistd.h>
@@ -32,6 +29,9 @@ struct Context {
 	vkw::Image depth;
 
 	vkw::Device* device;
+
+	vkw::Queue graphics;
+	vkw::Queue compute;
 	vkw::Queue queue;
 	
 	// vkw::Image renderImage;
@@ -335,7 +335,7 @@ void RecreateFrameResources(Window* window) {
 	if (!window->GetAlive()) { /* LOG_WARN("RecreateFrameResources: Window is dead"); */ return;} // important
 	if (window->GetIconified()) {/* LOG_TRACE("RecreateFrameResources: size = 0"); */ return;};
 
-	vkw::WaitIdle();
+	ctx.device->WaitIdle();
 	bool swapChainDirty = window->GetSwapchainDirty();
 	bool framebufferResized = window->GetFramebufferResized();
 	// LOG_INFO("RecreateFrameResources {} {} {} {}", window->GetName(), (void*)window->GetGLFWwindow(), swapChainDirty, framebufferResized);
@@ -427,7 +427,8 @@ void FeatureTestApplication::Create() {
 	auto window = WindowManager::NewWindow(ctx.width, ctx.height, "wm", false);
 	vkw::Init();
 	ctx.queue = {vkw::QueueFlagBits::Graphics | vkw::QueueFlagBits::Compute | vkw::QueueFlagBits::Transfer, window->GetGLFWwindow()};
-	ctx.device = vkw::GetDevice({&ctx.queue});
+
+	ctx.device = vkw::CreateDevice({&ctx.queue});
 	window->CreateSwapchain();
 	ctx.windows.emplace(window);
 	ctx.mainWindow = window;
@@ -468,7 +469,7 @@ void FeatureTestApplication::MainLoop() {
             DrawWindow(window);
         }
 	}
-	vkw::WaitIdle();
+	ctx.device->WaitIdle();
 }
 
 void FeatureTestApplication::Finish() {
