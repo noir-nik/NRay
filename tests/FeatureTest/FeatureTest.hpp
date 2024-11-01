@@ -1,8 +1,5 @@
 #if (!defined SLANG) && (!defined GLSL)
 #pragma once
-#include <string>
-#include <cstdint>
-#include <vector>
 
 #include "Lmath.hpp"
 
