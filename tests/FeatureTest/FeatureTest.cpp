@@ -30,6 +30,9 @@ struct Context {
 	vkw::Buffer vertexBuffer;
 
 	vkw::Image depth;
+
+	vkw::Device* device;
+	vkw::Queue queue;
 	
 	// vkw::Image renderImage;
 
@@ -114,7 +117,7 @@ const std::vector<Vertex> vertices = {
 };
 
 void Context::CreateShaders() {
-	pipeline = vkw::CreatePipeline({
+	pipeline = ctx.device->CreatePipeline({
 		.point = vkw::PipelinePoint::Graphics,
 		.stages = {
 			{.stage = vkw::ShaderStage::Vertex, .path = "tests/FeatureTest/FeatureTest.vert"},
@@ -133,7 +136,7 @@ void Context::CreateShaders() {
 }
 
 void Context::CreateImages(uint32_t width, uint32_t height) {
-	ctx.depth = vkw::CreateImage({
+	ctx.depth = ctx.device->CreateImage({
         .width = 3000,
         .height = 3000,
         .format = vkw::Format::D32_sfloat,
@@ -148,7 +151,7 @@ void CreateRenderImage(Window* window) {
 	uint32_t width = 3000;
 	uint32_t height = 3000;
 	ctx.renderImages.erase(window);
-	ctx.renderImages.try_emplace(window, vkw::CreateImage({
+	ctx.renderImages.try_emplace(window, ctx.device->CreateImage({
 		.width = width,
 		.height = height,
 		.format = vkw::Format::RGBA16_sfloat,
@@ -169,7 +172,7 @@ void CursorPosCallback(Window *window, double xpos, double ypos);
 
 
 void UploadBuffers() {
-	auto cmd = vkw::GetCommandBuffer(vkw::Queue::Transfer);
+	auto cmd = ctx.device->GetCommandBuffer(ctx.queue);
 	cmd.BeginCommandBuffer();
 	cmd.Copy(ctx.vertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex));
 	cmd.Barrier({});
@@ -422,7 +425,9 @@ void FeatureTestApplication::Setup() {
 
 void FeatureTestApplication::Create() {
 	auto window = WindowManager::NewWindow(ctx.width, ctx.height, "wm", false);
-	vkw::Init(window->GetGLFWwindow(), window->GetWidth(), window->GetHeight());
+	vkw::Init();
+	ctx.queue = {vkw::QueueFlagBits::Graphics | vkw::QueueFlagBits::Compute | vkw::QueueFlagBits::Transfer, window->GetGLFWwindow()};
+	ctx.device = vkw::GetDevice({&ctx.queue});
 	window->CreateSwapchain();
 	ctx.windows.emplace(window);
 	ctx.mainWindow = window;
@@ -434,7 +439,7 @@ void FeatureTestApplication::Create() {
 	window->AddCursorPosCallback(CursorPosCallback);
 	ctx.CreateImages(window->GetMonitorWidth(), window->GetMonitorHeight());
 	CreateRenderImage(window);
-	ctx.vertexBuffer = vkw::CreateBuffer(vertices.size() * sizeof(Vertex), vkw::BufferUsage::Vertex, vkw::Memory::GPU, "Vertex Buffer");
+	ctx.vertexBuffer = ctx.device->CreateBuffer(vertices.size() * sizeof(Vertex), vkw::BufferUsage::Vertex, vkw::Memory::GPU, "Vertex Buffer");
 	UploadBuffers();
 	ctx.CreateShaders();
 }

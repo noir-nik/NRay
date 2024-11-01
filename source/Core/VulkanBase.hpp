@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Lmath.hpp"
+#include <span>
 
 #define GLSL_VALIDATOR "glslangValidator"
 #define SLANGC "slangc"
@@ -132,6 +133,7 @@ struct BufferResource;
 struct ImageResource;
 struct PipelineResource;
 struct CommandResource;
+struct QueueResource;
 struct Semaphore;
 struct Command;
 
@@ -181,11 +183,12 @@ namespace QueueFlagBits {
 }
 using QueueFlags = Flags;
 
-struct QueueRequest {
+struct Queue {
 	QueueFlags flags = 0;
-	uint32_t count = 1;
-	bool presentSupported = false;
+	// bool presentSupported = false;
+	std::span<GLFWwindow*> supportedWindows = {};
 	bool preferSeparateFamily = false;
+	std::unique_ptr<QueueResource> resource;
 };
 
 
@@ -401,6 +404,10 @@ struct Device {
 	Image CreateImage(const ImageDesc& desc);
 	Pipeline CreatePipeline(const PipelineDesc& desc);
 
+	Queue& GetQueue(uint32_t familyIndex, uint32_t queueIndex);
+	Command& GetCommandBuffer(Queue* queue);
+
+
 	void* MapBuffer(Buffer& buffer);
 	void UnmapBuffer(Buffer& buffer);
 };
@@ -458,8 +465,7 @@ void WaitIdle();
 // void BeginImGui();
 
 void Init();
-void Init(GLFWwindow* window, uint32_t width, uint32_t height);
-Command& GetCommandBuffer(QueueFlags queue);
+Device& GetDevice(std::span<Queue*> queues);
 void Destroy();
 
 // template<typename T>

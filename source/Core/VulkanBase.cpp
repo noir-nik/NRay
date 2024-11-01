@@ -4,6 +4,7 @@
 #include "VulkanBase.hpp"
 #include "ShaderCommon.h"
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <numeric>
@@ -27,7 +28,6 @@ namespace vkw {
 struct Instance;
 struct PhysicalDevice;
 struct DeviceResource;
-struct QueueResourse;
 struct SwapChain;
 struct Context
 {	
@@ -42,7 +42,7 @@ struct Context
 
 	void CreatePipelineLibrary(const PipelineDesc& desc, Pipeline& pipeline);
 
-	bool presentRequested = false;
+	// bool presentRequested = false;
 	bool enableValidationLayers = true;
 	bool enableDebugReport = false;
 	bool linkTimeOptimization = true; // Pipeline library link
@@ -70,8 +70,8 @@ struct Context
 	std::unordered_map<UID, Device> devices;
 
 	std::shared_ptr<Instance> instance;
-	std::shared_ptr<PhysicalDevice> activePhysicalDevice;
-	std::shared_ptr<DeviceResource> activeDevice;
+	// std::shared_ptr<PhysicalDevice> activePhysicalDevice;
+	// std::shared_ptr<DeviceResource> activeDevice;
 
 	const uint32_t timeStampPerPool = 64;
 
@@ -112,8 +112,8 @@ struct DeleteCopyMove {
 
 struct Instance: DeleteCopyMove {
 	VkInstance handle = VK_NULL_HANDLE;
-	GLFWwindow* _dummyWindow = nullptr;
-	VkSurfaceKHR _dummySurface = VK_NULL_HANDLE; // for querying present support
+	// GLFWwindow* _dummyWindow = nullptr;
+	// VkSurfaceKHR _dummySurface = VK_NULL_HANDLE; // for querying present support
 	VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
 	VkDebugReportCallbackEXT debugReport = VK_NULL_HANDLE;
 	std::string applicationName = "Vulkan Slang Compute";
@@ -167,7 +167,7 @@ struct PhysicalDevice: DeleteCopyMove {
 	// @param avoidIfPossible: vector of pairs (flags, priority to avoid)
 	// @param surfaceToSupport: surface to support (strict)
 	// @return best queue family index or QUEUE_NOT_FOUND if strict requirements not met
-	uint32_t GetQueueFamilyIndex(VkQueueFlags desiredFlags, VkQueueFlags undesiredFlags, const std::vector<std::pair<VkQueueFlags, float>>& avoidIfPossible, VkSurfaceKHR surfaceToSupport);
+	uint32_t GetQueueFamilyIndex(VkQueueFlags desiredFlags, VkQueueFlags undesiredFlags, const std::span<const std::pair<VkQueueFlags, float>>& avoidIfPossible, VkSurfaceKHR surfaceToSupport);
 };
 
 struct DeviceResource: DeleteCopyMove {
@@ -180,7 +180,7 @@ struct DeviceResource: DeleteCopyMove {
 	VmaAllocator vmaAllocator;
 	PhysicalDevice* physicalDevice;
 
-	std::unordered_map<uint32_t, QueueResourse> uniqueQueues;
+	std::unordered_map<uint32_t, QueueResource> uniqueQueues;
 
 	// std::unordered_map<uint32_t, QueueResourse> uniqueQueues;
 	// Owns all command resources outside swapchains
@@ -216,7 +216,7 @@ struct DeviceResource: DeleteCopyMove {
 	} pipelineLibrary;
 
 	
-	void Create(PhysicalDevice& physicalDevice, std::vector<QueueRequest> queueRequests);
+	void Create(PhysicalDevice& physicalDevice, std::vector<Queue> queueRequests);
 	void Destroy();
 		
 	void createDescriptorSetLayout();
@@ -380,7 +380,8 @@ struct CommandResource {
 	}
 };
 
-struct QueueResourse {
+struct QueueResource {
+	// UID uid;
 	uint32_t family = ~0;
 	uint32_t indexInFamily = 0;
 	VkQueue queue = VK_NULL_HANDLE;
@@ -402,41 +403,34 @@ uint32_t Image::RID() {
 	return uint32_t(resource->rid);
 }
 
-void InitImpl(GLFWwindow* window, uint32_t width, uint32_t height){
-	auto presentRequested = window != nullptr;
-	_ctx.presentRequested = presentRequested;
+
+void Init(){
+	// auto presentRequested = window != nullptr;
+	// _ctx.presentRequested = presentRequested;
 	_ctx.instance = std::make_shared<Instance>();
-	_ctx.instance->Create();
+	_ctx.instance->Create();	
+	_ctx.GetPhysicalDevices();
+	// if (presentRequested) {
+	// 	auto res = glfwCreateWindowSurface(_ctx.instance->handle, window, _ctx.allocator, &_ctx.instance->_dummySurface);
+	// 	DEBUG_VK(res, "Failed to create window surface!");
+	// 	DEBUG_TRACE("Created surface.");
+	// }
+
 	
 
-	if (presentRequested) {
-		auto res = glfwCreateWindowSurface(_ctx.instance->handle, window, _ctx.allocator, &_ctx.instance->_dummySurface);
-		DEBUG_VK(res, "Failed to create window surface!");
-		DEBUG_TRACE("Created surface.");
-	}
+}
 
-	_ctx.GetPhysicalDevices();
-	auto physicalDeviceUIDs = _ctx.SelectPhysicalDevices(QueueFlagBits::Graphics | QueueFlagBits::Compute | QueueFlagBits::Transfer, presentRequested);
-	ASSERT(!physicalDeviceUIDs.empty(), "no device with Vulkan support!");
-	_ctx.activePhysicalDevice = std::make_shared<PhysicalDevice>(&_ctx.physicalDevices[physicalDeviceUIDs[0]]);
+Device& CreateDevice(std::span<Queue*> queues) {
+	
+	// auto physicalDeviceUIDs = _ctx.SelectPhysicalDevices(QueueFlagBits::Graphics | QueueFlagBits::Compute | QueueFlagBits::Transfer, presentRequested);
+	// ASSERT(!physicalDeviceUIDs.empty(), "no device with Vulkan support!");
 
 	auto uid = UIDGenerator::Next();
 	auto res = _ctx.devices.try_emplace(uid, DeviceResource(uid));
 	auto& device = res.first->second;
-	device.resource->Create(*_ctx.activePhysicalDevice, {{QueueFlagBits::Graphics | QueueFlagBits::Compute | QueueFlagBits::Transfer, 1, presentRequested}});
-	_ctx.activeDevice = std::make_shared<DeviceResource>(&device);
+	device.resource->Create(*_ctx.activePhysicalDevice, {{QueueFlagBits::Graphics | QueueFlagBits::Compute | QueueFlagBits::Transfer, presentRequested}});
 
 	_ctx.activeDevice->CreateBindlessDescriptorResources();
-	// _ctx.createDescriptorResources();
-
-}
-
-void Init(GLFWwindow* window, uint32_t width, uint32_t height){
-	InitImpl(window, width, height);
-}
-
-void Init(){
-	InitImpl(nullptr, 0, 0);
 }
 
 void Destroy() {
@@ -459,6 +453,10 @@ void* Device::MapBuffer(Buffer& buffer) {
 void Device::UnmapBuffer(Buffer& buffer) {
 	ASSERT(buffer.memory & Memory::CPU, "Buffer not cpu accessible!");
 	vmaUnmapMemory(resource->vmaAllocator, buffer.resource->allocation);
+}
+
+Command& Device::GetCommandBuffer(Queue* queue){
+
 }
 
 
@@ -1463,12 +1461,6 @@ void Command::PushConstants(void* data, uint32_t size) {
 //     ImGui_ImplGlfw_NewFrame();
 // }
 
-// for swapchain
-
-// Command& GetCommandBuffer (QueueFlags queue) {
-// 	return *_ctx.queues[queue]->commands;
-// }
-
 // vkWaitForFences + vkResetFences +
 // vkResetCommandPool + vkBeginCommandBuffer
 void Command::BeginCommandBuffer() {
@@ -1978,7 +1970,7 @@ void PhysicalDevice::GetDetails() {
 
 constexpr uint32_t QUEUE_NOT_FOUND = ~0u;
 
-uint32_t PhysicalDevice::GetQueueFamilyIndex(VkQueueFlags desiredFlags, VkQueueFlags undesiredFlags, const std::vector<std::pair<VkQueueFlags, float>>& avoidIfPossible, VkSurfaceKHR surfaceToSupport) {
+uint32_t PhysicalDevice::GetQueueFamilyIndex(VkQueueFlags desiredFlags, VkQueueFlags undesiredFlags, const std::span<const std::pair<VkQueueFlags, float>>& avoidIfPossible, VkSurfaceKHR surfaceToSupport) {
 	std::vector<std::pair<uint32_t, float>> candidates;
 	auto& families = availableFamilies;
 	for (auto i = 0; i < families.size(); i++) {
@@ -2060,37 +2052,46 @@ std::vector<UID> SelectPhysicalDevices(QueueFlags requiredQueueFlags, bool requi
 	return selectedDevices;
 }
 
-void DeviceResource::Create(PhysicalDevice& physicalDevice, std::vector<QueueRequest> queueRequests) {
-	std::vector<std::pair<uint32_t, uint32_t>> queuesToCreate;
-	std::vector<std::pair<VkQueueFlags, float>> avoidIfPossible;
-	// queuesToCreate.reserve(requiredQueues.size() + separateQueues.size());
-	for (auto& request: queueRequests) {
-		if (request.count == 0) {LOG_WARN("Requested queue count is zero") continue;}
-		uint32_t index;
-		uint32_t count = request.count;
-		if(request.preferSeparateFamily) {
-			switch (request.flags) {
-			case VK_QUEUE_COMPUTE_BIT: 
-				avoidIfPossible = {{VK_QUEUE_GRAPHICS_BIT, 1.0f}, {VK_QUEUE_TRANSFER_BIT, 0.5f}};
-				break;
-			case VK_QUEUE_TRANSFER_BIT:
-				avoidIfPossible = {{VK_QUEUE_GRAPHICS_BIT, 1.0f}, {VK_QUEUE_COMPUTE_BIT, 0.5f}};
-				break;
-			default:
-				avoidIfPossible = {{VK_QUEUE_GRAPHICS_BIT, 1.0f}};
-				break;
+PhysicalDevice& ChoosePhysicalDevice(std::span<Queue*> queues) {
+	for (auto& [uid, physicalDevice]: _ctx.physicalDevices) {
+		if (physicalDevice.GetQueueFamilyIndex(queues) != QUEUE_NOT_FOUND) {
+			return physicalDevice;
+		}
+	}
+}
+
+void DeviceResource::Create(std::span<Queue*> queues) {
+	// PhysicalDevice& physicalDevice = ChoosePhysicalDevice(queues);
+	std::unordered_map<uint32_t, uint32_t> queuesToCreate; // family index -> queue count
+	std::span<const std::pair<VkQueueFlags, float>> avoidIfPossible{};
+	queuesToCreate.reserve(queues.size());
+	for (auto& [uid, physicalDevice]: _ctx.physicalDevices) {
+		for (auto queue: queues) {
+			uint32_t index;
+			if(queue->preferSeparateFamily) {
+				switch (queue->flags) {
+				case VK_QUEUE_COMPUTE_BIT:
+					avoidIfPossible = {{{VK_QUEUE_GRAPHICS_BIT, 1.0f}, {VK_QUEUE_TRANSFER_BIT, 0.5f}}};
+					break;
+				case VK_QUEUE_TRANSFER_BIT:
+					avoidIfPossible = {{{VK_QUEUE_GRAPHICS_BIT, 1.0f}, {VK_QUEUE_COMPUTE_BIT, 0.5f}}};
+					break;
+				default:
+					avoidIfPossible = {{{VK_QUEUE_GRAPHICS_BIT, 1.0f}}};
+					break;
+				}
+			}
+			index = physicalDevice.GetQueueFamilyIndex(queue->flags, 0, avoidIfPossible, queue->supportPresent? _ctx.instance->_dummySurface : VK_NULL_HANDLE);
+			if (index == QUEUE_NOT_FOUND) {
+				LOG_WARN("Requested queue flags {} not available on device: {}", (uint32_t)queue->flags, physicalDevice.physicalProperties2.properties.deviceName);
+				continue; // TODO: Assert queue is present
+			}
+			if (physicalDevice.availableFamilies[index].queueCount == queuesToCreate[index]) {
+				LOG_WARN("Requested more queues with flags {} than available {} on device: {}. Queue was not created", queue->flags, physicalDevice.availableFamilies[index].queueCount, physicalDevice.physicalProperties2.properties.deviceName);
+			} else {
+				queuesToCreate[index]++;
 			}
 		}
-		index = physicalDevice.GetQueueFamilyIndex(request.flags, 0, avoidIfPossible, request.presentSupported? _ctx.instance->_dummySurface : VK_NULL_HANDLE);
-		if (index == QUEUE_NOT_FOUND) {
-			LOG_WARN("Requested queue flags {} not available on device: {}", (uint32_t)request.flags, physicalDevice.physicalProperties2.properties.deviceName);
-			continue; // TODO: Assert queue is present
-		}
-		if (physicalDevice.availableFamilies[index].queueCount < request.count) {
-			LOG_WARN("Requested more queues: {} than available {} on device: {}", request.count, physicalDevice.availableFamilies[index].queueCount, physicalDevice.physicalProperties2.properties.deviceName);
-			count = physicalDevice.availableFamilies[index].queueCount;
-		}
-		queuesToCreate.push_back({index, count});
 	}
 
 	uint32_t maxQueuesInFamily = std::max_element(physicalDevice.availableFamilies.begin(), physicalDevice.availableFamilies.end(), [](const auto& a, const auto& b) {
