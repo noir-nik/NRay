@@ -276,7 +276,7 @@ void WindowManager::Finish() {
 }
 
 // Window factory
-Window* WindowManager::NewWindow(int width, int height, const char* name, bool createSwapchain) {
+Window* WindowManager::NewWindow(int width, int height, const char* name) {
 	if (!is_initialized) {
 		Init();
 	}
@@ -313,9 +313,9 @@ Window* WindowManager::NewWindow(int width, int height, const char* name, bool c
 	glfwSetDropCallback              (glfwWindow, _InputCallbacks::DropCallback       );
 
 	window->ApplyChanges();
-	if (createSwapchain) {
-		window->swapChain.Create(glfwWindow, width, height);
-	}
+	// if (createSwapchain) {
+	// 	window->swapChain.Create(glfwWindow, width, height);
+	// }
 	return window;
 }
 

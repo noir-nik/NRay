@@ -7,7 +7,7 @@ TARGET := app
 OPT_LEVEL := 0
 
 INCLUDES := -Isource/Core -Isource/Base -Isource/Shaders
-CXXFLAGS := -MMD -MP $(INCLUDES) -O$(OPT_LEVEL) -DENGINE -std=c++17
+CXXFLAGS := -MMD -MP $(INCLUDES) -O$(OPT_LEVEL) -DENGINE -std=c++20
 LDFLAGS := -O$(OPT_LEVEL)
 LIBS := spdlog 
 
@@ -34,8 +34,8 @@ LDFLAGS += $(foreach lib,$(LIBS),-l$(lib))
 
 
 ifeq ($(findstring clang,$(CC)),clang)
-	CXXFLAGS += -target x86_64-w64-gnu
-	LDFLAGS += -target x86_64-w64-gnu -fuse-ld=lld -pthread
+	CXXFLAGS += -target x86_64-w64-mingw32
+	LDFLAGS += -target x86_64-w64-mingw32 -fuse-ld=lld -pthread
 endif
 
 # Folders
@@ -48,32 +48,35 @@ ifneq ($(OS),Windows_NT)
 	SRC_IMGUI := deps/imgui
 endif
 
-# Tests
-TST_NEURALSFD := tests/NeuralSdf
-TST_IMAGEOPT := tests/ImageOptimization
-TST_SLANG := tests/SlangTest
+# # Tests
+# TST_NEURALSFD := tests/NeuralSdf
+# TST_IMAGEOPT := tests/ImageOptimization
+# TST_SLANG := tests/SlangTest
 TST_FEATURE := tests/FeatureTest
-TST_RADIENCE := tests/RadienceField
-TST_HELLOTRIANGLE := tests/HelloTriangle
-TST_WINDOW := tests/Window
+# TST_RADIENCE := tests/RadienceField
+# TST_HELLOTRIANGLE := tests/HelloTriangle
+# TST_WINDOW := tests/Window
+
 # TST_ALL := $(TST_NEURALSFD) $(TST_IMAGEOPT) $(TST_SLANG) $(TST_FEATURE) $(TST_RADIENCE)
 tst_dirs := $(wildcard tests/*)
 files := $(foreach dir,$(tst_dirs),$(wildcard $(dir)/*.cpp))
-# TST_CPP := $(filter %.cpp, $(files) $(tst_dirs))
-# TST_CPP_RAW := $(notdir $(TST_CPP))
-TST_CPP_RAW := $(notdir $(files))
+TST_CPP := $(filter %.cpp, $(files) $(tst_dirs))
+TST_CPP_RAW := $(notdir $(TST_CPP))
+# TST_CPP_RAW := $(notdir $(files))
+# $(info $(files))
+# $(info $(TST_CPP))
 OBJS := \
 	$(patsubst $(SRC_MAIN)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(SRC_MAIN)/*.cpp)) \
 	$(patsubst $(SRC_CORE)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(SRC_CORE)/*.cpp)) \
 	$(patsubst $(SRC_BASE)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(SRC_BASE)/*.cpp)) \
 	$(patsubst $(SRC_TEST)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(SRC_TEST)/*.cpp)) \
-	$(patsubst %.cpp, $(OBJ_DIR)/%.o, $(TST_CPP_RAW)) \
-	$(patsubst $(SRC_IMGUI)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(SRC_IMGUI)/*.cpp)) \
+	$(patsubst $(TST_FEATURE)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(TST_FEATURE)/*.cpp)) \
+# $(patsubst %.cpp, $(OBJ_DIR)/%.o, $(TST_CPP_RAW)) \
+# $(patsubst $(SRC_IMGUI)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(SRC_IMGUI)/*.cpp)) \
 
 # $(patsubst $(TST_NEURALSFD)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(TST_NEURALSFD)/*.cpp)) \
 # $(patsubst $(TST_SLANG)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(TST_SLANG)/*.cpp)) \
 # $(patsubst $(TST_IMAGEOPT)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(TST_IMAGEOPT)/*.cpp)) \
-# $(patsubst $(TST_FEATURE)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(TST_FEATURE)/*.cpp)) \
 # $(patsubst $(TST_RADIENCE)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(TST_RADIENCE)/*.cpp)) \
 
 DEPS = $(OBJS:.o=.d)

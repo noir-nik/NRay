@@ -16,16 +16,16 @@ static void HelloTriangleTest();
 void Test(TestName testName) {
 	switch (testName)
 	{
-	case NeuralSdf: NeuralSdfTest(); break;
-	case ImageOptimization: ImageOptimizationTest(); break;
+	// case NeuralSdf: NeuralSdfTest(); break;
+	// case ImageOptimization: ImageOptimizationTest(); break;
+	// case RadienceField: RadienceFieldTest(); break;
+	// case HelloTriangle: HelloTriangleTest(); break;
 	case Feature: FeatureTest(); break;
-	case RadienceField: RadienceFieldTest(); break;
-	case HelloTriangle: HelloTriangleTest(); break;
 	default:
 		break;
 	}
 }
-
+/* 
 static void NeuralSdfTest() {
 	NeuralSdfApplication app;
 	NeuralSdfInfo neuralSdfInfo = {
@@ -48,7 +48,7 @@ static void ImageOptimizationTest() {
 	};
 	app.run(&imageOptimizationInfo);
 }
-
+ */
 static void FeatureTest() {
 	FeatureTestApplication app;
 	FeatureTestInfo FeatureTestInfo = {
@@ -57,7 +57,7 @@ static void FeatureTest() {
 	};
 	app.run(&FeatureTestInfo);
 }
-
+/* 
 static void RadienceFieldTest() {
 	RadienceFieldApplication app;
 	RadienceFieldInfo RadienceFieldInfo = {
@@ -79,5 +79,5 @@ static void HelloTriangleTest() {
 	};
 	app.run(&HelloTriangleInfo);
 }
-
+ */
 }

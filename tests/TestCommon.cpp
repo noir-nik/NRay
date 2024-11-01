@@ -17,18 +17,3 @@ void fillUV(Lmath::float4* image, int width, int height){
 		}
 	}
 }
-
-void saveBuffer(const char *fname, void* buffer, uint32_t width, uint32_t height) {
-	vkw::Buffer* b = (vkw::Buffer*)(buffer);
-	std::vector<unsigned char> image;
-	image.reserve(width * height * 4);
-	Pixel* mappedMemory = (Pixel*)vkw::MapBuffer(*b);
-	for (int i = 0; i < width * height; i++) {
-		image.push_back(255.0f * mappedMemory[i].r);
-		image.push_back(255.0f * mappedMemory[i].g);
-		image.push_back(255.0f * mappedMemory[i].b);
-		image.push_back(255.0f);
-	}
-	vkw::UnmapBuffer(*b);
-	FileManager::SaveBMP(fname, (const uint32_t*)image.data(), width, height);
-}

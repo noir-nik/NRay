@@ -212,8 +212,8 @@ public:
 	inline bool        GetDrawNeeded()                     { return drawNeeded; }
 	inline void        SetDrawNeeded(bool value)           { drawNeeded = value; }
 
-	inline void        CreateSwapchain()                   { if (!swapChainAlive) swapChain.Create(window, width, height); swapChainAlive = true; }
-	inline void        RecreateSwapchain()                 { swapChain.Recreate(width, height);} 
+	inline void        CreateSwapchain(vkw::Device& device){ if (!swapChainAlive) swapChain.Create(device, window, width, height); swapChainAlive = true; }
+	inline void        RecreateSwapchain()                 { ASSERT(swapChainAlive, "RecreateSwapchain: Swapchain is not alive"); swapChain.Recreate(width, height);} 
 	inline bool        GetSwapchainDirty()                 { return swapChain.GetDirty(); }
 	inline auto&       GetSwapchain()                      { return swapChain; }
 
@@ -300,7 +300,7 @@ friend class Window;
 public:
 	WindowManager() = delete;
 	static void Init();
-	static Window* NewWindow(int width, int height, const char* name, bool createSwapchain = true);
+	static Window* NewWindow(int width, int height, const char* name);
 	static void PollEvents(){ glfwPollEvents(); }
 	static void WaitEvents(){ glfwWaitEvents(); }
 	// void OnImgui();

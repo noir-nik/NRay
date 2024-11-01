@@ -2,8 +2,6 @@
 
 #include "Lmath.hpp"
 #include <cstdint>
-#include <span>
-#include <tuple>
 
 #define GLSL_VALIDATOR "glslangValidator"
 #define SLANGC "slangc"
@@ -401,7 +399,7 @@ struct Command {
 };
 
 struct Device {
-	std::unique_ptr<DeviceResource> resource;
+	std::shared_ptr<DeviceResource> resource;
 	Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory = Memory::GPU, const std::string& name = "");
 	Image CreateImage(const ImageDesc& desc);
 	Pipeline CreatePipeline(const PipelineDesc& desc);
@@ -418,7 +416,7 @@ struct Device {
 
 
 class SwapChain {
-	std::unique_ptr<SwapChainResource> resource;
+	std::shared_ptr<SwapChainResource> resource;
 
 	std::vector<Image> swapChainImages;
 	std::vector<Command> commands; // Owns all command resources
@@ -436,9 +434,6 @@ class SwapChain {
 	void DestroyImGui();
 
 public:
-	SwapChain() = default;
-	SwapChain(const SwapChain&) = delete;
-	SwapChain& operator=(const SwapChain&) = delete;
 	~SwapChain() {
 		printf("~SwapChain\n");
 	}
@@ -446,7 +441,7 @@ public:
 	inline Image&      GetCurrentImage()   { return swapChainImages[currentImageIndex]; }
 	inline Command&    GetCommandBuffer()  { return commands[currentFrame];             }
 
-	void Create(GLFWwindow* window, uint32_t width, uint32_t height);
+	void Create(Device& device, GLFWwindow* window, uint32_t width, uint32_t height);
 	void Destroy();
 	void Recreate(uint32_t width, uint32_t height);
 	bool AcquireImage();
@@ -467,8 +462,8 @@ void UnmapBuffer(Buffer& buffer);
 void WaitQueue(Queue* queue);
 // void BeginImGui();
 
-void Init();
-Device* CreateDevice(const std::vector<Queue*>& queues);
+void Init(bool requestPresent = true);
+Device CreateDevice(const std::vector<Queue*>& queues);
 void Destroy();
 
 // template<typename T>
