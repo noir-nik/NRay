@@ -45,7 +45,7 @@ SRC_BASE := source/base
 SRC_TEST := tests
 
 ifneq ($(OS),Windows_NT)
-	SRC_IMGUI := deps/imgui
+	SRC_IMGUI := bin/imgui
 endif
 
 # # Tests
@@ -71,8 +71,8 @@ OBJS := \
 	$(patsubst $(SRC_BASE)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(SRC_BASE)/*.cpp)) \
 	$(patsubst $(SRC_TEST)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(SRC_TEST)/*.cpp)) \
 	$(patsubst $(TST_FEATURE)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(TST_FEATURE)/*.cpp)) \
+	$(patsubst $(SRC_IMGUI)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(SRC_IMGUI)/*.cpp)) \
 # $(patsubst %.cpp, $(OBJ_DIR)/%.o, $(TST_CPP_RAW)) \
-# $(patsubst $(SRC_IMGUI)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(SRC_IMGUI)/*.cpp)) \
 
 # $(patsubst $(TST_NEURALSFD)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(TST_NEURALSFD)/*.cpp)) \
 # $(patsubst $(TST_SLANG)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(TST_SLANG)/*.cpp)) \

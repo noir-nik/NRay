@@ -4,7 +4,6 @@
 #include "VulkanBase.hpp"
 #include "ShaderCommon.h"
 #include <algorithm>
-#include <array>
 #include <cstdint>
 #include <memory>
 #include <numeric>
@@ -12,6 +11,7 @@
 #include <utility>
 #include <vulkan/vulkan_core.h>
 #include <fstream>
+#include <span>
 
 #define SHADER_ALWAYS_COMPILE 0
 
@@ -56,7 +56,7 @@ struct Context
 	};
 
 	std::unordered_map<UID, PhysicalDevice> physicalDevices;
-	std::unordered_map<UID, DeviceResource> devices;
+	std::unordered_map<UID, std::shared_ptr<DeviceResource>> devices;
 
 	std::shared_ptr<Instance> instance;
 	// std::shared_ptr<PhysicalDevice> activePhysicalDevice;
@@ -419,10 +419,10 @@ void Init(bool requestPresent) {
 
 Device CreateDevice(const std::vector<Queue*>& queues) {
 	auto uid = UIDGenerator::Next();
-	auto res = _ctx.devices.try_emplace(uid, uid);
-	auto& resource = res.first->second;
 	Device device;
-	device.resource = std::shared_ptr<DeviceResource>(&resource);
+	device.resource = std::make_shared<DeviceResource>(uid);
+	auto res = _ctx.devices.try_emplace(uid, device.resource);
+	auto& resource = *device.resource;
 	resource.Create(queues);
 	for (auto& [key, q]: resource.uniqueQueues) {
 		q->command.resource->Create(&resource, q.get());
@@ -2154,6 +2154,8 @@ void DeviceResource::Create(const std::vector<Queue*>& queues) {
 	// atomicFeatures.pNext = &sync2Features;
 
 	features2.pNext = &sync2Features;
+
+	requiredExtensions.insert(requiredExtensions.end(), _ctx.preferredExtensions.begin(), _ctx.preferredExtensions.end());
 
 	VkDeviceCreateInfo createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;

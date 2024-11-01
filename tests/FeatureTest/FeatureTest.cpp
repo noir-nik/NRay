@@ -140,7 +140,7 @@ void Context::CreateImages(uint32_t width, uint32_t height) {
         .width = 3000,
         .height = 3000,
         .format = vkw::Format::D32_sfloat,
-        .usage = vkw::ImageUsage::DepthStencilAttachment | vkw::ImageUsage::TransientAttachment,
+        .usage = vkw::ImageUsage::DepthStencilAttachment/*  | vkw::ImageUsage::TransientAttachment */,
         .name = "Depth Attachment"
     });
 }
@@ -174,7 +174,7 @@ void CursorPosCallback(Window *window, double xpos, double ypos);
 void UploadBuffers() {
 	auto cmd = ctx.device.GetCommandBuffer(ctx.queue);
 	cmd.BeginCommandBuffer();
-	cmd.Copy(ctx.vertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex));
+	cmd.Copy(ctx.device, ctx.vertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex));
 	cmd.Barrier({});
 	cmd.EndCommandBuffer();
 	cmd.QueueSubmit({});
@@ -240,6 +240,7 @@ void KeyCallback(Window* window, int key, int scancode, int action, int mods) {
 			static int windowCount = 1;
 			std::string name = "w" + std::to_string(windowCount++);
 			auto window = WindowManager::NewWindow(ctx.width, ctx.height, name.c_str());
+			window->CreateSwapchain(ctx.device, ctx.queue);
 			CreateRenderImage(window);
 			ctx.windows.emplace(window);
 			window->AddFramebufferSizeCallback(FramebufferCallback);
@@ -472,6 +473,9 @@ void FeatureTestApplication::MainLoop() {
 }
 
 void FeatureTestApplication::Finish() {
+	for (auto& window : ctx.windows) {
+		delete window;
+	}
 	ctx = {};
 	vkw::Destroy();
 	WindowManager::Finish();
