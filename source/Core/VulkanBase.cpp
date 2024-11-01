@@ -7,10 +7,10 @@
 #include <cstdint>
 #include <memory>
 #include <numeric>
-#include <tuple>
 #include <unordered_map>
 #include <utility>
 #include <vulkan/vulkan_core.h>
+#include <fstream>
 
 #define SHADER_ALWAYS_COMPILE 0
 
@@ -27,7 +27,7 @@ namespace vkw {
 struct Instance;
 struct PhysicalDevice;
 struct DeviceResource;
-struct InternalQueue;
+struct QueueResourse;
 struct SwapChain;
 struct Context
 {	
@@ -67,15 +67,19 @@ struct Context
 
 
 	std::unordered_map<UID, PhysicalDevice> physicalDevices;
-	std::unordered_map<UID, DeviceResource> devices;
+	std::unordered_map<UID, Device> devices;
 
 	std::shared_ptr<Instance> instance;
 	std::shared_ptr<PhysicalDevice> activePhysicalDevice;
 	std::shared_ptr<DeviceResource> activeDevice;
 
 	const uint32_t timeStampPerPool = 64;
-		
-	// bool requestSeparate[Queue::Count] = {false};
+
+	u8* stagingCpu = nullptr;
+	uint32_t stagingOffset = 0;
+	Buffer staging;
+
+	// bool requestSeparate[QueueFlagBits::Count] = {false};
 	
 	// const uint32_t initialScratchBufferSize = 64*1024*1024;
 	// Buffer asScratchBuffer;
@@ -88,8 +92,8 @@ struct Context
 	void GetPhysicalDevices();
 	std::vector<UID> SelectPhysicalDevices(QueueFlags requiredQueueFlags, bool requirePresent = false, QueueFlags requiredSeparateQueues = {});
 
-	void CreateCommandBuffers(std::vector<Command>& commands);
-	void DestroyCommandBuffers(std::vector<Command>& commands);
+	// void CreateCommandBuffers(std::vector<Command>& commands);
+	// void DestroyCommandBuffers(std::vector<Command>& commands);
 
 	void AcquireStagingBuffer();
 	void ReleaseStagingBuffer();
@@ -176,13 +180,13 @@ struct DeviceResource: DeleteCopyMove {
 	VmaAllocator vmaAllocator;
 	PhysicalDevice* physicalDevice;
 
-	std::unordered_map<uint32_t, InternalQueue> uniqueQueues;
+	std::unordered_map<uint32_t, QueueResourse> uniqueQueues;
 
-	// std::unordered_map<uint32_t, InternalQueue> uniqueQueues;
+	// std::unordered_map<uint32_t, QueueResourse> uniqueQueues;
 	// Owns all command resources outside swapchains
 	// Do not resize after creation!
 	// std::vector<Command> queuesCommands;
-	// InternalQueue* queues[Queue::Count]; // Pointers to uniqueQueues
+	// QueueResourse* queues[QueueFlagBits::Count]; // Pointers to uniqueQueues
 
 	const uint32_t stagingBufferSize = 2 * 1024 * 1024;
 
@@ -244,19 +248,22 @@ struct DeviceResource: DeleteCopyMove {
 	// PFN_vkCmdBuildAccelerationStructuresKHR vkCmdBuildAccelerationStructuresKHR;
 	// PFN_vkGetAccelerationStructureDeviceAddressKHR vkGetAccelerationStructureDeviceAddressKHR;
 	// PFN_vkDestroyAccelerationStructureKHR vkDestroyAccelerationStructureKHR;
+
+	~DeviceResource() {
+		// dummyVertexBuffer = {};
+		// asScratchBuffer = {};
+		// vkDestroyDescriptorPool(handle, imguiDescriptorPool, _ctx.allocator);
+		DestroyBindlessDescriptorResources();
+		vmaDestroyAllocator(vmaAllocator);
+		vkDestroySampler(handle, genericSampler, _ctx.allocator);
+		vkDestroyDevice(handle, _ctx.allocator);
+		DEBUG_TRACE("Destroyed logical device");
+		handle = VK_NULL_HANDLE;
+	}
 };
 
-struct Device {
-	std::shared_ptr<DeviceResource> resource;
-	Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory = Memory::GPU, const std::string& name = "");
-	Image CreateImage(const ImageDesc& desc);
-	Pipeline CreatePipeline(const PipelineDesc& desc);
 
-	void* MapBuffer(Buffer& buffer);
-	void UnmapBuffer(Buffer& buffer);
-};
-
-struct SwapChainResource {
+struct SwapChainResource: DeleteCopyMove {
 	DeviceResource* device = nullptr;
 	VkSurfaceKHR surface = VK_NULL_HANDLE;	
 	VkSwapchainKHR swapChain = VK_NULL_HANDLE;
@@ -354,12 +361,8 @@ struct PipelineResource : Resource {
 };
 
 struct CommandResource {
-	u8* stagingCpu = nullptr;
-	uint32_t stagingOffset = 0;
-	Buffer staging;
-
 	DeviceResource* device = nullptr;
-	InternalQueue* queue = nullptr;
+	uint32_t queueFamily = ~0;
 	PipelineResource* currentPipeline = nullptr;
 
 	VkCommandPool pool = VK_NULL_HANDLE;
@@ -369,15 +372,18 @@ struct CommandResource {
 	std::vector<std::string> timeStampNames;
 	std::vector<uint64_t> timeStamps;
 
-	void Create();
-	void Destroy();
+	void Create(uint32_t queueFamily);
+	~CommandResource() {
+		vkDestroyCommandPool(device->handle, pool, _ctx.allocator);
+		vkDestroyFence(device->handle, fence, _ctx.allocator);
+		// vkDestroyQueryPool(device->handle, queryPool, _ctx.allocator);
+	}
 };
 
-struct InternalQueue {
+struct QueueResourse {
 	uint32_t family = ~0;
 	uint32_t indexInFamily = 0;
 	VkQueue queue = VK_NULL_HANDLE;
-	Command* commands = nullptr;
 };
 
 
@@ -410,14 +416,14 @@ void InitImpl(GLFWwindow* window, uint32_t width, uint32_t height){
 	}
 
 	_ctx.GetPhysicalDevices();
-	auto physicalDeviceUIDs = _ctx.SelectPhysicalDevices(Queue::Graphics | Queue::Compute | Queue::Transfer, presentRequested);
+	auto physicalDeviceUIDs = _ctx.SelectPhysicalDevices(QueueFlagBits::Graphics | QueueFlagBits::Compute | QueueFlagBits::Transfer, presentRequested);
 	ASSERT(!physicalDeviceUIDs.empty(), "no device with Vulkan support!");
 	_ctx.activePhysicalDevice = std::make_shared<PhysicalDevice>(&_ctx.physicalDevices[physicalDeviceUIDs[0]]);
 
 	auto uid = UIDGenerator::Next();
 	auto res = _ctx.devices.try_emplace(uid, DeviceResource(uid));
 	auto& device = res.first->second;
-	device.Create(*_ctx.activePhysicalDevice, {{Queue::Graphics | Queue::Compute | Queue::Transfer, 1, presentRequested}});
+	device.resource->Create(*_ctx.activePhysicalDevice, {{QueueFlagBits::Graphics | QueueFlagBits::Compute | QueueFlagBits::Transfer, 1, presentRequested}});
 	_ctx.activeDevice = std::make_shared<DeviceResource>(&device);
 
 	_ctx.activeDevice->CreateBindlessDescriptorResources();
@@ -436,11 +442,11 @@ void Init(){
 void Destroy() {
 	// ImGui_ImplVulkan_Shutdown();
 	// ImGui_ImplGlfw_Shutdown();
-
-	for (auto& [uid, device] : _ctx.devices) {
-		device.Destroy();
-	}
+	_ctx.physicalDevices.clear();
+	_ctx.devices.clear();
 	_ctx.instance->Destroy();
+	_ctx.staging = {};
+	_ctx.stagingCpu = nullptr;
 }
 
 void* Device::MapBuffer(Buffer& buffer) {
@@ -1419,7 +1425,7 @@ void Command::DrawLineStrip(const Buffer& pointsBuffer, uint32_t firstPoint, uin
 
 
 // int CmdBeginTimeStamp(const std::string& name) {
-//     DEBUG_ASSERT(_ctx.currentQueue != Queue::Transfer, "Time Stamp not supported in Transfer queue");
+//     DEBUG_ASSERT(_ctx.currentQueue != QueueFlagBits::Transfer, "Time Stamp not supported in Transfer queue");
 //     int id = resource->timeStamps.size();
 //     if (id >= _ctx.timeStampPerPool - 1) {
 //         LOG_WARN("Maximum number of time stamp per pool exceeded. Ignoring Time stamp {}", name.c_str());
@@ -1466,8 +1472,6 @@ void Command::PushConstants(void* data, uint32_t size) {
 // vkWaitForFences + vkResetFences +
 // vkResetCommandPool + vkBeginCommandBuffer
 void Command::BeginCommandBuffer() {
-	// ASSERT(_ctx.currentQueue == Queue::Count, "Already recording a command buffer");
-	// _ctx.currentQueue = queue;
 	vkWaitForFences(resource->device->handle, 1, &resource->fence, VK_TRUE, UINT64_MAX);
 	vkResetFences(resource->device->handle, 1, &resource->fence);
 
@@ -1484,13 +1488,12 @@ void Command::BeginCommandBuffer() {
 
 	// ?VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT
 	vkResetCommandPool(resource->device->handle, resource->pool, 0); // TODO: check if this is needed
-	resource->stagingOffset = 0;
 	VkCommandBufferBeginInfo beginInfo{};
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 	vkBeginCommandBuffer(resource->buffer, &beginInfo);
 
-	// if (queue != Queue::Transfer) {
+	// if (queue != QueueFlagBits::Transfer) {
 	//     vkCmdResetQueryPool(resource->buffer, resource->queryPool, 0, _ctx.timeStampPerPool);
 	// }
 }
@@ -1532,7 +1535,7 @@ void Command::QueueSubmit(const SubmitInfo& submitInfo) {
 	DEBUG_VK(res, "Failed to submit command buffer");
 }
 
-// void DeviceResource::WaitQueue(Queue queue) {
+// void DeviceResource::WaitQueue(QueueFlagBits queue) {
 // 	// todo: wait on fence
 // 	auto res = vkQueueWaitIdle(_ctx.queues[queue]->queue);
 // 	DEBUG_VK(res, "Failed to wait idle command buffer");
@@ -2224,7 +2227,7 @@ void DeviceResource::Create(PhysicalDevice& physicalDevice, std::vector<QueueReq
 	for (auto& [family, count]: queuesToCreate) {
 		for (uint32_t index = 0; index < count; index++) {
 			auto key = family*maxQueuesInFamily + index;
-			InternalQueue q { family, index};
+			QueueResourse q { family, index};
 			vkGetDeviceQueue(handle, q.family, q.indexInFamily, &q.queue);
 			uniqueQueues.try_emplace(key, std::move(q));
 		}
@@ -2252,17 +2255,7 @@ void DeviceResource::Create(PhysicalDevice& physicalDevice, std::vector<QueueReq
 	// DEBUG_VK(result, "Failed to create imgui descriptor pool!");
 }
 
-void DeviceResource::Destroy() {
-	// dummyVertexBuffer = {};
-	// asScratchBuffer = {};
-	// vkDestroyDescriptorPool(handle, imguiDescriptorPool, _ctx.allocator);
-	DestroyBindlessDescriptorResources();
-	vmaDestroyAllocator(vmaAllocator);
-	vkDestroySampler(handle, genericSampler, _ctx.allocator);
-	vkDestroyDevice(handle, _ctx.allocator);
-	DEBUG_TRACE("Destroyed logical device");
-	handle = VK_NULL_HANDLE;
-}
+
 
 
 void SwapChainResource::CreateSurfaceFormats() {
@@ -2460,7 +2453,7 @@ void SwapChainResource::Destroy(bool is_recreation) {
 void SwapChain::Create(GLFWwindow* window, uint32_t width, uint32_t height) {
 	this->window = window;
 
-	resource = std::make_shared<SwapChainResource>();
+	resource = std::make_unique<SwapChainResource>();
 
 	VkResult res = glfwCreateWindowSurface(_ctx.instance->handle, window, _ctx.allocator, &resource->surface);
 	DEBUG_VK(res, "Failed to create window surface!");
@@ -2469,9 +2462,8 @@ void SwapChain::Create(GLFWwindow* window, uint32_t width, uint32_t height) {
 		// command buffers
 	commands.resize(framesInFlight);
 	for (auto& cmd: commands) {
-		// cmd.resource->queue = _ctx.queues[Queue::Graphics]; // TODO: make configurable
+		cmd.resource->Create();
 	}
-	_ctx.CreateCommandBuffers(commands);
 		// LOG_INFO("Created Swapchain {}", _ctx.swapChains.size());
 	currentFrame = 0;
 	currentImageIndex = 0;
@@ -2502,8 +2494,8 @@ void SwapChain::CreateImGui(GLFWwindow* window) {
     initInfo.Instance = _ctx.instance->handle;
     initInfo.PhysicalDevice = device->physicalDevice->handle;
     initInfo.DeviceResource = handle;
-    initInfo.QueueFamily = _ctx.queues[vkw::Queue::Graphics]->family;
-    initInfo.Queue = _ctx.queues[vkw::Queue::Graphics]->queue;
+    initInfo.QueueFamily = _ctx.queues[vkw::QueueFlagBits::Graphics]->family;
+    initInfo.QueueFlagBits = _ctx.queues[vkw::QueueFlagBits::Graphics]->queue;
     initInfo.DescriptorPool = _ctx.imguiDescriptorPool;
     initInfo.MinImageCount = resource->surfaceCapabilities.minImageCount;
     initInfo.ImageCount = (uint32_t)swapChainImages.size();
@@ -2569,7 +2561,7 @@ void SwapChain::SubmitAndPresent() {
 	presentInfo.pImageIndices = &currentImageIndex;
 	presentInfo.pResults = nullptr;
 
-	auto res = vkQueuePresentKHR(GetCommandBuffer().resource->queue->queue, &presentInfo); // TODO: use present queue
+	auto res = vkQueuePresentKHR(cmd.resource->queue->queue, &presentInfo); // TODO: use present queue
 
 	if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR) {
 		if (res == VK_ERROR_OUT_OF_DATE_KHR) { LOG_WARN("vkQueuePresentKHR: Out of date") }
@@ -2806,7 +2798,7 @@ void DeviceResource::DestroyBindlessDescriptorResources(){
 }
 
 
-void CommandResource::Create() {
+void CommandResource::Create(uint32_t queueFamily) {
 	VkCommandPoolCreateInfo poolInfo{};
 	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	poolInfo.flags = 0; // do not use VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT
@@ -2817,7 +2809,7 @@ void CommandResource::Create() {
 	allocInfo.commandBufferCount = 1;
 	static int buf_count = 0;
 
-	poolInfo.queueFamilyIndex = queue->family;
+	poolInfo.queueFamilyIndex = queueFamily;
 	auto res = vkCreateCommandPool(device->handle, &poolInfo, _ctx.allocator, &pool);
 	DEBUG_VK(res, "Failed to create command pool!");
 
@@ -2844,16 +2836,6 @@ void CommandResource::Create() {
 	// timeStamps.clear();
 	// timeStampNames.clear();
 
-}
-
-void CommandResource::Destroy() {
-	vkDestroyCommandPool(device->handle, pool, _ctx.allocator);
-	staging = {};
-	stagingCpu = nullptr;
-	vkDestroyFence(device->handle, fence, _ctx.allocator);
-	// DEBUG_TRACE("Destroyed fence {}", (void*)fence);
-	// printf("Destroyed fence %p\n", fence);
-	// vkDestroyQueryPool(device->handle, queryPool, _ctx.allocator);
 }
 
 bool SwapChainResource::SupportFormat(VkFormat format, VkImageTiling tiling, VkFormatFeatureFlags features) {
@@ -2921,7 +2903,7 @@ void Command::Copy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset) {
 		return;
 	}
 	// memcpy(resource->stagingCpu + resource->stagingOffset, data, size);
-	vmaCopyMemoryToAllocation(_ctx.vmaAllocator, data, resource->staging.resource->allocation, resource->stagingOffset, size);
+	vmaCopyMemoryToAllocation(resource->device->vmaAllocator, data, resource->staging.resource->allocation, resource->stagingOffset, size);
 	Copy(dst, resource->staging, size, dstOfsset, resource->stagingOffset);
 	DEBUG_TRACE("CmdCopy, size: {}, offset: {}", size, resource->stagingOffset);
 	resource->stagingOffset += size;

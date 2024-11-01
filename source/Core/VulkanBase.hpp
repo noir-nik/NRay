@@ -126,14 +126,14 @@ enum class ImageLayout {
 	MaxEnum = 0x7FFFFFFF
 };
 
-
+struct DeviceResource;
+struct SwapChainResource;
 struct BufferResource;
 struct ImageResource;
 struct PipelineResource;
 struct CommandResource;
 struct Semaphore;
 struct Command;
-struct SwapChainResource;
 
 struct Buffer {
 	std::shared_ptr<BufferResource> resource;
@@ -166,7 +166,7 @@ struct ImageDesc {
 	uint32_t layers = 1;
 };
 
-namespace Queue {
+namespace QueueFlagBits {
 	enum {
 		Graphics = 0x00000001,
 		Compute = 0x00000002,
@@ -344,7 +344,7 @@ struct ImageBarrier/* : MemoryBarrier */ {
 	MemoryBarrier memoryBarrier;
 };
 
-struct SubmitInfo{
+struct SubmitInfo {
 	Semaphore* waitSemaphore   = nullptr;
 	Flags64    waitStages      = PipelineStage::None;
 	Semaphore* signalSemaphore = nullptr;
@@ -395,8 +395,19 @@ struct Command {
 	void QueueSubmit (const SubmitInfo& submitInfo);
 };
 
+struct Device {
+	std::unique_ptr<DeviceResource> resource;
+	Buffer CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory = Memory::GPU, const std::string& name = "");
+	Image CreateImage(const ImageDesc& desc);
+	Pipeline CreatePipeline(const PipelineDesc& desc);
+
+	void* MapBuffer(Buffer& buffer);
+	void UnmapBuffer(Buffer& buffer);
+};
+
+
 class SwapChain {
-	std::shared_ptr<SwapChainResource> resource;
+	std::unique_ptr<SwapChainResource> resource;
 
 	std::vector<Image> swapChainImages;
 	std::vector<Command> commands; // Owns all command resources
