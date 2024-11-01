@@ -15,6 +15,9 @@ using i64 = int64_t;
 using f32 = float;
 using f64 = double;
 
+#define BIN_PATH "bin"
+#define IMG_PATH "img"
+
 #ifdef _WIN32
 	#define APP_PLATFORM_WINDOWS
 #endif

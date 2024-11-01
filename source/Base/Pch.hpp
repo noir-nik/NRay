@@ -12,5 +12,3 @@
 #include "Log.hpp"
 #include "Base.hpp"
 
-#define BIN_PATH "bin"
-#define IMG_PATH "img"
