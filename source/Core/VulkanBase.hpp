@@ -137,6 +137,8 @@ struct QueueResource;
 struct Semaphore;
 struct Command;
 
+struct Device;
+
 struct Buffer {
 	std::shared_ptr<BufferResource> resource;
 	uint32_t size;
@@ -186,7 +188,7 @@ using QueueFlags = Flags;
 struct Queue {
 	QueueFlags flags = 0;
 	// bool presentSupported = false;
-	GLFWwindow* supportedWindow = {};
+	GLFWwindow* supportedWindowToPresent = {};
 	bool preferSeparateFamily = false;
 	std::shared_ptr<QueueResource> resource;
 };
@@ -359,9 +361,9 @@ struct Command {
 	std::shared_ptr<CommandResource> resource;
 	Command();
 
-	void Copy(Buffer& dst, void*   data, uint32_t size, uint32_t dstOfsset = 0);
+	void Copy(Device& device, Buffer& dst, void*   data, uint32_t size, uint32_t dstOfsset = 0);
 	void Copy(Buffer& dst, Buffer& src,  uint32_t size, uint32_t dstOffset = 0, uint32_t srcOffset = 0);
-	void Copy(Image&  dst, void*   data, uint32_t size);
+	void Copy(Device& device, Image&  dst, void*   data, uint32_t size);
 	void Copy(Image&  dst, Buffer& src,  uint32_t srcOffset = 0); // size is a No OP
 	void Copy(Buffer& dst, Image&  src,  uint32_t dstOffset = 0); // size is a No OP
 	void Copy(Buffer& dst, Image& src, uint32_t dstOffset, ivec2 imageOffset, ivec2 imageExtent);// size is a No OP
@@ -441,7 +443,7 @@ public:
 	inline Image&      GetCurrentImage()   { return swapChainImages[currentImageIndex]; }
 	inline Command&    GetCommandBuffer()  { return commands[currentFrame];             }
 
-	void Create(Device& device, GLFWwindow* window, uint32_t width, uint32_t height);
+	void Create(Device& device, vkw::Queue& queue, GLFWwindow* window, uint32_t width, uint32_t height);
 	void Destroy();
 	void Recreate(uint32_t width, uint32_t height);
 	bool AcquireImage();

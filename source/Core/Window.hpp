@@ -212,7 +212,7 @@ public:
 	inline bool        GetDrawNeeded()                     { return drawNeeded; }
 	inline void        SetDrawNeeded(bool value)           { drawNeeded = value; }
 
-	inline void        CreateSwapchain(vkw::Device& device){ if (!swapChainAlive) swapChain.Create(device, window, width, height); swapChainAlive = true; }
+	inline void        CreateSwapchain(vkw::Device& device, vkw::Queue& queue){ if (!swapChainAlive) swapChain.Create(device, queue, window, width, height); swapChainAlive = true; }
 	inline void        RecreateSwapchain()                 { ASSERT(swapChainAlive, "RecreateSwapchain: Swapchain is not alive"); swapChain.Recreate(width, height);} 
 	inline bool        GetSwapchainDirty()                 { return swapChain.GetDirty(); }
 	inline auto&       GetSwapchain()                      { return swapChain; }

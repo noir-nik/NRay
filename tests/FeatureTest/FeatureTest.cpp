@@ -423,12 +423,12 @@ void FeatureTestApplication::Setup() {
 	ctx.height = info->height;
 }
 
-void FeatureTestApplication::Create() {
+void FeatureTestApplication::Create() { auto& c = ctx;
 	vkw::Init();
 	auto window = WindowManager::NewWindow(ctx.width, ctx.height, "wm");
 	ctx.queue = {vkw::QueueFlagBits::Graphics | vkw::QueueFlagBits::Compute | vkw::QueueFlagBits::Transfer, window->GetGLFWwindow()};
 	ctx.device = vkw::CreateDevice({&ctx.queue});
-	window->CreateSwapchain(ctx.device);
+	window->CreateSwapchain(ctx.device, ctx.queue);
 	ctx.windows.emplace(window);
 	ctx.mainWindow = window;
 	// ctx.window1 = WindowManager::NewWindow(ctx.width, ctx.height, "w1");
