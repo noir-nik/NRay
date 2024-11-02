@@ -4,6 +4,7 @@
 #include "VulkanBase.hpp"
 #include "ShaderCommon.h"
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <numeric>
@@ -252,27 +253,19 @@ struct DeviceResource: DeleteCopyMove {
 		
 		struct VertexInputHash {
 			size_t operator()(const VertexInputInfo& info) const {
-				size_t seed = 0;
-				for (const int& format : info.vertexAttributes) {
-					seed = HashCombine(seed, format);
-				}
-				seed = HashCombine(seed, info.lineTopology);
-				return seed;
+				return HashCombine(VectorHash(info.vertexAttributes), info.lineTopology);
 			}
 
 			bool operator()(const VertexInputInfo& a, const VertexInputInfo& b) const {
-				return a.vertexAttributes == b.vertexAttributes &&
-					a.lineTopology == b.lineTopology;
+				return a.vertexAttributes == b.vertexAttributes && a.lineTopology == b.lineTopology;
 			}
 		};
 
 		struct PreRasterizationHash {
 			size_t operator()(const PreRasterizationInfo& info) const {
 				size_t seed = 0;
-				for (const auto& stage : info.stages) {
-					seed = HashCombine(seed, stage.stage);
-					seed = HashCombine(seed, std::hash<std::string>{}(stage.path.string()));
-					seed = HashCombine(seed, std::hash<std::string>{}(stage.entryPoint));
+				for (const Pipeline::Stage &stage: info.stages) {
+					seed = HashCombine(seed, stage.Hash());
 				}
 				seed = HashCombine(seed, info.lineTopology);
 				seed = HashCombine(seed, info.cullMode);
@@ -280,33 +273,48 @@ struct DeviceResource: DeleteCopyMove {
 			}
 			
 			bool operator()(const PreRasterizationInfo& a, const PreRasterizationInfo& b) const {
-				bool equalStages = a.stages.size() == b.stages.size();
-				a.lineTopology == b.lineTopology &&
-				a.cullMode == b.cullMode;
+				return a.stages.size() == b.stages.size()
+					&& std::equal(a.stages.begin(), a.stages.end(), b.stages.begin(), [](const auto& a, const auto& b) {
+						return a.stage == b.stage && a.path == b.path && a.entryPoint == b.entryPoint;
+					})
+					&& a.lineTopology == b.lineTopology && a.cullMode == b.cullMode;
 			}
 		};
 
 		struct FragmentOutputHash {
-				}
+			size_t operator()(const FragmentOutputInfo& info) const {
+				return HashCombine(VectorHash(info.colorFormats), reinterpret_cast<size_t>(info.pipelineLayout));
+			}
+
+			bool operator()(const FragmentOutputInfo& a, const FragmentOutputInfo& b) const {
+				return std::equal(a.colorFormats.begin(), a.colorFormats.end(), b.colorFormats.begin())
+					&& a.pipelineLayout == b.pipelineLayout;
 			}
 		};
 
 		struct FragmentShaderHash {
 			size_t operator()(const FragmentShaderInfo& info) const {
-				size_t seed = 0;
-				for (const auto& stage : info.stages) {
-					seed = HashCombine(seed, stage);
+				size_t hash = 0;
+				for (const auto& stage: info.stages) {
+					hash = HashCombine(hash, stage.Hash());
 				}
-				return seed;
+				hash = HashCombine(hash, reinterpret_cast<size_t>(info.pipelineLayout));
+				return hash;
 			}
-		}
-
+			bool operator()(const FragmentShaderInfo& a, const FragmentShaderInfo& b) const {
+				return a.stages.size() == b.stages.size()
+					&& std::equal(a.stages.begin(), a.stages.end(), b.stages.begin(), [](const auto& a, const auto& b) {
+						return a.stage == b.stage && a.path == b.path && a.entryPoint == b.entryPoint;
+					})
+					&& a.pipelineLayout == b.pipelineLayout;
+			}
+		};
 
 		DeviceResource* device = nullptr;
-		std::unordered_map<VertexInputInfo, VkPipeline, VertexInputInfoHash, VertexInputInfoHash> vertexInputInterfaces;
-		// std::unordered_map<VertexInputInfo, VkPipeline, VertexInputInfoHash, VertexInputInfo> preRasterizationShaders;
-		// std::unordered_map<VertexInputInfo, VkPipeline, VertexInputInfoHash, VertexInputInfo> fragmentOutputInterfaces;
-		// std::unordered_map<FragmentShaderInfo, VkPipeline, VertexInputInfoHash, VertexInputInfo> fragmentShaders;
+		std::unordered_map<VertexInputInfo, VkPipeline, VertexInputHash, VertexInputHash> vertexInputInterfaces;
+		std::unordered_map<PreRasterizationInfo, VkPipeline, PreRasterizationHash, PreRasterizationHash> preRasterizationShaders;
+		std::unordered_map<FragmentOutputInfo, VkPipeline, FragmentOutputHash, FragmentOutputHash> fragmentOutputInterfaces;
+		std::unordered_map<FragmentShaderInfo, VkPipeline, FragmentShaderHash, FragmentShaderHash> fragmentShaders;
 
 		void CreateVertexInputInterface(VertexInputInfo info);
 		void CreatePreRasterizationShaders(PreRasterizationInfo info);
@@ -878,7 +886,7 @@ Pipeline DeviceResource::CreatePipeline(const PipelineDesc& desc) { // External 
 		// VertexInputInterface
 		DeviceResource::PipelineLibrary::VertexInputInfo vertexInputInfo {
 			.vertexAttributes = desc.vertexAttributes,
-			.lineTopology = desc.lineTopology
+			.lineTopology = desc.lineTopology,
 		};
 		if (pipelineLibrary.vertexInputInterfaces.find(vertexInputInfo) == pipelineLibrary.vertexInputInterfaces.end()) {
 			pipelineLibrary.CreateVertexInputInterface(vertexInputInfo);
@@ -892,6 +900,7 @@ Pipeline DeviceResource::CreatePipeline(const PipelineDesc& desc) { // External 
 				case ShaderStage::TessellationControl:
 				case ShaderStage::TessellationEvaluation:
 				case ShaderStage::Geometry:
+				case D
 				preRasterizationInfo.stages.push_back(stage);
 				break;
 				case ShaderStage::Fragment:
@@ -1282,7 +1291,7 @@ void DeviceResource::PipelineLibrary::CreatePreRasterizationShaders(PreRasteriza
 	VkPipeline pipeline;
 	auto res = vkCreateGraphicsPipelines(device->handle, device->pipelineCache, 1, &pipelineLibraryInfo , _ctx.allocator, &pipeline);
 	DEBUG_VK(res, "Failed to create pre-rasterization shaders!");
-	// preRasterizationShaders.emplace(info, pipeline);
+	preRasterizationShaders.emplace(info, pipeline);
 }
 
 void DeviceResource::PipelineLibrary::CreateFragmentShader(FragmentShaderInfo info) {
@@ -1350,7 +1359,7 @@ void DeviceResource::PipelineLibrary::CreateFragmentShader(FragmentShaderInfo in
 	VkPipeline pipeline;
 	auto res = vkCreateGraphicsPipelines(device->handle, device->pipelineCache, 1, &pipelineLibraryInfo, nullptr, &pipeline); //todo: Thread pipeline cache
 	DEBUG_VK(res, "Failed to create vertex input interface!");
-	// fragmentShaders.emplace(info, pipeline);
+	fragmentShaders.emplace(info, pipeline);
 }
 
 void DeviceResource::PipelineLibrary::CreateFragmentOutputInterface(FragmentOutputInfo info) {
@@ -1395,7 +1404,7 @@ void DeviceResource::PipelineLibrary::CreateFragmentOutputInterface(FragmentOutp
 	VkPipeline pipeline;
 	auto res = vkCreateGraphicsPipelines(device->handle, device->pipelineCache, 1, &pipelineLibraryInfo, nullptr, &pipeline);
 	DEBUG_VK(res, "Failed to create fragment output interface!");
-	// fragmentOutputInterfaces.emplace(info, pipeline);
+	fragmentOutputInterfaces.emplace(info, pipeline);
 }
 
 void DeviceResource::PipelineLibrary::LinkPipeline(std::span<VkPipeline> pipelines, VkPipelineLayout layout) {
@@ -3309,6 +3318,14 @@ VkSampler DeviceResource::CreateSampler(VkDevice device, f32 maxLod) {
 	return sampler;
 }
 
+size_t Pipeline::Stage::Hash() const {
+	size_t hash = 0;
+	hash = HashCombine(hash, static_cast<size_t>(stage));
+	hash = HashCombine(hash, std::hash<std::string>{}(path.string()));
+	hash = HashCombine(hash, std::hash<std::string>{}(entryPoint));
+	return hash;
+}
+
 }
 static const char *VK_ERROR_STRING(VkResult result) {
 	switch ((int)result)
@@ -3376,7 +3393,3 @@ static const char *VK_ERROR_STRING(VkResult result) {
 	}
 }
 
-
-namespace vkutil {
-
-}

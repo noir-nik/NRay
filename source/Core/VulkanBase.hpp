@@ -245,6 +245,9 @@ struct Pipeline {
 		ShaderStage stage;
 		std::filesystem::path path;
 		std::string entryPoint = "main";
+	private:
+	friend class DeviceResource;
+		size_t Hash() const;
 	};
 	PipelinePoint point;
 	std::shared_ptr<PipelineResource> resource;
