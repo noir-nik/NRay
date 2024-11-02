@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <vector>
+#include <cstddef>
 
 using Hash64 = std::uint64_t;
 using UID = uint32_t;
