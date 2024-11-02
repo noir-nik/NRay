@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <memory>
 #include <numeric>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 #include <vulkan/vulkan_core.h>
@@ -150,6 +151,7 @@ struct PhysicalDevice: DeleteCopyMove {
 	// @param avoidIfPossible: vector of pairs (flags, priority to avoid)
 	// @param surfaceToSupport: surface to support (strict)
 	// @return best queue family index or QUEUE_NOT_FOUND if strict requirements not met
+	std::vector<std::string_view> GetSupportedExtensions(const std::span<const char*>& desiredExtensions);
 	uint32_t GetQueueFamilyIndex(VkQueueFlags desiredFlags, VkQueueFlags undesiredFlags, const std::span<const std::pair<VkQueueFlags, float>>& avoidIfPossible = {}, VkSurfaceKHR surfaceToSupport = VK_NULL_HANDLE, const std::span<const uint32_t>& filledUpFamilies = {});
 };
 
@@ -1961,9 +1963,24 @@ void PhysicalDevice::GetDetails() {
 	if (numSamples > maxSamples) {numSamples = maxSamples;}
 }
 
+auto PhysicalDevice::GetSupportedExtensions(const std::span<const char*>& desiredExtensions) -> std::vector<std::string_view> {
+	std::vector<std::string_view> extensionsToEnable;
+	extensionsToEnable.reserve(desiredExtensions.size());
+	std::copy_if(desiredExtensions.begin(), desiredExtensions.end(), std::back_inserter(extensionsToEnable),
+		[&](const char* desiredExtension) {
+			if (std::any_of(availableExtensions.begin(), availableExtensions.end(), [&desiredExtension](const auto& availableExtension) {
+					return std::string_view(availableExtension.extensionName) == desiredExtension;
+			}) == true) { return true; } else {
+				LOG_WARN("Extension {} not supported on device {}", desiredExtension, physicalProperties2.properties.deviceName);
+				return false;
+			}
+		});
+	return extensionsToEnable;
+}
 
 
 constexpr uint32_t QUEUE_NOT_FOUND = ~0u;
+constexpr uint32_t ALL_SUITABLE_QUEUES_TAKEN = ~0u - 1;
 
 uint32_t PhysicalDevice::GetQueueFamilyIndex(VkQueueFlags desiredFlags, VkQueueFlags undesiredFlags, const std::span<const std::pair<VkQueueFlags, float>>& avoidIfPossible, VkSurfaceKHR surfaceToSupport, const std::span<const uint32_t>& filledUpFamilies) {
 	std::vector<std::pair<uint32_t, float>> candidates;
@@ -1996,7 +2013,7 @@ uint32_t PhysicalDevice::GetQueueFamilyIndex(VkQueueFlags desiredFlags, VkQueueF
 			LOG_WARN("Queue family {} is filled up", i);
 		}
 	}
-	if (candidates.empty()) { return QUEUE_NOT_FOUND; }
+	if (candidates.empty()) { return ALL_SUITABLE_QUEUES_TAKEN; }
 	// print candidates
 	for (auto& c: candidates) {
 		DEBUG_TRACE("Candidate: {} ({})", c.first, c.second);
@@ -2028,46 +2045,41 @@ void DeviceResource::Create(const std::vector<Queue*>& queues) {
 		requiredExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 	}
 	for (auto& [uid, physicalDevice]: _ctx.physicalDevices) {
+		// Require extension support
+		if (physicalDevice.GetSupportedExtensions(requiredExtensions).size() < requiredExtensions.size()) {
+			continue;
+		}
 		queuesToCreate.clear();
 		filledUpFamilies.clear();
 		bool deviceSuitable = true;
 		for (auto queue: queues) {
+			if (queue->resource) {
+				LOG_WARN("Queue already has resource with flags ({}) family ({}) index ({}). Ignoring request for new queue.", (uint32_t)queue->flags, queue->resource->familyIndex, queue->resource->index);
+				continue;
+			}
 			std::span<const std::pair<VkQueueFlags, float>> avoidIfPossible{};
-			uint32_t index;
 			if(queue->preferSeparateFamily) {
 				switch (queue->flags) {
-				case VK_QUEUE_COMPUTE_BIT:
-					avoidIfPossible = {{{VK_QUEUE_GRAPHICS_BIT, 1.0f}, {VK_QUEUE_TRANSFER_BIT, 0.5f}}};
-					break;
-				case VK_QUEUE_TRANSFER_BIT:
-					avoidIfPossible = {{{VK_QUEUE_GRAPHICS_BIT, 1.0f}, {VK_QUEUE_COMPUTE_BIT, 0.5f}}};
-					break;
-				default:
-					avoidIfPossible = {{{VK_QUEUE_GRAPHICS_BIT, 1.0f}}};
-					break;
+				case VK_QUEUE_COMPUTE_BIT:  avoidIfPossible = {{{VK_QUEUE_GRAPHICS_BIT, 1.0f}, {VK_QUEUE_TRANSFER_BIT, 0.5f}}}; break;
+				case VK_QUEUE_TRANSFER_BIT: avoidIfPossible = {{{VK_QUEUE_GRAPHICS_BIT, 1.0f}, {VK_QUEUE_COMPUTE_BIT, 0.5f}}}; break;
+				default:                    avoidIfPossible = {{{VK_QUEUE_GRAPHICS_BIT, 1.0f}}}; break;
 				}
 			}
-			index = physicalDevice.GetQueueFamilyIndex(queue->flags, 0, avoidIfPossible, surfaces[queue->supportedWindowToPresent], filledUpFamilies);
-			if (index == QUEUE_NOT_FOUND) {
+			auto familyIndex = physicalDevice.GetQueueFamilyIndex(queue->flags, 0, avoidIfPossible, surfaces[queue->supportedWindowToPresent], filledUpFamilies);
+			if (familyIndex == QUEUE_NOT_FOUND) {
 				LOG_WARN("Requested queue flags ({}) not available on device: ({})", (uint32_t)queue->flags, physicalDevice.physicalProperties2.properties.deviceName);
 				deviceSuitable = false;
 				break;
+			} else if (familyIndex == ALL_SUITABLE_QUEUES_TAKEN) {
+				LOG_WARN("Requested more queues with flags ({}) than available on device: ({}). Queue was not created", queue->flags, physicalDevice.physicalProperties2.properties.deviceName);
+				continue;
 			}
-			// if (physicalDevice.availableFamilies[index].queueCount == queuesToCreate[index]) {
-			// 	LOG_WARN("Requested more queues with flags ({}) than available ({}) on device: ({}). Queue was not created", queue->flags, physicalDevice.availableFamilies[index].queueCount, physicalDevice.physicalProperties2.properties.deviceName);
-
-			// } else {
-			if (!queue->resource) {
-				queue->resource = std::make_shared<QueueResource>(queue->flags, index);
-				queue->resource->familyIndex = index;
-				queue->resource->index = queuesToCreate[index];
-				queuesToCreate[index]++;
-				if (queuesToCreate[index] == physicalDevice.availableFamilies[index].queueCount) {
-					filledUpFamilies.push_back(queue->resource->familyIndex);
-				}
-			} else {
-				LOG_WARN("Queue ({}) already has resource with flags ({}) family ({}) index ({}). Ignoring request for new queue.", (uint32_t)queue->flags, index, queue->resource->familyIndex, queue->resource->index);
+			queue->resource = std::make_shared<QueueResource>(familyIndex, queuesToCreate[familyIndex]);
+			queuesToCreate[familyIndex]++;
+			if (queuesToCreate[familyIndex] == physicalDevice.availableFamilies[familyIndex].queueCount) {
+				filledUpFamilies.push_back(familyIndex);
 			}
+		
 			// }
 		}
 		if (deviceSuitable) {
@@ -2221,6 +2233,7 @@ void DeviceResource::Create(const std::vector<Queue*>& queues) {
 	vmaCreateAllocator(&allocatorCreateInfo, &vmaAllocator);
 
 	for (auto& q: queues) {
+		if (!q->resource) continue; // queue was not created
 		auto key = q->resource->familyIndex*maxQueuesInFamily + q->resource->index;
 		// auto sh = std::shared_ptr<Queue>(q->resource);
 		auto it = uniqueQueues.try_emplace(key, q->resource);
