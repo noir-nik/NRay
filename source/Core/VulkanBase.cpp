@@ -10,6 +10,7 @@
 #include <string_view>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 #include <vulkan/vulkan_core.h>
 #include <fstream>
 #include <span>
@@ -30,15 +31,16 @@ struct Instance;
 struct PhysicalDevice;
 struct DeviceResource;
 struct SwapChain;
-struct Context
-{	
+
+
+struct Context {	
 	// void EndCommandBuffer(VkSubmitInfo submitInfo);
 	// Command::void EndCommandBuffer(VkSubmitInfo submitInfo);
 	VkAllocationCallbacks* allocator = VK_NULL_HANDLE;
 
 
-	void LoadShaders(Pipeline& pipeline);
-	std::vector<char> CompileShader(const std::filesystem::path& path, const char* entryPoint);
+	// void LoadShaders(Pipeline& pipeline);
+	// std::vector<char> CompileShader(const std::filesystem::path& path, const char* entryPoint);
 
 	void CreatePipelineLibrary(const PipelineDesc& desc, Pipeline& pipeline);
 
@@ -151,8 +153,8 @@ struct PhysicalDevice: DeleteCopyMove {
 	// @param avoidIfPossible: vector of pairs (flags, priority to avoid)
 	// @param surfaceToSupport: surface to support (strict)
 	// @return best queue family index or QUEUE_NOT_FOUND if strict requirements not met
-	std::vector<std::string_view> GetSupportedExtensions(const std::span<const char*>& desiredExtensions);
 	uint32_t GetQueueFamilyIndex(VkQueueFlags desiredFlags, VkQueueFlags undesiredFlags, const std::span<const std::pair<VkQueueFlags, float>>& avoidIfPossible = {}, VkSurfaceKHR surfaceToSupport = VK_NULL_HANDLE, const std::span<const uint32_t>& filledUpFamilies = {});
+	std::vector<std::string_view> GetSupportedExtensions(const std::span<const char*>& desiredExtensions);
 };
 
 struct QueueResource {
@@ -188,7 +190,9 @@ struct CommandResource {
 
 struct DeviceResource: DeleteCopyMove {
 	UID uid;
-	DeviceResource(UID uid): uid(uid){}
+	DeviceResource(UID uid) : uid(uid) {
+		pipelineLibrary.device = this;
+	}
 
 	void CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipeline);
 
@@ -220,12 +224,50 @@ struct DeviceResource: DeleteCopyMove {
 	VkSampler genericSampler;
 
 	VkPipelineCache pipelineCache = VK_NULL_HANDLE;
+	
+	struct PipelineLibrary {
+		struct VertexInputInfo {
+			std::vector<Format> vertexAttributes;
+			CullModeFlags cullMode = CullMode::None;
+			bool lineTopology = false;
+		};
 
-	struct {
-		std::unordered_map<UID, VkPipeline> vertexInputInterface;
-		std::unordered_map<UID, VkPipeline> preRasterizationShaders;
-		std::unordered_map<UID, VkPipeline> fragmentOutputInterface;
+		struct VertexInputInfoHash {
+			Hash64 operator()(const VertexInputInfo& info) const {
+				Hash64 seed = 0;
+				for (const int& format : info.vertexAttributes) {
+					seed = HashCombine(seed, format);
+				}
+				seed = HashCombine(seed, info.cullMode);
+				seed = HashCombine(seed, info.lineTopology);
+				return seed;
+			}
+		};
+
+		struct VertexInputInfoKeyEqual {
+			bool operator()(const VertexInputInfo& a, const VertexInputInfo& b) const {
+				return a.vertexAttributes == b.vertexAttributes &&
+					a.cullMode == b.cullMode &&
+					a.lineTopology == b.lineTopology;
+			}
+		};
+
+		struct PreRasterizationInfo {
+			std::vector<Pipeline::Stage> stages;
+		};
+
+
+		DeviceResource* device = nullptr;
+		std::unordered_map<VertexInputInfo, VkPipeline, VertexInputInfoHash, VertexInputInfoKeyEqual> vertexInputInterfaces;
+		std::unordered_map<Hash64, VkPipeline> preRasterizationShaders;
+		std::unordered_map<Hash64, VkPipeline> fragmentOutputInterfaces;
 		std::vector<VkPipeline> fragmentShaders;
+
+		void CreateVertexInputInterface(VertexInputInfo info);
+		void CreatePreRasterizationShaders(PreRasterizationInfo info);
+		void CreateFragmentShader(FragmentShaderInfo info);
+		void CreateFragmentOutputInterface(FragmentOutputInfo info);
+		void LinkPipeline(Pipeline& pipeline);
 	} pipelineLibrary;
 	
 	const uint32_t stagingBufferSize = 2 * 1024 * 1024;
@@ -253,12 +295,6 @@ struct DeviceResource: DeleteCopyMove {
 
 	void CreateBindlessDescriptorResources();
 	void DestroyBindlessDescriptorResources();
-
-	void CreateVertexInputInterface(const PipelineDesc& desc, Pipeline& pipeline);
-	void CreatePreRasterizationShaders(const PipelineDesc& desc, Pipeline& pipeline);
-	void CreateFragmentShader(const PipelineDesc& desc, Pipeline& pipeline);
-	void CreateFragmentOutputInterface(const PipelineDesc& desc, Pipeline& pipeline);
-	void LinkPipeline(Pipeline& pipeline);
 
 	VkSampler CreateSampler(VkDevice device, f32 maxLod);
 
@@ -716,32 +752,8 @@ std::vector<char> ReadBinaryFile(const std::string& path) {
 	return buffer;
 }
 
-void Context::LoadShaders(Pipeline& pipeline) {
-	pipeline.stageBytes.clear();
-	for (auto& stage : pipeline.stages) {
-		std::filesystem::path binPath = "bin/" + stage.path.filename().string() + ".spv";
-		// LOG_DEBUG("Loading shader: " + binPath.string());
-		std::filesystem::path& shaderPath = stage.path;
-		bool compilationRequired = SHADER_ALWAYS_COMPILE;
-		// check if already compiled to .spv
-		if (std::filesystem::exists(binPath) && std::filesystem::exists(shaderPath)) {
-			auto lastSpvUpdate = std::filesystem::last_write_time(binPath);
-			auto lastShaderUpdate = std::filesystem::last_write_time(shaderPath);
-			if (lastShaderUpdate > lastSpvUpdate) {
-				compilationRequired = true;
-			}
-		} else {
-			compilationRequired = true;
-		}	
-		if (compilationRequired) {
-			pipeline.stageBytes.push_back(std::move(CompileShader(stage.path, stage.entryPoint.c_str())));
-		} else {
-			pipeline.stageBytes.push_back(std::move(ReadBinaryFile(binPath.string())));
-		}
-	}
-}
-// TODO: change for slang and check if compiled fresh spv exists
-std::vector<char> Context::CompileShader(const std::filesystem::path& path, const char* entryPoint) {
+
+std::vector<char> CompileShader(const std::filesystem::path& path, const char* entryPoint) {
 	char compile_string[1024];
 	char inpath[256];
 	char outpath[256];
@@ -764,40 +776,101 @@ std::vector<char> Context::CompileShader(const std::filesystem::path& path, cons
 	return ReadBinaryFile(outpath);
 }
 
-Pipeline Device::CreatePipeline(const PipelineDesc& desc) {// External handle
+std::vector<char> LoadShader(Pipeline::Stage stage) {
+	std::filesystem::path binPath = "bin/" + stage.path.filename().string() + ".spv";
+	// LOG_DEBUG("Loading shader: " + binPath.string());
+	std::filesystem::path& shaderPath = stage.path;
+	bool compilationRequired = SHADER_ALWAYS_COMPILE;
+	// check if already compiled to .spv
+	if (std::filesystem::exists(binPath) && std::filesystem::exists(shaderPath)) {
+		auto lastSpvUpdate = std::filesystem::last_write_time(binPath);
+		auto lastShaderUpdate = std::filesystem::last_write_time(shaderPath);
+		if (lastShaderUpdate > lastSpvUpdate) {
+			compilationRequired = true;
+		}
+	} else {
+		compilationRequired = true;
+	}	
+	if (compilationRequired) {
+		return std::move(CompileShader(stage.path, stage.entryPoint.c_str()));
+	} else {
+		return std::move(ReadBinaryFile(binPath.string()));
+	}
+}
+
+// struct VertexInputInterfaceInfoComparator {
+// 	bool operator()(const VertexInputInterfaceInfo& a, const VertexInputInterfaceInfo& b) const {
+// 		return std::tie(a.vertexAttributes, a.cullMode, a.lineTopology) ==
+// 			std::tie(b.vertexAttributes, b.cullMode, b.lineTopology);
+// 	}
+// };
+
+
+Pipeline Device::CreatePipeline(const PipelineDesc& desc) { // External handle
 	Pipeline pipeline;
-	pipeline.resource = std::make_shared<PipelineResource>();
-	pipeline.resource->device = this->resource.get();
-	pipeline.resource->name = desc.name;
-	pipeline.stages = desc.stages;
-	_ctx.LoadShaders(pipeline); // load into pipeline
-	resource->CreatePipelineImpl(desc, pipeline);
-	return pipeline;
+	if (desc.point == PipelinePoint::Graphics && resource->physicalDevice->graphicsPipelineLibraryFeatures.graphicsPipelineLibrary) {
+		// VertexInputInterface
+		DeviceResource::PipelineLibrary::VertexInputInfo vertexInputInfo {
+			.vertexAttributes = desc.vertexAttributes,
+			.cullMode = desc.cullMode,
+			.lineTopology = desc.lineTopology
+		};
+		if (resource->pipelineLibrary.vertexInputInterfaces.find(vertexInputInfo) == resource->pipelineLibrary.vertexInputInterfaces.end()) {
+			resource->pipelineLibrary.CreateVertexInputInterface(vertexInputInfo);
+		}
+
+		PreRasterizationInfo preRasterizationInfo;
+		preRasterizationInfo.lineTopology = desc.lineTopology;
+		for (auto& stage: desc.stages) {
+			switch(stage.stage) {
+				case ShaderStage::Vertex:
+				case ShaderStage::TessellationControl:
+				case ShaderStage::TessellationEvaluation:
+				case ShaderStage::Geometry:
+				preRasterizationInfo.stages.push_back(stage);
+				break;
+				case ShaderStage::Fragment:
+				default:
+				break;
+			}
+		}
+
+	} else {
+		
+		pipeline.resource = std::make_shared<PipelineResource>();
+		pipeline.resource->device = this->resource.get();
+		pipeline.resource->name = desc.name;
+		resource->CreatePipelineImpl(desc, pipeline);
+		return pipeline;
+	}
 }
 
 void DeviceResource::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipeline) {
 	pipeline.point = desc.point; // Graphics or Compute
 
-	std::vector<VkPipelineShaderStageCreateInfo> shaderStages(desc.stages.size());
-	std::vector<VkShaderModule> shaderModules(desc.stages.size());
-	for (int i = 0; i < desc.stages.size(); i++) {
+	std::vector<VkPipelineShaderStageCreateInfo> shaderStages;
+	shaderStages.reserve(desc.stages.size());
+	std::vector<VkShaderModule> shaderModules;
+	shaderModules.reserve(desc.stages.size());
+	for (auto& stage: desc.stages) {
+		std::vector<char> bytes = LoadShader(stage);
 		VkShaderModuleCreateInfo createInfo{};
+		VkShaderModule shaderModule;
 		createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-		createInfo.codeSize = pipeline.stageBytes[i].size();
-		createInfo.pCode = (const uint32_t*)(pipeline.stageBytes[i].data());
-		auto result = vkCreateShaderModule(handle, &createInfo, _ctx.allocator, &shaderModules[i]);
+		createInfo.codeSize = bytes.size();
+		createInfo.pCode = (const uint32_t*)(bytes.data());
+		auto result = vkCreateShaderModule(handle, &createInfo, _ctx.allocator, &shaderModule);
 		DEBUG_VK(result, "Failed to create shader module!");
 		ASSERT(result == VK_SUCCESS, "Failed to create shader module!");
-		shaderStages[i] = {};
-		shaderStages[i].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-		shaderStages[i].stage = (VkShaderStageFlagBits)desc.stages[i].stage;
-		shaderStages[i].module = shaderModules[i];
-		// function to invoke inside the shader module
-		// it's possible to combine multiple shaders into a single module
-		// using different entry points
-		shaderStages[i].pName = pipeline.stages[i].entryPoint.c_str();
-		// this allow us to specify values for shader constants
-		shaderStages[i].pSpecializationInfo = nullptr;
+		shaderModules.push_back(shaderModule);
+		VkPipelineShaderStageCreateInfo shaderStageInfo {
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			.stage = (VkShaderStageFlagBits)stage.stage,
+			.module = shaderModule,
+			.pName = stage.entryPoint.c_str(),
+			.pSpecializationInfo = nullptr,
+		};
+		shaderStages.push_back(shaderStageInfo);
 	}
 
 	std::vector<VkDescriptorSetLayout> layouts;
@@ -992,7 +1065,7 @@ void DeviceResource::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipe
 		vkDestroyShaderModule(handle, shaderModules[i], _ctx.allocator);
 	}
 }
-/* 
+
 namespace GraphicsPipelineLibraryFlags {
 	enum : Flags {
 		VertexInputInterface = 0x00000001,
@@ -1003,25 +1076,15 @@ namespace GraphicsPipelineLibraryFlags {
 	};
 }
 
-Hash64 HashFromFormats(std::vector<int> const& vec) {
-  Hash64 seed = vec.size();
-  for(auto x : vec) {
-    x = ((x >> 16) ^ x) * 0x45d9f3b;
-    x = ((x >> 16) ^ x) * 0x45d9f3b;
-    x = (x >> 16) ^ x;
-    seed ^= x + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-  }
-  return seed;
-}
 
-void DeviceResource::CreateVertexInputInterface(const PipelineDesc& desc, Pipeline& pipeline) {
+void DeviceResource::PipelineLibrary::CreateVertexInputInterface(VertexInputInfo info) {
 	VkGraphicsPipelineLibraryCreateInfoEXT libraryInfo{};
 	libraryInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT;
 	libraryInfo.flags = VK_GRAPHICS_PIPELINE_LIBRARY_VERTEX_INPUT_INTERFACE_BIT_EXT;
 
 	VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
 	inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-	if (desc.lineTopology) {
+	if (info.lineTopology) {
 		inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP;
 	} else {
 		inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
@@ -1029,18 +1092,18 @@ void DeviceResource::CreateVertexInputInterface(const PipelineDesc& desc, Pipeli
 	// with this parameter true we can break up lines and triangles in _STRIP topology modes
 	inputAssembly.primitiveRestartEnable = VK_FALSE;
 
-	std::vector<VkVertexInputAttributeDescription> attributeDescs(desc.vertexAttributes.size());
+	std::vector<VkVertexInputAttributeDescription> attributeDescs(info.vertexAttributes.size());
 	uint32_t attributeSize = 0;
-	for (int i = 0; i < desc.vertexAttributes.size(); i++) {
+	for (int i = 0; i < info.vertexAttributes.size(); i++) {
 		attributeDescs[i].binding = 0;
 		attributeDescs[i].location = i;
-		attributeDescs[i].format = (VkFormat)desc.vertexAttributes[i];
+		attributeDescs[i].format = (VkFormat)info.vertexAttributes[i];
 		attributeDescs[i].offset = attributeSize;
-		if (desc.vertexAttributes[i] == Format::RG32_sfloat) {
+		if (info.vertexAttributes[i] == Format::RG32_sfloat) {
 			attributeSize += 2 * sizeof(float);
-		} else if (desc.vertexAttributes[i] == Format::RGB32_sfloat) {
+		} else if (info.vertexAttributes[i] == Format::RGB32_sfloat) {
 			attributeSize += 3 * sizeof(float);
-		} else if (desc.vertexAttributes[i] == Format::RGBA32_sfloat) {
+		} else if (info.vertexAttributes[i] == Format::RGBA32_sfloat) {
 			attributeSize += 4 * sizeof(float);
 		} else {
 			DEBUG_ASSERT(false, "Invalid Vertex Attribute");
@@ -1067,11 +1130,13 @@ void DeviceResource::CreateVertexInputInterface(const PipelineDesc& desc, Pipeli
 	pipelineLibraryInfo.pInputAssemblyState = &inputAssembly;
 	pipelineLibraryInfo.pVertexInputState   = &vertexInputInfo;
 	
-	auto res = vkCreateGraphicsPipelines(handle, pipelineCache, 1, &pipelineLibraryInfo, _ctx.allocator, &pipelineLibrary.vertexInputInterface);
+	VkPipeline pipeline;
+	auto res = vkCreateGraphicsPipelines(device->handle, device->pipelineCache, 1, &pipelineLibraryInfo, _ctx.allocator, &pipeline);
 	DEBUG_VK(res, "Failed to create vertex input interface!");
+	pipelineLibrary.vertexInputInterface[HashFromFormats(vertexAttributes)] = pipeline;
 }
 
-void DeviceResource::CreatePreRasterizationShaders(const PipelineDesc& desc, Pipeline& pipeline) {
+void DeviceResource::PipelineLibrary::CreatePreRasterizationShaders(PreRasterizationInfo info) {
 	VkGraphicsPipelineLibraryCreateInfoEXT libraryInfo{};
 	libraryInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT;
 	libraryInfo.flags = VK_GRAPHICS_PIPELINE_LIBRARY_PRE_RASTERIZATION_SHADERS_BIT_EXT;
@@ -1080,10 +1145,10 @@ void DeviceResource::CreatePreRasterizationShaders(const PipelineDesc& desc, Pip
 		VK_DYNAMIC_STATE_VIEWPORT,
 		VK_DYNAMIC_STATE_SCISSOR
 	};
-	if (desc.lineTopology) {
+
+	if (lineTopology) {
 		dynamicStates.push_back(VK_DYNAMIC_STATE_LINE_WIDTH);
 	}
-
 
 	VkPipelineDynamicStateCreateInfo dynamicInfo{};
 	dynamicInfo.sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
@@ -1105,7 +1170,7 @@ void DeviceResource::CreatePreRasterizationShaders(const PipelineDesc& desc, Pip
 	rasterizationState.polygonMode = VK_POLYGON_MODE_FILL;
 	// line thickness in terms of number of fragments
 	rasterizationState.lineWidth = 1.0f;
-	rasterizationState.cullMode = (VkCullModeFlags)desc.cullMode;
+	rasterizationState.cullMode = (VkCullModeFlags)cullMode;
 	rasterizationState.frontFace = VK_FRONT_FACE_CLOCKWISE;
 	rasterizationState.depthBiasEnable = VK_FALSE;
 	rasterizationState.depthBiasConstantFactor = 0.0f;
@@ -1139,11 +1204,11 @@ void DeviceResource::CreatePreRasterizationShaders(const PipelineDesc& desc, Pip
 	pipelineLibraryInfo.pViewportState      = &viewportState;
 	pipelineLibraryInfo.pRasterizationState = &rasterizationState;
 
-	auto res = vkCreateGraphicsPipelines(handle, pipelineCache, 1, &pipelineLibraryInfo, nullptr, &pipeline_library.pre_rasterization_shaders);
+	auto res = vkCreateGraphicsPipelines(device->device->handle, device->pipelineCache, 1, &pipelineLibraryInfo, nullptr, &pipeline_library.pre_rasterization_shaders);
 	DEBUG_VK(res, "Failed to create vertex input interface!");
 }
 
-void DeviceResource::CreateFragmentShader(const PipelineDesc& desc, Pipeline& pipeline) {
+void DeviceResource::PipelineLibrary::CreateFragmentShader(FragmentShaderInfo info) {
 	VkGraphicsPipelineLibraryCreateInfoEXT libraryInfo{};
 	libraryInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT;
 	libraryInfo.flags = VK_GRAPHICS_PIPELINE_LIBRARY_FRAGMENT_SHADER_BIT_EXT;
@@ -1174,14 +1239,14 @@ void DeviceResource::CreateFragmentShader(const PipelineDesc& desc, Pipeline& pi
 	std::vector<uint32_t> spirv;
 	load_shader("uber.frag", VK_SHADER_STAGE_FRAGMENT_BIT, spirv);
 
-	VkShaderModuleCreateInfo shader_module_create_info{};
-	shader_module_create_info.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-	shader_module_create_info.codeSize = spirv.size() * sizeof(uint32_t);
-	shader_module_create_info.pCode    = spirv.data();
+	VkShaderModuleCreateInfo shaderModuleCreateInfo{};
+	shaderModuleCreateInfo.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	shaderModuleCreateInfo.codeSize = spirv.size() * sizeof(uint32_t);
+	shaderModuleCreateInfo.pCode    = spirv.data();
 
 	VkPipelineShaderStageCreateInfo shader_Stage_create_info{};
 	shader_Stage_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	shader_Stage_create_info.pNext = &shader_module_create_info;
+	shader_Stage_create_info.pNext = &shaderModuleCreateInfo;
 	shader_Stage_create_info.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
 	shader_Stage_create_info.pName = "main";
 
@@ -1197,12 +1262,12 @@ void DeviceResource::CreateFragmentShader(const PipelineDesc& desc, Pipeline& pi
 	};
 
 	VkPipeline fragment_shader = VK_NULL_HANDLE;
-	auto res = vkCreateGraphicsPipelines(handle, pipelineCache, 1, &pipelineLibraryInfo, nullptr, &fragment_shader); //todo: Thread pipeline cache
+	auto res = vkCreateGraphicsPipelines(device->handle, device->pipelineCache, 1, &pipelineLibraryInfo, nullptr, &fragment_shader); //todo: Thread pipeline cache
 	DEBUG_VK(res, "Failed to create vertex input interface!");
 
 }
 
-void DeviceResource::CreateFragmentOutputInterface(const PipelineDesc& desc, Pipeline& pipeline) {
+void DeviceResource::PipelineLibrary::CreateFragmentOutputInterface(FragmentOutputInfo info) {
 	VkGraphicsPipelineLibraryCreateInfoEXT libraryInfo{};
 	libraryInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT;
 	libraryInfo.flags = VK_GRAPHICS_PIPELINE_LIBRARY_FRAGMENT_OUTPUT_INTERFACE_BIT_EXT;
@@ -1244,7 +1309,7 @@ void DeviceResource::CreateFragmentOutputInterface(const PipelineDesc& desc, Pip
 	pipelineLibraryInfo.pColorBlendState           = &colorBlendState;
 	pipelineLibraryInfo.pMultisampleState          = &multisampleState;
 
-	auto res = vkCreateGraphicsPipelines(handle, pipelineCache, 1, &pipelineLibraryInfo, nullptr, &pipeline_library.fragment_output_interface);
+	auto res = vkCreateGraphicsPipelines(device->handle, device->pipelineCache, 1, &pipelineLibraryInfo, nullptr, &pipeline_library.fragment_output_interface);
 	DEBUG_VK(res, "Failed to create fragment output interface!");
 }
 
@@ -1274,7 +1339,7 @@ void DeviceResource::LinkPipeline(Pipeline& pipeline) {
 	}
 
 	VkPipeline executable = VK_NULL_HANDLE;
-	auto res = vkCreateGraphicsPipelines(handle, pipelineCache, 1, &pipelineInfo, nullptr, &executable); //todo: Thread pipeline cache
+	auto res = vkCreateGraphicsPipelines(device->handle, device->pipelineCache, 1, &pipelineInfo, nullptr, &executable); //todo: Thread pipeline cache
 	DEBUG_VK(res, "Failed to create vertex input interface!");
 
 	// pipelines.push_back(executable);
@@ -1283,7 +1348,6 @@ void DeviceResource::LinkPipeline(Pipeline& pipeline) {
 	pipeline_library.fragment_shaders.push_back(fragment_shader);
 }
 
- */
 void DeviceResource::SetDebugUtilsObjectNameEXT(VkDebugUtilsObjectNameInfoEXT* pNameInfo) {
 	if (vkSetDebugUtilsObjectNameEXT) {
 		vkSetDebugUtilsObjectNameEXT(handle, pNameInfo);
@@ -1986,6 +2050,7 @@ uint32_t PhysicalDevice::GetQueueFamilyIndex(VkQueueFlags desiredFlags, VkQueueF
 	std::vector<std::pair<uint32_t, float>> candidates;
 	auto& families = availableFamilies;
 	for (auto i = 0; i < families.size(); i++) {
+		// Check if queue family is suitable
 		bool suitable = ((families[i].queueFlags & desiredFlags) == desiredFlags && ((families[i].queueFlags & undesiredFlags) == 0));
 		if (surfaceToSupport != VK_NULL_HANDLE) {
 			VkBool32 presentSupport = false;
@@ -1995,6 +2060,7 @@ uint32_t PhysicalDevice::GetQueueFamilyIndex(VkQueueFlags desiredFlags, VkQueueF
 		}
 		if (!suitable) continue; 
 		if (avoidIfPossible.empty()) return i;
+		// candidate (familyIndex, weight)
 		std::pair<uint32_t, float> candidate(i, 0.0f);
 		// Prefer family with least number of VkQueueFlags
 		for (VkQueueFlags bit = 1; bit != 0; bit <<= 1) {
@@ -2014,21 +2080,21 @@ uint32_t PhysicalDevice::GetQueueFamilyIndex(VkQueueFlags desiredFlags, VkQueueF
 		}
 	}
 	if (candidates.empty()) { return ALL_SUITABLE_QUEUES_TAKEN; }
-	// print candidates
+	// debug print candidates
 	for (auto& c: candidates) {
-		DEBUG_TRACE("Candidate: {} ({})", c.first, c.second);
+		// DEBUG_TRACE("Candidate: {} ({})", c.first, c.second);
 	}
+	// Choose candidate with lowest weight
 	auto bestFamily = std::min_element(candidates.begin(), candidates.end(), [](auto& l, auto& r) {return l.second < r.second;})->first;
 	DEBUG_TRACE("Best family: {}", bestFamily);
 	return bestFamily;
-
 }
 
 void DeviceResource::Create(const std::vector<Queue*>& queues) {
-	std::unordered_map<uint32_t, uint32_t> queuesToCreate; // family index -> queue count
-	std::vector<uint32_t> filledUpFamilies;
+	std::unordered_map<uint32_t, uint32_t> queuesToCreate; // <family index, queue count>
 	queuesToCreate.reserve(queues.size());
-	std::unordered_map<GLFWwindow*, VkSurfaceKHR> surfaces;
+	std::vector<uint32_t> filledUpFamilies; // Track filled up families
+	std::unordered_map<GLFWwindow*, VkSurfaceKHR> surfaces; // Surfaces for checking present support
 
 	// Create surfaces for checking present support
 	for (auto queue: queues) {
@@ -2041,6 +2107,7 @@ void DeviceResource::Create(const std::vector<Queue*>& queues) {
 			surfaces.try_emplace(queue->supportedWindowToPresent, surface);
 		}
 	}
+	// Add swapchain extension
 	if (!surfaces.empty()) {
 		requiredExtensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 	}
@@ -2057,6 +2124,7 @@ void DeviceResource::Create(const std::vector<Queue*>& queues) {
 				LOG_WARN("Queue already has resource with flags ({}) family ({}) index ({}). Ignoring request for new queue.", (uint32_t)queue->flags, queue->resource->familyIndex, queue->resource->index);
 				continue;
 			}
+			// Queue choosing heuristics
 			std::span<const std::pair<VkQueueFlags, float>> avoidIfPossible{};
 			if(queue->preferSeparateFamily) {
 				switch (queue->flags) {
@@ -2065,6 +2133,7 @@ void DeviceResource::Create(const std::vector<Queue*>& queues) {
 				default:                    avoidIfPossible = {{{VK_QUEUE_GRAPHICS_BIT, 1.0f}}}; break;
 				}
 			}
+			// Get family index fitting requirements
 			auto familyIndex = physicalDevice.GetQueueFamilyIndex(queue->flags, 0, avoidIfPossible, surfaces[queue->supportedWindowToPresent], filledUpFamilies);
 			if (familyIndex == QUEUE_NOT_FOUND) {
 				LOG_WARN("Requested queue flags ({}) not available on device: ({})", (uint32_t)queue->flags, physicalDevice.physicalProperties2.properties.deviceName);
@@ -2074,13 +2143,12 @@ void DeviceResource::Create(const std::vector<Queue*>& queues) {
 				LOG_WARN("Requested more queues with flags ({}) than available on device: ({}). Queue was not created", queue->flags, physicalDevice.physicalProperties2.properties.deviceName);
 				continue;
 			}
+			// Create queue
 			queue->resource = std::make_shared<QueueResource>(familyIndex, queuesToCreate[familyIndex]);
 			queuesToCreate[familyIndex]++;
 			if (queuesToCreate[familyIndex] == physicalDevice.availableFamilies[familyIndex].queueCount) {
 				filledUpFamilies.push_back(familyIndex);
 			}
-		
-			// }
 		}
 		if (deviceSuitable) {
 			this->physicalDevice = &physicalDevice;
@@ -2106,7 +2174,7 @@ void DeviceResource::Create(const std::vector<Queue*>& queues) {
 	std::vector<float> priorities(maxQueuesInFamily, 1.0f);
 	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
 	for (auto &[family, count]: queuesToCreate) {
-		LOG_INFO("Creating queue family {} with {} queues", family, count);
+		// LOG_INFO("Creating queue family {} with {} queues", family, count);
 		VkDeviceQueueCreateInfo createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
 		createInfo.queueFamilyIndex = family;

@@ -237,6 +237,7 @@ enum class ShaderStage {
 
 	Task = 0x00000040,
 	Mesh = 0x00000080,
+	MaxEnum = 0x7FFFFFFF
 };
 
 struct Pipeline {
@@ -247,8 +248,8 @@ struct Pipeline {
 	};
 	PipelinePoint point;
 	std::shared_ptr<PipelineResource> resource;
-	std::vector<Stage> stages;
-	std::vector<std::vector<char>> stageBytes;
+	// std::vector<Stage> stages;
+	// std::vector<std::vector<char>> stageBytes;
 };
 
 namespace CullMode {
@@ -256,6 +257,8 @@ namespace CullMode {
 		None = 0,
 		Front = 1,
 		Back = 2,
+		FrontAndBack = 3,
+		MaxEnum = 0x7FFFFFFF
 	};
 }
 using CullModeFlags = Flags;
