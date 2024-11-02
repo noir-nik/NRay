@@ -1097,57 +1097,60 @@ namespace GraphicsPipelineLibraryFlags {
 
 
 void DeviceResource::PipelineLibrary::CreateVertexInputInterface(VertexInputInfo info) {
-	VkGraphicsPipelineLibraryCreateInfoEXT libraryInfo{};
-	libraryInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT;
-	libraryInfo.flags = VK_GRAPHICS_PIPELINE_LIBRARY_VERTEX_INPUT_INTERFACE_BIT_EXT;
+	VkGraphicsPipelineLibraryCreateInfoEXT libraryInfo{
+		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT,
+		.flags = VK_GRAPHICS_PIPELINE_LIBRARY_VERTEX_INPUT_INTERFACE_BIT_EXT,
+	};
 
-	VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
-	inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-	if (info.lineTopology) {
-		inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP;
-	} else {
-		inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-	}
-	// with this parameter true we can break up lines and triangles in _STRIP topology modes
-	inputAssembly.primitiveRestartEnable = VK_FALSE;
+	VkPipelineInputAssemblyStateCreateInfo inputAssembly{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+		.topology = info.lineTopology? VK_PRIMITIVE_TOPOLOGY_LINE_STRIP: VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+		// with this parameter true we can break up lines and triangles in _STRIP topology modes
+		.primitiveRestartEnable = VK_FALSE,
+	};
 
-	std::vector<VkVertexInputAttributeDescription> attributeDescs(info.vertexAttributes.size());
+	std::vector<VkVertexInputAttributeDescription> attributeDescs;
+	attributeDescs.reserve(info.vertexAttributes.size());
 	uint32_t attributeSize = 0;
-	for (int i = 0; i < info.vertexAttributes.size(); i++) {
-		attributeDescs[i].binding = 0;
-		attributeDescs[i].location = i;
-		attributeDescs[i].format = (VkFormat)info.vertexAttributes[i];
-		attributeDescs[i].offset = attributeSize;
-		if (info.vertexAttributes[i] == Format::RG32_sfloat) {
-			attributeSize += 2 * sizeof(float);
-		} else if (info.vertexAttributes[i] == Format::RGB32_sfloat) {
-			attributeSize += 3 * sizeof(float);
-		} else if (info.vertexAttributes[i] == Format::RGBA32_sfloat) {
-			attributeSize += 4 * sizeof(float);
-		} else {
+	for (size_t i = 0; auto& format: info.vertexAttributes) {
+		attributeDescs.emplace_back(VkVertexInputAttributeDescription{
+			.location = static_cast<uint32_t>(i++),
+			.binding = 0,
+			.format = (VkFormat)format,
+			.offset = attributeSize
+		});
+		switch (format) {
+		case Format::RG32_sfloat: attributeSize += 2 * sizeof(float); break;
+		case Format::RGB32_sfloat: attributeSize += 3 * sizeof(float); break;
+		case Format::RGBA32_sfloat: attributeSize += 4 * sizeof(float); break;
+		default:
 			DEBUG_ASSERT(false, "Invalid Vertex Attribute");
+			break;
 		}
 	}
 
-	VkVertexInputBindingDescription bindingDescription{};
-	bindingDescription.binding = 0;
-	bindingDescription.stride = attributeSize;
-	bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+	VkVertexInputBindingDescription bindingDescription{
+		.binding = 0,
+		.stride = attributeSize,
+		.inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
+	};
 
-	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
-	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertexInputInfo.vertexBindingDescriptionCount = 1;
-	vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
-	vertexInputInfo.vertexAttributeDescriptionCount = (uint32_t)(attributeDescs.size());
-	vertexInputInfo.pVertexAttributeDescriptions = attributeDescs.data();
+	VkPipelineVertexInputStateCreateInfo vertexInputInfo{
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+		.vertexBindingDescriptionCount = 1,
+		.pVertexBindingDescriptions = &bindingDescription,
+		.vertexAttributeDescriptionCount = (uint32_t)(attributeDescs.size()),
+		.pVertexAttributeDescriptions = attributeDescs.data(),
+	};
 
-	VkGraphicsPipelineCreateInfo pipelineLibraryInfo{};
-	pipelineLibraryInfo.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-	pipelineLibraryInfo.flags               = VK_PIPELINE_CREATE_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT;
-	pipelineLibraryInfo.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-	pipelineLibraryInfo.pNext               = &libraryInfo;
-	pipelineLibraryInfo.pInputAssemblyState = &inputAssembly;
-	pipelineLibraryInfo.pVertexInputState   = &vertexInputInfo;
+	VkGraphicsPipelineCreateInfo pipelineLibraryInfo {
+		.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+		.pNext               = &libraryInfo,
+		.flags               = VK_PIPELINE_CREATE_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT,
+		.pVertexInputState   = &vertexInputInfo,
+		.pInputAssemblyState = &inputAssembly,
+		.pDynamicState       = nullptr
+	};
 	
 	VkPipeline pipeline;
 	auto res = vkCreateGraphicsPipelines(device->handle, device->pipelineCache, 1, &pipelineLibraryInfo, _ctx.allocator, &pipeline);
@@ -1156,9 +1159,10 @@ void DeviceResource::PipelineLibrary::CreateVertexInputInterface(VertexInputInfo
 }
 
 void DeviceResource::PipelineLibrary::CreatePreRasterizationShaders(PreRasterizationInfo info) {
-	VkGraphicsPipelineLibraryCreateInfoEXT libraryInfo{};
-	libraryInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT;
-	libraryInfo.flags = VK_GRAPHICS_PIPELINE_LIBRARY_PRE_RASTERIZATION_SHADERS_BIT_EXT;
+	VkGraphicsPipelineLibraryCreateInfoEXT libraryInfo{
+		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT,
+		.flags = VK_GRAPHICS_PIPELINE_LIBRARY_PRE_RASTERIZATION_SHADERS_BIT_EXT,
+	};
 
 	std::vector<VkDynamicState> dynamicStates = {
 		VK_DYNAMIC_STATE_VIEWPORT,
@@ -1169,32 +1173,33 @@ void DeviceResource::PipelineLibrary::CreatePreRasterizationShaders(PreRasteriza
 		dynamicStates.push_back(VK_DYNAMIC_STATE_LINE_WIDTH);
 	}
 
-	VkPipelineDynamicStateCreateInfo dynamicInfo{};
-	dynamicInfo.sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-	dynamicInfo.pDynamicStates    = dynamicStates.data();
-	dynamicInfo.dynamicStateCount = dynamicStates.size();
+	VkPipelineDynamicStateCreateInfo dynamicInfo{
+		.sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+		.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()),
+		.pDynamicStates    = dynamicStates.data(),
+	};
 
-	VkPipelineViewportStateCreateInfo viewportState{};
-	viewportState.sType           = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-	viewportState.viewportCount   = 1;
-	viewportState.pViewports      = nullptr;
-	viewportState.scissorCount    = 1;
-	viewportState.pScissors       = nullptr;
+	VkPipelineViewportStateCreateInfo viewportState{
+		.sType         = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+		.viewportCount = 1,
+		.pViewports    = nullptr,
+		.scissorCount  = 1,
+		.pScissors     = nullptr,
+	};
 
-	VkPipelineRasterizationStateCreateInfo rasterizationState = {};
-	rasterizationState.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-	// fragments beyond near and far planes are clamped to them
-	rasterizationState.depthClampEnable = VK_FALSE;
-	rasterizationState.rasterizerDiscardEnable = VK_FALSE;
-	rasterizationState.polygonMode = VK_POLYGON_MODE_FILL;
-	// line thickness in terms of number of fragments
-	rasterizationState.lineWidth = 1.0f;
-	rasterizationState.cullMode = (VkCullModeFlags)info.cullMode;
-	rasterizationState.frontFace = VK_FRONT_FACE_CLOCKWISE;
-	rasterizationState.depthBiasEnable = VK_FALSE;
-	rasterizationState.depthBiasConstantFactor = 0.0f;
-	rasterizationState.depthBiasClamp = 0.0f;
-	rasterizationState.depthBiasSlopeFactor = 0.0f;
+	VkPipelineRasterizationStateCreateInfo rasterizationState = {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+		.depthClampEnable = VK_FALSE, // fragments beyond near and far planes are clamped to them
+		.rasterizerDiscardEnable = VK_FALSE,
+		.polygonMode = VK_POLYGON_MODE_FILL,
+		.cullMode = (VkCullModeFlags)info.cullMode, // line thickness in terms of number of fragments
+		.frontFace = VK_FRONT_FACE_CLOCKWISE,
+		.lineWidth = 1.0f,
+		.depthBiasEnable = VK_FALSE,
+		.depthBiasConstantFactor = 0.0f,
+		.depthBiasClamp = 0.0f,
+		.depthBiasSlopeFactor = 0.0f,
+	};
 
 	// Using the pipeline library extension, we can skip the pipeline shader module creation and directly pass the shader code to the pipeline
 	std::vector<VkShaderModuleCreateInfo> shaderModuleInfos;
@@ -1231,15 +1236,16 @@ void DeviceResource::PipelineLibrary::CreatePreRasterizationShaders(PreRasteriza
 		.layout              = info.pipelineLayout,
 	};
 	VkPipeline pipeline;
-	auto res = vkCreateGraphicsPipelines(device->handle, device->pipelineCache, 1, & , nullptr, &pipeline_library.pre_rasterization_shaders),
+	auto res = vkCreateGraphicsPipelines(device->handle, device->pipelineCache, 1, &pipelineLibraryInfo , _ctx.allocator, &pipeline);
 	DEBUG_VK(res, "Failed to create pre-rasterization shaders!");
 	preRasterizationShaders.emplace(info, pipeline);
 }
 
 void DeviceResource::PipelineLibrary::CreateFragmentShader(FragmentShaderInfo info) {
-	VkGraphicsPipelineLibraryCreateInfoEXT libraryInfo{};
-	libraryInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT;
-	libraryInfo.flags = VK_GRAPHICS_PIPELINE_LIBRARY_FRAGMENT_SHADER_BIT_EXT;
+	VkGraphicsPipelineLibraryCreateInfoEXT libraryInfo{
+		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT,
+		.flags = VK_GRAPHICS_PIPELINE_LIBRARY_FRAGMENT_SHADER_BIT_EXT,
+	};
 
 	VkPipelineDepthStencilStateCreateInfo depthStencilState = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
@@ -1277,6 +1283,29 @@ void DeviceResource::PipelineLibrary::CreateFragmentShader(FragmentShaderInfo in
 	shader_Stage_create_info.pNext = &shaderModuleCreateInfo;
 	shader_Stage_create_info.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
 	shader_Stage_create_info.pName = "main";
+
+
+	std::vector<VkShaderModuleCreateInfo> shaderModuleInfos;
+	shaderModuleInfos.reserve(info.stages.size());
+	std::vector<VkPipelineShaderStageCreateInfo> shaderStages;
+	shaderStages.reserve(info.stages.size());
+	for (auto&stage: info.stages) {
+		std::vector<char> bytes = LoadShader(stage);
+
+		shaderModuleInfos.emplace_back(VkShaderModuleCreateInfo{
+			.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+			.codeSize =  bytes.size(),
+			.pCode    = (const uint32_t*)bytes.data()
+		});
+
+		shaderStages.emplace_back(VkPipelineShaderStageCreateInfo {
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			.pNext = &shaderModuleInfos.back(),
+			.stage = (VkShaderStageFlagBits)stage.stage,
+			.pName = stage.entryPoint.c_str(),
+			.pSpecializationInfo = nullptr,
+		});
+	}
 
 	VkGraphicsPipelineCreateInfo pipelineLibraryInfo = {
 		.sType              = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
