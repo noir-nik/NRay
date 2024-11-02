@@ -24,7 +24,7 @@ struct VectorEqual {
 };
 
 template <typename T>
-Hash64 HashCombine(Hash64 hash, T x) {
+size_t HashCombine(size_t hash, const T x) {
 	x = ((x >> 16) ^ x) * 0x45d9f3b;
 	x = ((x >> 16) ^ x) * 0x45d9f3b;
 	x = (x >> 16) ^ x;

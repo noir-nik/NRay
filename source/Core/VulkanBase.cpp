@@ -232,24 +232,6 @@ struct DeviceResource: DeleteCopyMove {
 			bool lineTopology = false;
 		};
 
-		struct VertexInputInfoHash {
-			Hash64 operator()(const VertexInputInfo& info) const {
-				Hash64 seed = 0;
-				for (const int& format : info.vertexAttributes) {
-					seed = HashCombine(seed, format);
-				}
-				seed = HashCombine(seed, info.lineTopology);
-				return seed;
-			}
-		};
-
-		struct VertexInputInfoKeyEqual {
-			bool operator()(const VertexInputInfo& a, const VertexInputInfo& b) const {
-				return a.vertexAttributes == b.vertexAttributes &&
-					a.lineTopology == b.lineTopology;
-			}
-		};
-
 		struct PreRasterizationInfo {
 			std::vector<Pipeline::Stage> stages;
 			VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
@@ -258,18 +240,80 @@ struct DeviceResource: DeleteCopyMove {
 
 		};
 
+		struct FragmentShaderInfo {
+			std::vector<Pipeline::Stage> stages;
+			VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
+		};
+
+		struct FragmentOutputInfo {
+			std::vector<Format> colorFormats;
+			VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
+		};
+		
+		struct VertexInputHash {
+			size_t operator()(const VertexInputInfo& info) const {
+				size_t seed = 0;
+				for (const int& format : info.vertexAttributes) {
+					seed = HashCombine(seed, format);
+				}
+				seed = HashCombine(seed, info.lineTopology);
+				return seed;
+			}
+
+			bool operator()(const VertexInputInfo& a, const VertexInputInfo& b) const {
+				return a.vertexAttributes == b.vertexAttributes &&
+					a.lineTopology == b.lineTopology;
+			}
+		};
+
+		struct PreRasterizationHash {
+			size_t operator()(const PreRasterizationInfo& info) const {
+				size_t seed = 0;
+				for (const auto& stage : info.stages) {
+					seed = HashCombine(seed, stage.stage);
+					seed = HashCombine(seed, std::hash<std::string>{}(stage.path.string()));
+					seed = HashCombine(seed, std::hash<std::string>{}(stage.entryPoint));
+				}
+				seed = HashCombine(seed, info.lineTopology);
+				seed = HashCombine(seed, info.cullMode);
+				return seed;
+			}
+			
+			bool operator()(const PreRasterizationInfo& a, const PreRasterizationInfo& b) const {
+				bool equalStages = a.stages.size() == b.stages.size();
+				a.lineTopology == b.lineTopology &&
+				a.cullMode == b.cullMode;
+			}
+		};
+
+		struct FragmentOutputHash {
+				}
+			}
+		};
+
+		struct FragmentShaderHash {
+			size_t operator()(const FragmentShaderInfo& info) const {
+				size_t seed = 0;
+				for (const auto& stage : info.stages) {
+					seed = HashCombine(seed, stage);
+				}
+				return seed;
+			}
+		}
+
 
 		DeviceResource* device = nullptr;
-		std::unordered_map<VertexInputInfo, VkPipeline, VertexInputInfoHash, VertexInputInfoKeyEqual> vertexInputInterfaces;
-		std::unordered_map<Hash64, VkPipeline> preRasterizationShaders;
-		std::unordered_map<Hash64, VkPipeline> fragmentOutputInterfaces;
-		std::vector<VkPipeline> fragmentShaders;
+		std::unordered_map<VertexInputInfo, VkPipeline, VertexInputInfoHash, VertexInputInfoHash> vertexInputInterfaces;
+		// std::unordered_map<VertexInputInfo, VkPipeline, VertexInputInfoHash, VertexInputInfo> preRasterizationShaders;
+		// std::unordered_map<VertexInputInfo, VkPipeline, VertexInputInfoHash, VertexInputInfo> fragmentOutputInterfaces;
+		// std::unordered_map<FragmentShaderInfo, VkPipeline, VertexInputInfoHash, VertexInputInfo> fragmentShaders;
 
 		void CreateVertexInputInterface(VertexInputInfo info);
 		void CreatePreRasterizationShaders(PreRasterizationInfo info);
 		void CreateFragmentShader(FragmentShaderInfo info);
 		void CreateFragmentOutputInterface(FragmentOutputInfo info);
 		void LinkPipeline(std::span<VkPipeline> pipelines, VkPipelineLayout layout);
+
 	} pipelineLibrary;
 	
 	const uint32_t stagingBufferSize = 2 * 1024 * 1024;
@@ -369,23 +413,24 @@ struct SwapChainResource: DeleteCopyMove {
 
 
 struct Resource {
-	DeviceResource* device = nullptr;
+	DeviceResource* device;
 	std::string name;
-	int32_t rid = -1;
+	int32_t rid;
+
 	Resource(DeviceResource* device, const std::string& name = "") : device(device), name(name) {}
-	virtual ~Resource() {};
+	virtual ~Resource() = default;
 };
 
 struct BufferResource : Resource {
 	VkBuffer buffer;
 	VmaAllocation allocation;
 
-	virtual ~BufferResource() {
+	using Resource::Resource;
+
+	~BufferResource() override {
 		vmaDestroyBuffer(device->vmaAllocator, buffer, allocation);
-		// printf("destroy buffer %s\n", name.c_str());
 		if (rid >= 0) {
 			device->availableBufferRID.push_back(rid);
-			rid = -1;
 		}
 	}
 };
@@ -397,6 +442,8 @@ struct ImageResource : Resource {
 	bool fromSwapchain = false;
 	std::vector<VkImageView> layersView;
 	// std::vector<ImTextureID> imguiRIDs;
+
+	using Resource::Resource;
 
 	virtual ~ImageResource() {
 		if (!fromSwapchain) {
@@ -415,8 +462,6 @@ struct ImageResource : Resource {
 				rid = -1;
 				// imguiRIDs.clear();
 			}
-		} else {
-			// printf("FROM SWAPCHAIN %s\n", name.c_str());
 		}
 	}
 };
@@ -424,7 +469,9 @@ struct ImageResource : Resource {
 struct PipelineResource : Resource {
 	VkPipeline pipeline;
 	VkPipelineLayout layout;
-	
+
+	using Resource::Resource;
+
 	void CreatePipelineLayout(const std::span<const VkDescriptorSetLayout>& descriptorLayouts);
 
 	virtual ~PipelineResource() {
@@ -524,9 +571,8 @@ Buffer Device::CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags m
 		usage |= BufferUsage::Address;
 	}
 
-	std::shared_ptr<BufferResource> res = std::make_shared<BufferResource>();
-	res->device = this->resource.get();
-	res->name = name;
+	std::shared_ptr<BufferResource> res = std::make_shared<BufferResource>(this->resource.get(), name);
+
 	VkBufferCreateInfo bufferInfo{};
 	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
 	bufferInfo.size = size;
@@ -575,9 +621,7 @@ Buffer Device::CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags m
 }
 
 Image Device::CreateImage(const ImageDesc& desc) {
-	std::shared_ptr<ImageResource> res = std::make_shared<ImageResource>();
-	res->device = this->resource.get();
-	res->name = desc.name;
+	std::shared_ptr<ImageResource> res = std::make_shared<ImageResource>(this->resource.get(), desc.name);
 
 	VkImageCreateInfo imageInfo{};
 	imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -837,7 +881,7 @@ Pipeline DeviceResource::CreatePipeline(const PipelineDesc& desc) { // External 
 			.lineTopology = desc.lineTopology
 		};
 		if (pipelineLibrary.vertexInputInterfaces.find(vertexInputInfo) == pipelineLibrary.vertexInputInterfaces.end()) {
-			VkPipeline vertexInputInterface = pipelineLibrary.CreateVertexInputInterface(vertexInputInfo);
+			pipelineLibrary.CreateVertexInputInterface(vertexInputInfo);
 		}
 
 		DeviceResource::PipelineLibrary::PreRasterizationInfo preRasterizationInfo;
@@ -860,8 +904,8 @@ Pipeline DeviceResource::CreatePipeline(const PipelineDesc& desc) { // External 
 		
 		
 		CreatePipelineImpl(desc, pipeline);
-		return pipeline;
 	}
+	return pipeline;
 }
 
 void DeviceResource::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipeline) {
@@ -1194,11 +1238,11 @@ void DeviceResource::PipelineLibrary::CreatePreRasterizationShaders(PreRasteriza
 		.polygonMode = VK_POLYGON_MODE_FILL,
 		.cullMode = (VkCullModeFlags)info.cullMode, // line thickness in terms of number of fragments
 		.frontFace = VK_FRONT_FACE_CLOCKWISE,
-		.lineWidth = 1.0f,
 		.depthBiasEnable = VK_FALSE,
 		.depthBiasConstantFactor = 0.0f,
 		.depthBiasClamp = 0.0f,
 		.depthBiasSlopeFactor = 0.0f,
+		.lineWidth = 1.0f,
 	};
 
 	// Using the pipeline library extension, we can skip the pipeline shader module creation and directly pass the shader code to the pipeline
@@ -1206,7 +1250,7 @@ void DeviceResource::PipelineLibrary::CreatePreRasterizationShaders(PreRasteriza
 	shaderModuleInfos.reserve(info.stages.size());
 	std::vector<VkPipelineShaderStageCreateInfo> shaderStages;
 	shaderStages.reserve(info.stages.size());
-	for (auto&stage: info.stages) {
+	for (auto& stage: info.stages) {
 		std::vector<char> bytes = LoadShader(stage);
 
 		shaderModuleInfos.emplace_back(VkShaderModuleCreateInfo{
@@ -1238,7 +1282,7 @@ void DeviceResource::PipelineLibrary::CreatePreRasterizationShaders(PreRasteriza
 	VkPipeline pipeline;
 	auto res = vkCreateGraphicsPipelines(device->handle, device->pipelineCache, 1, &pipelineLibraryInfo , _ctx.allocator, &pipeline);
 	DEBUG_VK(res, "Failed to create pre-rasterization shaders!");
-	preRasterizationShaders.emplace(info, pipeline);
+	// preRasterizationShaders.emplace(info, pipeline);
 }
 
 void DeviceResource::PipelineLibrary::CreateFragmentShader(FragmentShaderInfo info) {
@@ -1270,26 +1314,11 @@ void DeviceResource::PipelineLibrary::CreateFragmentShader(FragmentShaderInfo in
 		.alphaToOneEnable = VK_FALSE,
 	};
 
-	std::vector<uint32_t> spirv;
-	load_shader("uber.frag", VK_SHADER_STAGE_FRAGMENT_BIT, spirv);
-
-	VkShaderModuleCreateInfo shaderModuleCreateInfo{};
-	shaderModuleCreateInfo.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-	shaderModuleCreateInfo.codeSize = spirv.size() * sizeof(uint32_t);
-	shaderModuleCreateInfo.pCode    = spirv.data();
-
-	VkPipelineShaderStageCreateInfo shader_Stage_create_info{};
-	shader_Stage_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	shader_Stage_create_info.pNext = &shaderModuleCreateInfo;
-	shader_Stage_create_info.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-	shader_Stage_create_info.pName = "main";
-
-
 	std::vector<VkShaderModuleCreateInfo> shaderModuleInfos;
 	shaderModuleInfos.reserve(info.stages.size());
 	std::vector<VkPipelineShaderStageCreateInfo> shaderStages;
 	shaderStages.reserve(info.stages.size());
-	for (auto&stage: info.stages) {
+	for (auto& stage: info.stages) {
 		std::vector<char> bytes = LoadShader(stage);
 
 		shaderModuleInfos.emplace_back(VkShaderModuleCreateInfo{
@@ -1307,93 +1336,82 @@ void DeviceResource::PipelineLibrary::CreateFragmentShader(FragmentShaderInfo in
 		});
 	}
 
-	VkGraphicsPipelineCreateInfo pipelineLibraryInfo = {
+	VkGraphicsPipelineCreateInfo pipelineLibraryInfo {
 		.sType              = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
 		.pNext              = &libraryInfo,
 		.flags              = VK_PIPELINE_CREATE_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT,
-		.stageCount         = 1,
-		.pStages            = &shader_Stage_create_info,
+		.stageCount          = static_cast<uint32_t>(shaderStages.size()),
+		.pStages             = shaderStages.data(),
 		.pMultisampleState  = &multisampleState,
 		.pDepthStencilState = &depthStencilState,
-		.layout             = pipeline.resource->layout,
+		.layout             = info.pipelineLayout,
 	};
 
-	VkPipeline fragment_shader = VK_NULL_HANDLE;
-	auto res = vkCreateGraphicsPipelines(device->handle, device->pipelineCache, 1, &pipelineLibraryInfo, nullptr, &fragment_shader); //todo: Thread pipeline cache
+	VkPipeline pipeline;
+	auto res = vkCreateGraphicsPipelines(device->handle, device->pipelineCache, 1, &pipelineLibraryInfo, nullptr, &pipeline); //todo: Thread pipeline cache
 	DEBUG_VK(res, "Failed to create vertex input interface!");
-
+	// fragmentShaders.emplace(info, pipeline);
 }
 
 void DeviceResource::PipelineLibrary::CreateFragmentOutputInterface(FragmentOutputInfo info) {
-	VkGraphicsPipelineLibraryCreateInfoEXT libraryInfo{};
-	libraryInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT;
-	libraryInfo.flags = VK_GRAPHICS_PIPELINE_LIBRARY_FRAGMENT_OUTPUT_INTERFACE_BIT_EXT;
+	VkGraphicsPipelineLibraryCreateInfoEXT libraryInfo {
+		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT,
+		.flags = VK_GRAPHICS_PIPELINE_LIBRARY_FRAGMENT_OUTPUT_INTERFACE_BIT_EXT,
+	};
 
-	std::vector<VkPipelineColorBlendAttachmentState> blendAttachments(desc.colorFormats.size());
-	for (int i = 0; i < desc.colorFormats.size(); i++) {
-		blendAttachments[i].colorWriteMask  = VK_COLOR_COMPONENT_R_BIT;
-		blendAttachments[i].colorWriteMask |= VK_COLOR_COMPONENT_G_BIT;
-		blendAttachments[i].colorWriteMask |= VK_COLOR_COMPONENT_B_BIT;
-		blendAttachments[i].colorWriteMask |= VK_COLOR_COMPONENT_A_BIT;
-		blendAttachments[i].blendEnable     = VK_FALSE;
-	}
+	std::vector<VkPipelineColorBlendAttachmentState> blendAttachments(info.colorFormats.size(), {
+		.blendEnable = VK_FALSE,
+		.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+	});
 
-	VkPipelineColorBlendStateCreateInfo colorBlendState{};
-	colorBlendState.sType                   = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-	colorBlendState.logicOpEnable           = VK_FALSE;
-	colorBlendState.logicOp                 = VK_LOGIC_OP_COPY;
-	colorBlendState.attachmentCount         = blendAttachments.size();
-	colorBlendState.pAttachments            = blendAttachments.data();
-	colorBlendState.blendConstants[0]       = 0.0f;
-	colorBlendState.blendConstants[1]       = 0.0f;
-	colorBlendState.blendConstants[2]       = 0.0f;
-	colorBlendState.blendConstants[3]       = 0.0f;
+	VkPipelineColorBlendStateCreateInfo colorBlendState {
+		.sType           = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+		.logicOpEnable   = VK_FALSE,
+		.logicOp         = VK_LOGIC_OP_COPY,
+		.attachmentCount = static_cast<uint32_t>(blendAttachments.size()),
+		.pAttachments    = blendAttachments.data(),
+		.blendConstants  = {0.0f, 0.0f, 0.0f, 0.0f},
+	};
 
-	VkPipelineMultisampleStateCreateInfo multisampleState = {};
-	multisampleState.sType                  = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-	multisampleState.rasterizationSamples   = VK_SAMPLE_COUNT_1_BIT;
-	multisampleState.sampleShadingEnable    = VK_FALSE;
-	multisampleState.minSampleShading       = 0.5f;
-	multisampleState.pSampleMask            = nullptr;
-	multisampleState.alphaToCoverageEnable  = VK_FALSE;
-	multisampleState.alphaToOneEnable       = VK_FALSE;
+	VkPipelineMultisampleStateCreateInfo multisampleState {
+		.sType                 = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+		.rasterizationSamples  = VK_SAMPLE_COUNT_1_BIT,
+		.sampleShadingEnable   = VK_FALSE,
+		.minSampleShading      = 0.5f,
+		.pSampleMask           = nullptr,
+		.alphaToCoverageEnable = VK_FALSE,
+		.alphaToOneEnable      = VK_FALSE,
+	};
 
-	VkGraphicsPipelineCreateInfo pipelineLibraryInfo{};
-	pipelineLibraryInfo.sType                      = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-	pipelineLibraryInfo.pNext                      = &libraryInfo;
-	pipelineLibraryInfo.layout                     = pipeline.resource->layout;
-	pipelineLibraryInfo.flags                      = VK_PIPELINE_CREATE_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT;
-	pipelineLibraryInfo.pColorBlendState           = &colorBlendState;
-	pipelineLibraryInfo.pMultisampleState          = &multisampleState;
+	VkGraphicsPipelineCreateInfo pipelineLibraryInfo {
+		.sType             = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+		.pNext             = &libraryInfo,
+		.flags             = VK_PIPELINE_CREATE_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT,
+		.pMultisampleState = &multisampleState,
+		.pColorBlendState  = &colorBlendState,
+		.layout            = info.pipelineLayout,
+	};
 
-	auto res = vkCreateGraphicsPipelines(device->handle, device->pipelineCache, 1, &pipelineLibraryInfo, nullptr, &pipeline_library.fragment_output_interface);
+	VkPipeline pipeline;
+	auto res = vkCreateGraphicsPipelines(device->handle, device->pipelineCache, 1, &pipelineLibraryInfo, nullptr, &pipeline);
 	DEBUG_VK(res, "Failed to create fragment output interface!");
+	// fragmentOutputInterfaces.emplace(info, pipeline);
 }
 
 void DeviceResource::PipelineLibrary::LinkPipeline(std::span<VkPipeline> pipelines, VkPipelineLayout layout) {
-	// Create the pipeline using the pre-built pipeline library parts
-	// Except for above fragment shader part all parts have been pre-built and will be re-used
-	// VkPipeline libraries[] = {
-	//     pipeline.resource->pipeline,
-	//     pipeline.resource->pipeline,
-	//     pipeline.resource->pipeline,
-	//     pipeline.resource->pipeline,
-	// 	// pipeline_library.vertex_input_interface,
-	//     // pipeline_library.pre_rasterization_shaders,
-	//     // fragment_shader,
-	//     // pipeline_library.fragment_output_interface
-	// };
 
 	// Link the library parts into a graphics pipeline
-	VkPipelineLibraryCreateInfoKHR linkingInfo{};
-	linkingInfo.sType        = VK_STRUCTURE_TYPE_PIPELINE_LIBRARY_CREATE_INFO_KHR;
-	linkingInfo.libraryCount = pipelines.size();
-	linkingInfo.pLibraries   = pipelines.data();
+	VkPipelineLibraryCreateInfoKHR linkingInfo {
+		.sType        = VK_STRUCTURE_TYPE_PIPELINE_LIBRARY_CREATE_INFO_KHR,
+		.libraryCount = static_cast<uint32_t>(pipelines.size()),
+		.pLibraries   = pipelines.data(),
+	};
 
-	VkGraphicsPipelineCreateInfo pipelineInfo{};
-	pipelineInfo.sType      = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-	pipelineInfo.pNext      = &linkingInfo;
-	pipelineInfo.layout     = layout;
+	VkGraphicsPipelineCreateInfo pipelineInfo {
+		.sType  = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+		.pNext  = &linkingInfo,
+		.layout = layout,
+	};
 
 	if (_ctx.linkTimeOptimization) {
 		pipelineInfo.flags = VK_PIPELINE_CREATE_LINK_TIME_OPTIMIZATION_BIT_EXT;
@@ -2509,7 +2527,7 @@ void SwapChainResource::Create(std::vector<Image>& swapChainImages, uint32_t wid
 		auto res = vkCreateImageView(device->handle, &viewInfo, _ctx.allocator, &ImageViews[i]);
 		DEBUG_VK(res, "Failed to create SwapChain image view!");
 
-		swapChainImages[i].resource = std::make_shared<ImageResource>();
+		swapChainImages[i].resource = std::make_shared<ImageResource>(device);
 		swapChainImages[i].resource->fromSwapchain = true;
 		swapChainImages[i].resource->image = ImageResources[i];
 		swapChainImages[i].resource->view = ImageViews[i];
