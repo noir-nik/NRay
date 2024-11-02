@@ -194,6 +194,7 @@ struct DeviceResource: DeleteCopyMove {
 		pipelineLibrary.device = this;
 	}
 
+	Pipeline CreatePipeline(const PipelineDesc& desc);
 	void CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipeline);
 
 	VkDevice handle = VK_NULL_HANDLE;
@@ -228,7 +229,6 @@ struct DeviceResource: DeleteCopyMove {
 	struct PipelineLibrary {
 		struct VertexInputInfo {
 			std::vector<Format> vertexAttributes;
-			CullModeFlags cullMode = CullMode::None;
 			bool lineTopology = false;
 		};
 
@@ -238,7 +238,6 @@ struct DeviceResource: DeleteCopyMove {
 				for (const int& format : info.vertexAttributes) {
 					seed = HashCombine(seed, format);
 				}
-				seed = HashCombine(seed, info.cullMode);
 				seed = HashCombine(seed, info.lineTopology);
 				return seed;
 			}
@@ -247,13 +246,16 @@ struct DeviceResource: DeleteCopyMove {
 		struct VertexInputInfoKeyEqual {
 			bool operator()(const VertexInputInfo& a, const VertexInputInfo& b) const {
 				return a.vertexAttributes == b.vertexAttributes &&
-					a.cullMode == b.cullMode &&
 					a.lineTopology == b.lineTopology;
 			}
 		};
 
 		struct PreRasterizationInfo {
 			std::vector<Pipeline::Stage> stages;
+			VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
+			bool lineTopology = false;
+			CullModeFlags cullMode = CullMode::None;
+
 		};
 
 
@@ -267,7 +269,7 @@ struct DeviceResource: DeleteCopyMove {
 		void CreatePreRasterizationShaders(PreRasterizationInfo info);
 		void CreateFragmentShader(FragmentShaderInfo info);
 		void CreateFragmentOutputInterface(FragmentOutputInfo info);
-		void LinkPipeline(Pipeline& pipeline);
+		void LinkPipeline(std::span<VkPipeline> pipelines, VkPipelineLayout layout);
 	} pipelineLibrary;
 	
 	const uint32_t stagingBufferSize = 2 * 1024 * 1024;
@@ -370,7 +372,7 @@ struct Resource {
 	DeviceResource* device = nullptr;
 	std::string name;
 	int32_t rid = -1;
-	// Resource(DeviceResource* device, const std::string& name) : device(device), name(name) {}
+	Resource(DeviceResource* device, const std::string& name = "") : device(device), name(name) {}
 	virtual ~Resource() {};
 };
 
@@ -422,6 +424,8 @@ struct ImageResource : Resource {
 struct PipelineResource : Resource {
 	VkPipeline pipeline;
 	VkPipelineLayout layout;
+	
+	void CreatePipelineLayout(const std::span<const VkDescriptorSetLayout>& descriptorLayouts);
 
 	virtual ~PipelineResource() {
 		vkDestroyPipeline(device->handle, pipeline, _ctx.allocator);
@@ -798,28 +802,45 @@ std::vector<char> LoadShader(Pipeline::Stage stage) {
 	}
 }
 
-// struct VertexInputInterfaceInfoComparator {
-// 	bool operator()(const VertexInputInterfaceInfo& a, const VertexInputInterfaceInfo& b) const {
-// 		return std::tie(a.vertexAttributes, a.cullMode, a.lineTopology) ==
-// 			std::tie(b.vertexAttributes, b.cullMode, b.lineTopology);
-// 	}
-// };
+void PipelineResource::CreatePipelineLayout(const std::span<const VkDescriptorSetLayout>& descriptorLayouts) {
 
+    VkPushConstantRange pushConstant{};
+    pushConstant.offset = 0;
+    pushConstant.size = device->physicalDevice->physicalProperties2.properties.limits.maxPushConstantsSize;
+    pushConstant.stageFlags = VK_SHADER_STAGE_ALL;
 
-Pipeline Device::CreatePipeline(const PipelineDesc& desc) { // External handle
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutInfo.setLayoutCount = descriptorLayouts.size();
+    pipelineLayoutInfo.pSetLayouts = descriptorLayouts.data();
+    pipelineLayoutInfo.pushConstantRangeCount = 1;
+    pipelineLayoutInfo.pPushConstantRanges = &pushConstant;
+
+    auto vkRes = vkCreatePipelineLayout(device->handle, &pipelineLayoutInfo, _ctx.allocator, &this->layout);
+    DEBUG_VK(vkRes, "Failed to create pipeline layout!");
+    ASSERT(vkRes == VK_SUCCESS, "Failed to create pipeline layout!");
+}
+
+Pipeline Device::CreatePipeline(const PipelineDesc& desc){
+	return resource->CreatePipeline(desc);
+}
+
+Pipeline DeviceResource::CreatePipeline(const PipelineDesc& desc) { // External handle
 	Pipeline pipeline;
-	if (desc.point == PipelinePoint::Graphics && resource->physicalDevice->graphicsPipelineLibraryFeatures.graphicsPipelineLibrary) {
+	pipeline.resource = std::make_shared<PipelineResource>(this, desc.name);
+	pipeline.resource->CreatePipelineLayout({{bindlessDescriptorLayout}});
+
+	if (desc.point == PipelinePoint::Graphics && physicalDevice->graphicsPipelineLibraryFeatures.graphicsPipelineLibrary) {
 		// VertexInputInterface
 		DeviceResource::PipelineLibrary::VertexInputInfo vertexInputInfo {
 			.vertexAttributes = desc.vertexAttributes,
-			.cullMode = desc.cullMode,
 			.lineTopology = desc.lineTopology
 		};
-		if (resource->pipelineLibrary.vertexInputInterfaces.find(vertexInputInfo) == resource->pipelineLibrary.vertexInputInterfaces.end()) {
-			resource->pipelineLibrary.CreateVertexInputInterface(vertexInputInfo);
+		if (pipelineLibrary.vertexInputInterfaces.find(vertexInputInfo) == pipelineLibrary.vertexInputInterfaces.end()) {
+			VkPipeline vertexInputInterface = pipelineLibrary.CreateVertexInputInterface(vertexInputInfo);
 		}
 
-		PreRasterizationInfo preRasterizationInfo;
+		DeviceResource::PipelineLibrary::PreRasterizationInfo preRasterizationInfo;
 		preRasterizationInfo.lineTopology = desc.lineTopology;
 		for (auto& stage: desc.stages) {
 			switch(stage.stage) {
@@ -837,10 +858,8 @@ Pipeline Device::CreatePipeline(const PipelineDesc& desc) { // External handle
 
 	} else {
 		
-		pipeline.resource = std::make_shared<PipelineResource>();
-		pipeline.resource->device = this->resource.get();
-		pipeline.resource->name = desc.name;
-		resource->CreatePipelineImpl(desc, pipeline);
+		
+		CreatePipelineImpl(desc, pipeline);
 		return pipeline;
 	}
 }
@@ -1133,7 +1152,7 @@ void DeviceResource::PipelineLibrary::CreateVertexInputInterface(VertexInputInfo
 	VkPipeline pipeline;
 	auto res = vkCreateGraphicsPipelines(device->handle, device->pipelineCache, 1, &pipelineLibraryInfo, _ctx.allocator, &pipeline);
 	DEBUG_VK(res, "Failed to create vertex input interface!");
-	pipelineLibrary.vertexInputInterface[HashFromFormats(vertexAttributes)] = pipeline;
+	vertexInputInterfaces.emplace(info, pipeline);
 }
 
 void DeviceResource::PipelineLibrary::CreatePreRasterizationShaders(PreRasterizationInfo info) {
@@ -1146,7 +1165,7 @@ void DeviceResource::PipelineLibrary::CreatePreRasterizationShaders(PreRasteriza
 		VK_DYNAMIC_STATE_SCISSOR
 	};
 
-	if (lineTopology) {
+	if (info.lineTopology) {
 		dynamicStates.push_back(VK_DYNAMIC_STATE_LINE_WIDTH);
 	}
 
@@ -1170,7 +1189,7 @@ void DeviceResource::PipelineLibrary::CreatePreRasterizationShaders(PreRasteriza
 	rasterizationState.polygonMode = VK_POLYGON_MODE_FILL;
 	// line thickness in terms of number of fragments
 	rasterizationState.lineWidth = 1.0f;
-	rasterizationState.cullMode = (VkCullModeFlags)cullMode;
+	rasterizationState.cullMode = (VkCullModeFlags)info.cullMode;
 	rasterizationState.frontFace = VK_FRONT_FACE_CLOCKWISE;
 	rasterizationState.depthBiasEnable = VK_FALSE;
 	rasterizationState.depthBiasConstantFactor = 0.0f;
@@ -1178,34 +1197,43 @@ void DeviceResource::PipelineLibrary::CreatePreRasterizationShaders(PreRasteriza
 	rasterizationState.depthBiasSlopeFactor = 0.0f;
 
 	// Using the pipeline library extension, we can skip the pipeline shader module creation and directly pass the shader code to the pipeline
-	std::vector<uint32_t> spirv;
-	load_shader("shared.vert", VK_SHADER_STAGE_VERTEX_BIT, spirv);
+	std::vector<VkShaderModuleCreateInfo> shaderModuleInfos;
+	shaderModuleInfos.reserve(info.stages.size());
+	std::vector<VkPipelineShaderStageCreateInfo> shaderStages;
+	shaderStages.reserve(info.stages.size());
+	for (auto&stage: info.stages) {
+		std::vector<char> bytes = LoadShader(stage);
 
-	VkShaderModuleCreateInfo shaderModuleInfo{};
-	shaderModuleInfo.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-	shaderModuleInfo.codeSize = spirv.size() * sizeof(uint32_t);
-	shaderModuleInfo.pCode    = spirv.data();
+		shaderModuleInfos.emplace_back(VkShaderModuleCreateInfo{
+			.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+			.codeSize =  bytes.size(),
+			.pCode    = (const uint32_t*)bytes.data()
+		});
 
-	VkPipelineShaderStageCreateInfo shaderStageInfo{};
-	shaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	shaderStageInfo.pNext = &shaderModuleInfo;
-	shaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
-	shaderStageInfo.pName = "main";
+		shaderStages.emplace_back(VkPipelineShaderStageCreateInfo {
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			.pNext = &shaderModuleInfos.back(),
+			.stage = (VkShaderStageFlagBits)stage.stage,
+			.pName = stage.entryPoint.c_str(),
+			.pSpecializationInfo = nullptr,
+		});
+	}
 
-	VkGraphicsPipelineCreateInfo pipelineLibraryInfo{};
-	pipelineLibraryInfo.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-	pipelineLibraryInfo.pNext               = &libraryInfo;
-	pipelineLibraryInfo.renderPass          = VK_NULL_HANDLE;
-	pipelineLibraryInfo.flags               = VK_PIPELINE_CREATE_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT;
-	pipelineLibraryInfo.stageCount          = 1;
-	pipelineLibraryInfo.pStages             = &shaderStageInfo;
-	pipelineLibraryInfo.layout              = pipeline.resource->layout;
-	pipelineLibraryInfo.pDynamicState       = &dynamicInfo;
-	pipelineLibraryInfo.pViewportState      = &viewportState;
-	pipelineLibraryInfo.pRasterizationState = &rasterizationState;
-
-	auto res = vkCreateGraphicsPipelines(device->device->handle, device->pipelineCache, 1, &pipelineLibraryInfo, nullptr, &pipeline_library.pre_rasterization_shaders);
-	DEBUG_VK(res, "Failed to create vertex input interface!");
+	VkGraphicsPipelineCreateInfo pipelineLibraryInfo {
+		.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+		.pNext               = &libraryInfo,
+		.flags               = VK_PIPELINE_CREATE_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT,
+		.stageCount          = static_cast<uint32_t>(shaderStages.size()),
+		.pStages             = shaderStages.data(),
+		.pViewportState      = &viewportState,
+		.pRasterizationState = &rasterizationState,
+		.pDynamicState       = &dynamicInfo,
+		.layout              = info.pipelineLayout,
+	};
+	VkPipeline pipeline;
+	auto res = vkCreateGraphicsPipelines(device->handle, device->pipelineCache, 1, & , nullptr, &pipeline_library.pre_rasterization_shaders),
+	DEBUG_VK(res, "Failed to create pre-rasterization shaders!");
+	preRasterizationShaders.emplace(info, pipeline);
 }
 
 void DeviceResource::PipelineLibrary::CreateFragmentShader(FragmentShaderInfo info) {
@@ -1313,26 +1341,30 @@ void DeviceResource::PipelineLibrary::CreateFragmentOutputInterface(FragmentOutp
 	DEBUG_VK(res, "Failed to create fragment output interface!");
 }
 
-void DeviceResource::LinkPipeline(Pipeline& pipeline) {
+void DeviceResource::PipelineLibrary::LinkPipeline(std::span<VkPipeline> pipelines, VkPipelineLayout layout) {
 	// Create the pipeline using the pre-built pipeline library parts
 	// Except for above fragment shader part all parts have been pre-built and will be re-used
-	std::vector<VkPipeline> libraries = {
-	    pipeline_library.vertex_input_interface,
-	    pipeline_library.pre_rasterization_shaders,
-	    fragment_shader,
-	    pipeline_library.fragment_output_interface
-	};
+	// VkPipeline libraries[] = {
+	//     pipeline.resource->pipeline,
+	//     pipeline.resource->pipeline,
+	//     pipeline.resource->pipeline,
+	//     pipeline.resource->pipeline,
+	// 	// pipeline_library.vertex_input_interface,
+	//     // pipeline_library.pre_rasterization_shaders,
+	//     // fragment_shader,
+	//     // pipeline_library.fragment_output_interface
+	// };
 
 	// Link the library parts into a graphics pipeline
 	VkPipelineLibraryCreateInfoKHR linkingInfo{};
 	linkingInfo.sType        = VK_STRUCTURE_TYPE_PIPELINE_LIBRARY_CREATE_INFO_KHR;
-	linkingInfo.libraryCount = libraries.size();
-	linkingInfo.pLibraries   = libraries.data();
+	linkingInfo.libraryCount = pipelines.size();
+	linkingInfo.pLibraries   = pipelines.data();
 
 	VkGraphicsPipelineCreateInfo pipelineInfo{};
 	pipelineInfo.sType      = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
 	pipelineInfo.pNext      = &linkingInfo;
-	pipelineInfo.layout     = pipeline.resource->layout;
+	pipelineInfo.layout     = layout;
 
 	if (_ctx.linkTimeOptimization) {
 		pipelineInfo.flags = VK_PIPELINE_CREATE_LINK_TIME_OPTIMIZATION_BIT_EXT;
@@ -1341,11 +1373,6 @@ void DeviceResource::LinkPipeline(Pipeline& pipeline) {
 	VkPipeline executable = VK_NULL_HANDLE;
 	auto res = vkCreateGraphicsPipelines(device->handle, device->pipelineCache, 1, &pipelineInfo, nullptr, &executable); //todo: Thread pipeline cache
 	DEBUG_VK(res, "Failed to create vertex input interface!");
-
-	// pipelines.push_back(executable);
-
-	// Add the fragment shader we created to a deletion list
-	pipeline_library.fragment_shaders.push_back(fragment_shader);
 }
 
 void DeviceResource::SetDebugUtilsObjectNameEXT(VkDebugUtilsObjectNameInfoEXT* pNameInfo) {
