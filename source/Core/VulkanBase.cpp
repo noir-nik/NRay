@@ -249,6 +249,8 @@ struct DeviceResource: DeleteCopyMove {
 		struct FragmentOutputInfo {
 			VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
 			std::vector<Format> colorFormats;
+			bool useDepth;
+			Format depthFormat;
 		};
 		
 		struct VertexInputHash {
@@ -283,12 +285,17 @@ struct DeviceResource: DeleteCopyMove {
 
 		struct FragmentOutputHash {
 			size_t operator()(const FragmentOutputInfo& info) const {
-				return HashCombine(VectorHash(info.colorFormats), reinterpret_cast<size_t>(info.pipelineLayout));
+				size_t hash = HashCombine(VectorHash(info.colorFormats), reinterpret_cast<size_t>(info.pipelineLayout));
+				hash = HashCombine(hash, info.useDepth);
+				hash = HashCombine(hash, static_cast<size_t>(info.depthFormat));
+				return hash;
 			}
 
 			bool operator()(const FragmentOutputInfo& a, const FragmentOutputInfo& b) const {
 				return std::equal(a.colorFormats.begin(), a.colorFormats.end(), b.colorFormats.begin())
-					&& a.pipelineLayout == b.pipelineLayout;
+					&& a.pipelineLayout == b.pipelineLayout
+					&& a.useDepth == b.useDepth
+					&& a.depthFormat == b.depthFormat;
 			}
 		};
 
@@ -366,14 +373,26 @@ struct DeviceResource: DeleteCopyMove {
 		// dummyVertexBuffer = {};
 		// asScratchBuffer = {};
 		// vkDestroyDescriptorPool(handle, imguiDescriptorPool, _ctx.allocator);
+		
+		for (auto& [_, pipeline]: pipelineLibrary.vertexInputInterfaces) {
+			vkDestroyPipeline(handle, pipeline, _ctx.allocator);
+		}
+		for (auto& [_, pipeline]: pipelineLibrary.preRasterizationShaders) {
+			vkDestroyPipeline(handle, pipeline, _ctx.allocator);
+		}
+		for (auto& [_, pipeline]: pipelineLibrary.fragmentOutputInterfaces) {
+			vkDestroyPipeline(handle, pipeline, _ctx.allocator);
+		}
+		for (auto& [_, pipeline]: pipelineLibrary.fragmentShaders) {
+			vkDestroyPipeline(handle, pipeline, _ctx.allocator);
+		}
+
 		staging = {};
 		stagingCpu = nullptr;
 		DestroyBindlessDescriptorResources();
 		vmaDestroyAllocator(vmaAllocator);
 		vkDestroySampler(handle, genericSampler, _ctx.allocator);
-		// for (auto& pipeline : pipelineLibrary.vertexInputInterface) {
-			
-		// }
+
 		for (auto& [_, queue] : uniqueQueues) {
 			queue->command.resource.reset();
 		}
@@ -917,7 +936,7 @@ Pipeline DeviceResource::CreatePipeline(const PipelineDesc& desc) { // External 
 			pipelineLibrary.CreateFragmentShader(fragmentShaderInfo);
 		}
 
-		PipelineLibrary::FragmentOutputInfo fragmentOutputInfo { pipeline.resource->layout, desc.colorFormats };
+		PipelineLibrary::FragmentOutputInfo fragmentOutputInfo { pipeline.resource->layout, desc.colorFormats, desc.useDepth, desc.depthFormat };
 		if (pipelineLibrary.fragmentOutputInterfaces.find(fragmentOutputInfo) == pipelineLibrary.fragmentOutputInterfaces.end()) {
 			pipelineLibrary.CreateFragmentOutputInterface(fragmentOutputInfo);
 		}
@@ -1439,9 +1458,20 @@ void DeviceResource::PipelineLibrary::CreateFragmentOutputInterface(FragmentOutp
 		.alphaToOneEnable      = VK_FALSE,
 	};
 
+	VkPipelineRenderingCreateInfo pipelineRenderingInfo {
+		.sType                   = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR,
+		.pNext                   = &libraryInfo,
+		.viewMask                = 0,
+		.colorAttachmentCount    = static_cast<uint32_t>(info.colorFormats.size()),
+		.pColorAttachmentFormats = (VkFormat*)info.colorFormats.data(),
+		.depthAttachmentFormat   = info.useDepth ? (VkFormat)info.depthFormat : VK_FORMAT_UNDEFINED,
+		.stencilAttachmentFormat = VK_FORMAT_UNDEFINED,
+	};
+
+
 	VkGraphicsPipelineCreateInfo pipelineLibraryInfo {
 		.sType             = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-		.pNext             = &libraryInfo,
+		.pNext             = &pipelineRenderingInfo,
 		.flags             = VK_PIPELINE_CREATE_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT,
 		.pMultisampleState = &multisampleState,
 		.pColorBlendState  = &colorBlendState,
@@ -2144,16 +2174,14 @@ void PhysicalDevice::GetDetails() {
 	// vkGetPhysicalDeviceImageFormatProperties2(physicalDevice, &imageFormatInfo2, &imageFormatProperties2);
 
 	VkSampleCountFlags counts = physicalProperties2.properties.limits.framebufferColorSampleCounts;
-	counts &= physicalProperties2.properties.limits.framebufferDepthSampleCounts;
-
-	// get max number of samples
-	maxSamples = VK_SAMPLE_COUNT_1_BIT;
-	if (counts & VK_SAMPLE_COUNT_64_BIT) { maxSamples = VK_SAMPLE_COUNT_64_BIT; }
-	else if (counts & VK_SAMPLE_COUNT_32_BIT) { maxSamples = VK_SAMPLE_COUNT_32_BIT; }
-	else if (counts & VK_SAMPLE_COUNT_16_BIT) { maxSamples = VK_SAMPLE_COUNT_16_BIT; }
-	else if (counts & VK_SAMPLE_COUNT_8_BIT) { maxSamples = VK_SAMPLE_COUNT_8_BIT; }
-	else if (counts & VK_SAMPLE_COUNT_4_BIT) { maxSamples = VK_SAMPLE_COUNT_4_BIT; }
-	else if (counts & VK_SAMPLE_COUNT_2_BIT) { maxSamples = VK_SAMPLE_COUNT_2_BIT; }
+	
+    // Get max number of samples
+    for (VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_64_BIT; sampleCount >= VK_SAMPLE_COUNT_1_BIT; sampleCount = (VkSampleCountFlagBits)(sampleCount >> 1)) {
+        if (counts & sampleCount) {
+            maxSamples = sampleCount;
+            break;
+        }
+    }
 
 	if (numSamples > maxSamples) {numSamples = maxSamples;}
 }
