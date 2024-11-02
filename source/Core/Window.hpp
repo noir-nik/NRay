@@ -100,6 +100,7 @@ class Window {
 	Lmath::ivec4  windowedSize       = { 30, 30, 640, 480 };
 	Lmath::ivec4  sizeLimits         = { 30, 30, 1920, 1080 };
 	static inline bool          framebufferResized = false;
+	int frameCount = 0;
 
 	std::chrono::high_resolution_clock::time_point lastTime;
 	float deltaTime = .0f;
@@ -155,7 +156,7 @@ class Window {
 public:
 	vkw::SwapChain swapChain;
 
-	Window(int width, int height, const char* name = "Engine"): width(width), height(height), name(name) {}
+	Window(int width, int height, const char* name = "Engine");
 	Window& operator=(const Window&) = delete;
 	Window(const Window&) = delete;
 	virtual ~Window(){ if(alive) Destroy(); }
@@ -165,22 +166,23 @@ public:
 	bool IsKeyPressed(uint16_t keyCode);
 	void Destroy();
 
-	inline GLFWwindow* GetGLFWwindow()                     { return window;                                 }
-	// inline bool        IsDirty()                           { return dirty;                                  }
-	inline void        WaitEvents()                        { glfwWaitEvents();                              }
-	inline int         GetWidth()                          { return width;                                  }
-	inline int         GetHeight()                         { return height;                                 }
-	inline auto        GetSize()                           { return Lmath::ivec2(width, height);            }
-	inline void        StoreWindowSize()                   { windowedSize = {pos.x, pos.y, width, height};    }
+	inline GLFWwindow* GetGLFWwindow()                     { return window; }
+	inline void        WaitEvents()                        { glfwWaitEvents(); }
+	inline int         GetWidth()                          { return width; }
+	inline int         GetHeight()                         { return height; }
+	inline auto        GetSize()                           { return Lmath::ivec2(width, height); }
+	inline void        StoreWindowSize()                   { windowedSize = {pos.x, pos.y, width, height}; }
+	inline auto        GetFrameCount()                     { return frameCount; }
+	inline void        SetFrameCount(int value)            { frameCount = value; }
 
-	inline int         GetMonitorIndex()                   { return monitorIndex;                           }
+	inline int         GetMonitorIndex()                   { return monitorIndex; }
 	inline int         GetMonitorWidth()                   { vidMode = glfwGetVideoMode(glfwGetPrimaryMonitor()); return vidMode->width; }
 	inline int         GetMonitorHeight()                  { vidMode = glfwGetVideoMode(glfwGetPrimaryMonitor()); return vidMode->height; }
 
-	inline float       GetDeltaTime()                      { return deltaTime;                              }
+	inline float       GetDeltaTime()                      { return deltaTime; }
 
-	inline bool        GetShouldClose()                    { return glfwWindowShouldClose(window);          }
-	inline void        SetShouldClose(bool value)          { glfwSetWindowShouldClose(window, value);       }
+	inline bool        GetShouldClose()                    { return glfwWindowShouldClose(window); }
+	inline void        SetShouldClose(bool value)          { glfwSetWindowShouldClose(window, value); }
 
 	// inline float&      GetScroll()                         { return scroll;                                 }
 	// inline float&      GetDeltaScroll()                    { return deltaScroll;                            }
@@ -194,17 +196,17 @@ public:
 	inline void        CmdResizeTo(int width, int height)  { glfwSetWindowSize(window, width, height); drawNeeded = true; }
 	inline void        SetSize(int w, int h)               { width = w; height = h;}
 	
-	inline Lmath::int2 GetPos()                            { glfwGetWindowPos(window, &pos.x, &pos.y); return {pos.x, pos.y}; }
+	inline auto        GetPos()                            { glfwGetWindowPos(window, &pos.x, &pos.y); return Lmath::int2(pos.x, pos.y); }
 	inline void        SetPos(int x, int y)                { pos.x = x; pos.y = y; }
 
-	inline WindowMode  GetMode()                           { return mode; }
+	inline auto        GetMode()                           { return mode; }
 	inline void        SetMode(WindowMode value)           { newMode = value; }
 
 	inline bool        GetFramebufferResized()             { return framebufferResized; }
 	inline void        SetFramebufferResized(bool value)   { framebufferResized = value; }
 
 	inline const char* GetName()                           { return name.c_str(); }
-	inline void        SetName(const char* name)           { glfwSetWindowTitle(window, name);               }
+	inline void        SetName(const char* name)           { glfwSetWindowTitle(window, name);}
 
 	inline bool        GetMaximized()                      { return maximized; }
 	inline void        SetMaximized(bool value)            { maximized = value;}
@@ -237,7 +239,7 @@ public:
 	inline void        SetMaxSize(int w, int h)            { sizeLimits.z = w; sizeLimits.w = h; glfwSetWindowSizeLimits(window, GLFW_DONT_CARE, GLFW_DONT_CARE, w, h); }
 	inline auto        GetSizeLimits()                     { return sizeLimits; }
 
-	inline Lmath::vec2 GetContentScale()                   { glfwGetWindowContentScale(window, &scaleX, &scaleY); return {scaleX, scaleY}; }
+	inline auto        GetContentScale()                   { glfwGetWindowContentScale(window, &scaleX, &scaleY); return Lmath::vec2(scaleX, scaleY); }
 
 	inline void        CmdShow()                           { glfwShowWindow(window); }
 	inline void        CmdHide()                           { glfwHideWindow(window); }
@@ -300,7 +302,6 @@ friend class Window;
 public:
 	WindowManager() = delete;
 	static void Init();
-	static Window* NewWindow(int width, int height, const char* name);
 	static void PollEvents(){ glfwPollEvents(); }
 	static void WaitEvents(){ glfwWaitEvents(); }
 	// void OnImgui();
@@ -308,5 +309,4 @@ public:
 	static void Finish();
 private:
 	static inline bool is_initialized = false;
-	// static inline int  windowCount = 0;
 };

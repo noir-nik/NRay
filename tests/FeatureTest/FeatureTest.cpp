@@ -30,9 +30,11 @@ struct Context {
 
 	vkw::Device device;
 
-	vkw::Queue graphics;
-	vkw::Queue compute;
 	vkw::Queue queue;
+	vkw::Queue computeQueue;
+	vkw::Queue transferQueue;
+	vkw::Queue transferQueue2;
+	vkw::Queue transferQueue3;
 	
 	// vkw::Image renderImage;
 
@@ -51,7 +53,7 @@ struct Camera {
 	vec3 focus = {0.0f, 0.0f, 0.0f};
 	float rotation_factor = 0.0025f;
 	float zoom_factor = 0.01f;
-	float move_factor = 0.002f;
+	float move_factor = 0.0011f;
 
     mat4 view = lookAt(vec3(0.0f, 0.0f, -3.0f), focus, vec3(0.0f, 1.0f, 0.0f));
 	mat4 proj = perspective(60.0f, 1.0f, 0.1f, 100.0f);
@@ -214,7 +216,6 @@ void RecordCommands(Window* window) {
 
 }
 
-static int frameCount = 0;
 void DrawWindow(Window* window) {
 	if (window->GetDrawNeeded() && !window->GetIconified()) {
 		RecordCommands(window);
@@ -226,7 +227,7 @@ void DrawWindow(Window* window) {
 			LOG_WARN("SubmitAndPresent: Swapchain dirty");
 		}
 		window->SetDrawNeeded(false);
-		frameCount = (frameCount + 1) % (1 << 15);
+		window->SetFrameCount((window->GetFrameCount() + 1) % (1 << 15));
 	}
 }
 
@@ -239,7 +240,7 @@ void KeyCallback(Window* window, int key, int scancode, int action, int mods) {
 		case GLFW_KEY_N: {
 			static int windowCount = 1;
 			std::string name = "w" + std::to_string(windowCount++);
-			auto window = WindowManager::NewWindow(ctx.width, ctx.height, name.c_str());
+			auto window = new Window(ctx.width, ctx.height, name.c_str());
 			window->CreateSwapchain(ctx.device, ctx.queue);
 			CreateRenderImage(window);
 			ctx.windows.emplace(window);
@@ -327,7 +328,6 @@ void FramebufferCallback(Window* window, int width, int height) {
 }
 
 void RefreshCallback(Window* window) {
-	DEBUG_TRACE("Window {} refresh callback", window->GetName());
 	window->SetDrawNeeded(true);
 	DrawWindow(window);
 }
@@ -426,13 +426,16 @@ void FeatureTestApplication::Setup() {
 
 void FeatureTestApplication::Create() { auto& c = ctx;
 	vkw::Init();
-	auto window = WindowManager::NewWindow(ctx.width, ctx.height, "wm");
+	auto window = new Window(ctx.width, ctx.height, "wm");
 	ctx.queue = {vkw::QueueFlagBits::Graphics | vkw::QueueFlagBits::Compute | vkw::QueueFlagBits::Transfer, window->GetGLFWwindow()};
-	ctx.device = vkw::CreateDevice({&ctx.queue});
+	ctx.transferQueue = {vkw::QueueFlagBits::Transfer, nullptr, true};
+	ctx.transferQueue2 = {vkw::QueueFlagBits::Transfer, nullptr, true};
+	ctx.transferQueue3 = {vkw::QueueFlagBits::Transfer, nullptr, true};
+	ctx.computeQueue = {vkw::QueueFlagBits::Compute, nullptr, true};
+	ctx.device = vkw::CreateDevice({&ctx.queue, &ctx.transferQueue, &ctx.computeQueue, &ctx.transferQueue2, &ctx.transferQueue3});
 	window->CreateSwapchain(ctx.device, ctx.queue);
 	ctx.windows.emplace(window);
 	ctx.mainWindow = window;
-	// ctx.window1 = WindowManager::NewWindow(ctx.width, ctx.height, "w1");
 	window->AddFramebufferSizeCallback(FramebufferCallback);
 	window->AddWindowRefreshCallback(RefreshCallback);
 	window->AddMouseButtonCallback(MouseButtonCallback);

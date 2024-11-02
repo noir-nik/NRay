@@ -187,9 +187,20 @@ using QueueFlags = Flags;
 
 struct Queue {
 	QueueFlags flags = 0;
-	// bool presentSupported = false;
 	GLFWwindow* supportedWindowToPresent = {};
 	bool preferSeparateFamily = false;
+	Queue() = default;
+	Queue(QueueFlags flags, GLFWwindow* supportedWindowToPresent = {}, bool preferSeparateFamily = false):
+		flags(flags),
+		supportedWindowToPresent(supportedWindowToPresent),
+		preferSeparateFamily(preferSeparateFamily) {};
+	
+private:
+	friend class Device;
+	friend class SwapChain;
+	friend class DeviceResource;
+	friend class CommandResource;
+	friend class SwapChainResource;
 	std::shared_ptr<QueueResource> resource;
 };
 
@@ -409,6 +420,7 @@ struct Device {
 	Queue& GetQueue(uint32_t familyIndex, uint32_t queueIndex);
 	Command& GetCommandBuffer(const Queue& queue);
 	
+	void WaitQueue(Queue* queue);
 	void WaitIdle();
 
 
@@ -436,9 +448,7 @@ class SwapChain {
 	void DestroyImGui();
 
 public:
-	~SwapChain() {
-		printf("~SwapChain\n");
-	}
+	// ~SwapChain() { printf("~SwapChain\n"); }
 
 	inline Image&      GetCurrentImage()   { return swapChainImages[currentImageIndex]; }
 	inline Command&    GetCommandBuffer()  { return commands[currentFrame];             }
@@ -461,7 +471,6 @@ void UnmapBuffer(Buffer& buffer);
 
 // void GetTimeStamps(std::map<std::string, float>& timeTable);
 
-void WaitQueue(Queue* queue);
 // void BeginImGui();
 
 void Init(bool requestPresent = true);

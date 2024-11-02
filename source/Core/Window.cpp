@@ -276,47 +276,41 @@ void WindowManager::Finish() {
 }
 
 // Window factory
-Window* WindowManager::NewWindow(int width, int height, const char* name) {
-	if (!is_initialized) {
-		Init();
+Window::Window(int width, int height, const char* name): width(width), height(height), name(name) {
+
+	if (!WindowManager::is_initialized) {
+		WindowManager::Init();
 	}
-	Window* window = new Window(width, height, name);
 
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
-	GLFWwindow* glfwWindow = glfwCreateWindow(width, height, name, nullptr, nullptr);
+	window = glfwCreateWindow(width, height, name, nullptr, nullptr);
 	// LOG_INFO("Window::Create({}x{}):{}", width, height, name);
-	window->window = glfwWindow;
-	window->GetPos();
+	GetPos();
 	auto vidMode = glfwGetVideoMode(glfwGetPrimaryMonitor());
-	// window->SetMaxSize(vidMode->width, vidMode->height);
-	window->sizeLimits = { 30, 30, vidMode->width, vidMode->height };
-	glfwSetWindowSizeLimits(glfwWindow, window->sizeLimits.x, window->sizeLimits.y, window->sizeLimits.z, window->sizeLimits.w);
+	sizeLimits = { 30, 30, vidMode->width, vidMode->height };
+	glfwSetWindowSizeLimits(window, sizeLimits.x, sizeLimits.y, sizeLimits.z, sizeLimits.w);
 
-	glfwSetWindowUserPointer(glfwWindow, window);
+	glfwSetWindowUserPointer(window, this);
 
-	glfwSetWindowPosCallback         (glfwWindow, _WindowCallbacks::WindowPosCallback         );
-	glfwSetWindowSizeCallback        (glfwWindow, _WindowCallbacks::WindowSizeCallback        );
-	glfwSetWindowCloseCallback       (glfwWindow, _WindowCallbacks::WindowCloseCallback       );
-	glfwSetWindowRefreshCallback     (glfwWindow, _WindowCallbacks::WindowRefreshCallback     );
-	glfwSetWindowFocusCallback       (glfwWindow, _WindowCallbacks::WindowFocusCallback       );
-	glfwSetWindowIconifyCallback     (glfwWindow, _WindowCallbacks::WindowIconifyCallback     );
-	glfwSetWindowMaximizeCallback    (glfwWindow, _WindowCallbacks::WindowMaximizeCallback    );
-	glfwSetFramebufferSizeCallback   (glfwWindow, _WindowCallbacks::FramebufferSizeCallback   );
-	glfwSetWindowContentScaleCallback(glfwWindow, _WindowCallbacks::WindowContentScaleCallback);
+	glfwSetWindowPosCallback         (window, _WindowCallbacks::WindowPosCallback         );
+	glfwSetWindowSizeCallback        (window, _WindowCallbacks::WindowSizeCallback        );
+	glfwSetWindowCloseCallback       (window, _WindowCallbacks::WindowCloseCallback       );
+	glfwSetWindowRefreshCallback     (window, _WindowCallbacks::WindowRefreshCallback     );
+	glfwSetWindowFocusCallback       (window, _WindowCallbacks::WindowFocusCallback       );
+	glfwSetWindowIconifyCallback     (window, _WindowCallbacks::WindowIconifyCallback     );
+	glfwSetWindowMaximizeCallback    (window, _WindowCallbacks::WindowMaximizeCallback    );
+	glfwSetFramebufferSizeCallback   (window, _WindowCallbacks::FramebufferSizeCallback   );
+	glfwSetWindowContentScaleCallback(window, _WindowCallbacks::WindowContentScaleCallback);
 
-	glfwSetMouseButtonCallback       (glfwWindow, _InputCallbacks::MouseButtonCallback);
-	glfwSetCursorPosCallback         (glfwWindow, _InputCallbacks::CursorPosCallback  );
-	glfwSetScrollCallback            (glfwWindow, _InputCallbacks::ScrollCallback     );
-	glfwSetKeyCallback               (glfwWindow, _InputCallbacks::KeyCallback        );
-	glfwSetCharCallback              (glfwWindow, _InputCallbacks::CharCallback       );
-	glfwSetCharModsCallback          (glfwWindow, _InputCallbacks::CharModsCallback   );
-	glfwSetDropCallback              (glfwWindow, _InputCallbacks::DropCallback       );
+	glfwSetMouseButtonCallback       (window, _InputCallbacks::MouseButtonCallback);
+	glfwSetCursorPosCallback         (window, _InputCallbacks::CursorPosCallback  );
+	glfwSetScrollCallback            (window, _InputCallbacks::ScrollCallback     );
+	glfwSetKeyCallback               (window, _InputCallbacks::KeyCallback        );
+	glfwSetCharCallback              (window, _InputCallbacks::CharCallback       );
+	glfwSetCharModsCallback          (window, _InputCallbacks::CharModsCallback   );
+	glfwSetDropCallback              (window, _InputCallbacks::DropCallback       );
 
-	window->ApplyChanges();
-	// if (createSwapchain) {
-	// 	window->swapChain.Create(glfwWindow, width, height);
-	// }
-	return window;
+	ApplyChanges();
 }
 
 void Window::Destroy() {
