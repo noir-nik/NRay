@@ -165,28 +165,7 @@ struct QueueResource {
 	// UID uid;
 };
 
-struct CommandResource {
-	VkDevice device = VK_NULL_HANDLE;
-	VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
-	// DeviceResource* device = nullptr;
-	// uint32_t queueFamily = ~0;
-	QueueResource* queue = nullptr;
-	PipelineResource* currentPipeline = nullptr;
 
-	VkCommandPool pool = VK_NULL_HANDLE;
-	VkCommandBuffer buffer = VK_NULL_HANDLE;
-	VkFence fence = VK_NULL_HANDLE;
-	VkQueryPool queryPool;
-	std::vector<std::string> timeStampNames;
-	std::vector<uint64_t> timeStamps;
-
-	void Create(DeviceResource* device, QueueResource* queue);
-	~CommandResource() {
-		vkDestroyCommandPool(device, pool, _ctx.allocator);
-		vkDestroyFence(device, fence, _ctx.allocator);
-		// vkDestroyQueryPool(device, queryPool, _ctx.allocator);
-	}
-};
 
 struct DeviceResource: DeleteCopyMove {
 	UID uid;
@@ -243,6 +222,7 @@ struct DeviceResource: DeleteCopyMove {
 
 		struct FragmentShaderInfo {
 			VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
+			SampleCount samples;
 			std::vector<Pipeline::Stage> stages;
 		};
 
@@ -251,6 +231,7 @@ struct DeviceResource: DeleteCopyMove {
 			std::vector<Format> colorFormats;
 			bool useDepth;
 			Format depthFormat;
+			SampleCount samples;
 		};
 		
 		struct VertexInputHash {
@@ -288,6 +269,7 @@ struct DeviceResource: DeleteCopyMove {
 				size_t hash = HashCombine(VectorHash(info.colorFormats), reinterpret_cast<size_t>(info.pipelineLayout));
 				hash = HashCombine(hash, info.useDepth);
 				hash = HashCombine(hash, static_cast<size_t>(info.depthFormat));
+				hash = HashCombine(hash, static_cast<size_t>(info.samples));
 				return hash;
 			}
 
@@ -295,7 +277,8 @@ struct DeviceResource: DeleteCopyMove {
 				return std::equal(a.colorFormats.begin(), a.colorFormats.end(), b.colorFormats.begin())
 					&& a.pipelineLayout == b.pipelineLayout
 					&& a.useDepth == b.useDepth
-					&& a.depthFormat == b.depthFormat;
+					&& a.depthFormat == b.depthFormat
+					&& a.samples == b.samples;
 			}
 		};
 
@@ -306,6 +289,7 @@ struct DeviceResource: DeleteCopyMove {
 					hash = HashCombine(hash, stage.Hash());
 				}
 				hash = HashCombine(hash, reinterpret_cast<size_t>(info.pipelineLayout));
+				hash = HashCombine(hash, static_cast<size_t>(info.samples));
 				return hash;
 			}
 			bool operator()(const FragmentShaderInfo& a, const FragmentShaderInfo& b) const {
@@ -313,7 +297,8 @@ struct DeviceResource: DeleteCopyMove {
 					&& std::equal(a.stages.begin(), a.stages.end(), b.stages.begin(), [](const auto& a, const auto& b) {
 						return a.stage == b.stage && a.path == b.path && a.entryPoint == b.entryPoint;
 					})
-					&& a.pipelineLayout == b.pipelineLayout;
+					&& a.pipelineLayout == b.pipelineLayout
+					&& a.samples == b.samples;
 			}
 		};
 
@@ -402,6 +387,29 @@ struct DeviceResource: DeleteCopyMove {
 	}
 };
 
+struct CommandResource {
+	DeviceResource* device = nullptr;
+	VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
+	// DeviceResource* device = nullptr;
+	// uint32_t queueFamily = ~0;
+	QueueResource* queue = nullptr;
+	PipelineResource* currentPipeline = nullptr;
+
+	VkCommandPool pool = VK_NULL_HANDLE;
+	VkCommandBuffer buffer = VK_NULL_HANDLE;
+	VkFence fence = VK_NULL_HANDLE;
+	VkQueryPool queryPool;
+	std::vector<std::string> timeStampNames;
+	std::vector<uint64_t> timeStamps;
+
+	void Create(DeviceResource* device, QueueResource* queue);
+	~CommandResource() {
+		vkDestroyCommandPool(device->handle, pool, _ctx.allocator);
+		vkDestroyFence(device->handle, fence, _ctx.allocator);
+		// vkDestroyQueryPool(device, queryPool, _ctx.allocator);
+	}
+};
+
 
 struct SwapChainResource: DeleteCopyMove {
 	DeviceResource* device = nullptr;
@@ -467,6 +475,7 @@ struct ImageResource : Resource {
 	VkImageView view;
 	VmaAllocation allocation;
 	bool fromSwapchain = false;
+	SampleCount samples = SampleCount::_1;
 	std::vector<VkImageView> layersView;
 	// std::vector<ImTextureID> imguiRIDs;
 
@@ -659,7 +668,7 @@ Buffer Device::CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags m
 
 Image Device::CreateImage(const ImageDesc& desc) {
 	std::shared_ptr<ImageResource> res = std::make_shared<ImageResource>(this->resource.get(), desc.name);
-
+	res->samples = desc.samples;
 	VkImageCreateInfo imageInfo{
 		.sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 		.flags         = (VkImageCreateFlags)(desc.layers == 6? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT: 0),
@@ -921,7 +930,7 @@ Pipeline DeviceResource::CreatePipeline(const PipelineDesc& desc) { // External 
 		}
 
 		PipelineLibrary::PreRasterizationInfo preRasterizationInfo { pipeline.resource->layout, desc.lineTopology, desc.cullMode };
-		PipelineLibrary::FragmentShaderInfo   fragmentShaderInfo   { pipeline.resource->layout };
+		PipelineLibrary::FragmentShaderInfo   fragmentShaderInfo   { pipeline.resource->layout, desc.samples};
 		for (auto& stage: desc.stages) {
 			switch(stage.stage) {
 				case ShaderStage::Vertex:
@@ -946,7 +955,7 @@ Pipeline DeviceResource::CreatePipeline(const PipelineDesc& desc) { // External 
 			pipelineLibrary.CreateFragmentShader(fragmentShaderInfo);
 		}
 
-		PipelineLibrary::FragmentOutputInfo fragmentOutputInfo { pipeline.resource->layout, desc.colorFormats, desc.useDepth, desc.depthFormat };
+		PipelineLibrary::FragmentOutputInfo fragmentOutputInfo { pipeline.resource->layout, desc.colorFormats, desc.useDepth, desc.depthFormat, desc.samples};
 		if (!pipelineLibrary.fragmentOutputInterfaces.count(fragmentOutputInfo)) {
 			pipelineLibrary.CreateFragmentOutputInterface(fragmentOutputInfo);
 		}
@@ -1368,13 +1377,14 @@ void DeviceResource::PipelineLibrary::CreateFragmentShader(FragmentShaderInfo in
 
 	VkPipelineMultisampleStateCreateInfo multisampleState = {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+		.rasterizationSamples = (VkSampleCountFlagBits)std::min(info.samples, device->physicalDevice->maxSamples),
 		.sampleShadingEnable = VK_FALSE,
 		.minSampleShading = 0.5f,
 		.pSampleMask = nullptr,
 		.alphaToCoverageEnable = VK_FALSE,
 		.alphaToOneEnable = VK_FALSE,
 	};
+	
 
 	std::vector<VkShaderModuleCreateInfo> shaderModuleInfos(info.stages.size());
 	std::vector<VkPipelineShaderStageCreateInfo> shaderStages(info.stages.size());
@@ -1438,7 +1448,7 @@ void DeviceResource::PipelineLibrary::CreateFragmentOutputInterface(FragmentOutp
 
 	VkPipelineMultisampleStateCreateInfo multisampleState {
 		.sType                 = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-		.rasterizationSamples  = VK_SAMPLE_COUNT_1_BIT,
+		.rasterizationSamples  = (VkSampleCountFlagBits)std::min(info.samples, device->physicalDevice->maxSamples),
 		.sampleShadingEnable   = VK_FALSE,
 		.minSampleShading      = 0.5f,
 		.pSampleMask           = nullptr,
@@ -1507,7 +1517,7 @@ Command::Command() {
 	resource = std::make_shared<CommandResource>();
 }
 
-void Command::BeginRendering(const std::vector<std::vector<Image>>& colorAttachs, Image depthAttach, uint32_t layerCount, vec4 viewport, ivec4 scissor) {
+void Command::BeginRendering(const std::vector<std::span<const Image>>& colorAttachs, Image depthAttach, uint32_t layerCount, vec4 viewport, ivec4 scissor) {
 
 	ivec2 offset(0, 0);
 	uvec2 extent(0, 0);
@@ -1524,13 +1534,11 @@ void Command::BeginRendering(const std::vector<std::vector<Image>>& colorAttachs
 	colorAttachInfos.reserve(colorAttachs.size());
 	VkRenderingAttachmentInfoKHR depthAttachInfo;
 	for (auto& colorAttach: colorAttachs) {
+		DEBUG_ASSERT(colorAttach.size() > 0 && colorAttach.size() < 3, "Invalid color attachment count.")
 		colorAttachInfos.emplace_back(VkRenderingAttachmentInfoKHR{
 			.sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR,
 			.imageView   = colorAttach[0].resource->view,
 			.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-			.resolveMode = (VkResolveModeFlagBits)(colorAttach.size() > 1? VK_RESOLVE_MODE_AVERAGE_BIT: VK_RESOLVE_MODE_NONE),
-			.resolveImageView = (VkImageView)(colorAttach.size() > 1 ? colorAttach[1].resource->view: nullptr),
-			.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 			.loadOp      = VK_ATTACHMENT_LOAD_OP_CLEAR,
 			.storeOp     = VK_ATTACHMENT_STORE_OP_STORE,
 			.clearValue  = {
@@ -1539,6 +1547,13 @@ void Command::BeginRendering(const std::vector<std::vector<Image>>& colorAttachs
 				}
 			}
 		});
+		if (colorAttach.size() > 1) {
+			DEBUG_ASSERT(std::min(colorAttach[0].resource->samples, resource->device->physicalDevice->maxSamples) > SampleCount::_1,
+				"[Command::BeginRendering] Using MSAA with maxSamples == 1 on device.")
+			colorAttachInfos.back().resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;
+			colorAttachInfos.back().resolveImageView = colorAttach[1].resource->view;
+			colorAttachInfos.back().resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+		}
 	}
 
 	VkRenderingInfoKHR renderingInfo{
@@ -1697,8 +1712,8 @@ void Command::PushConstants(void* data, uint32_t size) {
 // vkWaitForFences + vkResetFences +
 // vkResetCommandPool + vkBeginCommandBuffer
 void Command::BeginCommandBuffer() {
-	vkWaitForFences(resource->device, 1, &resource->fence, VK_TRUE, UINT64_MAX);
-	vkResetFences(resource->device, 1, &resource->fence);
+	vkWaitForFences(resource->device->handle, 1, &resource->fence, VK_TRUE, UINT64_MAX);
+	vkResetFences(resource->device->handle, 1, &resource->fence);
 
 	// device.resource->stagingOffset = 0;
 
@@ -1714,7 +1729,7 @@ void Command::BeginCommandBuffer() {
 	// }
 
 	// ?VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT
-	vkResetCommandPool(resource->device, resource->pool, 0); // TODO: check if this is needed
+	vkResetCommandPool(resource->device->handle, resource->pool, 0); // TODO: check if this is needed
 	VkCommandBufferBeginInfo beginInfo{};
 	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
@@ -3036,7 +3051,7 @@ void DeviceResource::DestroyBindlessDescriptorResources(){
 
 
 void CommandResource::Create(DeviceResource* device, QueueResource* queue) {
-	this->device = device->handle;
+	this->device = device;
 	this->queue = queue;
 	VkCommandPoolCreateInfo poolInfo{
 		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,

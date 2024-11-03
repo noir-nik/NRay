@@ -4,6 +4,7 @@
 #include "ShaderCommon.h"
 
 #include "FeatureTest.hpp"
+#include <array>
 #include <set>
 #include "Window.hpp"
 
@@ -23,6 +24,11 @@ struct Context {
 	// float4x4 viewMat;
 	// float4x4 worldViewInv;
 	// float4x4 worldViewProjInv;
+
+	vkw::SampleCount sampleCount = vkw::SampleCount::_4;
+	// vkw::Format renderFormat = vkw::Format::RGBA16_sfloat;
+	vkw::Format renderFormat = vkw::Format::RGBA8_unorm;
+	
 
 	// vkw::Buffer outputImage;
 	vkw::Buffer vertexBuffer;
@@ -133,10 +139,10 @@ void Context::CreateShaders() {
 		.name = "Feature pipeline",
 		// pos2 + color3
 		.vertexAttributes = {vkw::Format::RGB32_sfloat, vkw::Format::RGB32_sfloat},
-		.colorFormats = {vkw::Format::RGBA16_sfloat},
+		.colorFormats = {ctx.renderFormat},
 		.useDepth = true,
 		.depthFormat = ctx.depthImages[mainWindow].format,
-		.samples = vkw::SampleCount::_4
+		.samples = ctx.sampleCount
 	});
 
 }
@@ -161,8 +167,8 @@ void CreateWindowResources(Window* window) {
         .width = maxSize.x,
         .height = maxSize.y,
         .format = vkw::Format::D32_sfloat,
-        .usage = vkw::ImageUsage::DepthStencilAttachment/*  | vkw::ImageUsage::TransientAttachment */,
-		.samples = vkw::SampleCount::_4,
+        .usage = vkw::ImageUsage::DepthStencilAttachment | vkw::ImageUsage::TransientAttachment,
+		.samples = ctx.sampleCount,
         .name = "Depth Attachment"
     }));
 
@@ -170,8 +176,8 @@ void CreateWindowResources(Window* window) {
 	ctx.resolveImages.try_emplace(window, ctx.device.CreateImage({
 		.width = maxSize.x,
 		.height = maxSize.y,
-		.format = vkw::Format::RGBA16_sfloat,
-		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::TransferSrc | vkw::ImageUsage::TransferDst,
+		.format = ctx.renderFormat,
+		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::TransferSrc ,
 		.name = window->GetName(),
 	}));
 	
@@ -179,10 +185,9 @@ void CreateWindowResources(Window* window) {
 	ctx.colorImages.try_emplace(window, ctx.device.CreateImage({
 		.width = maxSize.x,
 		.height = maxSize.y,
-		.format = vkw::Format::RGBA16_sfloat,
-		// .format = vkw::Format::RGBA8_unorm,
-		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::TransferSrc | vkw::ImageUsage::TransferDst,
-		.samples = vkw::SampleCount::_4,
+		.format = ctx.renderFormat,
+		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::TransientAttachment,
+		.samples = ctx.sampleCount,
 		.name = window->GetName(),
 	}));
 }
@@ -215,9 +220,11 @@ void RecordCommands(Window* window) {
 	// cmd.Copy(ctx.vertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex));
 	// cmd.Barrier(ctx.renderImages[window], {vkw::ImageLayout::TransferDst});
 	// cmd.ClearColorImage(ctx.renderImages[window], {0.7f, 0.0f, 0.4f, 1.0f});
-
-	cmd.BeginRendering({{ctx.colorImages[window], ctx.resolveImages[window]}}, {ctx.depthImages[window]}, 1, viewport);
-	// cmd.BeginRendering({{ctx.resolveImages[window]}}, {ctx.depth}, 1, viewport);
+	if (ctx.sampleCount == vkw::SampleCount::_1) {
+		cmd.BeginRendering({{{ctx.resolveImages[window]}}}, {ctx.depthImages[window]}, 1, viewport);
+	} else {
+		cmd.BeginRendering({{{ctx.colorImages[window], ctx.resolveImages[window]}}}, {ctx.depthImages[window]}, 1, viewport);
+	}
 	cmd.BindPipeline(ctx.pipeline);
 	cmd.PushConstants(&constants, sizeof(constants));
 	cmd.BindVertexBuffer(ctx.vertexBuffer);

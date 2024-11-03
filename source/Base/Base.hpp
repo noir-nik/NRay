@@ -21,31 +21,31 @@ using f64 = double;
 #define IMG_PATH "img"
 
 #ifdef _WIN32
-	#define APP_PLATFORM_WINDOWS
+	#define NRAY_PLATFORM_WINDOWS
 #endif
 
 #ifdef __linux__
-	#define APP_PLATFORM_LINUX
+	#define NRAY_PLATFORM_LINUX
 #endif
 
-#ifdef APP_DEBUG
-	#ifdef APP_PLATFORM_WINDOWS
-		#define APP_DEBUGBREAK() __debugbreak()
+#ifdef NRAY_DEBUG
+	#ifdef NRAY_PLATFORM_WINDOWS
+		#define NRAY_DEBUGBREAK() __debugbreak()
 	#endif
 
-	#ifdef APP_PLATFORM_LINUX
+	#ifdef NRAY_PLATFORM_LINUX
         #include <csignal>
-		#define APP_DEBUGBREAK() raise(SIGTRAP)
+		#define NRAY_DEBUGBREAK() raise(SIGTRAP)
 	#endif
 #else
-	#define APP_DEBUGBREAK()
+	#define NRAY_DEBUGBREAK()
 #endif 
 
 #define ASSERT(condition, ...) { if (!(condition)) { LOG_ERROR("[ASSERTION FAILED] in {}:{} {}", __FILE__, __LINE__, __VA_ARGS__); exit(1); } }
 
-#ifdef APP_DEBUG
-#define DEBUG_ASSERT(condition, ...) { if (!(condition)) { LOG_ERROR("[ASSERTION FAILED] {0}", __VA_ARGS__); APP_DEBUGBREAK(); } }
-#define DEBUG_VK(res, ...) { if ((res) != VK_SUCCESS) { LOG_ERROR("[VULKAN ERROR = {0}] {1}", VK_ERROR_STRING((res)), __VA_ARGS__); APP_DEBUGBREAK(); } }
+#ifdef NRAY_DEBUG
+#define DEBUG_ASSERT(condition, ...) { if (!(condition)) { LOG_ERROR("[ASSERTION FAILED] {0}", __VA_ARGS__); NRAY_DEBUGBREAK(); } }
+#define DEBUG_VK(res, ...) { if ((res) != VK_SUCCESS) { LOG_ERROR("[VULKAN ERROR = {0}] {1}", VK_ERROR_STRING((res)), __VA_ARGS__); NRAY_DEBUGBREAK(); } }
 #else
 #define DEBUG_ASSERT(condition, ...)
 #define DEBUG_VK(res, ...) { if ((res) != VK_SUCCESS) { LOG_ERROR("[{0}] {1} in {2}:{3}", VK_ERROR_STRING(res), __VA_ARGS__, __FILE__, __LINE__); exit(1);}}

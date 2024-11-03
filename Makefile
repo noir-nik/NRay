@@ -83,7 +83,7 @@ DEPS = $(OBJS:.o=.d)
 
 all: build_target
 
-debug: CXXFLAGS += -g -ggdb -DAPP_DEBUG
+debug: CXXFLAGS += -g -ggdb -DNRAY_DEBUG
 debug: build_target
 
 build_target: create_dirs $(BUILD_DIR)/$(TARGET)

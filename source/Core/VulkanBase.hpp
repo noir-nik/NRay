@@ -409,7 +409,7 @@ struct Command {
 	void ClearColorImage(Image& image, const float4& color);
 
 
-	void BeginRendering(const std::vector<std::vector<Image>>& colorAttachs, Image depthAttach = {}, uint32_t layerCount = 1, vec4 viewport = {}, ivec4 scissor = {});
+	void BeginRendering(const std::vector<std::span<const Image>>& colorAttachs, Image depthAttach = {}, uint32_t layerCount = 1, vec4 viewport = {}, ivec4 scissor = {});
 	void EndRendering();
 	// void BeginPresent();
 	// void EndPresent();

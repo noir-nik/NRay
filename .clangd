@@ -1,2 +1,2 @@
 CompileFlags:
-  Add: [-std=c++20, -DENGINE, -I./source/Core, -I./source/Base, -I./source/Shaders, --target=x86_64-w64-windows-gnu]
+  Add: [-std=c++20, -DENGINE, -I./source/Core, -I./source/Base, -I./source/Shaders, --target=x86_64-w64-windows-gnu, -DNRAY_DEBUG]

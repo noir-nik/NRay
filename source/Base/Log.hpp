@@ -12,7 +12,7 @@
 
 #define LOG_TRACE(...) spdlog::trace(__VA_ARGS__);
 
-#ifdef APP_DEBUG
+#ifdef NRAY_DEBUG
 #define DEBUG_TRACE(...) Logger::Get()->trace(__VA_ARGS__)
 #else
 #define DEBUG_TRACE(...)

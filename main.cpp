@@ -1,12 +1,7 @@
-#include "Pch.hpp"
 
-#include "VulkanBase.hpp"
-
-#include "FileManager.hpp"
-
+#include "Log.hpp"
 #include "tests/Test.hpp"
 
-#include <filesystem>
 
 // Example
 int main(int argc, char* argv[])
