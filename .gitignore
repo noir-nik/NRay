@@ -40,3 +40,10 @@ deps/*
 *.swp
 *.tmp
 *.rej
+
+*.ttf
+*.ttc
+*.otf
+
+*.ini
+*.log

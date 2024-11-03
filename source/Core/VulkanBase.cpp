@@ -52,6 +52,11 @@ struct Context {
 	bool usePipelineLibrary = false;
 	bool linkTimeOptimization = true; // Pipeline library link
 
+	bool enableUnusedAttachments = false;
+
+
+	bool imguiInitialized = false;
+
 	std::vector<const char*> requiredInstanceExtensions {
 		VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
 	};
@@ -128,11 +133,12 @@ struct PhysicalDevice: DeleteCopyMove {
 
 	bool descriptorIndexingAvailable = false;
 	
+	VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT unusedAttachmentFeatures{};
+	VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT graphicsPipelineLibraryFeatures{};
+	VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddressFeatures{};
 	VkPhysicalDeviceSynchronization2FeaturesKHR synchronization2Features{};
 	VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures{};
-	VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddressFeatures{};
 	VkPhysicalDeviceDescriptorIndexingFeatures indexingFeatures{};
-	VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT graphicsPipelineLibraryFeatures{};
 	VkPhysicalDeviceFeatures2 physicalFeatures2{};
 
 	VkPhysicalDeviceGraphicsPipelineLibraryPropertiesEXT graphicsPipelineLibraryProperties{};
@@ -160,7 +166,7 @@ struct PhysicalDevice: DeleteCopyMove {
 struct QueueResource {
 	uint32_t familyIndex = ~0;
 	uint32_t index = 0;
-	VkQueue queue = VK_NULL_HANDLE;
+	VkQueue handle = VK_NULL_HANDLE;
 	Command command {};
 	// UID uid;
 };
@@ -357,7 +363,7 @@ struct DeviceResource: DeleteCopyMove {
 	~DeviceResource() {
 		// dummyVertexBuffer = {};
 		// asScratchBuffer = {};
-		// vkDestroyDescriptorPool(handle, imguiDescriptorPool, _ctx.allocator);
+		vkDestroyDescriptorPool(handle, imguiDescriptorPool, _ctx.allocator);
 		
 		for (auto& [_, pipeline]: pipelineLibrary.vertexInputInterfaces) {
 			vkDestroyPipeline(handle, pipeline, _ctx.allocator);
@@ -423,6 +429,9 @@ struct SwapChainResource: DeleteCopyMove {
 	VkSurfaceCapabilitiesKHR surfaceCapabilities;
 	std::vector<VkPresentModeKHR> availablePresentModes;
 	std::vector<VkSurfaceFormatKHR> availableSurfaceFormats;
+
+	std::vector<Command> commands; // Owns all command resources
+
 	// // preferred, warn if not available
 	VkFormat colorFormat = VK_FORMAT_B8G8R8A8_UNORM;
 	// VkFormat colorFormat = VK_FORMAT_B8G8R8A8_SRGB;
@@ -437,6 +446,9 @@ struct SwapChainResource: DeleteCopyMove {
 
 	void Create(std::vector<Image>& swapChainImages, uint32_t width, uint32_t height, bool is_recreation = false);
 	void Destroy(bool is_recreation = false);
+
+	void CreateImGui(GLFWwindow* window);
+	void DestroyImGui();
 
 	inline VkSemaphore GetImageAvailableSemaphore(uint32_t currentFrame) { return imageAvailableSemaphores[currentFrame]; }
 	inline VkSemaphore GetRenderFinishedSemaphore(uint32_t currentFrame) { return renderFinishedSemaphores[currentFrame]; }
@@ -477,7 +489,7 @@ struct ImageResource : Resource {
 	bool fromSwapchain = false;
 	SampleCount samples = SampleCount::_1;
 	std::vector<VkImageView> layersView;
-	// std::vector<ImTextureID> imguiRIDs;
+	std::vector<ImTextureID> imguiRIDs;
 
 	using Resource::Resource;
 	ImageResource(DeviceResource* device, VkImage image, VkImageView view, bool fromSwapchain, const std::string& name = ""):
@@ -497,11 +509,11 @@ struct ImageResource : Resource {
 			vmaDestroyImage(device->vmaAllocator, image, allocation);
 			if (rid >= 0) {
 				device->availableImageRID.push_back(rid);
-				// for (ImTextureID imguiRID : imguiRIDs) {
-				//     ImGui_ImplVulkan_RemoveTexture((VkDescriptorSet)imguiRID);
-				// }
+				for (ImTextureID imguiRID : imguiRIDs) {
+				    ImGui_ImplVulkan_RemoveTexture((VkDescriptorSet)imguiRID);
+				}
 				rid = -1;
-				// imguiRIDs.clear();
+				imguiRIDs.clear();
 			}
 		}
 	}
@@ -565,8 +577,8 @@ Device CreateDevice(const std::vector<Queue*>& queues) {
 
 
 void Destroy() {
-	// ImGui_ImplVulkan_Shutdown();
-	// ImGui_ImplGlfw_Shutdown();
+	ImGui_ImplVulkan_Shutdown();
+	ImGui_ImplGlfw_Shutdown();
 	_ctx.physicalDevices.clear();
 	_ctx.devices.clear();
 	_ctx.instance->Destroy();
@@ -759,24 +771,22 @@ Image Device::CreateImage(const ImageDesc& desc) {
 	}
 
 	if (desc.usage & ImageUsage::Sampled) {
+		ImageLayout newLayout = ImageLayout::ShaderRead;
 		switch (aspect) {
-		case Aspect::Depth:                   image.layout = ImageLayout::DepthReadOnly;    break;
-		case Aspect::Depth | Aspect::Stencil: image.layout = ImageLayout::DepthStencilRead; break;
-		default:                              image.layout = ImageLayout::ShaderRead;       break;
+		case Aspect::Depth:                   newLayout = ImageLayout::DepthReadOnly;    break;
+		case Aspect::Depth | Aspect::Stencil: newLayout = ImageLayout::DepthStencilRead; break;
+		default: break;
 		}
-		// res->imguiRIDs.resize(desc.layers);
-		// if (desc.layers > 1) {
-		//     for (int i = 0; i < desc.layers; i++) {
-		//         res->imguiRIDs[i] = ImGui_ImplVulkan_AddTexture(_ctx.genericSampler, res->layersView[i], (VkImageLayout)newLayout);
-		//     }
-		// } else {
-		//     res->imguiRIDs[0] = ImGui_ImplVulkan_AddTexture(_ctx.genericSampler, res->view, (VkImageLayout)newLayout);
-		// }
+		res->imguiRIDs.resize(desc.layers);
+		
+		for (int i = 0; i < desc.layers; i++) {
+			res->imguiRIDs[i] = (ImTextureID) ImGui_ImplVulkan_AddTexture(resource->genericSampler, res->layersView[i], (VkImageLayout)newLayout);
+		}
 
 		VkDescriptorImageInfo descriptorInfo = {
 			.sampler = resource->genericSampler,
 			.imageView = res->view,
-			.imageLayout = (VkImageLayout)image.layout,
+			.imageLayout = (VkImageLayout)newLayout,
 		};
 		VkWriteDescriptorSet write = {
 			.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -1148,7 +1158,12 @@ void DeviceResource::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipe
 		};
 
 		std::vector<VkPipelineColorBlendAttachmentState> blendAttachments(desc.colorFormats.size(), {
-			.blendEnable = VK_FALSE,
+			.blendEnable         = VK_FALSE,
+			.srcColorBlendFactor = VK_BLEND_FACTOR_ONE,
+			.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO,
+			.colorBlendOp        = VK_BLEND_OP_ADD,
+			.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+			.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
 			.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
 		});
 
@@ -1665,9 +1680,9 @@ void Command::DrawLineStrip(const Buffer& pointsBuffer, uint32_t firstPoint, uin
 //     vkCmdDraw(resource->buffer, 6, 1, 0, 0);
 // }
 
-// Command::void CmdDrawImGui(ImDrawData* data) {
-//     ImGui_ImplVulkan_RenderDrawData(data, _ctx.GetCurrentCommandResources().buffer);
-// }
+void Command::DrawImGui(ImDrawData* data) {
+    ImGui_ImplVulkan_RenderDrawData(data, resource->buffer);
+}
 
 
 // int CmdBeginTimeStamp(const std::string& name) {
@@ -1704,10 +1719,10 @@ void Command::PushConstants(void* data, uint32_t size) {
 	vkCmdPushConstants(resource->buffer, resource->currentPipeline->layout, VK_SHADER_STAGE_ALL, 0, size, data);
 }
 
-// void BeginImGui() {
-//     ImGui_ImplVulkan_NewFrame();
-//     ImGui_ImplGlfw_NewFrame();
-// }
+void BeginImGui() {
+    ImGui_ImplVulkan_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+}
 
 // vkWaitForFences + vkResetFences +
 // vkResetCommandPool + vkBeginCommandBuffer
@@ -1746,7 +1761,7 @@ void Command::EndCommandBuffer() {
 }
 
 void Device::WaitQueue(Queue* queue) {
-	auto res = vkQueueWaitIdle(queue->resource->queue);
+	auto res = vkQueueWaitIdle(queue->resource->handle);
 	DEBUG_VK(res, "Failed to wait idle command buffer");
 }
 
@@ -1780,7 +1795,7 @@ void Command::QueueSubmit(const SubmitInfo& submitInfo) {
 		.pSignalSemaphoreInfos = &signalInfo,
 	};
 
-	auto res = vkQueueSubmit2(resource->queue->queue, 1, &info, resource->fence);
+	auto res = vkQueueSubmit2(resource->queue->handle, 1, &info, resource->fence);
 	DEBUG_VK(res, "Failed to submit command buffer");
 }
 
@@ -1793,25 +1808,6 @@ void Device::WaitIdle() {
 
 namespace{ // utils
 // https://github.com/charles-lunarg/vk-bootstrap/blob/main/src/VkBootstrap.cpp
-bool check_extension_supported(std::vector<VkExtensionProperties> const& available_extensions, const char* extension_name) {
-	if (!extension_name) return false;
-	for (const auto& extension_properties : available_extensions) {
-		if (strcmp(extension_name, extension_properties.extensionName) == 0) {
-			return true;
-		}
-	}
-	return false;
-}
-
-bool check_extensions_supported(
-	std::vector<VkExtensionProperties> const& available_extensions, std::vector<const char*> const& extension_names) {
-	bool all_found = true;
-	for (const auto& extension_name : extension_names) {
-		bool found = check_extension_supported(available_extensions, extension_name);
-		if (!found) all_found = false;
-	}
-	return all_found;
-}
 
 template <typename T> void setup_pNext_chain(T& structure, std::vector<VkBaseOutStructure*> const& structs) {
 	structure.pNext = nullptr;
@@ -2167,12 +2163,13 @@ void PhysicalDevice::GetDetails() {
 	availableFamilies.resize(familyCount);
 	vkGetPhysicalDeviceQueueFamilyProperties(handle, &familyCount, availableFamilies.data());
 	
-	graphicsPipelineLibraryFeatures = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_FEATURES_EXT, nullptr };
-	bufferDeviceAddressFeatures     = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES,         &graphicsPipelineLibraryFeatures };
+	unusedAttachmentFeatures        = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_FEATURES_EXT, nullptr };
+	graphicsPipelineLibraryFeatures = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_FEATURES_EXT, &unusedAttachmentFeatures };
+	indexingFeatures                = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT,       &graphicsPipelineLibraryFeatures };
+	bufferDeviceAddressFeatures     = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES,         &indexingFeatures };
 	synchronization2Features        = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR,         &bufferDeviceAddressFeatures };
 	dynamicRenderingFeatures        = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,             &synchronization2Features };
-	indexingFeatures                = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT,       &dynamicRenderingFeatures };
-	physicalFeatures2               = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,                             &indexingFeatures };
+	physicalFeatures2               = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,                             &dynamicRenderingFeatures };
 	vkGetPhysicalDeviceFeatures2(handle, &physicalFeatures2);
 
 	
@@ -2399,9 +2396,16 @@ void DeviceResource::Create(const std::vector<Queue*>& queues) {
 	// // rayQueryFeatures.pNext = &accelerationStructureFeatures;
 	// rayQueryFeatures.pNext = &addresFeatures;
 
+	VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT unusedAttachmentFeatures{
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_FEATURES_EXT,
+		.pNext = &addresFeatures,
+		.dynamicRenderingUnusedAttachments = physicalDevice->unusedAttachmentFeatures.dynamicRenderingUnusedAttachments && _ctx.enableUnusedAttachments,
+	};
+
+
 	VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures{
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR,
-		.pNext = &addresFeatures,
+		.pNext = &unusedAttachmentFeatures,
 		.dynamicRendering = physicalDevice->dynamicRenderingFeatures.dynamicRendering,
 	};
 
@@ -2483,7 +2487,7 @@ void DeviceResource::Create(const std::vector<Queue*>& queues) {
 		if (!it.second) {
 			LOG_WARN("Queue family index {} index {} already exists", q->resource->familyIndex, q->resource->index);
 		}
-		vkGetDeviceQueue(handle, q->resource->familyIndex, q->resource->index, &q->resource->queue);
+		vkGetDeviceQueue(handle, q->resource->familyIndex, q->resource->index, &q->resource->handle);
 	}
 
 	genericSampler = CreateSampler(handle, 1.0);
@@ -2496,16 +2500,16 @@ void DeviceResource::Create(const std::vector<Queue*>& queues) {
 	// vkGetAccelerationStructureDeviceAddressKHR = (PFN_vkGetAccelerationStructureDeviceAddressKHR)vkGetDeviceProcAddr(device, "vkGetAccelerationStructureDeviceAddressKHR");
 	// vkDestroyAccelerationStructureKHR = (PFN_vkDestroyAccelerationStructureKHR)vkGetDeviceProcAddr(device, "vkDestroyAccelerationStructureKHR");
 
-	// VkDescriptorPoolSize imguiPoolSizes[]    = { {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000}, {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000} };
-	// VkDescriptorPoolCreateInfo imguiPoolInfo{};
-	// imguiPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-	// imguiPoolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-	// imguiPoolInfo.maxSets = (uint32_t)(1024);
-	// imguiPoolInfo.poolSizeCount = sizeof(imguiPoolSizes)/sizeof(VkDescriptorPoolSize);
-	// imguiPoolInfo.pPoolSizes = imguiPoolSizes;
+	VkDescriptorPoolSize imguiPoolSizes[]    = { {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000}, {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000} };
+	VkDescriptorPoolCreateInfo imguiPoolInfo{};
+	imguiPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	imguiPoolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+	imguiPoolInfo.maxSets = (uint32_t)(1024);
+	imguiPoolInfo.poolSizeCount = sizeof(imguiPoolSizes)/sizeof(VkDescriptorPoolSize);
+	imguiPoolInfo.pPoolSizes = imguiPoolSizes;
 
-	// VkResult result = vkCreateDescriptorPool(device, &imguiPoolInfo, _ctx.allocator, &imguiDescriptorPool);
-	// DEBUG_VK(result, "Failed to create imgui descriptor pool!");
+	VkResult result = vkCreateDescriptorPool(handle, &imguiPoolInfo, _ctx.allocator, &imguiDescriptorPool);
+	DEBUG_VK(result, "Failed to create imgui descriptor pool!");
 }
 
 
@@ -2651,8 +2655,7 @@ void SwapChainResource::Create(std::vector<Image>& swapChainImages, uint32_t wid
 		device->SetDebugUtilsObjectNameEXT(&name);
 	}
 
-	if (!is_recreation)
-	{
+	if (!is_recreation) {
 		// synchronization objects
 		imageAvailableSemaphores.resize(framesInFlight);
 		renderFinishedSemaphores.resize(framesInFlight);
@@ -2667,6 +2670,7 @@ void SwapChainResource::Create(std::vector<Image>& swapChainImages, uint32_t wid
 			DEBUG_VK(res, "Failed to create semaphore!");
 		}
 	}
+
 }
 
 void SwapChainResource::Destroy(bool is_recreation) {
@@ -2704,24 +2708,30 @@ void SwapChain::Create(Device& device, vkw::Queue& queue, GLFWwindow* window, ui
 	VkResult res = glfwCreateWindowSurface(_ctx.instance->handle, window, _ctx.allocator, &resource->surface);
 	DEBUG_VK(res, "Failed to create window surface!");
 	DEBUG_TRACE("Created surface.");
+
 	resource->Create(swapChainImages, width, height, false);
-		// command buffers
-	commands.resize(framesInFlight);
-	for (auto& cmd: commands) {
+
+	// command buffers
+	resource->commands.resize(framesInFlight);
+	for (auto& cmd: resource->commands) {
 		cmd.resource->Create(device.resource.get(), queue.resource.get());
 	}
-		// LOG_INFO("Created Swapchain {}", _ctx.swapChains.size());
+	// LOG_INFO("Created Swapchain {}", _ctx.swapChains.size());
+
+	// after commands
+	resource->CreateImGui(window);
 	currentFrame = 0;
 	currentImageIndex = 0;
 	dirty = false;
 }
 
 void SwapChain::Destroy(){
-	for (auto& cmd: commands) {
+	for (auto& cmd: resource->commands) {
 		vkWaitForFences(resource->device->handle, 1, &cmd.resource->fence, VK_TRUE, UINT_MAX);
 	}
-	commands.clear();
+	resource->commands.clear();
 	swapChainImages.clear();
+	resource->DestroyImGui();
 	resource->Destroy();
 }
 
@@ -2732,30 +2742,44 @@ void ImGuiCheckVulkanResult(VkResult res) {
 	LOG_WARN("Imgui error: {}", VK_ERROR_STRING(res));
 	DEBUG_VK(res, "Imgui error: {}", VK_ERROR_STRING(res));
 }
-/* 
-void SwapChain::CreateImGui(GLFWwindow* window) {
-    ImGui_ImplVulkan_InitInfo initInfo{};
-    initInfo.Instance = _ctx.instance->handle;
-    initInfo.PhysicalDevice = device->physicalDevice->handle;
-    initInfo.DeviceResource = handle;
-    initInfo.QueueFamily = _ctx.queues[vkw::QueueFlagBits::Graphics]->familyIndex;
-    initInfo.QueueFlagBits = _ctx.queues[vkw::QueueFlagBits::Graphics]->queue;
-    initInfo.DescriptorPool = _ctx.imguiDescriptorPool;
-    initInfo.MinImageCount = resource->surfaceCapabilities.minImageCount;
-    initInfo.ImageCount = (uint32_t)swapChainImages.size();
-    initInfo.MSAASamples = (VkSampleCountFlagBits)_ctx.numSamples;
-    initInfo.PipelineCache = VK_NULL_HANDLE;
-    initInfo.UseDynamicRendering = true;
-    initInfo.Allocator = _ctx.allocator;
-    initInfo.CheckVkResultFn = ImGuiCheckVulkanResult;
-    ImGui_ImplVulkan_Init(&initInfo);
-    ImGui_ImplVulkan_CreateFontsTexture();
-    ImGui_ImplGlfw_InitForVulkan(window, true);
+
+void SwapChainResource::CreateImGui(GLFWwindow* window) {
+	if (_ctx.imguiInitialized) return;
+	_ctx.imguiInitialized = true;
+	std::vector <Format> colorFormats = { vkw::Format::RGBA8_unorm};
+	std::vector <Format> depthFormats = { vkw::Format::D32_sfloat };
+	ImGui_ImplVulkan_InitInfo initInfo{
+		.Instance            = _ctx.instance->handle,
+		.PhysicalDevice      = device->physicalDevice->handle,
+		.Device              = device->handle,
+		.QueueFamily         = commands[0].resource->queue->familyIndex,
+		.Queue               = commands[0].resource->queue->handle,
+		.DescriptorPool      = device->imguiDescriptorPool,
+		.MinImageCount       = surfaceCapabilities.minImageCount,
+		.ImageCount          = (uint32_t)imageResources.size(),
+		.MSAASamples         = (VkSampleCountFlagBits)device->physicalDevice->numSamples,
+		.PipelineCache       = device->pipelineCache,
+		.UseDynamicRendering = true,
+		.PipelineRenderingCreateInfo{
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+			.colorAttachmentCount    = 1,
+			.pColorAttachmentFormats = reinterpret_cast<const VkFormat*>(colorFormats.data()),
+			.depthAttachmentFormat   = static_cast<VkFormat>(depthFormats[0]),
+		},
+		.Allocator           = _ctx.allocator,
+		.CheckVkResultFn     = ImGuiCheckVulkanResult,
+	};
+	ImGui_ImplVulkan_Init(&initInfo);
+	ImGui_ImplVulkan_CreateFontsTexture();
+	ImGui_ImplGlfw_InitForVulkan(window, true);
 }
- */
-void SwapChain::DestroyImGui() {
-	ImGui_ImplVulkan_Shutdown();
-	ImGui_ImplGlfw_Shutdown();
+
+
+
+void SwapChainResource::DestroyImGui() {
+	// ImGui_ImplVulkan_DestroyFontsTexture();
+	// ImGui_ImplVulkan_Shutdown();
+	// ImGui_ImplGlfw_Shutdown();
 }
 
 void SwapChain::Recreate(uint32_t width, uint32_t height) {
@@ -2785,6 +2809,10 @@ bool SwapChain::GetDirty() {
 	return dirty;
 }
 
+Command& SwapChain::GetCommandBuffer() {
+	return resource->commands[currentFrame];
+}
+
 // EndCommandBuffer + vkQueuePresentKHR
 void SwapChain::SubmitAndPresent() {
 
@@ -2806,7 +2834,7 @@ void SwapChain::SubmitAndPresent() {
 	 	.pResults = nullptr,
 	};
 
-	auto res = vkQueuePresentKHR(cmd.resource->queue->queue, &presentInfo); // TODO: use present queue
+	auto res = vkQueuePresentKHR(cmd.resource->queue->handle, &presentInfo); // TODO: use present queue
 
 	switch (res) {
 	case VK_SUCCESS: break;

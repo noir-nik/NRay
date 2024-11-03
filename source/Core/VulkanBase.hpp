@@ -2,6 +2,7 @@
 
 #include "Lmath.hpp"
 #include <cstdint>
+#include <imgui/imgui.h>
 #include <span>
 
 #define GLSL_VALIDATOR "glslangValidator"
@@ -424,7 +425,7 @@ struct Command {
 	void DrawMesh(Buffer& vertexBuffer, Buffer& indexBuffer, uint32_t indexCount);
 	void DrawLineStrip(const Buffer& pointsBuffer, uint32_t firstPoint, uint32_t pointCount, float thickness = 1.0f);
 	void DrawPassThrough();
-	// void DrawImGui(ImDrawData* data);
+	void DrawImGui(ImDrawData* data);
 	void Dispatch(const uvec3& groups);
 
 	int BeginTimeStamp(const std::string& name);
@@ -457,7 +458,6 @@ class SwapChain {
 	std::shared_ptr<SwapChainResource> resource;
 
 	std::vector<Image> swapChainImages;
-	std::vector<Command> commands; // Owns all command resources
 
 	GLFWwindow* window = nullptr;	
 	uint32_t framesInFlight = 2;
@@ -468,14 +468,11 @@ class SwapChain {
 
 	// SwapChain() = default;
 
-	void CreateImGui(GLFWwindow* window);
-	void DestroyImGui();
-
 public:
 	// ~SwapChain() { printf("~SwapChain\n"); }
 
 	inline Image&      GetCurrentImage()   { return swapChainImages[currentImageIndex]; }
-	inline Command&    GetCommandBuffer()  { return commands[currentFrame];             }
+	Command&    GetCommandBuffer();
 
 	void Create(Device& device, vkw::Queue& queue, GLFWwindow* window, uint32_t width, uint32_t height);
 	void Destroy();
@@ -495,7 +492,7 @@ void UnmapBuffer(Buffer& buffer);
 
 // void GetTimeStamps(std::map<std::string, float>& timeTable);
 
-// void BeginImGui();
+void BeginImGui();
 
 void Init(bool requestPresent = true);
 Device CreateDevice(const std::vector<Queue*>& queues);

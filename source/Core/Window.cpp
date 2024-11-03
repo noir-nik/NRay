@@ -102,7 +102,7 @@ void FramebufferSizeCallback(GLFWwindow* window, int width, int height) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
 	LOG_WINDOW("Window {} framebuffer resized to {}x{}", pWindow->GetName(), width, height);
 	
-	pWindow->SetDrawNeeded(true);
+	pWindow->AddFramesToDraw(1);
 	pWindow->SetFramebufferResized(true);
 	// LOG_WINDOW("Window {} framebuffer resized to {}x{}", pWindow->GetName(), width, height);
 	
@@ -332,7 +332,7 @@ void Window::ApplyChanges() {
 	if (newMode != mode) {
 		mode = newMode;
 		framebufferResized = true;
-		drawNeeded = true;
+		framesToDraw += 1;
 		
 		int monitorCount;
 		auto monitors = glfwGetMonitors(&monitorCount);

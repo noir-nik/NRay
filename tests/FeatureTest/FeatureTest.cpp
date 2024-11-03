@@ -4,11 +4,9 @@
 #include "ShaderCommon.h"
 
 #include "FeatureTest.hpp"
-#include <array>
 #include <set>
 #include "Window.hpp"
 
-#include <string_view>
 #include <unistd.h>
 
 using namespace Lmath;
@@ -21,11 +19,13 @@ struct Context {
 
 	uint32_t width, height;
 
+	ImDrawData* imguiDrawData = nullptr;
+
 	// float4x4 viewMat;
 	// float4x4 worldViewInv;
 	// float4x4 worldViewProjInv;
 
-	vkw::SampleCount sampleCount = vkw::SampleCount::_4;
+	vkw::SampleCount sampleCount = vkw::SampleCount::_1;
 	// vkw::Format renderFormat = vkw::Format::RGBA16_sfloat;
 	vkw::Format renderFormat = vkw::Format::RGBA8_unorm;
 	
@@ -142,7 +142,8 @@ void Context::CreateShaders() {
 		.colorFormats = {ctx.renderFormat},
 		.useDepth = true,
 		.depthFormat = ctx.depthImages[mainWindow].format,
-		.samples = ctx.sampleCount
+		.samples = ctx.sampleCount,
+		.lineTopology = true
 	});
 
 }
@@ -209,7 +210,7 @@ void RecordCommands(Window* window) {
 	FeatureTestConstants constants{};
 	constants.model = float4x4();
 	constants.view = inverse4x4(camera.view);
-	constants.proj = perspective(60.0f, (float)size.x / size.y, 0.01f, 100.0f);
+	constants.proj = perspective(60.0f, (float)size.x / size.y, 0.01f, 1000.0f);
 
 	// LOG_INFO("Viewport: {}, {}, {}, {}", viewport.x, viewport.y, viewport.z, viewport.w); 
 
@@ -221,14 +222,19 @@ void RecordCommands(Window* window) {
 	// cmd.Barrier(ctx.renderImages[window], {vkw::ImageLayout::TransferDst});
 	// cmd.ClearColorImage(ctx.renderImages[window], {0.7f, 0.0f, 0.4f, 1.0f});
 	if (ctx.sampleCount == vkw::SampleCount::_1) {
-		cmd.BeginRendering({{{ctx.resolveImages[window]}}}, {ctx.depthImages[window]}, 1, viewport);
+		// cmd.BeginRendering({{{ctx.resolveImages[window]}}}, {ctx.depthImages[window]}, 1, viewport);
+		cmd.BeginRendering({{{ctx.resolveImages[window]}}}, {}, 1, viewport);
 	} else {
-		cmd.BeginRendering({{{ctx.colorImages[window], ctx.resolveImages[window]}}}, {ctx.depthImages[window]}, 1, viewport);
+		// cmd.BeginRendering({{{ctx.colorImages[window], ctx.resolveImages[window]}}}, {ctx.depthImages[window]}, 1, viewport);
+		cmd.BeginRendering({{{ctx.colorImages[window], ctx.resolveImages[window]}}}, {}, 1, viewport);
 	}
 	cmd.BindPipeline(ctx.pipeline);
 	cmd.PushConstants(&constants, sizeof(constants));
 	cmd.BindVertexBuffer(ctx.vertexBuffer);
 	cmd.Draw(vertices.size(), 1, 0, 0);
+
+	cmd.DrawImGui(ctx.imguiDrawData);
+
 	cmd.EndRendering();
 	
 	cmd.Barrier(ctx.resolveImages[window], {vkw::ImageLayout::TransferSrc});
@@ -238,17 +244,29 @@ void RecordCommands(Window* window) {
 
 }
 
+void DrawImgui(Window* window) {
+	vkw::BeginImGui();
+	ImGui::NewFrame();
+	ImGui::ShowDemoWindow();
+	ImGui::Render();
+	// ImGui::get
+	ctx.imguiDrawData = ImGui::GetDrawData();
+}
+
 void DrawWindow(Window* window) {
 	if (window->GetDrawNeeded() && !window->GetIconified()) {
+		DrawImgui(window);
 		RecordCommands(window);
 		if (window->swapChain.GetDirty()) {
 			LOG_WARN("RecordCommands: Swapchain dirty");
+			return;
 		}
 		window->swapChain.SubmitAndPresent();
 		if (window->swapChain.GetDirty()) {
 			LOG_WARN("SubmitAndPresent: Swapchain dirty");
+			return;
 		}
-		window->SetDrawNeeded(false);
+		window->AddFramesToDraw(-1);
 		window->SetFrameCount((window->GetFrameCount() + 1) % (1 << 15));
 	}
 }
@@ -257,7 +275,7 @@ void KeyCallback(Window* window, int key, int scancode, int action, int mods) {
 	// printf("key: %d, scancode: %d, action: %d, mods: %d\n", key, scancode, action, mods);
 	switch (action){
 	case GLFW_PRESS:
-		window->SetDrawNeeded(true);
+		window->AddFramesToDraw(1);
 		switch (key) {
 		case GLFW_KEY_N: {
 			static int windowCount = 1;
@@ -301,6 +319,8 @@ void CursorPosCallback (Window *window, double xpos, double ypos) {
 	vec3 camera_up = camera.view.get_col(1).xyz();
 	vec3 camera_forward = camera.view.get_col(2).xyz();
 
+	window->AddFramesToDraw(1);
+
 	if (mouse.buttons[GLFW_MOUSE_BUTTON_RIGHT]) {
 		switch (mouse.mods)
 		{
@@ -320,19 +340,30 @@ void CursorPosCallback (Window *window, double xpos, double ypos) {
 
 			break;
 		}
-		window->SetDrawNeeded(true);
+		// window->AddFramesToDraw(1);
 	}
 	if (mouse.buttons[GLFW_MOUSE_BUTTON_MIDDLE]) {
 		auto move_factor = camera.move_factor * length(camera_pos - camera.focus);
 		auto movement =  move_factor * (camera_up * mouse.deltaPos.y + camera_right * mouse.deltaPos.x); 
 		camera.focus += movement;
 		camera.view = translate4x4(movement) * camera.view;
-		window->SetDrawNeeded(true);
+		// window->AddFramesToDraw(1);
+	}
+	if (mouse.buttons[GLFW_MOUSE_BUTTON_LEFT]) {
+		// window->AddFramesToDraw(1);
 	}
 }
 
 void MouseButtonCallback(Window* window, int button, int action, int mods) {
-
+	switch (button) {
+	case GLFW_MOUSE_BUTTON_LEFT:
+		if (action == GLFW_PRESS) {
+			window->AddFramesToDraw(3);
+		}
+		break;
+	default:
+		break;
+	}
 }
 
 void FramebufferCallback(Window* window, int width, int height) {
@@ -343,7 +374,7 @@ void FramebufferCallback(Window* window, int width, int height) {
 }
 
 void RefreshCallback(Window* window) {
-	window->SetDrawNeeded(true);
+	window->AddFramesToDraw(1);
 	DrawWindow(window);
 }
 
@@ -360,7 +391,7 @@ void RecreateFrameResources(Window* window) {
 		window->UpdateFramebufferSize();
 		window->RecreateSwapchain();
 		window->SetFramebufferResized(false);
-		window->SetDrawNeeded(true);
+		window->AddFramesToDraw(1);
 	}
 
 	// }
@@ -435,8 +466,27 @@ void FeatureTestApplication::run(FeatureTestInfo* pFeatureTestInfo) {
 }
 
 void FeatureTestApplication::Setup() {
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGuiIO& io = ImGui::GetIO();
+    io.Fonts->AddFontDefault();
+	const float fontSize = 17.0f;
+    io.FontDefault = io.Fonts->AddFontFromFileTTF("bin/Roboto-Medium.ttf", fontSize);
 	ctx.width = info->width;
 	ctx.height = info->height;
+}
+
+std::chrono::high_resolution_clock::time_point lastFrameTime = {};
+void BatterySaver() {
+	float targetFrameTime = 33.333f;
+	auto currentTime = std::chrono::high_resolution_clock::now();
+	float elapsedTime = 0.0f;
+	do {
+		elapsedTime = std::chrono::duration_cast<std::chrono::microseconds>(currentTime - lastFrameTime).count() / 1000.0f;
+	} while (elapsedTime < targetFrameTime);
+	// std::this_thread::sleep_for(std::chrono::duration<float>(targetFrameTime - (currentTime - lastFrameTime).count() / 1000.0f));
+	// std::this_thread::sleep_for(std::chrono::duration<float>(targetFrameTime));
+	lastFrameTime = std::chrono::high_resolution_clock::now();
 }
 
 void FeatureTestApplication::Create() { auto& c = ctx;
@@ -450,11 +500,15 @@ void FeatureTestApplication::Create() { auto& c = ctx;
 	UploadBuffers();
 	ctx.CreateShaders();
 }
+
+
 static int loopCount = 0;
 void FeatureTestApplication::MainLoop() {
 	Context* c = &ctx;
+	lastFrameTime = std::chrono::high_resolution_clock::now();
 	while (ctx.mainWindow != nullptr) {
 		WindowManager::WaitEvents();
+		// WindowManager::PollEvents();
 		for (auto it = ctx.windows.begin(); it != ctx.windows.end();) {
 			auto window = *it;
 			window->ApplyChanges();
@@ -471,11 +525,11 @@ void FeatureTestApplication::MainLoop() {
 			}
 			// LOG_INFO("RecreateFrameResources {}", window->GetName());
 			RecreateFrameResources(window);
+			
+			DrawWindow(window);
 			++it;
 		}
-		for (auto& window : ctx.windows) {
-            DrawWindow(window);
-        }
+		// BatterySaver();
 	}
 	ctx.device.WaitIdle();
 }
@@ -487,4 +541,5 @@ void FeatureTestApplication::Finish() {
 	ctx = {};
 	vkw::Destroy();
 	WindowManager::Finish();
+	ImGui::DestroyContext();
 }

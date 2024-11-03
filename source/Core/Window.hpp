@@ -112,7 +112,7 @@ class Window {
 	WindowMode newMode = WindowMode::Windowed;
 	const GLFWvidmode* vidMode = nullptr;
 
-	bool drawNeeded = true;
+	int framesToDraw = 1;
 	// bool swapchainDirty = false;
 
 	bool resizable = true;
@@ -193,7 +193,7 @@ public:
 	inline bool        IsMouseDown(uint16_t buttonCode)    { return glfwGetMouseButton(window, buttonCode); }
 
 
-	inline void        CmdResizeTo(int width, int height)  { glfwSetWindowSize(window, width, height); drawNeeded = true; }
+	inline void        CmdResizeTo(int width, int height)  { glfwSetWindowSize(window, width, height); framesToDraw += 1; }
 	inline void        SetSize(int w, int h)               { width = w; height = h;}
 	
 	inline auto        GetPos()                            { glfwGetWindowPos(window, &pos.x, &pos.y); return Lmath::int2(pos.x, pos.y); }
@@ -211,8 +211,9 @@ public:
 	inline bool        GetMaximized()                      { return maximized; }
 	inline void        SetMaximized(bool value)            { maximized = value;}
 
-	inline bool        GetDrawNeeded()                     { return drawNeeded; }
-	inline void        SetDrawNeeded(bool value)           { drawNeeded = value; }
+	inline bool        GetDrawNeeded()                     { return framesToDraw > 0; }
+	// inline void        SetDrawNeeded(bool value)           { framesToDraw = value; }
+	inline void        AddFramesToDraw(int value)           { framesToDraw += value; }
 
 	inline void        CreateSwapchain(vkw::Device& device, vkw::Queue& queue){ if (!swapChainAlive) swapChain.Create(device, queue, window, width, height); swapChainAlive = true; }
 	inline void        RecreateSwapchain()                 { ASSERT(swapChainAlive, "RecreateSwapchain: Swapchain is not alive"); swapChain.Recreate(width, height);} 
