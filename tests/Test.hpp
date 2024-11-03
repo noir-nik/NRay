@@ -2,7 +2,10 @@
 namespace Test {
 enum TestName {
 	NeuralSdf,
-	Slang
+	ImageOptimization,
+	Feature,
+	RadienceField,
+	HelloTriangle
 };
 
 void Test(TestName testName);

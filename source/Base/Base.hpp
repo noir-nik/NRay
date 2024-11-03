@@ -1,6 +1,9 @@
 #pragma once
 
+#include <cstdint>
 #include <stdint.h>
+
+#include "Log.hpp"
 
 using u8  = uint8_t;
 using u16 = uint16_t;
@@ -13,6 +16,9 @@ using i32 = int32_t;
 using i64 = int64_t;
 using f32 = float;
 using f64 = double;
+
+#define BIN_PATH "bin"
+#define IMG_PATH "img"
 
 #ifdef _WIN32
 	#define APP_PLATFORM_WINDOWS
@@ -35,7 +41,7 @@ using f64 = double;
 	#define APP_DEBUGBREAK()
 #endif 
 
-#define ASSERT(condition, ...) { if (!(condition)) { LOG_ERROR("[ASSERTION FAILED] {0} in {1}:{2}", __VA_ARGS__, __FILE__, __LINE__); exit(1); } }
+#define ASSERT(condition, ...) { if (!(condition)) { LOG_ERROR("[ASSERTION FAILED] in {}:{} {}", __FILE__, __LINE__, __VA_ARGS__); exit(1); } }
 
 #ifdef APP_DEBUG
 #define DEBUG_ASSERT(condition, ...) { if (!(condition)) { LOG_ERROR("[ASSERTION FAILED] {0}", __VA_ARGS__); APP_DEBUGBREAK(); } }
@@ -44,3 +50,5 @@ using f64 = double;
 #define DEBUG_ASSERT(condition, ...)
 #define DEBUG_VK(res, ...) { if ((res) != VK_SUCCESS) { LOG_ERROR("[{0}] {1} in {2}:{3}", VK_ERROR_STRING(res), __VA_ARGS__, __FILE__, __LINE__); exit(1);}}
 #endif
+
+#define ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))

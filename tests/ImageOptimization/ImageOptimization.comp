@@ -1,0 +1,54 @@
+#version 450
+#extension GL_GOOGLE_include_directive : enable
+#include "ShaderCommon.h"
+#include "ImageOptimization.hpp"
+
+layout (local_size_x = WORKGROUP_SIZE, local_size_y = WORKGROUP_SIZE, local_size_z = 1 ) in;
+
+layout(push_constant) uniform Constants {
+    ImageOptConstants ctx;
+};
+
+#define ImageOpt float4Buffers[ctx.imageOptRID].data
+#define ImageGT float4Buffers[ctx.imageGTRID].data
+#define grad float4Buffers[ctx.gradRID].data
+
+float msePerPixel(const vec4 a, vec4 b) {
+    return (a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y) + (a.z - b.z) * (a.z - b.z);
+}
+
+vec4 d_mse(const vec4 param, const vec4 gt) {
+    return vec4((param.x - gt.x), (param.y - gt.y), (param.z - gt.z), 0.0f) ;
+}
+
+layout(local_size_x = WORKGROUP_SIZE, local_size_y = WORKGROUP_SIZE, local_size_z = 1) in;
+void main()
+{
+	if(gl_GlobalInvocationID.x < ctx.width && gl_GlobalInvocationID.y < ctx.height)
+    {
+		uint index = gl_GlobalInvocationID.y * ctx.width + gl_GlobalInvocationID.x;
+		for (int iter = 0; iter < ctx.numIterations; ++iter) {
+
+			// grad[index] = d_mse(ImageOpt[index], ImageGT[index]);
+
+			// let dpa = diffPair(ImageOpt[index]);
+            // let dpb = diffPair(ImageGT[index]);
+            // dpfloat dpo = dpfloat(2.0, 1.0);
+            // // let result = fwd_diff(msePerPixel)(diffPair(a, 1), diffPair(b, 0));
+            // // grad[index] = sqrt(result.d);
+            // // bwd_diff(msePerPixel)(a, b, float(1.0));
+            // bwd_diff(msePerPixel)(a, b, float(1.0));
+            // grad[index] = sqrt(a.d);
+
+            // ImageOpt[index] -= grad[index] * ctx.learningRate;
+            ImageOpt[index] = vec4(0.);
+            for (int i = 0; i < ctx.width * ctx.height; ++i) {
+                ImageOpt[index] += msePerPixel(ImageOpt[index], ImageGT[index]);
+            }
+            ImageOpt[index] /= (ctx.width * ctx.height);
+			vec4 color  = vec4(0.3137, 0.149, 0.149, 0.8);
+            ImageOpt[index] = color;
+		}
+	}
+}
+

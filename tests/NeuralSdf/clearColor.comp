@@ -1,6 +1,7 @@
 #version 450
 #extension GL_GOOGLE_include_directive : enable
 #include "ShaderCommon.h"
+#include "NeuralSdf.hpp"
 
 layout (local_size_x = WORKGROUP_SIZE, local_size_y = WORKGROUP_SIZE, local_size_z = 1 ) in;
 
@@ -9,9 +10,10 @@ layout(push_constant) uniform Constants {
 };
 
 void main() {
-  if(gl_GlobalInvocationID.x >= ctx.width || gl_GlobalInvocationID.y >= ctx.height)
-    return;
-	uint pos = gl_GlobalInvocationID.y * ctx.width + gl_GlobalInvocationID.x;
-  	vec4 color = vec4(1.0,.5,.1,1.);
-  	outputImage[pos].value = color;
+  if(gl_GlobalInvocationID.x < ctx.width && gl_GlobalInvocationID.y < ctx.height)
+    {
+		uint pos = gl_GlobalInvocationID.y * ctx.width + gl_GlobalInvocationID.x;
+		vec4 color = vec4(1.0,.5,.1,1.);
+		outputImage[pos].value = color;
+	}
 }

@@ -1,0 +1,23 @@
+#version 450
+#extension GL_GOOGLE_include_directive : enable
+#include "ShaderCommon.h"
+#include "FeatureTest.hpp"
+
+layout (local_size_x = WORKGROUP_SIZE, local_size_y = WORKGROUP_SIZE, local_size_z = 1 ) in;
+
+layout(push_constant) uniform Constants {
+    FeatureTestConstants ctx;
+};
+
+shared vec4 tr[WORKGROUP_SIZE * WORKGROUP_SIZE];
+
+void main() {
+  if(gl_GlobalInvocationID.x < ctx.width && gl_GlobalInvocationID.y < ctx.height)
+    {
+		uint pos = gl_GlobalInvocationID.y * ctx.width + gl_GlobalInvocationID.x;
+		// vec4 color = vec4(1.0,.5,.1,1.);
+		// vec4 color = vec4(gl_GlobalInvocationID.x / float(ctx.width), gl_GlobalInvocationID.y / float(ctx.height), 0.0, 1.0);
+		vec4 color = vec4(gl_LocalInvocationID.x / float(WORKGROUP_SIZE), gl_LocalInvocationID.y / float(WORKGROUP_SIZE), 0.0, 1.0);
+		outputImage[pos].value = color;
+	}
+}

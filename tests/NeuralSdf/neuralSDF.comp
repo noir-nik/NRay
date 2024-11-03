@@ -1,8 +1,8 @@
 #version 450
 #extension GL_GOOGLE_include_directive : enable
 #include "ShaderCommon.h"
+#include "NeuralSdf.hpp"
 #extension GL_ARB_separate_shader_objects : enable
-
 
 layout (local_size_x = WORKGROUP_SIZE, local_size_y = WORKGROUP_SIZE, local_size_z = 1 ) in;
 
