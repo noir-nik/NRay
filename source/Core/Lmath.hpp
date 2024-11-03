@@ -171,8 +171,8 @@ typedef struct uint2
 	inline explicit uint2(uint val) : x(val), y(val) {}
 	inline explicit uint2(const uint a[2]) : x(a[0]), y(a[1]) {}
 
-	inline explicit uint2(float2 a);
-	inline explicit uint2(int2 a);
+	// inline explicit uint2(float2 a): x(uint(a[0])), y(uint(a[1])) {};
+	inline explicit uint2(int2 a): x(uint(a[0])), y(uint(a[1])) {};
 	
 	inline uint& operator[](int i)			 { return M[i]; }
 	inline uint	operator[](int i) const { return M[i]; }

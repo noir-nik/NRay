@@ -1507,14 +1507,14 @@ Command::Command() {
 	resource = std::make_shared<CommandResource>();
 }
 
-void Command::BeginRendering(const std::vector<std::pair<Image, Image>>& colorAttachs, Image depthAttach, uint32_t layerCount, vec4 viewport, ivec4 scissor) {
+void Command::BeginRendering(const std::vector<std::vector<Image>>& colorAttachs, Image depthAttach, uint32_t layerCount, vec4 viewport, ivec4 scissor) {
 
 	ivec2 offset(0, 0);
 	uvec2 extent(0, 0);
 
 	if (colorAttachs.size() > 0) {
-		extent.x = colorAttachs[0].first.width;
-		extent.y = colorAttachs[0].first.height;
+		extent.x = colorAttachs[0][0].width;
+		extent.y = colorAttachs[0][0].height;
 	} else if (depthAttach.resource) {
 		extent.x = depthAttach.width;
 		extent.y = depthAttach.height;
@@ -1522,15 +1522,15 @@ void Command::BeginRendering(const std::vector<std::pair<Image, Image>>& colorAt
 
 	std::vector<VkRenderingAttachmentInfoKHR> colorAttachInfos;
 	colorAttachInfos.reserve(colorAttachs.size());
+	VkRenderingAttachmentInfoKHR depthAttachInfo;
 	for (auto& colorAttach: colorAttachs) {
 		colorAttachInfos.emplace_back(VkRenderingAttachmentInfoKHR{
 			.sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR,
-			.imageView   = colorAttach.resource->view,
+			.imageView   = colorAttach[0].resource->view,
 			.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-			.resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT,
-			.resolveImageView = 
+			.resolveMode = (VkResolveModeFlagBits)(colorAttach.size() > 1? VK_RESOLVE_MODE_AVERAGE_BIT: VK_RESOLVE_MODE_NONE),
+			.resolveImageView = (VkImageView)(colorAttach.size() > 1 ? colorAttach[1].resource->view: nullptr),
 			.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-			.resolveMode = VK_RESOLVE_MODE_NONE,
 			.loadOp      = VK_ATTACHMENT_LOAD_OP_CLEAR,
 			.storeOp     = VK_ATTACHMENT_STORE_OP_STORE,
 			.clearValue  = {
@@ -2585,6 +2585,7 @@ void SwapChainResource::Create(std::vector<Image>& swapChainImages, uint32_t wid
 
 	// create image views
 	imageViews.reserve(imageResources.size());
+	swapChainImages.clear();
 	swapChainImages.reserve(imageResources.size());
 	for (auto imageResource: imageResources) {
 		VkImageViewCreateInfo viewInfo{
@@ -2674,6 +2675,7 @@ void SwapChainResource::Destroy(bool is_recreation) {
 		vkDestroySurfaceKHR(_ctx.instance->handle, surface, _ctx.allocator);
 	}
 
+	imageResources.clear();
 	imageViews.clear();
 	swapChain = VK_NULL_HANDLE;
 }

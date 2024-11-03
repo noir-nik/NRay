@@ -26,9 +26,6 @@ struct Context {
 
 	// vkw::Buffer outputImage;
 	vkw::Buffer vertexBuffer;
-
-	vkw::Image depth;
-
 	vkw::Device device;
 
 	vkw::Queue queue;
@@ -40,7 +37,6 @@ struct Context {
 	std::unordered_map<Window*, vkw::Image> depthImages;
 	std::unordered_map<Window*, vkw::Image> resolveImages;
 
-	void CreateImages(uint32_t width, uint32_t height);
 	void CreateShaders();
 };
 static Context ctx;
@@ -139,15 +135,15 @@ void Context::CreateShaders() {
 		.vertexAttributes = {vkw::Format::RGB32_sfloat, vkw::Format::RGB32_sfloat},
 		.colorFormats = {vkw::Format::RGBA16_sfloat},
 		.useDepth = true,
-		.depthFormat = ctx.depth.format,
+		.depthFormat = ctx.depthImages[mainWindow].format,
 		.samples = vkw::SampleCount::_4
 	});
 
 }
 
-void Context::CreateImages(uint32_t width, uint32_t height) {
+// void Context::CreateImages(uint32_t width, uint32_t height) {
 
-}
+// }
 
 void CreateWindowResources(Window* window) {
 	window->CreateSwapchain(ctx.device, ctx.queue);
@@ -166,6 +162,7 @@ void CreateWindowResources(Window* window) {
         .height = maxSize.y,
         .format = vkw::Format::D32_sfloat,
         .usage = vkw::ImageUsage::DepthStencilAttachment/*  | vkw::ImageUsage::TransientAttachment */,
+		.samples = vkw::SampleCount::_4,
         .name = "Depth Attachment"
     }));
 
@@ -186,15 +183,10 @@ void CreateWindowResources(Window* window) {
 		// .format = vkw::Format::RGBA8_unorm,
 		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::TransferSrc | vkw::ImageUsage::TransferDst,
 		.samples = vkw::SampleCount::_4,
-		.resolveTarget = ctx.resolveImages.at(window).resource.get(),
 		.name = window->GetName(),
 	}));
 }
 
-void CreateWindow(std::string_view name) {
-	
-
-}
 
 void UploadBuffers() {
 	auto cmd = ctx.device.GetCommandBuffer(ctx.queue);
@@ -220,21 +212,21 @@ void RecordCommands(Window* window) {
 	cmd.BeginCommandBuffer();
 	if (!window->swapChain.AcquireImage()) return;
 	vkw::Image& img = window->swapChain.GetCurrentImage();
-	
 	// cmd.Copy(ctx.vertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex));
 	// cmd.Barrier(ctx.renderImages[window], {vkw::ImageLayout::TransferDst});
 	// cmd.ClearColorImage(ctx.renderImages[window], {0.7f, 0.0f, 0.4f, 1.0f});
 
-	cmd.BeginRendering({{ctx.colorImages[window],ctx.colorImages[window]}}, {ctx.depth}, 1, viewport);
+	cmd.BeginRendering({{ctx.colorImages[window], ctx.resolveImages[window]}}, {ctx.depthImages[window]}, 1, viewport);
+	// cmd.BeginRendering({{ctx.resolveImages[window]}}, {ctx.depth}, 1, viewport);
 	cmd.BindPipeline(ctx.pipeline);
 	cmd.PushConstants(&constants, sizeof(constants));
 	cmd.BindVertexBuffer(ctx.vertexBuffer);
 	cmd.Draw(vertices.size(), 1, 0, 0);
 	cmd.EndRendering();
 	
-	cmd.Barrier(ctx.renderImages[window], {vkw::ImageLayout::TransferSrc});
+	cmd.Barrier(ctx.resolveImages[window], {vkw::ImageLayout::TransferSrc});
 	cmd.Barrier(img, {vkw::ImageLayout::TransferDst});
-	cmd.Blit(img, ctx.renderImages[window], {0, 0, size.x, size.y}, {0, 0, size.x, size.y});
+	cmd.Blit(img, ctx.resolveImages[window], {0, 0, size.x, size.y}, {0, 0, size.x, size.y});
 	cmd.Barrier(img, {vkw::ImageLayout::Present});
 
 }
@@ -445,15 +437,7 @@ void FeatureTestApplication::Create() { auto& c = ctx;
 	auto window = new Window(ctx.width, ctx.height, "wm");
 	ctx.queue = {vkw::QueueFlagBits::Graphics | vkw::QueueFlagBits::Compute | vkw::QueueFlagBits::Transfer, window->GetGLFWwindow()};
 	ctx.device = vkw::CreateDevice({&ctx.queue});
-	window->CreateSwapchain(ctx.device, ctx.queue);
-	ctx.windows.emplace(window);
 	ctx.mainWindow = window;
-	window->AddFramebufferSizeCallback(FramebufferCallback);
-	window->AddWindowRefreshCallback(RefreshCallback);
-	window->AddMouseButtonCallback(MouseButtonCallback);
-	window->AddKeyCallback(KeyCallback);
-	window->AddCursorPosCallback(CursorPosCallback);
-	ctx.CreateImages(window->GetMonitorWidth(), window->GetMonitorHeight());
 	CreateWindowResources(window);
 	ctx.vertexBuffer = ctx.device.CreateBuffer(vertices.size() * sizeof(Vertex), vkw::BufferUsage::Vertex, vkw::Memory::GPU, "Vertex Buffer");
 	UploadBuffers();

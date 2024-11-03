@@ -2,6 +2,7 @@
 
 #include "Lmath.hpp"
 #include <cstdint>
+#include <span>
 
 #define GLSL_VALIDATOR "glslangValidator"
 #define SLANGC "slangc"
@@ -183,7 +184,6 @@ struct ImageDesc {
 	Format format;
 	ImageUsageFlags usage;
 	SampleCount samples = SampleCount::_1;
-	ImageResource* resolveTarget = nullptr;
 	std::string name = "";
 	uint32_t layers = 1;
 };
@@ -409,7 +409,7 @@ struct Command {
 	void ClearColorImage(Image& image, const float4& color);
 
 
-	void BeginRendering(const std::vector<std::pair<Image, Image>>& colorAttachs, Image depthAttach = {}, uint32_t layerCount = 1, vec4 viewport = {}, ivec4 scissor = {});
+	void BeginRendering(const std::vector<std::vector<Image>>& colorAttachs, Image depthAttach = {}, uint32_t layerCount = 1, vec4 viewport = {}, ivec4 scissor = {});
 	void EndRendering();
 	// void BeginPresent();
 	// void EndPresent();
