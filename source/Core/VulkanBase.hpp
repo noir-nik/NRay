@@ -382,7 +382,6 @@ struct Command {
 	void Copy(Buffer& dst, Buffer& src,  uint32_t size, uint32_t dstOffset = 0, uint32_t srcOffset = 0);
 	void Copy(Device& device, Image&  dst, void*   data, uint32_t size);
 	void Copy(Image&  dst, Buffer& src,  uint32_t srcOffset = 0); // size is a No OP
-	void Copy(Buffer& dst, Image&  src,  uint32_t dstOffset = 0); // size is a No OP
 	void Copy(Buffer& dst, Image& src, uint32_t dstOffset, ivec2 imageOffset, ivec2 imageExtent);// size is a No OP
 	void Barrier(Image& img, const ImageBarrier& barrier);
 	void Barrier(Buffer& buf, const BufferBarrier& barrier);
