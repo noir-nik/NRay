@@ -48,6 +48,8 @@ struct Context {
 	bool presentRequested = false;
 	bool enableValidationLayers = true;
 	bool enableDebugReport = false;
+	
+	bool usePipelineLibrary = false;
 	bool linkTimeOptimization = true; // Pipeline library link
 
 	std::vector<const char*> requiredInstanceExtensions {
@@ -120,8 +122,8 @@ struct PhysicalDevice: DeleteCopyMove {
 
 	UID uid;
 	VkPhysicalDevice handle = VK_NULL_HANDLE;
-	VkSampleCountFlagBits maxSamples = VK_SAMPLE_COUNT_1_BIT;
-	VkSampleCountFlagBits numSamples  = VK_SAMPLE_COUNT_1_BIT;
+	SampleCount maxSamples = SampleCount::_1;
+	SampleCount numSamples = SampleCount::_1;
 	VkSampleCountFlags sampleCounts;
 
 	bool descriptorIndexingAvailable = false;
@@ -670,7 +672,7 @@ Image Device::CreateImage(const ImageDesc& desc) {
 		},
 		.mipLevels     = 1,
 		.arrayLayers   = desc.layers,
-		.samples       = VK_SAMPLE_COUNT_1_BIT,
+		.samples       = (VkSampleCountFlagBits)std::min(desc.samples, resource->physicalDevice->maxSamples),
 		.tiling        = VK_IMAGE_TILING_OPTIMAL,
 		.usage         = (VkImageUsageFlags)desc.usage,
 		.sharingMode   = VK_SHARING_MODE_EXCLUSIVE,
@@ -910,7 +912,7 @@ Pipeline DeviceResource::CreatePipeline(const PipelineDesc& desc) { // External 
 	pipeline.resource = std::make_shared<PipelineResource>(this, desc.name);
 	pipeline.resource->CreatePipelineLayout({{bindlessDescriptorLayout}});
 
-	if (desc.point == PipelinePoint::Graphics && physicalDevice->graphicsPipelineLibraryFeatures.graphicsPipelineLibrary) {
+	if (_ctx.usePipelineLibrary && desc.point == PipelinePoint::Graphics && physicalDevice->graphicsPipelineLibraryFeatures.graphicsPipelineLibrary) {
 	// if (0) {
 		// VertexInputInterface
 		DeviceResource::PipelineLibrary::VertexInputInfo vertexInputInfo { desc.vertexAttributes, desc.lineTopology };
@@ -1047,7 +1049,7 @@ void DeviceResource::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipe
 
 		VkPipelineMultisampleStateCreateInfo multisampleState = {
 			.sType                 = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-			.rasterizationSamples  = VK_SAMPLE_COUNT_1_BIT,
+			.rasterizationSamples  = (VkSampleCountFlagBits)std::min(desc.samples, physicalDevice->maxSamples),
 			.sampleShadingEnable   = VK_FALSE,
 			.minSampleShading      = 0.5f,
 			.pSampleMask           = nullptr,
@@ -1505,14 +1507,14 @@ Command::Command() {
 	resource = std::make_shared<CommandResource>();
 }
 
-void Command::BeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach, uint32_t layerCount, vec4 viewport, ivec4 scissor) {
+void Command::BeginRendering(const std::vector<std::pair<Image, Image>>& colorAttachs, Image depthAttach, uint32_t layerCount, vec4 viewport, ivec4 scissor) {
 
 	ivec2 offset(0, 0);
 	uvec2 extent(0, 0);
 
 	if (colorAttachs.size() > 0) {
-		extent.x = colorAttachs[0].width;
-		extent.y = colorAttachs[0].height;
+		extent.x = colorAttachs[0].first.width;
+		extent.y = colorAttachs[0].first.height;
 	} else if (depthAttach.resource) {
 		extent.x = depthAttach.width;
 		extent.y = depthAttach.height;
@@ -1520,17 +1522,19 @@ void Command::BeginRendering(const std::vector<Image>& colorAttachs, Image depth
 
 	std::vector<VkRenderingAttachmentInfoKHR> colorAttachInfos;
 	colorAttachInfos.reserve(colorAttachs.size());
-	VkRenderingAttachmentInfoKHR depthAttachInfo;
 	for (auto& colorAttach: colorAttachs) {
 		colorAttachInfos.emplace_back(VkRenderingAttachmentInfoKHR{
-			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR,
-			.imageView = colorAttach.resource->view,
+			.sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR,
+			.imageView   = colorAttach.resource->view,
 			.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+			.resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT,
+			.resolveImageView = 
+			.resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 			.resolveMode = VK_RESOLVE_MODE_NONE,
-			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-			.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-			.clearValue = {
-				.color = { 
+			.loadOp      = VK_ATTACHMENT_LOAD_OP_CLEAR,
+			.storeOp     = VK_ATTACHMENT_STORE_OP_STORE,
+			.clearValue  = {
+				.color   = { 
 					.float32 = { 0.1f, 0.1f, 0.1f, 0.0f },
 				}
 			}
@@ -2172,7 +2176,7 @@ void PhysicalDevice::GetDetails() {
     // Get max number of samples
     for (VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_64_BIT; sampleCount >= VK_SAMPLE_COUNT_1_BIT; sampleCount = (VkSampleCountFlagBits)(sampleCount >> 1)) {
         if (counts & sampleCount) {
-            maxSamples = sampleCount;
+            maxSamples = (SampleCount)sampleCount;
             break;
         }
     }
@@ -2722,7 +2726,7 @@ void SwapChain::CreateImGui(GLFWwindow* window) {
     initInfo.DescriptorPool = _ctx.imguiDescriptorPool;
     initInfo.MinImageCount = resource->surfaceCapabilities.minImageCount;
     initInfo.ImageCount = (uint32_t)swapChainImages.size();
-    initInfo.MSAASamples = _ctx.numSamples;
+    initInfo.MSAASamples = (VkSampleCountFlagBits)_ctx.numSamples;
     initInfo.PipelineCache = VK_NULL_HANDLE;
     initInfo.UseDynamicRendering = true;
     initInfo.Allocator = _ctx.allocator;

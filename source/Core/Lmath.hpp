@@ -41,7 +41,16 @@ typedef struct int4
 	
 	inline int& operator[](int i)			 { return M[i]; }
 	inline int	operator[](int i) const { return M[i]; }
-	
+
+	inline explicit int4(float4 a); 
+	inline explicit int4(uint4 a); 
+
+	inline int2& xy() { return reinterpret_cast<int2&>(M); }
+	inline int3& xyz() { return reinterpret_cast<int3&>(M); }
+	inline const int2& xy() const { return reinterpret_cast<const int2&>(M); }
+	inline const int3& xyz() const { return reinterpret_cast<const int3&>(M); }
+	inline int2& zw() { return reinterpret_cast<int2&>(M[2]); }
+	inline const int2& zw() const { return reinterpret_cast<const int2&>(M[2]); }
 
 	union
 	{
@@ -61,6 +70,9 @@ typedef struct int3
 	inline int3(int x, int y, int z) : x(x), y(y), z(z) {}
 	inline explicit int3(int val) : x(val), y(val), z(val) {}
 	inline explicit int3(const int a[3]) : x(a[0]), y(a[1]), z(a[2]) {}
+
+	inline explicit int3(float3 a); 
+	inline explicit int3(uint3 a); 
 	
 	inline int& operator[](int i)			 { return M[i]; }
 	inline int	operator[](int i) const { return M[i]; }
@@ -83,7 +95,10 @@ typedef struct int2
 	inline int2(int x, int y) : x(x), y(y) {}
 	inline explicit int2(int val) : x(val), y(val) {}
 	inline explicit int2(const int a[2]) : x(a[0]), y(a[1]) {}
-	
+
+	inline explicit int2(float2 a); 
+	inline explicit int2(uint2 a); 
+		
 	inline int& operator[](int i)			 { return M[i]; }
 	inline int	operator[](int i) const { return M[i]; }
 
@@ -102,9 +117,20 @@ typedef struct uint4
 	inline explicit uint4(uint val) : x(val), y(val), z(val), w(val) {}
 	inline explicit uint4(const uint a[4]) : x(a[0]), y(a[1]), z(a[2]), w(a[3]) {}
 	
+	inline explicit uint4(float4 a); 
+	inline explicit uint4(int4 a);
+
 	inline uint& operator[](int i)			 { return M[i]; }
 	inline uint	operator[](int i) const { return M[i]; }
 	// inline explicit operator bool() { return x > 0 || y > 0 || z > 0 || w > 0; }
+
+	inline uint2& xy() { return reinterpret_cast<uint2&>(M); }
+	inline uint2& zw() { return reinterpret_cast<uint2&>(M[2]); }
+	inline uint3& xyz() { return reinterpret_cast<uint3&>(M); }
+	inline const uint2& xy() const { return reinterpret_cast<const uint2&>(M); }
+	inline const uint2& zw() const { return reinterpret_cast<const uint2&>(M[2]); }
+	inline const uint3& xyz() const { return reinterpret_cast<const uint3&>(M); }
+
 	union
 	{
 		struct { uint x, y, z, w; };
@@ -119,6 +145,9 @@ typedef struct uint3
 	inline uint3(uint x, uint y, uint z) : x(x), y(y), z(z) {}
 	inline explicit uint3(uint val) : x(val), y(val), z(val) {}
 	inline explicit uint3(const uint a[3]) : x(a[0]), y(a[1]), z(a[2]) {}
+
+	inline explicit uint3(float3 a); 
+	inline explicit uint3(int3 a); 
 	
 	inline uint& operator[](int i)			 { return M[i]; }
 	inline uint	operator[](int i) const { return M[i]; }
@@ -141,6 +170,9 @@ typedef struct uint2
 	inline uint2(uint x, uint y) : x(x), y(y) {}
 	inline explicit uint2(uint val) : x(val), y(val) {}
 	inline explicit uint2(const uint a[2]) : x(a[0]), y(a[1]) {}
+
+	inline explicit uint2(float2 a);
+	inline explicit uint2(int2 a);
 	
 	inline uint& operator[](int i)			 { return M[i]; }
 	inline uint	operator[](int i) const { return M[i]; }
@@ -167,6 +199,8 @@ typedef struct float4
 	inline float3& xyz() { return reinterpret_cast<float3&>(M); }
 	inline const float2& xy() const { return reinterpret_cast<const float2&>(M); }
 	inline const float3& xyz() const { return reinterpret_cast<const float3&>(M); }
+	inline float2& zw() { return reinterpret_cast<float2&>(M[2]); }
+	inline const float2& zw() const { return reinterpret_cast<const float2&>(M[2]); }
 	
 	union
 	{
@@ -251,38 +285,38 @@ typedef struct float3
 	};
 
 } vec3;
-  static inline float3 operator+(const float3 a, const float3 b) { return float3{a.x + b.x, a.y + b.y, a.z + b.z}; }
-  static inline float3 operator-(const float3 a, const float3 b) { return float3{a.x - b.x, a.y - b.y, a.z - b.z}; }
-  static inline float3 operator*(const float3 a, const float3 b) { return float3{a.x * b.x, a.y * b.y, a.z * b.z}; }
-  static inline float3 operator/(const float3 a, const float3 b) { return float3{a.x / b.x, a.y / b.y, a.z / b.z}; }
+static inline float3 operator+(const float3 a, const float3 b) { return float3{a.x + b.x, a.y + b.y, a.z + b.z}; }
+static inline float3 operator-(const float3 a, const float3 b) { return float3{a.x - b.x, a.y - b.y, a.z - b.z}; }
+static inline float3 operator*(const float3 a, const float3 b) { return float3{a.x * b.x, a.y * b.y, a.z * b.z}; }
+static inline float3 operator/(const float3 a, const float3 b) { return float3{a.x / b.x, a.y / b.y, a.z / b.z}; }
 
-  static inline float3 operator * (const float3 a, float b) { return float3{a.x * b, a.y * b, a.z * b}; }
-  static inline float3 operator / (const float3 a, float b) { return float3{a.x / b, a.y / b, a.z / b}; }
-  static inline float3 operator * (float a, const float3 b) { return float3{a * b.x, a * b.y, a * b.z}; }
-  static inline float3 operator / (float a, const float3 b) { return float3{a / b.x, a / b.y, a / b.z}; }
+static inline float3 operator * (const float3 a, float b) { return float3{a.x * b, a.y * b, a.z * b}; }
+static inline float3 operator / (const float3 a, float b) { return float3{a.x / b, a.y / b, a.z / b}; }
+static inline float3 operator * (float a, const float3 b) { return float3{a * b.x, a * b.y, a * b.z}; }
+static inline float3 operator / (float a, const float3 b) { return float3{a / b.x, a / b.y, a / b.z}; }
 
-  static inline float3 operator + (const float3 a, float b) { return float3{a.x + b, a.y + b, a.z + b}; }
-  static inline float3 operator - (const float3 a, float b) { return float3{a.x - b, a.y - b, a.z - b}; }
-  static inline float3 operator + (float a, const float3 b) { return float3{a + b.x, a + b.y, a + b.z}; }
-  static inline float3 operator - (float a, const float3 b) { return float3{a - b.x, a - b.y, a - b.z}; }
+static inline float3 operator + (const float3 a, float b) { return float3{a.x + b, a.y + b, a.z + b}; }
+static inline float3 operator - (const float3 a, float b) { return float3{a.x - b, a.y - b, a.z - b}; }
+static inline float3 operator + (float a, const float3 b) { return float3{a + b.x, a + b.y, a + b.z}; }
+static inline float3 operator - (float a, const float3 b) { return float3{a - b.x, a - b.y, a - b.z}; }
 
-  static inline float3& operator *= (float3& a, const float3 b) { a.x *= b.x; a.y *= b.y; a.z *= b.z;  return a; }
-  static inline float3& operator /= (float3& a, const float3 b) { a.x /= b.x; a.y /= b.y; a.z /= b.z;  return a; }
-  static inline float3& operator *= (float3& a, float b) { a.x *= b; a.y *= b; a.z *= b;  return a; }
-  static inline float3& operator /= (float3& a, float b) { a.x /= b; a.y /= b; a.z /= b;  return a; }
+static inline float3& operator *= (float3& a, const float3 b) { a.x *= b.x; a.y *= b.y; a.z *= b.z;  return a; }
+static inline float3& operator /= (float3& a, const float3 b) { a.x /= b.x; a.y /= b.y; a.z /= b.z;  return a; }
+static inline float3& operator *= (float3& a, float b) { a.x *= b; a.y *= b; a.z *= b;  return a; }
+static inline float3& operator /= (float3& a, float b) { a.x /= b; a.y /= b; a.z /= b;  return a; }
 
-  static inline float3& operator += (float3& a, const float3 b) { a.x += b.x; a.y += b.y; a.z += b.z;  return a; }
-  static inline float3& operator -= (float3& a, const float3 b) { a.x -= b.x; a.y -= b.y; a.z -= b.z;  return a; }
-  static inline float3& operator += (float3& a, float b) { a.x += b; a.y += b; a.z += b;  return a; }
-  static inline float3& operator -= (float3& a, float b) { a.x -= b; a.y -= b; a.z -= b;  return a; }
+static inline float3& operator += (float3& a, const float3 b) { a.x += b.x; a.y += b.y; a.z += b.z;  return a; }
+static inline float3& operator -= (float3& a, const float3 b) { a.x -= b.x; a.y -= b.y; a.z -= b.z;  return a; }
+static inline float3& operator += (float3& a, float b) { a.x += b; a.y += b; a.z += b;  return a; }
+static inline float3& operator -= (float3& a, float b) { a.x -= b; a.y -= b; a.z -= b;  return a; }
 
-  static inline void store  (float* p, const float3 a_val) { memcpy((void*)p, (void*)&a_val, sizeof(float)*3); }
-  static inline void store_u(float* p, const float3 a_val) { memcpy((void*)p, (void*)&a_val, sizeof(float)*3); }  
+static inline void store  (float* p, const float3 a_val) { memcpy((void*)p, (void*)&a_val, sizeof(float)*3); }
+static inline void store_u(float* p, const float3 a_val) { memcpy((void*)p, (void*)&a_val, sizeof(float)*3); }  
 
-  static inline float3 min  (const float3 a, const float3 b) { return float3{std::min(a.x, b.x), std::min(a.y, b.y), std::min(a.z, b.z)}; }
-  static inline float3 max  (const float3 a, const float3 b) { return float3{std::max(a.x, b.x), std::max(a.y, b.y), std::max(a.z, b.z)}; }
-  static inline float3 clamp(const float3 u, const float3 a, const float3 b) { return float3{clamp(u.x, a.x, b.x), clamp(u.y, a.y, b.y), clamp(u.z, a.z, b.z)}; }
-  static inline float3 clamp(const float3 u, float a, float b) { return float3{clamp(u.x, a, b), clamp(u.y, a, b), clamp(u.z, a, b)}; }
+static inline float3 min  (const float3 a, const float3 b) { return float3{std::min(a.x, b.x), std::min(a.y, b.y), std::min(a.z, b.z)}; }
+static inline float3 max  (const float3 a, const float3 b) { return float3{std::max(a.x, b.x), std::max(a.y, b.y), std::max(a.z, b.z)}; }
+static inline float3 clamp(const float3 u, const float3 a, const float3 b) { return float3{clamp(u.x, a.x, b.x), clamp(u.y, a.y, b.y), clamp(u.z, a.z, b.z)}; }
+static inline float3 clamp(const float3 u, float a, float b) { return float3{clamp(u.x, a, b), clamp(u.y, a, b), clamp(u.z, a, b)}; }
 
 static inline  float dot(const float3 a, const float3 b)  { return a.x*b.x + a.y*b.y + a.z*b.z; }
 

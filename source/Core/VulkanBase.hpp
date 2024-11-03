@@ -127,6 +127,22 @@ enum class ImageLayout {
 	MaxEnum = 0x7FFFFFFF
 };
 
+
+enum class SampleCount {
+// namespace SampleCount {
+	// enum {
+		_1 = 0x00000001,
+		_2 = 0x00000002,
+		_4 = 0x00000004,
+		_8 = 0x00000008,
+		_16 = 0x00000010,
+		_32 = 0x00000020,
+		_64 = 0x00000040,
+		MaxEnum= 0x7FFFFFFF
+	// };
+};
+// using SampleCountFlags = Flags;
+
 struct DeviceResource;
 struct SwapChainResource;
 struct BufferResource;
@@ -166,6 +182,8 @@ struct ImageDesc {
 	uint32_t height;
 	Format format;
 	ImageUsageFlags usage;
+	SampleCount samples = SampleCount::_1;
+	ImageResource* resolveTarget = nullptr;
 	std::string name = "";
 	uint32_t layers = 1;
 };
@@ -274,6 +292,7 @@ struct PipelineDesc {
 	std::vector<Format> colorFormats;
 	bool useDepth = false;
 	Format depthFormat;
+	SampleCount samples = vkw::SampleCount::_1;
 	CullModeFlags cullMode = CullMode::None;
 	bool lineTopology = false;
 };
@@ -390,7 +409,7 @@ struct Command {
 	void ClearColorImage(Image& image, const float4& color);
 
 
-	void BeginRendering(const std::vector<Image>& colorAttachs, Image depthAttach = {}, uint32_t layerCount = 1, vec4 viewport = {}, ivec4 scissor = {});
+	void BeginRendering(const std::vector<std::pair<Image, Image>>& colorAttachs, Image depthAttach = {}, uint32_t layerCount = 1, vec4 viewport = {}, ivec4 scissor = {});
 	void EndRendering();
 	// void BeginPresent();
 	// void EndPresent();

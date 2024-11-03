@@ -7,6 +7,7 @@
 #include <set>
 #include "Window.hpp"
 
+#include <string_view>
 #include <unistd.h>
 
 using namespace Lmath;
@@ -31,16 +32,13 @@ struct Context {
 	vkw::Device device;
 
 	vkw::Queue queue;
-	vkw::Queue computeQueue;
-	vkw::Queue transferQueue;
-	vkw::Queue transferQueue2;
-	vkw::Queue transferQueue3;
-	
 	// vkw::Image renderImage;
 
 	Window* mainWindow;
 	std::set<Window*> windows;
-	std::unordered_map<Window*, vkw::Image> renderImages;
+	std::unordered_map<Window*, vkw::Image> colorImages;
+	std::unordered_map<Window*, vkw::Image> depthImages;
+	std::unordered_map<Window*, vkw::Image> resolveImages;
 
 	void CreateImages(uint32_t width, uint32_t height);
 	void CreateShaders();
@@ -66,6 +64,17 @@ struct Vertex {
 	vec3 pos;
 	vec3 color;
 };
+
+
+void RecreateFrameResources(Window* w);
+void UploadBuffers();
+
+void FramebufferCallback(Window* window, int width, int height);
+void RefreshCallback(Window* window);
+void MouseButtonCallback(Window* window, int button, int action, int mods);
+void KeyCallback(Window* window, int key, int scancode, int action, int mods);
+void CursorPosCallback(Window *window, double xpos, double ypos);
+
 
 // const std::vector<Vertex> vertices = {
 // 	{{0.0f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
@@ -128,50 +137,64 @@ void Context::CreateShaders() {
 		.name = "Feature pipeline",
 		// pos2 + color3
 		.vertexAttributes = {vkw::Format::RGB32_sfloat, vkw::Format::RGB32_sfloat},
-		// .colorFormats = {ctx.albedo.format, ctx.normal.format, ctx.material.format, ctx.emission.format},
 		.colorFormats = {vkw::Format::RGBA16_sfloat},
-		// .colorFormats = {vkw::Format::RGBA8_unorm},
 		.useDepth = true,
-		.depthFormat = ctx.depth.format
+		.depthFormat = ctx.depth.format,
+		.samples = vkw::SampleCount::_4
 	});
 
 }
 
 void Context::CreateImages(uint32_t width, uint32_t height) {
-	ctx.depth = ctx.device.CreateImage({
-        .width = 3000,
-        .height = 3000,
+
+}
+
+void CreateWindowResources(Window* window) {
+	window->CreateSwapchain(ctx.device, ctx.queue);
+	ctx.windows.emplace(window);
+	window->AddFramebufferSizeCallback(FramebufferCallback);
+	window->AddMouseButtonCallback(MouseButtonCallback);
+	window->AddWindowRefreshCallback(RefreshCallback);
+	window->AddKeyCallback(KeyCallback);
+	window->AddCursorPosCallback(CursorPosCallback);
+
+	uint2 maxSize = uint2(window->GetSizeLimits().zw());
+
+	ctx.depthImages.erase(window);
+	ctx.depthImages.try_emplace(window, ctx.device.CreateImage({
+        .width = maxSize.x,
+        .height = maxSize.y,
         .format = vkw::Format::D32_sfloat,
         .usage = vkw::ImageUsage::DepthStencilAttachment/*  | vkw::ImageUsage::TransientAttachment */,
         .name = "Depth Attachment"
-    });
-}
+    }));
 
-void CreateRenderImage(Window* window) {
-	// uint32_t width = window->GetMonitorWidth();
-	// uint32_t height = window->GetMonitorHeight();
-	uint32_t width = 3000;
-	uint32_t height = 3000;
-	ctx.renderImages.erase(window);
-	ctx.renderImages.try_emplace(window, ctx.device.CreateImage({
-		.width = width,
-		.height = height,
+	ctx.resolveImages.erase(window);
+	ctx.resolveImages.try_emplace(window, ctx.device.CreateImage({
+		.width = maxSize.x,
+		.height = maxSize.y,
+		.format = vkw::Format::RGBA16_sfloat,
+		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::TransferSrc | vkw::ImageUsage::TransferDst,
+		.name = window->GetName(),
+	}));
+	
+	ctx.colorImages.erase(window);
+	ctx.colorImages.try_emplace(window, ctx.device.CreateImage({
+		.width = maxSize.x,
+		.height = maxSize.y,
 		.format = vkw::Format::RGBA16_sfloat,
 		// .format = vkw::Format::RGBA8_unorm,
 		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::TransferSrc | vkw::ImageUsage::TransferDst,
+		.samples = vkw::SampleCount::_4,
+		.resolveTarget = ctx.resolveImages.at(window).resource.get(),
 		.name = window->GetName(),
 	}));
 }
 
-void RecreateFrameResources(Window* w);
-void UploadBuffers();
+void CreateWindow(std::string_view name) {
+	
 
-void FramebufferCallback(Window* window, int width, int height);
-void RefreshCallback(Window* window);
-void MouseButtonCallback(Window* window, int button, int action, int mods);
-void KeyCallback(Window* window, int key, int scancode, int action, int mods);
-void CursorPosCallback(Window *window, double xpos, double ypos);
-
+}
 
 void UploadBuffers() {
 	auto cmd = ctx.device.GetCommandBuffer(ctx.queue);
@@ -202,7 +225,7 @@ void RecordCommands(Window* window) {
 	// cmd.Barrier(ctx.renderImages[window], {vkw::ImageLayout::TransferDst});
 	// cmd.ClearColorImage(ctx.renderImages[window], {0.7f, 0.0f, 0.4f, 1.0f});
 
-	cmd.BeginRendering({ctx.renderImages[window]}, {ctx.depth}, 1, viewport);
+	cmd.BeginRendering({{ctx.colorImages[window],ctx.colorImages[window]}}, {ctx.depth}, 1, viewport);
 	cmd.BindPipeline(ctx.pipeline);
 	cmd.PushConstants(&constants, sizeof(constants));
 	cmd.BindVertexBuffer(ctx.vertexBuffer);
@@ -241,14 +264,7 @@ void KeyCallback(Window* window, int key, int scancode, int action, int mods) {
 			static int windowCount = 1;
 			std::string name = "w" + std::to_string(windowCount++);
 			auto window = new Window(ctx.width, ctx.height, name.c_str());
-			window->CreateSwapchain(ctx.device, ctx.queue);
-			CreateRenderImage(window);
-			ctx.windows.emplace(window);
-			window->AddFramebufferSizeCallback(FramebufferCallback);
-			window->AddMouseButtonCallback(MouseButtonCallback);
-			window->AddWindowRefreshCallback(RefreshCallback);
-			window->AddKeyCallback(KeyCallback);
-			window->AddCursorPosCallback(CursorPosCallback);
+			CreateWindowResources(window);
 			break;
 		}
 		case GLFW_KEY_W:
@@ -428,11 +444,7 @@ void FeatureTestApplication::Create() { auto& c = ctx;
 	vkw::Init();
 	auto window = new Window(ctx.width, ctx.height, "wm");
 	ctx.queue = {vkw::QueueFlagBits::Graphics | vkw::QueueFlagBits::Compute | vkw::QueueFlagBits::Transfer, window->GetGLFWwindow()};
-	ctx.computeQueue = {vkw::QueueFlagBits::Compute, nullptr, true};
-	ctx.transferQueue = {vkw::QueueFlagBits::Transfer, nullptr, true};
-	ctx.transferQueue2 = {vkw::QueueFlagBits::OpticalFlow, nullptr, true};
-	ctx.transferQueue3 = {vkw::QueueFlagBits::OpticalFlow, nullptr, true};
-	ctx.device = vkw::CreateDevice({&ctx.queue, &ctx.computeQueue, &ctx.transferQueue2, &ctx.transferQueue3, &ctx.transferQueue});
+	ctx.device = vkw::CreateDevice({&ctx.queue});
 	window->CreateSwapchain(ctx.device, ctx.queue);
 	ctx.windows.emplace(window);
 	ctx.mainWindow = window;
@@ -442,7 +454,7 @@ void FeatureTestApplication::Create() { auto& c = ctx;
 	window->AddKeyCallback(KeyCallback);
 	window->AddCursorPosCallback(CursorPosCallback);
 	ctx.CreateImages(window->GetMonitorWidth(), window->GetMonitorHeight());
-	CreateRenderImage(window);
+	CreateWindowResources(window);
 	ctx.vertexBuffer = ctx.device.CreateBuffer(vertices.size() * sizeof(Vertex), vkw::BufferUsage::Vertex, vkw::Memory::GPU, "Vertex Buffer");
 	UploadBuffers();
 	ctx.CreateShaders();
@@ -456,7 +468,9 @@ void FeatureTestApplication::MainLoop() {
 			auto window = *it;
 			window->ApplyChanges();
 			if (!window->GetAlive()) {
-				ctx.renderImages.erase(window);
+				ctx.depthImages.erase(window);
+				ctx.colorImages.erase(window);
+				ctx.resolveImages.erase(window);
 				it = ctx.windows.erase(it);
 				if (window == ctx.mainWindow) {
 					ctx.mainWindow = nullptr;
