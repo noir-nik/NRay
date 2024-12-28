@@ -1,13 +1,8 @@
 #ifdef USE_MODULES
-module;
-#include <cmath>
-#include <cstring>
-#define LMATH_EXPORT export 
 export module Lmath.types;
+#define LMATH_EXPORT export 
 #else
 #pragma once
-#include <cmath>
-#include <cstring>
 #define LMATH_EXPORT
 #endif
 
@@ -18,21 +13,15 @@ namespace Lmath
 typedef unsigned int uint;
 typedef unsigned char	uchar;
 
-inline float clamp(float u, float a, float b) { return std::min(std::max(a, u), b); }
-inline uint  clamp(uint u,  uint a,  uint b)  { return std::min(std::max(a, u), b); }
-inline int   clamp(int u,   int a,   int b)   { return std::min(std::max(a, u), b); }
-
-constexpr inline float DEG_TO_RAD = 3.14159265358979323846f / 180.0f;
-
-struct uint4;
-struct int4;
-struct float4;
-struct uint3;
-struct int3;
-struct float3;
-struct uint2;
 struct int2;
+struct int3;
+struct int4;
+struct uint2;
+struct uint3;
+struct uint4;
 struct float2;
+struct float3;
+struct float4;
 
 struct float3x3;
 struct float4x4;

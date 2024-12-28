@@ -4,7 +4,6 @@ export module UI;
 #else
 #pragma once
 #define _UI_EXPORT
-
 #endif
 
 _UI_EXPORT
@@ -26,4 +25,4 @@ void Destroy();
 
 bool SaveStyle();
 bool LoadStyle();
-}
+} // namespace UI

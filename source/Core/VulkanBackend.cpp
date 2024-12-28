@@ -3594,8 +3594,8 @@ void ImGuiNewFrame() {
 	ImGui_ImplGlfw_NewFrame();
 }
 
-void Command::DrawImGui(ImDrawData* data) {
-	ImGui_ImplVulkan_RenderDrawData(data, resource->buffer);
+void Command::DrawImGui(void* imDrawData) {
+	ImGui_ImplVulkan_RenderDrawData(static_cast<ImDrawData*>(imDrawData), resource->buffer);
 }
 
 void ImGuiShutdown() {

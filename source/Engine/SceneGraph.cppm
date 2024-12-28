@@ -10,7 +10,6 @@ import Types;
 #define _SCENEGRAPH_EXPORT
 #include "Component.cppm"
 #include "Entity.cppm"
-#include "Types.cppm"
 #endif
 
 _SCENEGRAPH_EXPORT

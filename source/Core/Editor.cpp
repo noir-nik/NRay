@@ -26,11 +26,14 @@ import Runtime;
 // #include <string_view>
 
 #define STYLE_PATH "assets/"
-struct EditorContext;
+
+namespace Editor {
+using namespace Lmath;
+struct Context;
 
 struct Panel {
 	const char* name;
-	void (EditorContext::*draw)(Runtime::Context& ctx) = nullptr;
+	void (Context::*draw)(Runtime::Context& ctx) = nullptr;
 };
 
 struct Tab {
@@ -39,14 +42,14 @@ struct Tab {
 	void Draw(Runtime::Context& ctx);
 };
 
-struct EditorContext {
+struct Context {
 	using NodeIndex = SceneGraph::NodeIndex;
 
-	EditorContext() = default;
-	EditorContext(const EditorContext&) = delete;
-	EditorContext& operator=(const EditorContext&) = delete;
-	EditorContext(EditorContext&&) = default;
-	EditorContext& operator=(EditorContext&&) = default;
+	Context() = default;
+	Context(const Context&) = delete;
+	Context& operator=(const Context&) = delete;
+	Context(Context&&) = default;
+	Context& operator=(Context&&) = default;
 
 	bool showStyleEditor = false;
 	bool showDemoWindow = false;
@@ -60,8 +63,8 @@ struct EditorContext {
 	NodeIndex activeNode = -1;
 	std::vector<Tab> tabs {
 		{"View3d", {
-			{"Outliner", &EditorContext::OutlinerWindow},
-			{"Properties", &EditorContext::PropertiesWindow},
+			{"Outliner", &Context::OutlinerWindow},
+			{"Properties", &Context::PropertiesWindow},
 		}},
 		{"Mesh", {
 
@@ -95,7 +98,7 @@ void Tab::Draw(Runtime::Context& ctx) {
 	}
 }
 
-void EditorContext::MainMenu(Runtime::Context& ctx) {
+void Context::MainMenu(Runtime::Context& ctx) {
 	if (!ImGui::BeginMainMenuBar()) return;
 	ImGuiIO& io = ImGui::GetIO();
 	io.WantCaptureMouse |= io.WantCaptureKeyboard;
@@ -173,7 +176,7 @@ void EditorContext::MainMenu(Runtime::Context& ctx) {
 	ImGui::EndMainMenuBar();
 }
 
-void EditorContext::RenderUI() {
+void Context::RenderUI() {
 	ImGui::Begin("Scene Panel", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove);
 	ImGui::Text("Scene Objects:");
 	ImGui::Separator();
@@ -202,7 +205,7 @@ void EditorContext::RenderUI() {
 	ImGui::End();
 }
 
-void EditorContext::StyleWindow() {
+void Context::StyleWindow() {
 	if (ImGui::Begin("Style Window", nullptr, ImGuiWindowFlags_NoCollapse)) {
 		if (ImGui::Button("Save Style")) {
 			if (SaveStyle(STYLE_PATH"style.ini", ImGui::GetStyle())) {
@@ -228,7 +231,7 @@ void EditorContext::StyleWindow() {
 	ImGui::End();
 }
 
-void EditorContext::DebugWindow(Runtime::Camera& camera) {
+void Context::DebugWindow(Runtime::Camera& camera) {
 
 	if (ImGui::Begin("Debug Window", nullptr)) {
 		ImGui::Text("Camera Focus: (%.2f, %.2f, %.2f)", camera.focus.x, camera.focus.y, camera.focus.z);
@@ -241,7 +244,7 @@ void EditorContext::DebugWindow(Runtime::Camera& camera) {
 		Lmath::float3 position;
 		Lmath::float3 rotation;
 		Lmath::float3 scale;
-		camera.view | inverse | std::tie(position, rotation, scale);
+		camera.view | affineInverse | std::tie(position, rotation, scale);
 
 		// ImGui::SliderFloat3("Camera Position", position.M, -50.0f, 50.0f);
 		// ImGui::SliderFloat3("Camera Focus", rotation.M, -50.0f, 50.0f);
@@ -285,14 +288,14 @@ void EditorContext::DebugWindow(Runtime::Camera& camera) {
 	ImGui::End();
 }
 
-uint32_t EditorContext::FindSelected(NodeIndex nodeIndex) {
+uint32_t Context::FindSelected(NodeIndex nodeIndex) {
 	auto it = std::find_if(selectedNodes.begin(), selectedNodes.end(), [&](const NodeIndex other) {
 		return nodeIndex == other;
 	});
 	return it == selectedNodes.end() ? -1 : it - selectedNodes.begin();
 }
 
-void EditorContext::Select(NodeIndex nodeIndex) {
+void Context::Select(NodeIndex nodeIndex) {
 	bool holdingCtrl = ImGui::IsKeyDown(ImGuiKey_LeftCtrl);
 	int index = FindSelected(nodeIndex);
 	if (index != -1 && holdingCtrl) {
@@ -310,7 +313,7 @@ ImVec4 selected_hovered;
 ImVec4 active_col;
 ImVec4 active_hovered;
 
-void EditorContext::displayNode(const SceneGraph& sceneGraph, const NodeIndex nodeIndex, ImGuiTreeNodeFlags flags) {
+void Context::displayNode(const SceneGraph& sceneGraph, const NodeIndex nodeIndex, ImGuiTreeNodeFlags flags) {
 	
 	const auto& node = sceneGraph.Get(nodeIndex);
 	ImGuiTreeNodeFlags child_flags = flags;
@@ -344,7 +347,7 @@ void EditorContext::displayNode(const SceneGraph& sceneGraph, const NodeIndex no
 	ImGui::PopID();
 }
 
-void EditorContext::OutlinerWindow(Runtime::Context& ctx) {
+void Context::OutlinerWindow(Runtime::Context& ctx) {
 	const ImGuiTreeNodeFlags parent_flags {
 		ImGuiTreeNodeFlags_OpenOnArrow       |
 		ImGuiTreeNodeFlags_OpenOnDoubleClick |
@@ -378,7 +381,7 @@ void EditorContext::OutlinerWindow(Runtime::Context& ctx) {
 	ImGui::End();
 }
 
-void EditorContext::PropertiesWindow(Runtime::Context& ctx) {
+void Context::PropertiesWindow(Runtime::Context& ctx) {
 	// if (ImGui::Begin("Properties", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove)) {
 	// }
 	// ImGui::End();
@@ -427,7 +430,7 @@ void Hover_Example() {
 }
  */
 
-void EditorContext::Draw(Runtime::Context& ctx) {
+void Context::Draw(Runtime::Context& ctx) {
 	editorContext.MainMenu(ctx);
 	
 	if (showDemoWindow) ImGui::ShowDemoWindow();
@@ -436,22 +439,22 @@ void EditorContext::Draw(Runtime::Context& ctx) {
 	// ctx.RenderUI();
 }
 
-void Editor::Draw(Runtime::Context& ctx) {
+void Draw(Runtime::Context& ctx) {
 	editorContext.Draw(ctx);
 }
 
-void Editor::BeginFrame() {
+void BeginFrame() {
 	vkw::ImGuiNewFrame();
 	ImGui::NewFrame();
 	ImGui::DockSpaceOverViewport(ImGui::GetWindowDockID(), 0, /* ImGuiDockNodeFlags_PassthruCentralNode |  */ImGuiDockNodeFlags_AutoHideTabBar);
 }
 
-Editor::UiDrawData* Editor::EndFrame() {
+UiDrawData* EndFrame() {
 	ImGui::Render();
 	return static_cast<UiDrawData*>(ImGui::GetDrawData());
 }
 
-void Editor::Setup(){
+void Setup(){
 
 	editorContext.defaultStyle = ImGui::GetStyle();
 
@@ -480,11 +483,11 @@ void Editor::Setup(){
 
 }
 
-Editor::UiStyle* Editor::GetStyle() {
+UiStyle* GetStyle() {
 	return static_cast<UiStyle*>(&editorContext.style);
 }
 
-inline const char* EditorContext::GetStyleVarName(ImGuiStyleVar idx) {
+inline const char* Context::GetStyleVarName(ImGuiStyleVar idx) {
 	switch (idx) {
 	case ImGuiStyleVar_Alpha:                       return "Alpha";                       // float
 	case ImGuiStyleVar_DisabledAlpha:               return "DisabledAlpha";               // float
@@ -553,7 +556,7 @@ inline const char* EditorContext::GetStyleVarName(ImGuiStyleVar idx) {
 // }
 
 
-bool EditorContext::SaveStyle(const char* filename, const ImGuiStyle& style) {
+bool Context::SaveStyle(const char* filename, const ImGuiStyle& style) {
 	// Write .style file
 	FILE* f = fopen(filename, "wt");
 	if (!f)  return false;
@@ -608,7 +611,7 @@ bool EditorContext::SaveStyle(const char* filename, const ImGuiStyle& style) {
 	return true;
 }
 
-bool EditorContext::LoadStyle(const char* filename, ImGuiStyle& style) {
+bool Context::LoadStyle(const char* filename, ImGuiStyle& style) {
     std::ifstream file(filename);
     if (!file.is_open()) {
         return false;
@@ -738,7 +741,7 @@ static void HelpMarker(const char* desc) {
     }
 }
 
-void EditorContext::StyleEditor() {
+void Context::StyleEditor() {
 	if(ImGui::Begin("Style Editor", &showStyleEditor)) {
 		// You can pass in a reference ImGuiStyle structure to compare to, revert to and save to
 		// (without a reference style pointer, we will use one compared locally as a reference)
@@ -1050,3 +1053,5 @@ void EditorContext::StyleEditor() {
 	}
 	ImGui::End();
 }
+
+} // namespace Editor

@@ -655,10 +655,12 @@ namespace ImGui
 
 static inline constexpr auto IM_NewLine = IM_NEWLINE;
 
-#endif
+#endif // USE_MODULES
 // NOLINTEND(misc-unused-using-decls)
 
 _IMGUI_EXPORT 
-inline void IMGUI_CheckVersion() {
+namespace ImGui {
+inline void CheckVersion() {
 	IMGUI_CHECKVERSION();
 }
+} // namespace ImGui

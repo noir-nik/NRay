@@ -21,7 +21,7 @@ ImFont* defaultFont = nullptr;
 ImGuiContext* setupContext = nullptr;
 
 void Init(){
-	IMGUI_CheckVersion();
+	ImGui::CheckVersion();
 	setupContext = ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
 	sharedFontAtlas = io.Fonts;

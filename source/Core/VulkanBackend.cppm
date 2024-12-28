@@ -3,10 +3,10 @@ export module VulkanBackend;
 import Lmath.types;
 import stl;
 import imgui; 
-#define VKW_EXPORT export
+#define _VKW_EXPORT export
 #else
 #pragma once
-#define VKW_EXPORT
+#define _VKW_EXPORT
 #include "Lmath.types.cppm"
 
 #include <cstdint>
@@ -16,20 +16,12 @@ import imgui;
 #include <filesystem>
 #include <memory>
 #include <string>
-
-#include "imgui.cppm"
 #endif
 
 
-VKW_EXPORT namespace vkw {
-
-using float4 = Lmath::float4;
-
-using vec4  = Lmath::vec4;
-using ivec4 = Lmath::ivec4;
-using ivec2 = Lmath::ivec2;
-using uvec3 = Lmath::uvec3;
-using uvec2 = Lmath::uvec2;
+_VKW_EXPORT
+namespace vkw {
+using namespace Lmath;
 
 using Flags = uint32_t;
 using Flags64 = uint64_t;
@@ -507,7 +499,7 @@ struct Command {
 	void DrawMesh(Buffer& vertexBuffer, Buffer& indexBuffer, uint32_t indexCount);
 	void DrawLineStrip(const Buffer& pointsBuffer, uint32_t firstPoint, uint32_t pointCount, float thickness = 1.0f);
 	void DrawPassThrough();
-	void DrawImGui(ImDrawData* data);
+	void DrawImGui(void* imDrawData);
 	void Dispatch(const uvec3& groups);
 
 	int BeginTimeStamp(const std::string& name);

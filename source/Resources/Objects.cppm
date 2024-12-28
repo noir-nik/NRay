@@ -11,7 +11,6 @@ import stl;
 #include "VulkanBackend.cppm"
 #include <cstdint>
 #include <vector>
-#include <memory>
 #endif
 
 _OBJECTS_EXPORT

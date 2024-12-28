@@ -9,11 +9,12 @@ import Lmath.types;
 #else
 #include "Lmath.types.cppm"
 #define _PHONG_EXPORT
-#endif
+#endif // USE_MODULES
+namespace Phong {
 using namespace Lmath;
 #else
 #define _PHONG_EXPORT
-#endif
+#endif // ENGINE
 
 _PHONG_EXPORT
 struct PhongLight {
@@ -43,4 +44,9 @@ struct PhongConstants {
 	vec3 cameraPosition;
 	int pad[1];
 };
+
+#ifdef ENGINE
+} // namespace Phong
 #endif
+
+#endif // PHONG_H

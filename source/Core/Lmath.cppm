@@ -24,8 +24,22 @@ export import Lmath.types;
 //#endif
 #endif
 
+
 LMATH_EXPORT
 namespace Lmath {
+
+inline int   min(const int   a, const int   b) { return (a < b) ? a : b; }
+inline int   max(const int   a, const int   b) { return (a > b) ? a : b; }
+inline uint  min(const uint  a, const uint  b) { return (a < b) ? a : b; }
+inline uint  max(const uint  a, const uint  b) { return (a > b) ? a : b; }
+inline float min(const float a, const float b) { return (a < b) ? a : b; }
+inline float max(const float a, const float b) { return (a > b) ? a : b; }
+
+inline int   clamp(int u,   int a,   int b)   { return min(max(a, u), b); }
+inline uint  clamp(uint u,  uint a,  uint b)  { return min(max(a, u), b); }
+inline float clamp(float u, float a, float b) { return min(max(a, u), b); }
+
+constexpr inline float DEG_TO_RAD = 3.14159265358979323846f / 180.0f;
 
 inline float3 operator+(const float3 a, const float3 b) { return float3{a.x + b.x, a.y + b.y, a.z + b.z}; }
 inline float3 operator-(const float3 a, const float3 b) { return float3{a.x - b.x, a.y - b.y, a.z - b.z}; }
@@ -59,8 +73,8 @@ inline void store_u(float* p, const float3 a_val) { memcpy((void*)p, (void*)&a_v
 
 inline void load (const float* p, float3& a_val) { memcpy((void*)&a_val, (void*)p, sizeof(float)*3); }
 
-inline float3 min  (const float3 a, const float3 b) { return float3{std::min(a.x, b.x), std::min(a.y, b.y), std::min(a.z, b.z)}; }
-inline float3 max  (const float3 a, const float3 b) { return float3{std::max(a.x, b.x), std::max(a.y, b.y), std::max(a.z, b.z)}; }
+inline float3 min  (const float3 a, const float3 b) { return float3{min(a.x, b.x), min(a.y, b.y), min(a.z, b.z)}; }
+inline float3 max  (const float3 a, const float3 b) { return float3{max(a.x, b.x), max(a.y, b.y), max(a.z, b.z)}; }
 inline float3 clamp(const float3 u, const float3 a, const float3 b) { return float3{clamp(u.x, a.x, b.x), clamp(u.y, a.y, b.y), clamp(u.z, a.z, b.z)}; }
 inline float3 clamp(const float3 u, float a, float b) { return float3{clamp(u.x, a, b), clamp(u.y, a, b), clamp(u.z, a, b)}; }
 
@@ -118,23 +132,23 @@ inline void store_u(float* p, const float4 a_val) { memcpy((void*)p, (void*)&a_v
 
 inline void load(const float* p, float4& a_val) { memcpy((void*)&a_val, (void*)p, sizeof(float)*4); }
 
-inline float4 min  (const float4 a, const float4 b) { return float4{std::min(a.x, b.x), std::min(a.y, b.y), std::min(a.z, b.z), std::min(a.w, b.w)}; }
-inline float4 max  (const float4 a, const float4 b) { return float4{std::max(a.x, b.x), std::max(a.y, b.y), std::max(a.z, b.z), std::max(a.w, b.w)}; }
+inline float4 min  (const float4 a, const float4 b) { return float4{min(a.x, b.x), min(a.y, b.y), min(a.z, b.z), min(a.w, b.w)}; }
+inline float4 max  (const float4 a, const float4 b) { return float4{max(a.x, b.x), max(a.y, b.y), max(a.z, b.z), max(a.w, b.w)}; }
 inline float4 clamp(const float4 u, const float4 a, const float4 b) { return float4{clamp(u.x, a.x, b.x), clamp(u.y, a.y, b.y), clamp(u.z, a.z, b.z), clamp(u.w, a.w, b.w)}; }
 inline float4 clamp(const float4 u, float a, float b) { return float4{clamp(u.x, a, b), clamp(u.y, a, b), clamp(u.z, a, b), clamp(u.w, a, b)}; }
 
-inline float4 abs (const float4 a) { return float4{std::abs(a.x), std::abs(a.y), std::abs(a.z), std::abs(a.w)}; } 
+// inline float4 abs (const float4 a) { return float4{std::abs(a.x), std::abs(a.y), std::abs(a.z), std::abs(a.w)}; } 
 // inline float4 sign(const float4 a) { return float4{sign(a.x), sign(a.y), sign(a.z), sign(a.w)}; }
 
-inline float4 lerp(const float4 a, const float4 b, float t) { return a + t * (b - a); }
-inline float4 mix (const float4 a, const float4 b, float t) { return a + t * (b - a); }
-inline float4 floor(const float4 a)                { return float4{std::floor(a.x), std::floor(a.y), std::floor(a.z), std::floor(a.w)}; }
-inline float4 ceil(const float4 a)                 { return float4{std::ceil(a.x), std::ceil(a.y), std::ceil(a.z), std::ceil(a.w)}; }
-inline float4 rcp (const float4 a)                 { return float4{1.0f/a.x, 1.0f/a.y, 1.0f/a.z, 1.0f/a.w}; }
-inline float4 mod (const float4 x, const float4 y) { return x - y * floor(x/y); }
-inline float4 fract(const float4 x)                { return x - floor(x); }
-inline float4 sqrt(const float4 a)                 { return float4{std::sqrt(a.x), std::sqrt(a.y), std::sqrt(a.z), std::sqrt(a.w)}; }
-inline float4 inversesqrt(const float4 a)          { return 1.0f/sqrt(a); }
+inline float4 lerp (const float4 a, const float4 b, float t) { return a + t * (b - a); }
+inline float4 mix  (const float4 a, const float4 b, float t) { return a + t * (b - a); }
+inline float4 floor(const float4 a)                 { return float4{std::floor(a.x), std::floor(a.y), std::floor(a.z), std::floor(a.w)}; }
+inline float4 ceil (const float4 a)                 { return float4{std::ceil(a.x), std::ceil(a.y), std::ceil(a.z), std::ceil(a.w)}; }
+inline float4 rcp  (const float4 a)                 { return float4{1.0f/a.x, 1.0f/a.y, 1.0f/a.z, 1.0f/a.w}; }
+inline float4 mod  (const float4 x, const float4 y) { return x - y * floor(x/y); }
+inline float4 fract(const float4 x)                 { return x - floor(x); }
+inline float4 sqrt (const float4 a)                 { return float4{std::sqrt(a.x), std::sqrt(a.y), std::sqrt(a.z), std::sqrt(a.w)}; }
+inline float4 inversesqrt(const float4 a)           { return 1.0f/sqrt(a); }
 
 inline  float dot(const float4 a, const float4 b)  { return a.x*b.x + a.y*b.y + a.z*b.z + a.w*b.w; }
 

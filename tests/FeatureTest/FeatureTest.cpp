@@ -26,7 +26,6 @@ import Runtime;
 #include "Log.cppm"
 #include "Bindless.h"
 #include "Editor.cppm"
-#include "FileManager.cppm"
 #include "FeatureTest.cppm"
 
 #include "Phong.cppm"
@@ -38,7 +37,6 @@ import Runtime;
 
 #include <cstdint>
 #include <cstdio>
-#include <set>
 #include <vector>
 
 #include "Types.cppm"
@@ -59,7 +57,7 @@ struct AppContext {
 
 	uint32_t width, height;
 
-	ImDrawData* imguiDrawData = nullptr;
+	Editor::UiDrawData* imDrawData = nullptr;
 
 	// float4x4 viewMat;
 	// float4x4 worldViewInv;
@@ -83,9 +81,6 @@ struct AppContext {
 
 	Entity phongMaterial;
 	Entity phongLight;
-
-
-	Editor editor;
 
 	Runtime::Context runtimeContext;
 
@@ -303,10 +298,10 @@ void AppContext::DrawViewport(Entity window, int4 viewport) {
 	auto& windowHandle = window.Get<Window>();
 	auto& resource = window.Get<WindowImageResource>();
 	auto glfwWindow = windowHandle.GetGLFWwindow();
-	PhongConstants constants{};
+	Phong::PhongConstants constants{};
 	constants.viewProj = camera.proj * camera.view | affineInverse;
-	constants.light = phongLight.Get<PhongLight>();
-	constants.material = phongMaterial.Get<PhongMaterial>();
+	constants.light = phongLight.Get<Phong::PhongLight>();
+	constants.material = phongMaterial.Get<Phong::PhongMaterial>();
 	constants.cameraPosition = camera.getPosition();
 
 	// LOG_INFO("Viewport: {}, {}, {}, {}", viewport.x, viewport.y, viewport.z, viewport.w); 
@@ -351,7 +346,7 @@ void AppContext::DrawViewport(Entity window, int4 viewport) {
 	cmd.BindVertexBuffer(cubeVertexBuffer);
 	cmd.Draw(vertices.size(), 1, 0, 0);
  */
-	cmd.DrawImGui(imguiDrawData);
+	cmd.DrawImGui(imDrawData);
 
 	cmd.EndRendering();
 	
@@ -370,9 +365,9 @@ void AppContext::DrawViewport(Entity window, int4 viewport) {
 void AppContext::DrawWindow(Entity window) {
 	auto& windowHandle = window.Get<Window>();
 	windowHandle.SetUIContextCurrent();
-	editor.BeginFrame();
-	editor.Draw(runtimeContext);
-	imguiDrawData = static_cast<ImDrawData*>(editor.EndFrame());
+	Editor::BeginFrame();
+	Editor::Draw(runtimeContext);
+	imDrawData = static_cast<Editor::UiDrawData*>(Editor::EndFrame());
 
 	
 	DrawViewport(window, int4(0, 0, windowHandle.GetSize().x, windowHandle.GetSize().y));
@@ -443,7 +438,7 @@ void KeyCallback(Window* window, int key, int scancode, int action, int mods) {
 		// case GLFW::Key::J: {
 		// 	ImGuiIO& io = ImGui::GetIO();
 		// 	const float fontSize = 17.0f;
-		// 	// editor.BeginFrame();
+		// 	// Editor::BeginFrame();
 		// 	vkw::BeginImGui();
 		// 	for (const auto& entry : std::filesystem::directory_iterator("bin")) {
 		// 		if (entry.path().extension() == ".ttf" || entry.path().extension() == ".otf") {
@@ -457,7 +452,7 @@ void KeyCallback(Window* window, int key, int scancode, int action, int mods) {
 		// 			// }
 		// 		}
 		// 	}
-		// 	// editor.EndFrame();
+		// 	// Editor::EndFrame();
 		// 	break;
 		// }
 		default:
@@ -713,20 +708,20 @@ void FeatureTestApplication::Create() {
 
 	ctx->phongMaterial = ctx->project.CreateEntity("PhongMaterial");
 	// phongMaterial.Add<PhongMaterial>();
-	PhongMaterial phongMat = {
+	Phong::PhongMaterial phongMat = {
 		.ambient = vec3(0.1, 0.1, 0.1),
 		.diffuse = vec3(0.8, 0.8, 0.8),
 		.specular = vec3(0.8, 0.8, 0.8),
 		.shininess = 64.0
 	};
-	ctx->project.registry.emplace<PhongMaterial>(ctx->phongMaterial.entity, phongMat);
+	ctx->project.registry.emplace<Phong::PhongMaterial>(ctx->phongMaterial.entity, phongMat);
 
-	PhongLight light = {
+	Phong::PhongLight light = {
 		.position = vec3(10.0, 10.0, 0.0),
 		.color = vec3(0.8, 0.8, 0.8)
 	};
 	ctx->phongLight = ctx->project.CreateEntity("PhongLight");
-	ctx->project.registry.emplace<PhongLight>(ctx->phongLight.entity, light);
+	ctx->project.registry.emplace<Phong::PhongLight>(ctx->phongLight.entity, light);
 }
 
 void FeatureTestApplication::Setup() {
@@ -735,7 +730,7 @@ void FeatureTestApplication::Setup() {
 	UI::Init();
 	ctx->width = info->width;
 	ctx->height = info->height;
-	ctx->editor.Setup();
+	Editor::Setup();
 
 	ctx->runtimeContext.camera = &camera;
 	ctx->runtimeContext.sceneGraph = &ctx->project.GetSceneGraph();
@@ -744,7 +739,7 @@ void FeatureTestApplication::Setup() {
 
 	// auto window = new Window(ctx->width, ctx->height, "NRay");
 	auto mainWindow = ctx->CreateEntity("Main Window");
-	auto style = ctx->editor.GetStyle();
+	auto style = Editor::GetStyle();
 	mainWindow.Add<Window>(ctx->width, ctx->height, "NRay", style);
 	mainWindow.Add<WindowImageResource>();
 	Window& windowHandle = mainWindow.Get<Window>();

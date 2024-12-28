@@ -9,8 +9,6 @@ import Lmath;
 #pragma once
 #define _RUNTIMECONTEXT_EXPORT
 #include "SceneGraph.cppm"
-#include "Objects.cppm"
-#include "Types.cppm"
 #include "Lmath.cppm"
 #endif
 

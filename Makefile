@@ -211,9 +211,13 @@ OBJS_GLFW  := $(patsubst $(DEPS_PATH)/glfw/src/%.c, $(PLATFORM_BUILD_DIR)/glfw/%
 
 # fastgltf
 SRC_FASTGLTF := $(DEPS_PATH)/fastgltf/src
+OBJS_FASTGLTF := $(patsubst $(SRC_FASTGLTF)/%.cpp, $(PLATFORM_BUILD_DIR)/fastgltf/%.$(OBJ_EXT), $(wildcard $(SRC_FASTGLTF)/*.cpp))
+
+# simdjson
 SRC_SIMDJSON :=  $(DEPS_PATH)/fastgltf/deps/simdjson
-OBJS_FASTGLTF := $(patsubst $(SRC_FASTGLTF)/%.cpp, $(PLATFORM_BUILD_DIR)/fastgltf/%.$(OBJ_EXT), $(wildcard $(SRC_FASTGLTF)/*.cpp)) \
-				$(patsubst $(SRC_SIMDJSON)/%.cpp, $(PLATFORM_BUILD_DIR)/fastgltf/%.$(OBJ_EXT), $(wildcard $(SRC_SIMDJSON)/*.cpp))
+OBJS_SIMDJSON := $(patsubst $(SRC_SIMDJSON)/%.cpp, $(PLATFORM_BUILD_DIR)/simdjson/%.$(OBJ_EXT), $(SRC_SIMDJSON)/simdjson.cpp)
+
+$(info $(OBJS_SIMDJSON))
 
 # spdlog
 SRC_SPDLOG := $(DEPS_PATH)/spdlog/src
@@ -286,6 +290,8 @@ ifeq ($(OS),Windows_NT)
 # @cmd /c if not exist $(_WINBDIR)\stb mkdir $(_WINBDIR)\stb
 	@cmd /c if not exist $(_WINBDIR)\glfw mkdir $(_WINBDIR)\glfw
 	@cmd /c if not exist $(_WINBDIR)\fastgltf mkdir $(_WINBDIR)\fastgltf
+	@cmd /c if not exist $(DEPS_PATH)\fastgltf\deps\simdjson mkdir $(DEPS_PATH)\fastgltf\deps\simdjson
+	@cmd /c if not exist $(_WINBDIR)\simdjson mkdir $(_WINBDIR)\simdjson
 	@cmd /c if not exist $(_WINBDIR)\spdlog mkdir $(_WINBDIR)\spdlog
 	@cmd /c if not exist $(_WINBDIR)\fmt mkdir $(_WINBDIR)\fmt
 else
@@ -299,6 +305,8 @@ else
 	$(PLATFORM_BUILD_DIR)/imgui \
 	$(PLATFORM_BUILD_DIR)/glfw \
 	$(PLATFORM_BUILD_DIR)/fastgltf \
+	$(DEPS_PATH)/fastgltf/deps/simdjson \
+	$(PLATFORM_BUILD_DIR)/simdjson \
 	$(PLATFORM_BUILD_DIR)/spdlog \
 	$(PLATFORM_BUILD_DIR)/fmt \
 
@@ -347,11 +355,11 @@ CPP_HEADER_TARGETS := \
 	$(patsubst %.hpp, $(HEADERS_BUILD_DIR)/%.pcm, $(CPP_HEADERS)) \
 	
 
-CPP_MODULE_DEPENDENCIES_FILE := $(PLATFORM_BUILD_DIR)/cpp_module_dependencies.mk
+CPP_MODULE_DEPENDENCIES_FILE := $(BUILD_DIR)/cpp_module_dependencies.mk
 
-$(CPP_MODULE_DEPENDENCIES_FILE): scripts/generate_cpp_module_dependencies.py $(CPP_MODULE_SRCS) $(SRCS)
+$(BUILD_DIR)/%.mk: scripts/generate_cpp_module_dependencies.py $(CPP_MODULE_SRCS) $(SRCS)
 	@echo "Generating $(CPP_MODULE_DEPENDENCIES_FILE)"
-	@PYTHON $< > $(CPP_MODULE_DEPENDENCIES_FILE)
+	@PYTHON $< > $@
 
 
 	
@@ -404,6 +412,7 @@ $(TARGET): \
 	$(OBJS_IMGUI) \
 	$(OBJS_GLFW) \
 	$(OBJS_FASTGLTF) \
+	$(OBJS_SIMDJSON) \
 	$(OBJS_SPDLOG) \
 	
 # $(OBJS_STB) \
@@ -502,7 +511,11 @@ $(MODULES_BUILD_DIR)/stl.pcm: source/Base/stl.cppm
 # ============================================ Modules ===================================================
 
 modules: CXXFLAGS += -fprebuilt-module-path=$(MODULES_BUILD_DIR) -D USE_MODULES -fmodule-file-deps
-modules: get_cpp_module_dependencies $(EXTERNAL_MODULE_TARGETS) $(CPP_MODULE_TARGETS) 
+modules: $(CPP_MODULE_DEPENDENCIES_FILE) $(EXTERNAL_MODULE_TARGETS) $(CPP_MODULE_TARGETS) 
+
+ifeq (modules,$(MAKECMDGOALS))
+include $(CPP_MODULE_DEPENDENCIES_FILE)
+endif
 
 # $(_MBD)/*.pcm: 
 
@@ -609,7 +622,7 @@ endif
 
 
 # Fastgltf
-$(PLATFORM_BUILD_DIR)/fastgltf/%.$(OBJ_EXT): $(SRC_FASTGLTF)/%.cpp
+$(PLATFORM_BUILD_DIR)/fastgltf/%.$(OBJ_EXT): $(SRC_FASTGLTF)/%.cpp $(SRC_SIMDJSON)/simdjson.h
 	@echo "Compiling $(notdir $<)"
 	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $< -I$(DEPS_PATH)/fastgltf/include/ -I$(DEPS_PATH)/fastgltf/deps/simdjson $(_CLANG_FASTGLTF)
 
@@ -622,8 +635,8 @@ $(SRC_SIMDJSON)/simdjson.cpp:
 $(SRC_SIMDJSON)/simdjson.h:
 	@echo "Downloading $(notdir $@) v$(SIMDJSON_TARGET_VERSION)"
 	@curl -L -o $@ https://raw.githubusercontent.com/simdjson/simdjson/v$(SIMDJSON_TARGET_VERSION)/singleheader/simdjson.h
-
-$(PLATFORM_BUILD_DIR)/fastgltf/%.$(OBJ_EXT): $(SRC_SIMDJSON)/%.cpp $(SRC_SIMDJSON)/%.h # simdjson/
+# curl -L -o
+$(PLATFORM_BUILD_DIR)/simdjson/%.$(OBJ_EXT): $(SRC_SIMDJSON)/%.cpp $(SRC_SIMDJSON)/%.h # simdjson/
 	@echo "Compiling $(notdir $<)"
 	@$(CC) -MMD -MP $(-O)$@ $(-C) $< -I$(DEPS_PATH)/fastgltf/deps/simdjson -O3 $(_CLANG_LIBFLAGS)
 
