@@ -1,4 +1,9 @@
 #pragma once
+#ifdef USE_MODULES
+import Lmath;
+#else
+#include "Lmath.cxx"
+#endif
 #include <GLFW/glfw3.h>
 #include <chrono>
 #include <vector>
@@ -8,11 +13,6 @@
 #include "VulkanBase.hpp" // For swapchain
 #include "UI.hpp"
 
-#ifdef USE_MODULES
-import Lmath;
-#else
-#include "Lmath.hpp"
-#endif
 
 class WindowManager;
 enum class WindowMode {

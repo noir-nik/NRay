@@ -19,7 +19,7 @@ export module Lmath;
 //#endif
 #endif
 
-LMATH_EXPORT namespace Lmath
+LMATH_EXPORT namespace Lmath 
 {
 typedef unsigned int uint;
 typedef unsigned char	uchar;
@@ -28,7 +28,7 @@ inline float clamp(float u, float a, float b) { return std::min(std::max(a, u), 
 inline uint  clamp(uint u,  uint a,  uint b)  { return std::min(std::max(a, u), b); }
 inline int   clamp(int u,   int a,   int b)   { return std::min(std::max(a, u), b); }
 
-constexpr float DEG_TO_RAD   = float(3.14159265358979323846f) / 180.0f;
+constexpr inline float DEG_TO_RAD   = float(3.14159265358979323846f) / 180.0f;
 
 struct uint4;
 struct int4;
@@ -128,7 +128,7 @@ typedef struct uint2
 	inline explicit uint2(int2 a);
 	
 	inline uint& operator[](int i)			 { return M[i]; }
-	inline uint	operator[](int i) const { return M[i]; }
+	inline uint	operator[](int i) const { return M[i]; } 
 
 	union
 	{

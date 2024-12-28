@@ -1,22 +1,31 @@
 CompileFlags:
-	Add: [
-		-std=c++20,
-		-DENGINE,
-		-Isource/Core,
-		-Isource/Base,
-		-Isource/Shaders,
-		-Isource/Engine,
-		-Isource/Resources,
-		-Ideps,
-		-Ideps/fastgltf/include,
-		-Ideps/spdlog/include,
-		-Ideps/fmt/include,
-		-Ideps/imgui,
-		-Ideps/imgui/backends,
-		-Ideps/entt/src,
-		-Ideps/stb,
-		-Ideps/fastgltf/deps/simdjson,
-		--target=x86_64-w64-windows-gnu,
-		-DNRAY_DEBUG,
-		-DUSE_MODULES
-	]
+  Add: [
+    -std=c++20,
+    -DENGINE,
+    -Isource/Core,
+    -Isource/Base,
+    -Isource/Shaders,
+    -Isource/Engine,
+    -Isource/Resources,
+    -Ideps,
+    -Ideps/fastgltf/include,
+    -Ideps/spdlog/include,
+    -Ideps/fmt/include,
+    -Ideps/imgui,
+    -Ideps/imgui/backends,
+    -Ideps/entt/src,
+    -Ideps/stb,
+    -Ideps/fastgltf/deps/simdjson,
+    --target=x86_64-w64-windows-gnu,
+    -DNRAY_DEBUG,
+    -DUSE_MODULES,
+    -fprebuilt-module-path=build/win/modules,
+  ]
+Diagnostics:
+  Suppress: [
+    pch-langopt-mismatch,
+    pch_langopt_mismatch,
+    note_ovl_candidate_arity,
+    note_ovl_candidate_bad_conv_incomplete,
+    pch_langopt_mismatch
+  ]

@@ -1,14 +1,14 @@
 #if (!defined SLANG) && (!defined GLSL)
 #pragma once
+#ifdef USE_MODULES
+import Lmath;
+#else
+#include "Lmath.cxx"
+#endif
 #include <string>
 #include <cstdint>
 #include <vector>
 
-#ifdef USE_MODULES
-import Lmath;
-#else
-#include "Lmath.hpp"
-#endif
 
 using mat2  = Lmath::float4;
 using vec2  = Lmath::float2;

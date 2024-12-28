@@ -4,7 +4,7 @@
 #ifdef USE_MODULES
 import Lmath;
 #else
-#include "Lmath.hpp"
+#include "Lmath.cxx"
 #endif
 
 using float3 = Lmath::float3;

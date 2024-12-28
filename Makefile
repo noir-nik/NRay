@@ -8,12 +8,13 @@ TARGET := nRay
 COMPILE_IMGUI := 1
 STATIC_LINK := 0
 
-USE_MODULES := 1
+USE_MODULES := 0
 
 
 mkfile_path := $(abspath $(lastword $(MAKEFILE_LIST)))
 DEPS_PATH := deps
 
+CPP_MODULES := Lmath std_lib
 
 # SUBMODULE_LIBS_LIST := fastgltf spdlog glfw3
 # SUBMODULE_LIBS_LIST := fmt
@@ -63,33 +64,36 @@ BIN_DIR := bin
 ifeq ($(OS),Windows_NT)
 	LDFLAGS += -fuse-ld=lld -Lbin/lib
 	LIBS := $(LIBS) Gdi32 vulkan-1
-	BUILD_PLATFORM_DIR := $(BUILD_DIR)\win
+	PLATFORM_BUILD_DIR := $(BUILD_DIR)/win
 	CMAKE_BUILD_DIR := build
 	TARGET_DIR := .
 	CMD := cmd /c
-	MODULES_DIR := $(BUILD_PLATFORM_DIR)\modules
+	
 	RM := $(CMD) del /Q
 else
 	CC := g++
 	LDFLAGS += -lpthread -Lbin/lib-linux -lstdc++
 	LIBS := $(LIBS) vulkan GL m
-	BUILD_PLATFORM_DIR := $(BUILD_DIR)/linux
+	PLATFORM_BUILD_DIR := $(BUILD_DIR)/linux
 	CMAKE_BUILD_DIR := build-linux
-	TARGET_DIR := $(BUILD_PLATFORM_DIR)
+	TARGET_DIR := $(PLATFORM_BUILD_DIR)
 	RM := rm -rf
 	USE_MODULES = 0
 endif
 
 LDFLAGS += $(foreach lib,$(LIBS),-l$(lib))
-LIB_PATH := $(BUILD_PLATFORM_DIR)/lib
+LIB_PATH := $(PLATFORM_BUILD_DIR)/lib
 SUBMODULE_LIBS := $(foreach lib,$(SUBMODULE_LIBS_LIST),$(LIB_PATH)/lib$(lib).a)
+OBJS_BUILD_DIR := $(PLATFORM_BUILD_DIR)/objs
+MODULES_BUILD_DIR := $(PLATFORM_BUILD_DIR)/modules
 
 ifeq ($(USE_MODULES), 1)
-CXXFLAGS += -fprebuilt-module-path=$(MODULES_DIR) -D USE_MODULES
-# LDFLAGS += -fprebuilt-module-path=$(MODULES_DIR) -D USE_MODULES
-LDFLAGS += $(MODULES_DIR)/Lmath.pcm
+CXXFLAGS += -fprebuilt-module-path=$(MODULES_BUILD_DIR) -D USE_MODULES
+LDFLAGS += $(MODULES_BUILD_DIR)/*.pcm
+CPP_MODULE_TARGETS := $(foreach module,$(CPP_MODULES),$(MODULES_BUILD_DIR)/$(module).pcm)
 endif
 
+# $(info $(CPP_MODULE_TARGETS))
 
 ifeq ($(CC),cl)
     INCLUDES := $(patsubst -I%,/I%,$(INCLUDES))
@@ -145,13 +149,13 @@ endif
 
 
 OBJS := \
-	$(patsubst $(SRC_MAIN)/%.cpp, $(BUILD_PLATFORM_DIR)/%.$(OBJ_EXT), $(wildcard $(SRC_MAIN)/*.cpp)) \
-	$(patsubst $(SRC_CORE)/%.cpp, $(BUILD_PLATFORM_DIR)/%.$(OBJ_EXT), $(wildcard $(SRC_CORE)/*.cpp)) \
-	$(patsubst $(SRC_BASE)/%.cpp, $(BUILD_PLATFORM_DIR)/%.$(OBJ_EXT), $(wildcard $(SRC_BASE)/*.cpp)) \
-	$(patsubst $(SRC_ENGINE)/%.cpp, $(BUILD_PLATFORM_DIR)/%.$(OBJ_EXT), $(wildcard $(SRC_ENGINE)/*.cpp)) \
-	$(patsubst $(SRC_RESOURCES)/%.cpp, $(BUILD_PLATFORM_DIR)/%.$(OBJ_EXT), $(wildcard $(SRC_RESOURCES)/*.cpp)) \
-	$(patsubst $(SRC_TEST)/%.cpp, $(BUILD_PLATFORM_DIR)/%.$(OBJ_EXT), $(wildcard $(SRC_TEST)/*.cpp)) \
-	$(patsubst $(TST_FEATURE)/%.cpp, $(BUILD_PLATFORM_DIR)/%.$(OBJ_EXT), $(wildcard $(TST_FEATURE)/*.cpp)) \
+	$(patsubst $(SRC_MAIN)/%.cpp, $(OBJS_BUILD_DIR)/%.$(OBJ_EXT), $(wildcard $(SRC_MAIN)/*.cpp)) \
+	$(patsubst $(SRC_CORE)/%.cpp, $(OBJS_BUILD_DIR)/%.$(OBJ_EXT), $(wildcard $(SRC_CORE)/*.cpp)) \
+	$(patsubst $(SRC_BASE)/%.cpp, $(OBJS_BUILD_DIR)/%.$(OBJ_EXT), $(wildcard $(SRC_BASE)/*.cpp)) \
+	$(patsubst $(SRC_ENGINE)/%.cpp, $(OBJS_BUILD_DIR)/%.$(OBJ_EXT), $(wildcard $(SRC_ENGINE)/*.cpp)) \
+	$(patsubst $(SRC_RESOURCES)/%.cpp, $(OBJS_BUILD_DIR)/%.$(OBJ_EXT), $(wildcard $(SRC_RESOURCES)/*.cpp)) \
+	$(patsubst $(SRC_TEST)/%.cpp, $(OBJS_BUILD_DIR)/%.$(OBJ_EXT), $(wildcard $(SRC_TEST)/*.cpp)) \
+	$(patsubst $(TST_FEATURE)/%.cpp, $(OBJS_BUILD_DIR)/%.$(OBJ_EXT), $(wildcard $(TST_FEATURE)/*.cpp)) \
 
 # Libs
 # ImGui
@@ -159,30 +163,30 @@ SRC_IMGUI := $(DEPS_PATH)/imgui
 IMGUI_BACKENDS_DIR := $(DEPS_PATH)/imgui/backends
 SRC_IMGUI_BACKENDS := imgui_impl_vulkan.cpp imgui_impl_glfw.cpp
 SRC_IMGUI_BACKENDS := $(foreach file,$(SRC_IMGUI_BACKENDS),$(IMGUI_BACKENDS_DIR)/$(file))
-OBJS_IMGUI := 	$(patsubst $(SRC_IMGUI)/%.cpp, $(BUILD_PLATFORM_DIR)/imgui/%.$(OBJ_EXT), $(wildcard $(SRC_IMGUI)/*.cpp)) \
-				$(patsubst $(IMGUI_BACKENDS_DIR)/%.cpp, $(BUILD_PLATFORM_DIR)/imgui/%.$(OBJ_EXT), $(SRC_IMGUI_BACKENDS)) 
+OBJS_IMGUI := 	$(patsubst $(SRC_IMGUI)/%.cpp, $(PLATFORM_BUILD_DIR)/imgui/%.$(OBJ_EXT), $(wildcard $(SRC_IMGUI)/*.cpp)) \
+				$(patsubst $(IMGUI_BACKENDS_DIR)/%.cpp, $(PLATFORM_BUILD_DIR)/imgui/%.$(OBJ_EXT), $(SRC_IMGUI_BACKENDS)) 
 
 # Stb	
 SRC_STB := $(DEPS_PATH)/stb_src
-OBJS_STB := $(patsubst $(SRC_STB)/%.c, $(BUILD_PLATFORM_DIR)/stb/%.$(OBJ_EXT), $(wildcard $(SRC_STB)/*.c))
+OBJS_STB := $(patsubst $(SRC_STB)/%.c, $(PLATFORM_BUILD_DIR)/stb/%.$(OBJ_EXT), $(wildcard $(SRC_STB)/*.c))
 
 # GLFW
 SRC_GLFW := $(DEPS_PATH)/glfw/src
-OBJS_GLFW  := $(patsubst $(DEPS_PATH)/glfw/src/%.c, $(BUILD_PLATFORM_DIR)/glfw/%.$(OBJ_EXT), $(wildcard $(SRC_GLFW)/*.c))
+OBJS_GLFW  := $(patsubst $(DEPS_PATH)/glfw/src/%.c, $(PLATFORM_BUILD_DIR)/glfw/%.$(OBJ_EXT), $(wildcard $(SRC_GLFW)/*.c))
 
 # fastgltf
 SRC_FASTGLTF := $(DEPS_PATH)/fastgltf/src
 SRC_SIMDJSON :=  $(DEPS_PATH)/fastgltf/deps/simdjson
-OBJS_FASTGLTF := $(patsubst $(SRC_FASTGLTF)/%.cpp, $(BUILD_PLATFORM_DIR)/fastgltf/%.$(OBJ_EXT), $(wildcard $(SRC_FASTGLTF)/*.cpp)) \
-				$(patsubst $(SRC_SIMDJSON)/%.cpp, $(BUILD_PLATFORM_DIR)/fastgltf/%.$(OBJ_EXT), $(wildcard $(SRC_SIMDJSON)/*.cpp))
+OBJS_FASTGLTF := $(patsubst $(SRC_FASTGLTF)/%.cpp, $(PLATFORM_BUILD_DIR)/fastgltf/%.$(OBJ_EXT), $(wildcard $(SRC_FASTGLTF)/*.cpp)) \
+				$(patsubst $(SRC_SIMDJSON)/%.cpp, $(PLATFORM_BUILD_DIR)/fastgltf/%.$(OBJ_EXT), $(wildcard $(SRC_SIMDJSON)/*.cpp))
 
 # spdlog
 SRC_SPDLOG := $(DEPS_PATH)/spdlog/src
-OBJS_SPDLOG := $(patsubst $(SRC_SPDLOG)/%.cpp, $(BUILD_PLATFORM_DIR)/spdlog/%.$(OBJ_EXT), $(wildcard $(SRC_SPDLOG)/*.cpp))
+OBJS_SPDLOG := $(patsubst $(SRC_SPDLOG)/%.cpp, $(PLATFORM_BUILD_DIR)/spdlog/%.$(OBJ_EXT), $(wildcard $(SRC_SPDLOG)/*.cpp))
 
 #fmt
 SRC_FMT := $(DEPS_PATH)/fmt/src
-OBJS_FMT := $(patsubst $(SRC_FMT)/%.cc, $(BUILD_PLATFORM_DIR)/fmt/%.$(OBJ_EXT), $(wildcard $(SRC_FMT)/*.cc))
+OBJS_FMT := $(patsubst $(SRC_FMT)/%.cc, $(PLATFORM_BUILD_DIR)/fmt/%.$(OBJ_EXT), $(wildcard $(SRC_FMT)/*.cc))
 
 
 # $(info $(OBJS))
@@ -192,12 +196,12 @@ OBJS_FMT := $(patsubst $(SRC_FMT)/%.cc, $(BUILD_PLATFORM_DIR)/fmt/%.$(OBJ_EXT), 
 # $(info $(SRC_FMT))
 # $(info $(OBJS_FMT))
 
-# $(patsubst %.cpp, $(BUILD_PLATFORM_DIR)/%.o, $(TST_CPP_RAW)) \
+# $(patsubst %.cpp, $(PLATFORM_BUILD_DIR)/%.o, $(TST_CPP_RAW)) \
 
-# $(patsubst $(TST_NEURALSFD)/%.cpp, $(BUILD_PLATFORM_DIR)/%.o, $(wildcard $(TST_NEURALSFD)/*.cpp)) \
-# $(patsubst $(TST_SLANG)/%.cpp, $(BUILD_PLATFORM_DIR)/%.o, $(wildcard $(TST_SLANG)/*.cpp)) \
-# $(patsubst $(TST_IMAGEOPT)/%.cpp, $(BUILD_PLATFORM_DIR)/%.o, $(wildcard $(TST_IMAGEOPT)/*.cpp)) \
-# $(patsubst $(TST_RADIENCE)/%.cpp, $(BUILD_PLATFORM_DIR)/%.o, $(wildcard $(TST_RADIENCE)/*.cpp)) \
+# $(patsubst $(TST_NEURALSFD)/%.cpp, $(PLATFORM_BUILD_DIR)/%.o, $(wildcard $(TST_NEURALSFD)/*.cpp)) \
+# $(patsubst $(TST_SLANG)/%.cpp, $(PLATFORM_BUILD_DIR)/%.o, $(wildcard $(TST_SLANG)/*.cpp)) \
+# $(patsubst $(TST_IMAGEOPT)/%.cpp, $(PLATFORM_BUILD_DIR)/%.o, $(wildcard $(TST_IMAGEOPT)/*.cpp)) \
+# $(patsubst $(TST_RADIENCE)/%.cpp, $(PLATFORM_BUILD_DIR)/%.o, $(wildcard $(TST_RADIENCE)/*.cpp)) \
 
 
 DEPFILES =  $(OBJS:.$(OBJ_EXT)=.d) \
@@ -209,7 +213,7 @@ all: release
 
 .PHONY: debug
 ifeq ($(CC),cl)
-debug: CXXFLAGS += /Zi /Od /DNRAY_DEBUG /EHsc /Fd$(BUILD_PLATFORM_DIR)/$(TARGET).pdb /FS
+debug: CXXFLAGS += /Zi /Od /DNRAY_DEBUG /EHsc /Fd$(PLATFORM_BUILD_DIR)/$(TARGET).pdb /FS
 debug: LDFLAGS  += vulkan-1.lib
 	
 debug: SUBMODULE_LIBS := $(foreach lib,$(SUBMODULE_LIBS_LIST),$(LIB_PATH)/$(lib)d.lib)
@@ -224,32 +228,40 @@ release: CXXFLAGS += $(OPT_RELEASE)
 release: LDFLAGS  += $(OPT_RELEASE)
 release: build_target
 
-build_target: create_dirs build_modules $(TARGET)
+build_target: create_dirs $(TARGET)
 
+_WINBDIR := $(subst /,\,$(PLATFORM_BUILD_DIR))
+_WOBDIR := $(subst /,\,$(OBJS_BUILD_DIR))
+_WMBDIR := $(subst /,\,$(MODULES_BUILD_DIR))
 create_dirs:
 ifeq ($(OS),Windows_NT)
 	@cmd /c if not exist $(TARGET_DIR) mkdir $(TARGET_DIR)
 	@cmd /c if not exist $(BIN_DIR) mkdir $(BIN_DIR)
 	@cmd /c if not exist $(BUILD_DIR) mkdir $(BUILD_DIR)
-	@cmd /c if not exist $(MODULES_DIR) mkdir $(MODULES_DIR)
-	@cmd /c if not exist $(BUILD_PLATFORM_DIR) mkdir $(BUILD_PLATFORM_DIR)
-	@cmd /c if not exist $(BUILD_PLATFORM_DIR)\imgui mkdir $(BUILD_PLATFORM_DIR)\imgui
-	@cmd /c if not exist $(BUILD_PLATFORM_DIR)\stb mkdir $(BUILD_PLATFORM_DIR)\stb
-	@cmd /c if not exist $(BUILD_PLATFORM_DIR)\glfw mkdir $(BUILD_PLATFORM_DIR)\glfw
-	@cmd /c if not exist $(BUILD_PLATFORM_DIR)\fastgltf mkdir $(BUILD_PLATFORM_DIR)\fastgltf
-	@cmd /c if not exist $(BUILD_PLATFORM_DIR)\spdlog mkdir $(BUILD_PLATFORM_DIR)\spdlog
-	@cmd /c if not exist $(BUILD_PLATFORM_DIR)\fmt mkdir $(BUILD_PLATFORM_DIR)\fmt
+	@cmd /c if not exist $(_WINBDIR) mkdir $(_WINBDIR)
+	@cmd /c if not exist $(_WOBDIR) mkdir $(_WOBDIR)
+	@cmd /c if not exist $(_WMBDIR) mkdir $(_WMBDIR)
+	@cmd /c if not exist $(_WINBDIR)\imgui mkdir $(_WINBDIR)\imgui
+	@cmd /c if not exist $(_WINBDIR)\stb mkdir $(_WINBDIR)\stb
+	@cmd /c if not exist $(_WINBDIR)\glfw mkdir $(_WINBDIR)\glfw
+	@cmd /c if not exist $(_WINBDIR)\fastgltf mkdir $(_WINBDIR)\fastgltf
+	@cmd /c if not exist $(_WINBDIR)\spdlog mkdir $(_WINBDIR)\spdlog
+	@cmd /c if not exist $(_WINBDIR)\fmt mkdir $(_WINBDIR)\fmt
 else
 	@mkdir -p \
 	$(TARGET_DIR) $(BIN_DIR) \
 	$(BUILD_DIR) \
-	$(BUILD_PLATFORM_DIR) \
-	$(BUILD_PLATFORM_DIR)/imgui \
-	$(BUILD_PLATFORM_DIR)/stb \
-	$(BUILD_PLATFORM_DIR)/glfw \
-	$(BUILD_PLATFORM_DIR)/fastgltf \
-	$(BUILD_PLATFORM_DIR)/spdlog \
-	$(BUILD_PLATFORM_DIR)/fmt
+	$(PLATFORM_BUILD_DIR) \
+	$(OBJS_BUILD_DIR) \
+	$(MODULES_BUILD_DIR) \
+	$(PLATFORM_BUILD_DIR)/imgui \
+	$(PLATFORM_BUILD_DIR)/stb \
+	$(PLATFORM_BUILD_DIR)/glfw \
+	$(PLATFORM_BUILD_DIR)/fastgltf \
+	$(PLATFORM_BUILD_DIR)/spdlog \
+	$(PLATFORM_BUILD_DIR)/fmt \
+
+
 endif
 
 
@@ -275,45 +287,45 @@ endif
 	@echo "=== Done ==="
 
 #compile
-$(BUILD_PLATFORM_DIR)/%.$(OBJ_EXT): $(SRC_MAIN)/%.cpp # ./
+$(OBJS_BUILD_DIR)/%.$(OBJ_EXT): $(SRC_MAIN)/%.cpp # ./
 	@echo "Compiling $(notdir $<)"
 	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
-$(BUILD_PLATFORM_DIR)/%.$(OBJ_EXT): $(SRC_CORE)/%.cpp # core/
+$(OBJS_BUILD_DIR)/%.$(OBJ_EXT): $(SRC_CORE)/%.cpp # core/
 	@echo "Compiling $(notdir $<)"
 	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
-$(BUILD_PLATFORM_DIR)/%.$(OBJ_EXT): $(SRC_BASE)/%.cpp # base/
+$(OBJS_BUILD_DIR)/%.$(OBJ_EXT): $(SRC_BASE)/%.cpp # base/
 	@echo "Compiling $(notdir $<)"
 	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
-$(BUILD_PLATFORM_DIR)/%.$(OBJ_EXT): $(SRC_TEST)/%.cpp # test/
+$(OBJS_BUILD_DIR)/%.$(OBJ_EXT): $(SRC_TEST)/%.cpp # test/
 	@echo "Compiling $(notdir $<)"
 	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
-$(BUILD_PLATFORM_DIR)/%.$(OBJ_EXT): $(SRC_ENGINE)/%.cpp # engine/
+$(OBJS_BUILD_DIR)/%.$(OBJ_EXT): $(SRC_ENGINE)/%.cpp # engine/
 	@echo "Compiling $(notdir $<)"
 	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
-$(BUILD_PLATFORM_DIR)/%.$(OBJ_EXT): $(SRC_RESOURCES)/%.cpp # resources/
+$(OBJS_BUILD_DIR)/%.$(OBJ_EXT): $(SRC_RESOURCES)/%.cpp # resources/
 	@echo "Compiling $(notdir $<)"
 	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
 
 # Tests
-$(BUILD_PLATFORM_DIR)/%.$(OBJ_EXT): $(TST_NEURALSFD)/%.cpp # tests/NeuralSdf
+$(OBJS_BUILD_DIR)/%.$(OBJ_EXT): $(TST_NEURALSFD)/%.cpp # tests/NeuralSdf
 	@echo "Compiling $(notdir $<)"
 	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
-$(BUILD_PLATFORM_DIR)/%.$(OBJ_EXT): $(TST_IMAGEOPT)/%.cpp # tests/ImageOptimization
+$(OBJS_BUILD_DIR)/%.$(OBJ_EXT): $(TST_IMAGEOPT)/%.cpp # tests/ImageOptimization
 	@echo "Compiling $(notdir $<)"
 	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
-$(BUILD_PLATFORM_DIR)/%.$(OBJ_EXT): $(TST_SLANG)/%.cpp # tests/SlangTest
+$(OBJS_BUILD_DIR)/%.$(OBJ_EXT): $(TST_SLANG)/%.cpp # tests/SlangTest
 	@echo "Compiling $(notdir $<)"
 	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
-$(BUILD_PLATFORM_DIR)/%.$(OBJ_EXT): $(TST_FEATURE)/%.cpp # tests/FeatureTest
+$(OBJS_BUILD_DIR)/%.$(OBJ_EXT): $(TST_FEATURE)/%.cpp # tests/FeatureTest
 	@echo "Compiling $(notdir $<)"
 	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
-$(BUILD_PLATFORM_DIR)/%.$(OBJ_EXT): $(TST_RADIENCE)/%.cpp # tests/RadienceField
+$(OBJS_BUILD_DIR)/%.$(OBJ_EXT): $(TST_RADIENCE)/%.cpp # tests/RadienceField
 	@echo "Compiling $(notdir $<)"
 	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
-$(BUILD_PLATFORM_DIR)/%.$(OBJ_EXT): $(TST_HELLOTRIANGLE)/%.cpp # tests/HelloTriangle
+$(OBJS_BUILD_DIR)/%.$(OBJ_EXT): $(TST_HELLOTRIANGLE)/%.cpp # tests/HelloTriangle
 	@echo "Compiling $(notdir $<)"
 	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
-$(BUILD_PLATFORM_DIR)/%.$(OBJ_EXT): $(TST_WINDOW)/%.cpp # tests/Window
+$(OBJS_BUILD_DIR)/%.$(OBJ_EXT): $(TST_WINDOW)/%.cpp # tests/Window
 	@echo "Compiling $(notdir $<)"
 	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
 
@@ -321,25 +333,30 @@ $(BUILD_PLATFORM_DIR)/%.$(OBJ_EXT): $(TST_WINDOW)/%.cpp # tests/Window
 
 # ================ Modules ==================
 
-XMODULE = -x c++-module
-PC := --precompile
+# SRC_MODULES := source/Core/Lmath.cxx
 
-SRC_MODULES := source/Core/Lmath.hpp
-# TARGET_MODULES := $(pat
-build_modules:
-	@echo "Compiling modules"
-	@$(CC) $(CXXFLAGS) $(PC) -c -x c++-module source/Core/Lmath.hpp -o $(MODULES_DIR)/Lmath.pcm
+ifeq ($(USE_MODULES), 1)
+$(OBJS) : $(CPP_MODULE_TARGETS)
+endif
+
+$(MODULES_BUILD_DIR)/%.pcm: source/Core/%.cxx
+	@echo "Compiling module $(notdir $<)"
+	@$(CC) $(CXXFLAGS) --precompile -c -x c++-module $< -o $@
+
+$(MODULES_BUILD_DIR)/%.pcm: source/Base/%.cxx
+	@echo "Compiling module $(notdir $<)"
+	@$(CC) $(CXXFLAGS) --precompile -c -x c++-module $< -o $@
 
 #ImGui
-$(BUILD_PLATFORM_DIR)/imgui/%.$(OBJ_EXT): $(SRC_IMGUI)/%.cpp # imgui/
+$(PLATFORM_BUILD_DIR)/imgui/%.$(OBJ_EXT): $(SRC_IMGUI)/%.cpp # imgui/
 	@echo "Compiling $(notdir $<)"
 	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
-$(BUILD_PLATFORM_DIR)/imgui/%.$(OBJ_EXT): $(IMGUI_BACKENDS_DIR)/%.cpp # imgui/backends/
+$(PLATFORM_BUILD_DIR)/imgui/%.$(OBJ_EXT): $(IMGUI_BACKENDS_DIR)/%.cpp # imgui/backends/
 	@echo "Compiling $(notdir $<)"
 	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
 
 #Stb
-$(BUILD_PLATFORM_DIR)/stb/%.$(OBJ_EXT): $(SRC_STB)/%.c # stb/
+$(PLATFORM_BUILD_DIR)/stb/%.$(OBJ_EXT): $(SRC_STB)/%.c # stb/
 	@echo "Compiling $(notdir $<)"
 	@$(CC) -x c $(filter-out -std=c++20,$(CXXFLAGS)) $(-O)$@ $(-C) $<
 
@@ -349,28 +366,28 @@ GLFW_PLATFORM := _GLFW_WIN32
 else
 GLFW_PLATFORM := _GLFW_X11
 endif
-$(BUILD_PLATFORM_DIR)/glfw/%.$(OBJ_EXT): $(SRC_GLFW)/%.c # glfw/
+$(PLATFORM_BUILD_DIR)/glfw/%.$(OBJ_EXT): $(SRC_GLFW)/%.c # glfw/
 	@echo "Compiling $(notdir $<)"
 	@$(CC) -x c $(filter-out -std=c++20,$(CXXFLAGS)) -c $< $(-O)$@ -D$(GLFW_PLATFORM)
 
 # Fastgltf
-$(BUILD_PLATFORM_DIR)/fastgltf/%.$(OBJ_EXT): $(SRC_FASTGLTF)/%.cpp # fastgltf/
+$(PLATFORM_BUILD_DIR)/fastgltf/%.$(OBJ_EXT): $(SRC_FASTGLTF)/%.cpp # fastgltf/
 	@echo "Compiling $(notdir $<)"
 	$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $< -I$(DEPS_PATH)/fastgltf/include/ -I$(DEPS_PATH)/fastgltf/deps/simdjson
 
 # Simdjson
-$(BUILD_PLATFORM_DIR)/fastgltf/%.$(OBJ_EXT): $(SRC_SIMDJSON)/%.cpp # simdjson/
+$(PLATFORM_BUILD_DIR)/fastgltf/%.$(OBJ_EXT): $(SRC_SIMDJSON)/%.cpp # simdjson/
 	@echo "Compiling $(notdir $<)"
 	@$(CC) -MMD -MP $(-O)$@ $(-C) $< -I$(DEPS_PATH)/fastgltf/deps/simdjson -O3
 
 # spdlog
-$(BUILD_PLATFORM_DIR)/spdlog/%.$(OBJ_EXT): $(SRC_SPDLOG)/%.cpp # spdlog/
+$(PLATFORM_BUILD_DIR)/spdlog/%.$(OBJ_EXT): $(SRC_SPDLOG)/%.cpp # spdlog/
 	@echo "Compiling $(notdir $<)"
 	@$(CC) -MMD -MP $(-O)$@ $(-C) $< -O3 -DSPDLOG_COMPILED_LIB -DSPDLOG_NO_EXCEPTIONS -I$(DEPS_PATH)/spdlog/include
 # -I$(DEPS_PATH)/fmt/include -DSPDLOG_FMT_EXTERNAL -DSPDLOG_FMT_EXTERNAL_HO
 
 #fmt
-$(BUILD_PLATFORM_DIR)/fmt/%.$(OBJ_EXT): $(SRC_FMT)/%.cc # fmt/
+$(PLATFORM_BUILD_DIR)/fmt/%.$(OBJ_EXT): $(SRC_FMT)/%.cc # fmt/
 	@echo "Compiling $(notdir $<)"
 	@$(CC) -MMD -MP $(-O)$@ $(-C) $< -I$(DEPS_PATH)/fmt/include -fmodules-ts
 
@@ -390,8 +407,10 @@ runv:
 	@valgrind $(VLGRND_FULL) $(VLGRND_OUTPUT) ./$(TARGET) 
 # @valgrind ./$(TARGET_DIR)/$(TARGET)
 
+# $(info $(DEPFILES))
+
 clean:
-	@rm -f $(OBJS) $(DEPFILES) $(BUILD_PLATFORM_DIR)/$(TARGET).pdb $(wildcard $(BUILD_PLATFORM_DIR)/*.o) $(wildcard $(BUILD_PLATFORM_DIR)/*.obj)
+	@rm -f $(OBJS) $(DEPFILES) $(PLATFORM_BUILD_DIR)/$(TARGET).pdb $(wildcard $(PLATFORM_BUILD_DIR)/*.o) $(wildcard $(PLATFORM_BUILD_DIR)/*.obj)
 	@echo "=== Cleaned ==="
 
 cleanlib:

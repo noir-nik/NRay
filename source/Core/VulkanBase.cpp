@@ -1,7 +1,13 @@
+#ifdef USE_MODULES
+import Lmath;
+#else
+#include "Lmath.cxx"
+#endif
 #include "Log.hpp"
 #include "Base.hpp"
 #include "Util.hpp"
 #include "VulkanBase.hpp"
+
 #include "Bindless.h"
 #include <algorithm>
 #include <cstddef>

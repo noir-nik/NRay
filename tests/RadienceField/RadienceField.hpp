@@ -1,14 +1,13 @@
 #if defined(ENGINE)
 #pragma once
-#include <string>
-#include <cstdint>
-#include <vector>
-
 #ifdef USE_MODULES
 import Lmath;
 #else
-#include "Lmath.hpp"
+#include "Lmath.cxx"
 #endif
+#include <string>
+#include <cstdint>
+#include <vector>
 
 using float3 = Lmath::float3;
 using float4x4 = Lmath::float4x4;

@@ -1,9 +1,9 @@
-#include <SceneGraph.hpp>
 #ifdef USE_MODULES
 import Lmath;
 #else
-#include "Lmath.hpp"
+#include "Lmath.cxx"
 #endif
+#include "SceneGraph.hpp"
 
 using namespace Lmath;
 

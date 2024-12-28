@@ -1,5 +1,9 @@
 #pragma once
-
+#ifdef USE_MODULES
+import Lmath;
+#else
+#include "Lmath.cxx"
+#endif
 #include "Component.hpp"
 #include "Entity.hpp"
 

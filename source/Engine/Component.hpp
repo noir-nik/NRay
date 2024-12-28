@@ -1,3 +1,8 @@
+#ifdef USE_MODULES
+import Lmath;
+#else
+#include "Lmath.cxx"
+#endif
 #pragma once
 
 #include <cstdint>
@@ -6,11 +11,6 @@
 #include "Objects.hpp"
 #include "Phong.h"
 
-#ifdef USE_MODULES
-import Lmath;
-#else
-#include "Lmath.hpp"
-#endif
 
 namespace Component {
 using namespace Lmath;

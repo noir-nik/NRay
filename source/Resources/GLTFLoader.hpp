@@ -1,4 +1,9 @@
 #pragma once
+#ifdef USE_MODULES
+import Lmath;
+#else
+#include "Lmath.cxx"
+#endif
 #include <string>
 #include <filesystem>
 #include <memory>
@@ -8,11 +13,6 @@
 #include "SceneGraph.hpp"
 #include "VulkanBase.hpp"
 
-#ifdef USE_MODULES
-import Lmath;
-#else
-#include "Lmath.hpp"
-#endif
 
 namespace glTF {
 using namespace Component;

@@ -5,7 +5,7 @@
 #ifdef USE_MODULES
 import Lmath;
 #else
-#include "Lmath.hpp"
+#include "Lmath.cxx"
 #endif
 using namespace Lmath;
 #endif

@@ -1,9 +1,14 @@
 #pragma once
-#include <SceneGraph.hpp>
-#include <entt/entity/registry.hpp>
+#ifdef USE_MODULES
+import Lmath;
+#else
+#include "Lmath.cxx"
+#endif
+#include "SceneGraph.hpp"
+// #include <entt/entity/registry.hpp>
 
 #include "Entity.hpp"
-#include "Component.hpp"
+// #include "Component.hpp"
 
 class Project {
 public:

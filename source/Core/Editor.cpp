@@ -1,7 +1,7 @@
 #ifdef USE_MODULES
 import Lmath;
 #else
-#include "Lmath.hpp"
+#include "Lmath.cxx"
 #endif
 #include "Editor.hpp"
 #include "VulkanBase.hpp"

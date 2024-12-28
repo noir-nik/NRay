@@ -2,6 +2,10 @@
 #include <cstdint>
 #include <vector>
 
+#ifdef __unix__ 
+#include <cstddef>
+#endif
+
 using Hash64 = std::uint64_t;
 using UID = uint32_t;
 

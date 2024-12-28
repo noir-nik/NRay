@@ -1,3 +1,8 @@
+#ifdef USE_MODULES
+import Lmath;
+#else
+#include "Lmath.cxx"
+#endif
 #include <cstdint>
 #include <cstdio>
 #include <set>
