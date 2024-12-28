@@ -15,10 +15,6 @@ build/
 build-linux/
 logs/*
 
-deps/*
-
-
-
 *.spv
 *.so
 *.so.*

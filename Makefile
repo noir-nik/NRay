@@ -8,7 +8,7 @@ TARGET := nRay
 COMPILE_IMGUI := 0
 STATIC_LINK := 0
 
-INCLUDES := -Isource/Core -Isource/Base -Isource/Shaders
+INCLUDES := -Isource/Core -Isource/Base -Isource/Shaders -Ideps\fastgltf\include
 CXXFLAGS := -MMD -MP $(INCLUDES) -DENGINE
 LDFLAGS :=
 LIBS := spdlog fmt 
@@ -136,7 +136,7 @@ release: CXXFLAGS += $(OPT_RELEASE)
 release: LDFLAGS  += $(OPT_RELEASE)
 release: build_target
 
-build_target: create_dirs $(TARGET)
+build_target: create_dirs build_libs $(TARGET)
 
 create_dirs:
 	@$(MKDIR_BUILD)
@@ -210,4 +210,20 @@ rm:
 	$(RM) $(wildcard *.bmp)
 
 
-# $(RM) $(OBJ_DIR)/
+mkfile_path := $(abspath $(lastword $(MAKEFILE_LIST)))
+LIB_PATH := $(dir $(mkfile_path))bin/lib
+
+CMAKE_FLAGS :=  -DCMAKE_CXX_FLAGS="-target x86_64-w64-mingw32" \
+				-DCMAKE_C_COMPILER_TARGET="x86_64-windows-gnu" \
+				-DCMAKE_EXE_LINKER_FLAGS_INIT="-fuse-ld=lld" \
+				-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=$(LIB_PATH) \
+				-DCMAKE_ARCHIVE_OUTPUT_DIRECTORY=$(LIB_PATH) \
+				-DCMAKE_MODULE_LINKER_FLAGS_INIT="-fuse-ld=lld" \
+				-DCMAKE_SHARED_LINKER_FLAGS_INIT="-fuse-ld=lld" \
+				-DCMAKE_LINKER_FLAGS_INIT="-fuse-ld=lld" \
+
+build_libs: $(LIB_PATH)/libfastgltf.a
+
+$(LIB_PATH)/libfastgltf.a:
+	cmake deps/fastgltf -Bdeps/fastgltf/build -G "MinGW Makefiles" ${CMAKE_FLAGS}
+	cmake --build deps/fastgltf/build
