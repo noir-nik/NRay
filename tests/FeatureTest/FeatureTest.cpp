@@ -1,4 +1,6 @@
 #ifdef USE_MODULES
+module;
+#include "Phong.h"
 module FeatureTest;
 import glfw;
 import imgui;
@@ -13,7 +15,6 @@ import Entity;
 import Component;
 import Project;
 import Objects;
-import Phong;
 import GLTFLoader;
 import entt;
 import UI;
@@ -29,7 +30,7 @@ import Structs;
 #include "Editor.cppm"
 #include "FeatureTest.cppm"
 
-#include "Phong.cppm"
+#include "Phong.h"
 
 #include "GLTFLoader.cppm"
 #include "Project.cppm"

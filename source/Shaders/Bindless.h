@@ -6,6 +6,9 @@
 
 #define WORKGROUP_SIZE 16
 
+#define MAX_MODELS 256
+#define MAX_MATERIALS 256
+
 #ifdef GLSL
 
 #define float3 vec3
@@ -19,12 +22,16 @@ layout(set = 0, binding = BINDING_TEXTURE) uniform sampler2D textures[];
 // layout(set = 0, binding = BINDING_TEXTURE) uniform samplerCube cubeTextures[];
 
 layout(set = 0, binding = BINDING_BUFFER) buffer floatBuffer {
-    float data[];
+	float data[];
 } floatBuffers[];
 
 layout(set = 0, binding = BINDING_BUFFER) buffer float4Buffer {
-    vec4 data[];
+	vec4 data[];
 } float4Buffers[];
+
+layout(set = 0, binding = BINDING_BUFFER) readonly buffer ModelBuffer {
+	ModelBlock models[MAX_MODELS];
+} modelsBuffers[];
 
 layout(binding = BINDING_STORAGE_IMAGE) uniform image2D images[];
 

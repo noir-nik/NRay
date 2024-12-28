@@ -529,9 +529,9 @@ struct Command {
 	std::shared_ptr<CommandResource> resource;
 	Command();
 
-	bool Copy(Buffer& dst, void*   data, uint32_t size, uint32_t dstOffset = 0);
+	bool Copy(Buffer& dst, const void*   data, uint32_t size, uint32_t dstOffset = 0);
 	void Copy(Buffer& dst, Buffer& src,  uint32_t size, uint32_t dstOffset = 0, uint32_t srcOffset = 0);
-	bool Copy(Image&  dst, void*   data, uint32_t size);
+	bool Copy(Image&  dst, const void*   data, uint32_t size);
 	void Copy(Image&  dst, Buffer& src,  uint32_t srcOffset = 0); // size is a No OP
 	void Copy(Buffer& dst, Image& src, uint32_t dstOffset, ivec2 imageOffset, ivec2 imageExtent);// size is a No OP
 	void Barrier(Image& img, const ImageBarrier& barrier);
@@ -548,7 +548,7 @@ struct Command {
 	// void BeginPresent();
 	// void EndPresent();
 	void BindPipeline(Pipeline& pipeline);
-	void PushConstants(const Pipeline& pipeline, void* data, uint32_t size);
+	void PushConstants(const Pipeline& pipeline, const void* data, uint32_t size);
 
 	// void BuildBLAS(BLAS& blas);
 	// void BuildTLAS(TLAS& tlas, const std::vector<BLASInstance>& instances);

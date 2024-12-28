@@ -377,23 +377,19 @@ void LoadMeshes(fastgltf::Asset& asset, std::unordered_map<size_t, Component::Me
 	device.ResetStaging();
 	cmd.Begin();
 	bool result;
+	auto copyToBuffer = [&](vkw::Buffer& buffer, const void* data, uint32_t size) {
+		result = cmd.Copy(buffer, data, size);
+		if (!result) {
+			cmd.End();
+			cmd.QueueSubmit({});
+			cmd.Begin();
+			result = cmd.Copy(buffer, data, size);
+			ASSERT(result, "Failed to copy buffer: not enough staging capacity");
+		}
+	};
 	for (auto& [_, mesh] : meshMap) {
-		result = cmd.Copy(mesh->vertexBuffer, mesh->vertices.data(), mesh->vertices.size() * sizeof(Objects::Vertex));
-		if (!result) {
-			cmd.End();
-			cmd.QueueSubmit({});
-			cmd.Begin();
-			result = cmd.Copy(mesh->vertexBuffer, mesh->vertices.data(), mesh->vertices.size() * sizeof(Objects::Vertex));
-			ASSERT(result, "Failed to copy vertex buffer: not enough staging capacity");
-		}
-		result = cmd.Copy(mesh->indexBuffer, mesh->indices.data(), mesh->indices.size() * sizeof(uint32_t));
-		if (!result) {
-			cmd.End();
-			cmd.QueueSubmit({});
-			cmd.Begin();
-			result = cmd.Copy(mesh->indexBuffer, mesh->indices.data(), mesh->indices.size() * sizeof(uint32_t));
-			ASSERT(result, "Failed to copy index buffer: not enough staging capacity");
-		}
+		copyToBuffer(mesh->vertexBuffer, mesh->vertices.data(), mesh->vertices.size() * sizeof(Objects::Vertex));
+		copyToBuffer(mesh->indexBuffer, mesh->indices.data(), mesh->indices.size() * sizeof(uint32_t));
 	}
 	cmd.End();
 	cmd.QueueSubmit({});

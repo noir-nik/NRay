@@ -3,24 +3,13 @@ module;
 #endif
 
 #include "Bindless.h"
-
-// #define VK_NO_STDDEF_H
 #include <vulkan/vulkan_core.h>
-
-#define GLSL_VALIDATOR "glslangValidator"
-#define SLANGC "slangc"
-
-#define BIN_PATH "bin"
-
-#define SHADER_ALWAYS_COMPILE 0
 
 #ifdef USE_MODULES
 module VulkanBackend;
 import vk_mem_alloc;
 import Lmath;
 import glfw;
-import Window;
-import Types;
 import Structs;
 import Log;
 import Util;
@@ -28,7 +17,6 @@ import stl;
 import imgui;
 import imgui_impl_glfw;
 import imgui_impl_vulkan;
-
 #else
 #include "vk_mem_alloc.cppm"
 #include "Lmath.cppm"
@@ -50,12 +38,17 @@ import imgui_impl_vulkan;
 #include <fstream>
 #include <filesystem>
 #include <array>
-
-
 #endif
 
 #define USE_VLA
 #include "Macros.h"
+
+#define GLSL_VALIDATOR "glslangValidator"
+#define SLANGC "slangc"
+
+#define BIN_PATH "bin"
+
+#define SHADER_ALWAYS_COMPILE 0
 
 #ifdef NRAY_DEBUG
 #define DEBUG_VK(res, ...) { if ((res) != VK_SUCCESS) { LOG_ERROR("[VULKAN ERROR = {0}] {1} in {2}:{3}", VK_ERROR_STRING(res), __VA_ARGS__, __FILE__, __LINE__); exit(1);}}
@@ -444,7 +437,7 @@ struct DeviceResource: DeleteCopyDeleteMove {
 	} pipelineLibrary;
 	
 	const uint32_t stagingBufferSize = 32 * 1024 * 1024;
-	u8* stagingCpu = nullptr;
+	uint8_t* stagingCpu = nullptr;
 	uint32_t stagingOffset = 0;
 	Buffer staging;
 	
@@ -514,7 +507,7 @@ struct DeviceResource: DeleteCopyDeleteMove {
 		for (auto& [_, queue] : uniqueQueues) {
 			queue->command.resource.reset();
 		}
-		
+
 		vmaDestroyAllocator(vmaAllocator);
 
 		vkDestroyDevice(handle, _ctx.allocator);
@@ -702,7 +695,7 @@ Device CreateDevice(const std::span<Queue*> queues) {
 	}
 	resource.CreateBindlessDescriptorResources();
 	resource.staging = device.CreateBuffer({resource.stagingBufferSize, BufferUsage::TransferSrc, Memory::CPU, "StagingBuffer[" + std::to_string(uid) + "]"});
-	resource.stagingCpu = (u8*)resource.staging.resource->allocation->GetMappedData();
+	resource.stagingCpu = (uint8_t*)resource.staging.resource->allocation->GetMappedData();
 	return device;
 }
 
@@ -1908,7 +1901,7 @@ void Command::BindPipeline(Pipeline& pipeline) {
 	// resource->currentPipeline = pipeline.resource.get();
 }
 
-void Command::PushConstants(const Pipeline& pipeline, void* data, uint32_t size) {
+void Command::PushConstants(const Pipeline& pipeline, const void* data, uint32_t size) {
 	vkCmdPushConstants(resource->buffer, pipeline.resource->layout, VK_SHADER_STAGE_ALL, 0, size, data);
 }
 
@@ -2992,10 +2985,10 @@ void SwapChain::SubmitAndPresent() {
 }
 
 
-const u32 MAX_STORAGE = 64;
-const u32 MAX_SAMPLEDIMAGES = 64;
-// const u32 MAX_ACCELERATIONSTRUCTURE = 64;
-const u32 MAX_STORAGE_IMAGES = 8192;
+const uint32_t MAX_STORAGE = 64;
+const uint32_t MAX_SAMPLEDIMAGES = 64;
+// const uint32_t MAX_ACCELERATIONSTRUCTURE = 64;
+const uint32_t MAX_STORAGE_IMAGES = 8192;
 
 
 void DeviceResource::createDescriptorPool(){
@@ -3094,10 +3087,10 @@ void DeviceResource::CreateBindlessDescriptorResources(){
 	{
 
 		// TODO: val = min(MAX_, available)
-		const u32 MAX_STORAGE = 8192;
-		const u32 MAX_SAMPLEDIMAGES = 8192;
-		// const u32 MAX_ACCELERATIONSTRUCTURE = 64;
-		const u32 MAX_STORAGE_IMAGES = 8192;
+		const uint32_t MAX_STORAGE = 8192;
+		const uint32_t MAX_SAMPLEDIMAGES = 8192;
+		// const uint32_t MAX_ACCELERATIONSTRUCTURE = 64;
+		const uint32_t MAX_STORAGE_IMAGES = 8192;
 
 		// create descriptor set pool for bindless resources
 		std::vector<VkDescriptorPoolSize> bindlessPoolSizes = { 
@@ -3318,7 +3311,7 @@ void SwapChainResource::ChooseExtent(uint32_t width, uint32_t height) {
 
 
 
-bool Command::Copy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset) {
+bool Command::Copy(Buffer& dst, const void* data, uint32_t size, uint32_t dstOfsset) {
 	auto device = resource->device;
 	if (device->stagingBufferSize - device->stagingOffset < size) [[unlikely]] {
 		LOG_WARN("not enough size in staging buffer to copy");
@@ -3352,7 +3345,7 @@ void Command::Copy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset, 
 	vkCmdCopyBuffer2(resource->buffer, &copyBufferInfo);
 }
 
-bool Command::Copy(Image& dst, void* data, uint32_t size) {
+bool Command::Copy(Image& dst, const void* data, uint32_t size) {
 	auto device = resource->device;
 	if (device->stagingBufferSize - device->stagingOffset < size) [[unlikely]] {
 		LOG_WARN("not enough size in staging buffer to copy");

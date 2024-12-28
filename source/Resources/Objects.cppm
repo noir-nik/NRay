@@ -33,7 +33,7 @@ struct Primitive {
     uint32_t firstIndex;
     int32_t  vertexOffset;
     uint32_t firstInstance;
-	// Material material;
+	int materialID = 0;
 };
 
 

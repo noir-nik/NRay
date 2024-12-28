@@ -2,21 +2,11 @@
 #define PHONG_H
 
 #ifdef ENGINE
-#ifdef USE_MODULES
-export module Phong;
-#define _PHONG_EXPORT export
-import Lmath;
-#else
 #include "Lmath_types.h"
-#define _PHONG_EXPORT
-#endif // USE_MODULES
 namespace Phong {
 using namespace Lmath;
-#else
-#define _PHONG_EXPORT
 #endif // ENGINE
 
-_PHONG_EXPORT
 struct PhongLight {
 	vec3 position;
 	float range;
@@ -24,7 +14,6 @@ struct PhongLight {
 	float intensity;
 };
 
-_PHONG_EXPORT
 struct PhongMaterial {
     vec3 ambient;
 	int pad[1];
@@ -34,7 +23,6 @@ struct PhongMaterial {
     float shininess;
 };
 
-_PHONG_EXPORT
 struct PhongConstants {
 	mat4 model;
 	mat4 viewProj;
