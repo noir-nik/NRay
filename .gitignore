@@ -21,6 +21,7 @@ deps/*
 *.so
 *.so.*
 *.dll
+*.pdb
 *.exe
 *.o
 *.obj

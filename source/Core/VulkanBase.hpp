@@ -5,9 +5,6 @@
 #include <imgui/imgui.h>
 #include <span>
 
-#define GLSL_VALIDATOR "glslangValidator"
-#define SLANGC "slangc"
-
 #include <vector>
 #include <filesystem>
 #include <memory>

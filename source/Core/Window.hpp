@@ -90,13 +90,11 @@ class Window {
 	friend class WindowManager;
 	GLFWwindow*   window             = nullptr;
 	std::string   name               = "Engine";
-	int           width              = 640;
-	int           height             = 480;
 	Lmath::int2   pos                = { 0, 30 };
+	Lmath::int2   size               = { 640, 480 };
 	int           monitorIndex       = 0;
 	int           videoModeIndex     = 0;
-	float         scaleX             = 1.0f;
-	float         scaleY             = 1.0f;
+	Lmath::vec2   scale              = { 1.0f, 1.0f };
 	Lmath::ivec4  windowedSize       = { 30, 30, 640, 480 };
 	Lmath::ivec4  sizeLimits         = { 30, 30, 1920, 1080 };
 	static inline bool          framebufferResized = false;
@@ -168,10 +166,10 @@ public:
 
 	inline GLFWwindow* GetGLFWwindow()                     { return window; }
 	inline void        WaitEvents()                        { glfwWaitEvents(); }
-	inline int         GetWidth()                          { return width; }
-	inline int         GetHeight()                         { return height; }
-	inline auto        GetSize()                           { return Lmath::ivec2(width, height); }
-	inline void        StoreWindowSize()                   { windowedSize = {pos.x, pos.y, width, height}; }
+	inline int         GetWidth()                          { return size.x; }
+	inline int         GetHeight()                         { return size.y; }
+	inline auto        GetSize()                           { return size; }
+	inline void        StoreWindowSize()                   { windowedSize = {pos.x, pos.y, size.x, size.y}; }
 	inline auto        GetFrameCount()                     { return frameCount; }
 	inline void        SetFrameCount(int value)            { frameCount = value; }
 
@@ -194,7 +192,8 @@ public:
 
 
 	inline void        CmdResizeTo(int width, int height)  { glfwSetWindowSize(window, width, height); framesToDraw += 1; }
-	inline void        SetSize(int w, int h)               { width = w; height = h;}
+	inline void        SetSize(Lmath::int2 value)          { size = value; }
+	inline void        SetSize(int width, int height)      { size = {width, height}; }
 	
 	inline auto        GetPos()                            { glfwGetWindowPos(window, &pos.x, &pos.y); return Lmath::int2(pos.x, pos.y); }
 	inline void        SetPos(int x, int y)                { pos.x = x; pos.y = y; }
@@ -212,11 +211,12 @@ public:
 	inline void        SetMaximized(bool value)            { maximized = value;}
 
 	inline bool        GetDrawNeeded()                     { return framesToDraw > 0; }
+	inline int         GetFramesToDraw()                   { return framesToDraw; }
 	// inline void        SetDrawNeeded(bool value)           { framesToDraw = value; }
 	inline void        AddFramesToDraw(int value)           { framesToDraw += value; }
 
-	inline void        CreateSwapchain(vkw::Device& device, vkw::Queue& queue){ if (!swapChainAlive) swapChain.Create(device, queue, window, width, height); swapChainAlive = true; }
-	inline void        RecreateSwapchain()                 { ASSERT(swapChainAlive, "RecreateSwapchain: Swapchain is not alive"); swapChain.Recreate(width, height);} 
+	inline void        CreateSwapchain(vkw::Device& device, vkw::Queue& queue){ if (!swapChainAlive) swapChain.Create(device, queue, window, size.x, size.y); swapChainAlive = true; }
+	inline void        RecreateSwapchain()                 { ASSERT(swapChainAlive, "RecreateSwapchain: Swapchain is not alive"); swapChain.Recreate(size.x, size.y);} 
 	inline bool        GetSwapchainDirty()                 { return swapChain.GetDirty(); }
 	inline auto&       GetSwapchain()                      { return swapChain; }
 
@@ -234,13 +234,13 @@ public:
 
 	inline void        GetFocused()                        { glfwGetWindowAttrib(window, GLFW_FOCUSED); }
 
-	inline bool        GetIconified()                      { glfwGetWindowSize(window, &width, &height); return width == 0 || height == 0; }
+	inline bool        GetIconified()                      { glfwGetWindowSize(window, &size.x, &size.y); return size.x == 0 || size.y == 0; }
 
 	inline void        SetMinSize(int w, int h)            { sizeLimits.x = w; sizeLimits.y = h; glfwSetWindowSizeLimits(window, w, h, GLFW_DONT_CARE, GLFW_DONT_CARE); }
 	inline void        SetMaxSize(int w, int h)            { sizeLimits.z = w; sizeLimits.w = h; glfwSetWindowSizeLimits(window, GLFW_DONT_CARE, GLFW_DONT_CARE, w, h); }
 	inline auto        GetSizeLimits()                     { return sizeLimits; }
 
-	inline auto        GetContentScale()                   { glfwGetWindowContentScale(window, &scaleX, &scaleY); return Lmath::vec2(scaleX, scaleY); }
+	inline auto        GetContentScale()                   { glfwGetWindowContentScale(window, &scale.x, &scale.y); return scale; }
 
 	inline void        CmdShow()                           { glfwShowWindow(window); }
 	inline void        CmdHide()                           { glfwHideWindow(window); }

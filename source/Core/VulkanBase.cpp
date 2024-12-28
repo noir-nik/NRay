@@ -6,15 +6,17 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <memory>
 #include <numeric>
 #include <string_view>
 #include <unordered_map>
 #include <utility>
-#include <vector>
 #include <vulkan/vulkan_core.h>
 #include <fstream>
-#include <span>
+#include <array>
+
+#define GLSL_VALIDATOR "glslangValidator"
+#define SLANGC "slangc"
+
 
 #define SHADER_ALWAYS_COMPILE 0
 
@@ -46,7 +48,12 @@ struct Context {
 	void CreatePipelineLibrary(const PipelineDesc& desc, Pipeline& pipeline);
 
 	bool presentRequested = false;
+
+#ifdef NRAY_DEBUG
 	bool enableValidationLayers = true;
+#else
+	bool enableValidationLayers = false;
+#endif
 	bool enableDebugReport = false;
 	
 	bool usePipelineLibrary = false;
@@ -350,7 +357,7 @@ struct DeviceResource: DeleteCopyMove {
 
 	VkSampler CreateSampler(VkDevice device, float maxLod, float maxAnisotropy = 0.0f);
 
-	void SetDebugUtilsObjectNameEXT(VkDebugUtilsObjectNameInfoEXT* pNameInfo);
+	void SetDebugUtilsObjectName(const VkDebugUtilsObjectNameInfoEXT& pNameInfo);
 	
 	PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT = nullptr;
 	// PFN_vkGetAccelerationStructureBuildSizesKHR vkGetAccelerationStructureBuildSizesKHR;
@@ -629,7 +636,7 @@ Buffer Device::CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags m
 	VkBufferCreateInfo bufferInfo{
 		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
 		.size = size,
-		.usage = (VkBufferUsageFlagBits)usage,
+		.usage = static_cast<VkBufferUsageFlags>(usage),
 		.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
 	};
 
@@ -819,22 +826,19 @@ Image Device::CreateImage(const ImageDesc& desc) {
 		vkUpdateDescriptorSets(resource->handle, 1, &write, 0, nullptr);
 	}
 
-	VkDebugUtilsObjectNameInfoEXT name = {
+	resource->SetDebugUtilsObjectName({
 		.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
 		.objectType = VkObjectType::VK_OBJECT_TYPE_IMAGE,
 		.objectHandle = (uint64_t)(VkImage)res->image,
 		.pObjectName = desc.name.c_str(),
-	};
-	resource->SetDebugUtilsObjectNameEXT(&name);
+	});
 
-	std::string strName = desc.name + "View";
-	name = {
+	resource->SetDebugUtilsObjectName({
 		.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
 		.objectType = VkObjectType::VK_OBJECT_TYPE_IMAGE_VIEW,
 		.objectHandle = (uint64_t)(VkImageView)res->view,
-		.pObjectName = strName.c_str(),
-	};
-	resource->SetDebugUtilsObjectNameEXT(&name);
+		.pObjectName = (desc.name + "View").c_str(),
+	});
 	return image;
 }
 
@@ -1522,9 +1526,9 @@ VkPipeline DeviceResource::PipelineLibrary::LinkPipeline(const std::array<VkPipe
 	return pipeline;
 }
 
-void DeviceResource::SetDebugUtilsObjectNameEXT(VkDebugUtilsObjectNameInfoEXT* pNameInfo) {
+void DeviceResource::SetDebugUtilsObjectName(const VkDebugUtilsObjectNameInfoEXT& pNameInfo) {
 	if (vkSetDebugUtilsObjectNameEXT) {
-		vkSetDebugUtilsObjectNameEXT(handle, pNameInfo);
+		vkSetDebugUtilsObjectNameEXT(handle, &pNameInfo);
 	}
 }
 
@@ -2111,7 +2115,7 @@ void Instance::Create(){
 		DEBUG_TRACE("Created debug report callback.");
 	}
 
-	LOG_INFO("Created Vulkan Instance.");
+	// LOG_INFO("Created Vulkan Instance.");
 }
 
 void Instance::Destroy() {
@@ -2337,7 +2341,7 @@ void DeviceResource::Create(const std::vector<Queue*>& queues) {
 
 	uint32_t maxQueuesInFamily = std::max_element(physicalDevice->availableFamilies.begin(), physicalDevice->availableFamilies.end(), [](const auto& a, const auto& b) {
 		return a.queueCount < b.queueCount;
-	}).base()->queueCount;
+	})->queueCount;
 
 	// priority for each type of queue (1.0f for all)
 	std::vector<float> priorities(maxQueuesInFamily, 1.0f);
@@ -2352,17 +2356,35 @@ void DeviceResource::Create(const std::vector<Queue*>& queues) {
 		});
 	}
 
-	// request features if available
-
-	VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT graphicsPipelineLibraryFeatures{
-		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_FEATURES_EXT,
-		.pNext = nullptr,
-		.graphicsPipelineLibrary = physicalDevice->graphicsPipelineLibraryFeatures.graphicsPipelineLibrary,
+	auto& supportedFeatures = physicalDevice->physicalFeatures2.features;
+	VkPhysicalDeviceFeatures2 features2 {
+		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+		.features = {
+			.geometryShader    = supportedFeatures.geometryShader,
+			.sampleRateShading = supportedFeatures.sampleRateShading,
+			.logicOp           = supportedFeatures.logicOp,
+			.depthClamp        = supportedFeatures.depthClamp,
+			.fillModeNonSolid  = supportedFeatures.fillModeNonSolid,
+			.wideLines         = supportedFeatures.wideLines,
+			.multiViewport     = supportedFeatures.multiViewport,
+			.samplerAnisotropy = supportedFeatures.samplerAnisotropy,
+		}
 	};
+
+	// request features if available
+	if (_ctx.usePipelineLibrary) {
+		VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT graphicsPipelineLibraryFeatures{
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_FEATURES_EXT,
+			.pNext = features2.pNext,
+			.graphicsPipelineLibrary = physicalDevice->graphicsPipelineLibraryFeatures.graphicsPipelineLibrary,
+		}; features2.pNext = &graphicsPipelineLibraryFeatures;
+		requiredExtensions.push_back(VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME);
+		requiredExtensions.push_back(VK_EXT_GRAPHICS_PIPELINE_LIBRARY_EXTENSION_NAME);
+	}
 
 	VkPhysicalDeviceDescriptorIndexingFeatures descriptorIndexingFeatures = {
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES,
-		.pNext = &graphicsPipelineLibraryFeatures,
+		.pNext = features2.pNext,
 		.shaderUniformBufferArrayNonUniformIndexing   = physicalDevice->indexingFeatures.shaderUniformBufferArrayNonUniformIndexing,
 		.shaderSampledImageArrayNonUniformIndexing    = physicalDevice->indexingFeatures.shaderSampledImageArrayNonUniformIndexing,
 		.shaderStorageBufferArrayNonUniformIndexing   = physicalDevice->indexingFeatures.shaderStorageBufferArrayNonUniformIndexing,
@@ -2370,13 +2392,13 @@ void DeviceResource::Create(const std::vector<Queue*>& queues) {
 		.descriptorBindingStorageImageUpdateAfterBind = physicalDevice->indexingFeatures.descriptorBindingStorageImageUpdateAfterBind,
 		.descriptorBindingPartiallyBound              = physicalDevice->indexingFeatures.descriptorBindingPartiallyBound,
 		.runtimeDescriptorArray                       = physicalDevice->indexingFeatures.runtimeDescriptorArray,
-	};
+	}; features2.pNext = &descriptorIndexingFeatures;
 
 	VkPhysicalDeviceBufferDeviceAddressFeatures addresFeatures{
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES,
-		.pNext = &descriptorIndexingFeatures,
+		.pNext = features2.pNext,
 		.bufferDeviceAddress = physicalDevice->bufferDeviceAddressFeatures.bufferDeviceAddress,
-	};
+	}; features2.pNext = &addresFeatures;
 
 	// VkPhysicalDeviceRayTracingPipelineFeaturesKHR rayTracingPipelineFeatures{};
 	// rayTracingPipelineFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
@@ -2396,52 +2418,34 @@ void DeviceResource::Create(const std::vector<Queue*>& queues) {
 	// // rayQueryFeatures.pNext = &accelerationStructureFeatures;
 	// rayQueryFeatures.pNext = &addresFeatures;
 
-	VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT unusedAttachmentFeatures{
-		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_FEATURES_EXT,
-		.pNext = &addresFeatures,
-		.dynamicRenderingUnusedAttachments = physicalDevice->unusedAttachmentFeatures.dynamicRenderingUnusedAttachments && _ctx.enableUnusedAttachments,
-	};
-
+	
 
 	VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures{
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR,
-		.pNext = &unusedAttachmentFeatures,
+		.pNext = features2.pNext,
 		.dynamicRendering = physicalDevice->dynamicRenderingFeatures.dynamicRendering,
-	};
+	}; features2.pNext = &dynamicRenderingFeatures;
+
+	if (_ctx.enableUnusedAttachments) {
+		VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT unusedAttachmentFeatures{
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_FEATURES_EXT,
+			.pNext = features2.pNext,
+			.dynamicRenderingUnusedAttachments = physicalDevice->unusedAttachmentFeatures.dynamicRenderingUnusedAttachments,
+		}; features2.pNext = &unusedAttachmentFeatures;
+		requiredExtensions.push_back(VK_EXT_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_EXTENSION_NAME);
+	}
 
 	VkPhysicalDeviceSynchronization2FeaturesKHR sync2Features{
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES_KHR,
-		.pNext = &dynamicRenderingFeatures,
+		.pNext = features2.pNext,
 		.synchronization2 = physicalDevice->synchronization2Features.synchronization2,
-	};
+	}; features2.pNext = &sync2Features;
 
 	// VkPhysicalDeviceShaderAtomicFloatFeaturesEXT atomicFeatures{};
 	// atomicFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT;
 	// atomicFeatures.shaderBufferFloat32AtomicAdd = VK_TRUE;
 	// atomicFeatures.pNext = &sync2Features;
 
-	auto& supportedFeatures = physicalDevice->physicalFeatures2.features;
-	VkPhysicalDeviceFeatures2 features2 {
-		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
-		.pNext = &sync2Features,
-		.features = {
-			.geometryShader    = supportedFeatures.geometryShader,
-			.sampleRateShading = supportedFeatures.sampleRateShading,
-			.logicOp           = supportedFeatures.logicOp,
-			.depthClamp        = supportedFeatures.depthClamp,
-			.fillModeNonSolid  = supportedFeatures.fillModeNonSolid,
-			.wideLines         = supportedFeatures.wideLines,
-			.multiViewport     = supportedFeatures.multiViewport,
-			.samplerAnisotropy = supportedFeatures.samplerAnisotropy,
-		}
-	};
-
-	if (physicalDevice->graphicsPipelineLibraryFeatures.graphicsPipelineLibrary) {
-		requiredExtensions.push_back(VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME);
-		requiredExtensions.push_back(VK_EXT_GRAPHICS_PIPELINE_LIBRARY_EXTENSION_NAME);
-	}
-
-	
 	VkDeviceCreateInfo createInfo{
 		.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
 		.pNext = &features2,
@@ -2635,33 +2639,33 @@ void SwapChainResource::Create(std::vector<Image>& swapChainImages, uint32_t wid
 		
 	}
 
-	for (size_t i = 0; i < swapChainImages.size(); i++) {
-		std::string strName = ("SwapChain Image " + std::to_string(i));
-		VkDebugUtilsObjectNameInfoEXT name = {
-			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-			.objectType = VkObjectType::VK_OBJECT_TYPE_IMAGE,
-			.objectHandle = (uint64_t)(VkImage)imageResources[i],
-			.pObjectName = strName.c_str(),
-		};
-		device->SetDebugUtilsObjectNameEXT(&name);
-		swapChainImages[i].resource->name = strName;
-		strName = ("SwapChain View " + std::to_string(i));
-		name = {
-			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-			.objectType = VkObjectType::VK_OBJECT_TYPE_IMAGE_VIEW,
-			.objectHandle = (uint64_t)(VkImageView)imageViews[i],
-			.pObjectName = strName.c_str(),
-		};
-		device->SetDebugUtilsObjectNameEXT(&name);
-	}
+    if (_ctx.enableValidationLayers) {
+        for (size_t i = 0; i < swapChainImages.size(); i++) {
+            std::string strName = ("SwapChain Image " + std::to_string(i));
+            device->SetDebugUtilsObjectName({
+                .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+                .objectType = VkObjectType::VK_OBJECT_TYPE_IMAGE,
+                .objectHandle = (uint64_t)(VkImage)imageResources[i],
+                .pObjectName = strName.c_str(),
+            });
+            swapChainImages[i].resource->name = strName;
+            device->SetDebugUtilsObjectName({
+                .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+                .objectType = VkObjectType::VK_OBJECT_TYPE_IMAGE_VIEW,
+                .objectHandle = (uint64_t)(VkImageView)imageViews[i],
+                .pObjectName = ("SwapChain View " + std::to_string(i)).c_str(),
+            });
+        }
+    }
 
 	if (!is_recreation) {
 		// synchronization objects
 		imageAvailableSemaphores.resize(framesInFlight);
 		renderFinishedSemaphores.resize(framesInFlight);
 
-		VkSemaphoreCreateInfo semaphoreInfo{};
-		semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+		VkSemaphoreCreateInfo semaphoreInfo{
+			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+		};
 
 		for (size_t i = 0; i < framesInFlight; i++) {
 			auto res = vkCreateSemaphore(device->handle, &semaphoreInfo, nullptr, &imageAvailableSemaphores[i]);
@@ -2770,7 +2774,7 @@ void SwapChainResource::CreateImGui(GLFWwindow* window) {
 		.CheckVkResultFn     = ImGuiCheckVulkanResult,
 	};
 	ImGui_ImplVulkan_Init(&initInfo);
-	ImGui_ImplVulkan_CreateFontsTexture();
+	// ImGui_ImplVulkan_CreateFontsTexture();
 	ImGui_ImplGlfw_InitForVulkan(window, true);
 }
 
@@ -3081,6 +3085,7 @@ void DeviceResource::DestroyBindlessDescriptorResources(){
 void CommandResource::Create(DeviceResource* device, QueueResource* queue) {
 	this->device = device;
 	this->queue = queue;
+	this->descriptorSet = device->bindlessDescriptorSet;
 	VkCommandPoolCreateInfo poolInfo{
 		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 		.flags = 0, // do not use VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT

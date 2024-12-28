@@ -268,15 +268,13 @@ void WindowManager::Init(){
 
 // Call after all graphics contexts are destroyed
 void WindowManager::Finish() {
-	// Do not Log
 	if (!is_initialized) return;
-	printf("WindowManager::Finish()\n");
 	glfwTerminate();
 	is_initialized = false;
 }
 
 // Window factory
-Window::Window(int width, int height, const char* name): width(width), height(height), name(name) {
+Window::Window(int width, int height, const char* name): size( width, height ), name(name) {
 
 	if (!WindowManager::is_initialized) {
 		WindowManager::Init();
@@ -402,7 +400,7 @@ std::string VideoModeText(GLFWvidmode mode) {
 void Window::UpdateFramebufferSize() {
 	WINDOW_ALIVE_GUARD
 	// framebufferResized = false;
-	glfwGetFramebufferSize(window, &width, &height);
+	glfwGetFramebufferSize(window, &size.x, &size.y);
 }
 
 // bool Window::IsKeyPressed(uint16_t keyCode) {
