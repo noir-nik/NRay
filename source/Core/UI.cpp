@@ -1,9 +1,17 @@
-#include <filesystem>
-#include <imgui.h>
+#ifdef USE_MODULES
+module UI;
+import VulkanBackend;
+import Log;
+import stl;
+import imgui;
+#else
+#include "UI.cppm"
+#include "VulkanBackend.cppm"
+#include "imgui.cppm"
+#include "Log.cppm"
 
-#include "Base.hpp"
-#include "VulkanBase.hpp"
-#include "UI.hpp"
+#include <filesystem>
+#endif
 
 
 namespace UI {
@@ -13,7 +21,7 @@ ImFont* defaultFont = nullptr;
 ImGuiContext* setupContext = nullptr;
 
 void Init(){
-	IMGUI_CHECKVERSION();
+	IMGUI_CheckVersion();
 	setupContext = ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
 	sharedFontAtlas = io.Fonts;
@@ -43,29 +51,29 @@ void Init(){
 }
 
 void Destroy() {
-	// ImGui::SetCurrentContext(setupContext);
-	vkw::ImGuiShutdown();
+	ImGui::SetCurrentContext(setupContext);
+	// vkw::ImGuiShutdown();
 	ImGui::DestroyContext(setupContext);
 }
 
 
 void Context::Init() {
-	// context = ImGui::CreateContext(sharedFontAtlas);
-	// SetCurrent();
-	// auto& io = ImGui::GetIO();
-	// io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+	context = ImGui::CreateContext(sharedFontAtlas);
+	SetCurrent();
+	auto& io = ImGui::GetIO();
+	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 	// io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
-	// io.FontDefault = defaultFont;
+	io.FontDefault = defaultFont;
 }
 
 void Context::SetCurrent(){
-	// ImGui::SetCurrentContext(static_cast<ImGuiContext*>(context));
+	ImGui::SetCurrentContext(static_cast<ImGuiContext*>(context));
 }
 
 void Context::Destroy() {
-	// SetCurrent();
-	// vkw::ImGuiShutdown();
-	// ImGui::DestroyContext(static_cast<ImGuiContext*>(context));
+	SetCurrent();
+	vkw::ImGuiShutdown();
+	ImGui::DestroyContext(static_cast<ImGuiContext*>(context));
 }
 
 

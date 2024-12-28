@@ -1,9 +1,10 @@
 #ifdef USE_MODULES
+module Project;
 import Lmath;
 #else
-#include "Lmath.cxx"
+#include "Lmath.cppm"
+#include "Project.cppm"
 #endif
-#include "Project.hpp"
 
 /* 
 Entity Project::CreateEntity(const std::string_view& name) {

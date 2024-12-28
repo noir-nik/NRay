@@ -1,6 +1,14 @@
-#include "Pch.hpp"
+#ifdef USE_MODULES
+import Lmath;
+import VulkanBackend;
+import window;
+#else
+#include "Lmath.cppm"
+#include "VulkanBackend.cppm"
+#include "Window.cppm"
+#endif
 
-#include "VulkanBase.hpp"
+#include "Pch.hpp"
 #include "Bindless.h"
 #include "FileManager.hpp"
 
@@ -8,7 +16,6 @@
 #include "../TestCommon.hpp"
 #include "Timer.hpp"
 
-#include "Window.hpp"
 
 #include <unistd.h>
 

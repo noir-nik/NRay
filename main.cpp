@@ -1,5 +1,9 @@
 
-#include "Log.hpp"
+#ifdef USE_MODULES
+import Log;
+#else
+#include "Log.cppm"
+#endif
 #include "tests/Test.hpp"
 
 

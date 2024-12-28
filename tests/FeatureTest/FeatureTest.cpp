@@ -1,27 +1,45 @@
 #ifdef USE_MODULES
+module FeatureTest;
+import glfw;
+import imgui;
+import Window;
 import Lmath;
+import VulkanBackend;
+import Component;
+import stl;
+import Log;
+import Editor;
+import Entity;
+import Component;
+import Project;
+import Objects;
+import Phong;
+import GLTFLoader;
+import entt;
+import UI;
 #else
-#include "Lmath.cxx"
-#endif
+#include "Lmath.cppm"
+#include "VulkanBackend.cppm"
+#include "Window.cppm"
+#include "Log.cppm"
+#include "Bindless.h"
+#include "Editor.cppm"
+#include "FileManager.cppm"
+#include "FeatureTest.cppm"
+
+#include "Phong.cppm"
+
+#include "GLTFLoader.cppm"
+#include "Project.cppm"
+
+#include "UI.cppm"
+
 #include <cstdint>
 #include <cstdio>
 #include <set>
-#include <GLFW/glfw3.h>
-#include <imgui/imgui.h>
 #include <vector>
+#endif
 
-#include "Log.hpp"
-#include "Window.hpp"
-#include "VulkanBase.hpp"
-#include "Bindless.h"
-#include "Editor.hpp"
-#include "FileManager.hpp"
-#include "FeatureTest.hpp"
-
-#include "Phong.h"
-
-#include "GLTFLoader.hpp"
-#include "Project.hpp"
 
 using namespace Lmath;
 
@@ -244,7 +262,6 @@ void AppContext::CreateWindowResources(Window* window) {
 	}));
 }
 
-
 void AppContext::UploadBuffers() {
 	auto cmd = device.GetCommandBuffer(queue);
 	cmd.BeginCommandBuffer();
@@ -260,6 +277,7 @@ void AppContext::UploadBuffers() {
 
 	auto& sceneGraph = project.GetSceneGraph();
 	meshes.reserve(sceneGraph.registry->view<Component::Mesh>().size());
+	auto vv = sceneGraph.registry->view<Component::Mesh>();
 	for (auto entity : sceneGraph.registry->view<Component::Mesh>()) {
 		meshes.push_back(Entity(sceneGraph.registry, entity));
 	}
@@ -355,49 +373,50 @@ void AppContext::DrawWindow(Window* window) {
 void KeyCallback(Window* window, int key, int scancode, int action, int mods) {
 	// printf("key: %d, scancode: %d, action: %d, mods: %d\n", key, scancode, action, mods);
 	window->AddFramesToDraw(1);
+	auto glfwkey = static_cast<GLFW::Key>(key);
 	switch (action){
-	case GLFW_PRESS:
-		switch (key) {
-		case GLFW_KEY_N: {
+	case GLFW::Press:
+		switch (glfwkey) {
+		case GLFW::Key::N: {
 			static int windowCount = 1;
 			std::string name = "w" + std::to_string(windowCount++);
 			auto window = new Window(ctx->width, ctx->height, name.c_str());
 			ctx->CreateWindowResources(window);
 			break;
 		}
-		case GLFW_KEY_W:
+		case GLFW::Key::W:
 			camera.view = translate4x4({0, 0, -0.02f}) * camera.view;
 			break;
-		case GLFW_KEY_S:
+		case GLFW::Key::S:
 			camera.view = translate4x4({0, 0, 0.02f}) * camera.view;
 			break;
-		case GLFW_KEY_A:
+		case GLFW::Key::A:
 			camera.view = translate4x4({0.02f, 0, 0}) * camera.view;
 			break;
-		case GLFW_KEY_D:
+		case GLFW::Key::D:
 			camera.view = translate4x4({-0.02f, 0, 0}) * camera.view;
 			break;
-		case GLFW_KEY_G: {
-				auto& io = ImGui::GetIO();
-				auto& fonts = io.Fonts;
-				unsigned char* texData;
-				int texWidth, texHeight;
-				fonts->GetTexDataAsAlpha8(&texData, &texWidth, &texHeight);
-				// printf("Font texture size: %dx%d\n", texWidth, texHeight);
-				// printf("Font texture data: %p\n", texData);
-				std::vector<uint32_t> texData4(texWidth * texHeight);
-				for (int i = 0; i < texWidth * texHeight; ++i) {
-					uint32_t pixel = 0;
-					pixel |= (texData[i] << 24);
-					pixel |= (texData[i] << 16);
-					pixel |= (texData[i] << 8);
-					pixel |= (texData[i] << 0);
-					texData4[i] = pixel;
-				}
-				FileManager::SaveBMP("font.bmp", texData4.data(), texWidth, texHeight);
-				break;
+		case GLFW::Key::G: {
+				// auto& io = ImGui::GetIO();
+				// auto& fonts = io.Fonts;
+				// unsigned char* texData;
+				// int texWidth, texHeight;
+				// fonts->GetTexDataAsAlpha8(&texData, &texWidth, &texHeight);
+				// // printf("Font texture size: %dx%d\n", texWidth, texHeight);
+				// // printf("Font texture data: %p\n", texData);
+				// std::vector<uint32_t> texData4(texWidth * texHeight);
+				// for (int i = 0; i < texWidth * texHeight; ++i) {
+				// 	uint32_t pixel = 0;
+				// 	pixel |= (texData[i] << 24);
+				// 	pixel |= (texData[i] << 16);
+				// 	pixel |= (texData[i] << 8);
+				// 	pixel |= (texData[i] << 0);
+				// 	texData4[i] = pixel;
+				// }
+				// FileManager::SaveBMP("font.bmp", texData4.data(), texWidth, texHeight);
+				// break;
 		}
-		// case GLFW_KEY_J: {
+		// case GLFW::Key::J: {
 		// 	ImGuiIO& io = ImGui::GetIO();
 		// 	const float fontSize = 17.0f;
 		// 	// editor.BeginFrame();
@@ -421,9 +440,9 @@ void KeyCallback(Window* window, int key, int scancode, int action, int mods) {
 			break;
 		}
 		break;
-	case GLFW_RELEASE:
+	case GLFW::Release:
 		break;
-	case GLFW_REPEAT:
+	case GLFW::Repeat:
 		switch (key) {
 		
 		default:
@@ -466,10 +485,10 @@ Hit MouseHitTest (Window *window, double xpos, double ypos) {
 
 
 void CursorPosCallback (Window *window, double xpos, double ypos) {
-	vec3 camera_right = camera.getRight();
-	vec3 camera_up = camera.getUp();
-	vec3 camera_forward = camera.getForward();
-	auto camera_pos = camera.getPosition();
+	auto& camera_right = camera.getRight();
+	auto& camera_up = camera.getUp();
+	auto& camera_forward = camera.getForward();
+	vec3 camera_pos = camera.getPosition();
 
 	window->AddFramesToDraw(1);
 
@@ -488,10 +507,10 @@ void CursorPosCallback (Window *window, double xpos, double ypos) {
 	// }
 	
 
-	if (mouse.buttons[GLFW_MOUSE_BUTTON_RIGHT]) {
+	if (mouse.buttons[static_cast<int>(GLFW::MouseButton::Right)]) {
 		switch (mouse.mods)
 		{
-		case GLFW_MOD_ALT: {
+		case GLFW::Mod::Alt: {
 			auto zoom_factor = camera.zoom_factor * length(camera_pos - camera.focus);
 			auto movement =  (zoom_factor * mouse.deltaPos.x) * camera_forward;
 			camera.view = translate4x4(movement) * camera.view;
@@ -509,22 +528,23 @@ void CursorPosCallback (Window *window, double xpos, double ypos) {
 		}
 		// window->AddFramesToDraw(1);
 	}
-	if (mouse.buttons[GLFW_MOUSE_BUTTON_MIDDLE]) {
+	if (mouse.buttons[GLFW::MouseButton::Middle]) {
 		auto move_factor = camera.move_factor * length(camera_pos - camera.focus);
 		auto movement =  move_factor * (camera_up * -mouse.deltaPos.y + camera_right * mouse.deltaPos.x); 
+		// printf("%f %f %f\n", movement.x, movement.y, movement.z);
 		camera.focus += movement;
 		camera.view = translate4x4(movement) * camera.view;
 		// window->AddFramesToDraw(1);
 	}
-	if (mouse.buttons[GLFW_MOUSE_BUTTON_LEFT]) {
+	if (mouse.buttons[GLFW::MouseButton::Left]) {
 		// window->AddFramesToDraw(1);
 	}
 }
 
 void MouseButtonCallback(Window* window, int button, int action, int mods) {
 	switch (button) {
-	case GLFW_MOUSE_BUTTON_LEFT:
-		// if (action == GLFW_PRESS) {
+	case GLFW::MouseButton::Left:
+		// if (action == GLFW::PRESS) {
 			window->AddFramesToDraw(2);
 		// }
 		break;
@@ -732,6 +752,7 @@ bool DrawOrRemoveWindow(Window* window) {
 		if (window == ctx->mainWindow) {
 			ctx->mainWindow = nullptr;
 		}
+		// window->Destroy();
 		delete window;
 		return true;
 	}

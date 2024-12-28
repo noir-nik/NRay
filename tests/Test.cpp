@@ -1,10 +1,14 @@
+#ifdef USE_MODULES
+import FeatureTest;
+#else
+#include "FeatureTest/FeatureTest.cppm"
+#endif
 #include "Test.hpp"
 
-#include "NeuralSdf/NeuralSdf.hpp"
-#include "ImageOptimization/ImageOptimization.hpp"
-#include "FeatureTest/FeatureTest.hpp"
-#include "RadienceField/RadienceField.hpp"
-#include "HelloTriangle/HelloTriangle.hpp"
+// #include "NeuralSdf/NeuralSdf.cppm"
+// #include "ImageOptimization/ImageOptimization.cppm"
+// #include "RadienceField/RadienceField.cppm"
+// #include "HelloTriangle/HelloTriangle.cppm"
 
 namespace Test {
 static void NeuralSdfTest();

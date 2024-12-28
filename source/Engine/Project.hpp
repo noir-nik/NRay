@@ -1,14 +1,13 @@
 #pragma once
 #ifdef USE_MODULES
 import Lmath;
+import SceneGraph;
+import Entity;
 #else
-#include "Lmath.cxx"
+#include "Lmath.cppm"
+#include "SceneGraph.cppm"
+#include "Entity.cppm"
 #endif
-#include "SceneGraph.hpp"
-// #include <entt/entity/registry.hpp>
-
-#include "Entity.hpp"
-// #include "Component.hpp"
 
 class Project {
 public:

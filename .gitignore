@@ -36,6 +36,8 @@ logs/*
 *.tmp
 *.rej
 
+*.mk
+
 *.ttf
 *.ttc
 *.otf

@@ -1,15 +1,31 @@
+#ifdef USE_MODULES
+module GLTFLoader;
+import fastgltf;
+import Lmath;
+import stl;
+import Objects;
+import ImageIO;
+import VulkanBackend;
+import SceneGraph;
+import Log;
+import Component;
+#else
+#include "GLTFLoader.cppm"
+#include "VulkanBackend.cppm"
+#include "Lmath.cppm"
+#include "ImageIO.cppm"
+#include "Log.cppm"
 
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
-#include <fastgltf/core.hpp>
 #include <unordered_map>
 #include <vector>
 
-#include "GLTFLoader.hpp"
-#include "Base.hpp"
-#include "ImageIO.hpp"
-#include "fastgltf/tools.hpp"
+#include <fastgltf/core.hpp>
+#include <fastgltf/tools.hpp>
+
+#endif
 
 // #include "Entity.hpp"
 // #include "Scene.hpp"
@@ -21,13 +37,14 @@ template<> struct ElementTraits<Lmath::vec2> : ElementTraitsBase<Lmath::vec2, Ac
 }
 
 namespace glTF {
+using namespace Lmath;
 // auto LoadTexture(fastgltf::Asset& asset, size_t imageIndex) -> Texture;
 void LoadTextures(fastgltf::Asset& asset);
 bool LoadMaterial(fastgltf::Asset& asset, size_t materialIndex);
 void LoadMaterials(fastgltf::Asset& asset);
-void LoadMeshes(fastgltf::Asset& asset, std::unordered_map<size_t, Mesh>& meshMap, vkw::Device& device);
+void LoadMeshes(fastgltf::Asset& asset, std::unordered_map<size_t, Component::Mesh>& meshMap, vkw::Device& device);
 void LoadScene(fastgltf::Asset& asset, SceneGraph& sceneGraph);
-void LoadScenes(fastgltf::Asset& asset, std::unordered_map<size_t, Mesh>& meshMap, SceneGraph& sceneGraph);
+void LoadScenes(fastgltf::Asset& asset, std::unordered_map<size_t, Component::Mesh>& meshMap, SceneGraph& sceneGraph);
 
 
 bool Loader::Load(const std::filesystem::path& filepath, SceneGraph& sceneGraph, vkw::Device& device) {
@@ -61,7 +78,7 @@ bool Loader::Load(const std::filesystem::path& filepath, SceneGraph& sceneGraph,
 	// LoadTextures(asset, loadedData);
 	// LoadMaterials(asset, loadedData);
 
-	std::unordered_map<size_t, Mesh> meshMap;
+	std::unordered_map<size_t, Component::Mesh> meshMap;
 	LoadMeshes(asset, meshMap, device);
 	LoadScenes(asset, meshMap, sceneGraph);
 	return true;
@@ -254,7 +271,7 @@ void LoadMaterials(fastgltf::Asset& asset) {
 // std::vector<uint32_t> indices;
 // std::vector<Vertex> vertices;
 
-void LoadMesh(fastgltf::Asset& asset, size_t meshIndex, Objects::Mesh& mesh, vkw::Device& device) {
+void LoadMesh(fastgltf::Asset& asset, size_t meshIndex, Component::Mesh& mesh, vkw::Device& device) {
 	auto& glTFmesh = asset.meshes[meshIndex];
 	auto numPrimitives = glTFmesh.primitives.size();
 
@@ -262,16 +279,16 @@ void LoadMesh(fastgltf::Asset& asset, size_t meshIndex, Objects::Mesh& mesh, vkw
 		auto& p = glTFmesh.primitives[primitiveIndex];
 		// Primitive primitive;
 
-		size_t initialVertex = mesh.vertices.size();
+		size_t initialVertex = mesh->vertices.size();
 
 		// Indexes
 		if (p.indicesAccessor.has_value()) {
 			fastgltf::Accessor& indexaccessor = asset.accessors[p.indicesAccessor.value()];
-			mesh.indices.reserve(mesh.indices.size() + indexaccessor.count);
+			mesh->indices.reserve(mesh->indices.size() + indexaccessor.count);
 
 			fastgltf::iterateAccessor<std::uint32_t>(asset, indexaccessor,
 				[&](std::uint32_t idx) {
-					mesh.indices.push_back(idx + initialVertex);
+					mesh->indices.push_back(idx + initialVertex);
 				});
 		}
 
@@ -279,7 +296,7 @@ void LoadMesh(fastgltf::Asset& asset, size_t meshIndex, Objects::Mesh& mesh, vkw
 		auto position = p.findAttribute("POSITION");
 		if (position != p.attributes.end()) {
 			auto& posAccessor = asset.accessors[position->accessorIndex];
-			mesh.vertices.resize(mesh.vertices.size() + posAccessor.count);
+			mesh->vertices.resize(mesh->vertices.size() + posAccessor.count);
 
 			fastgltf::iterateAccessorWithIndex<vec3>(asset, posAccessor,
 				[&](vec3 v, size_t index) {
@@ -289,7 +306,7 @@ void LoadMesh(fastgltf::Asset& asset, size_t meshIndex, Objects::Mesh& mesh, vkw
 					newvtx.color = vec4 { 1.f };
 					newvtx.uv.x = 0;
 					newvtx.uv.y = 0;
-					mesh.vertices[initialVertex + index] = newvtx;
+					mesh->vertices[initialVertex + index] = newvtx;
 				});
 		}
 		
@@ -299,7 +316,7 @@ void LoadMesh(fastgltf::Asset& asset, size_t meshIndex, Objects::Mesh& mesh, vkw
 
 			fastgltf::iterateAccessorWithIndex<vec3>(asset, asset.accessors[normals->accessorIndex],
 				[&](vec3 v, size_t index) {
-					mesh.vertices[initialVertex + index].normal = v;
+					mesh->vertices[initialVertex + index].normal = v;
 				});
 		}
 
@@ -309,8 +326,8 @@ void LoadMesh(fastgltf::Asset& asset, size_t meshIndex, Objects::Mesh& mesh, vkw
 
 			fastgltf::iterateAccessorWithIndex<vec2>(asset, asset.accessors[uv->accessorIndex],
 				[&](vec2 v, size_t index) {
-					mesh.vertices[initialVertex + index].uv.x = v.x;
-					mesh.vertices[initialVertex + index].uv.y = v.y;
+					mesh->vertices[initialVertex + index].uv.x = v.x;
+					mesh->vertices[initialVertex + index].uv.y = v.y;
 				});
 		}
 
@@ -319,7 +336,7 @@ void LoadMesh(fastgltf::Asset& asset, size_t meshIndex, Objects::Mesh& mesh, vkw
 		if (colors != p.attributes.end()) {
 			fastgltf::iterateAccessorWithIndex<vec4>(asset, asset.accessors[colors->accessorIndex],
 				[&](vec4 v, size_t index) {
-					mesh.vertices[initialVertex + index].color = v;
+					mesh->vertices[initialVertex + index].color = v;
 				});
 		}
 	}
@@ -332,11 +349,11 @@ void LoadMeshes(fastgltf::Asset& asset, std::unordered_map<size_t, Component::Me
 		auto mesh = std::make_shared<Objects::Mesh>(asset.meshes[meshIndex].name);
 		auto it = meshMap.emplace(meshIndex, mesh);
 		if (!it.second) {
-			LOG_WARN("Mesh {} already exists", meshIndex);
+			LOG_WARN("Component::Mesh {} already exists", meshIndex);
 			continue;
 		}
 		mesh->name = asset.meshes[meshIndex].name;
-		LoadMesh(asset, meshIndex, *mesh, device);
+		LoadMesh(asset, meshIndex, mesh, device);
 		mesh->vertexBuffer = device.CreateBuffer({
 			.size = mesh->vertices.size() * sizeof(Objects::Vertex),
 			.usage = vkw::BufferUsage::Vertex,
@@ -376,14 +393,14 @@ void LoadMeshes(fastgltf::Asset& asset, std::unordered_map<size_t, Component::Me
 	cmd.QueueSubmit({});
 }
 
-void LoadNode(fastgltf::Asset& asset, const int gltfNodeIndex, std::unordered_map<size_t, Mesh>& meshMap, SceneGraph& sceneGraph, size_t offset) {
+void LoadNode(fastgltf::Asset& asset, const int gltfNodeIndex, std::unordered_map<size_t, Component::Mesh>& meshMap, SceneGraph& sceneGraph, size_t offset) {
 	auto& glTFNode = asset.nodes[gltfNodeIndex];
 	auto& newNode = sceneGraph.nodes[offset + gltfNodeIndex];
 	newNode.entity = sceneGraph.CreateEntity(glTFNode.name);
-	DEBUG_TRACE("Loading node {}", glTFNode.name);
+	DEBUG_TRACE("Loading node {}", glTFNode.name.c_str());
 	newNode.entity.AddComponent<Component::Transform>();
 	if (glTFNode.meshIndex.has_value()) {
-		Mesh mesh = meshMap[glTFNode.meshIndex.value()];
+		Component::Mesh mesh = meshMap[glTFNode.meshIndex.value()];
 		newNode.entity.AddComponent<Component::Mesh>(mesh); //todo: fix
 	} else {
 		// todo : empty, volume flags
@@ -413,7 +430,7 @@ void LoadNode(fastgltf::Asset& asset, const int gltfNodeIndex, std::unordered_ma
 	}
 }
 
-void LoadScenes(fastgltf::Asset& asset, std::unordered_map<size_t, Mesh>& meshMap, SceneGraph& sceneGraph) {
+void LoadScenes(fastgltf::Asset& asset, std::unordered_map<size_t, Component::Mesh>& meshMap, SceneGraph& sceneGraph) {
 	
 	auto numNodes = asset.nodes.size();
 

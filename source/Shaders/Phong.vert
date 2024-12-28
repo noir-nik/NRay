@@ -1,6 +1,6 @@
 #version 450
 #extension GL_GOOGLE_include_directive : enable
-#include "Phong.h"
+#include "Phong.cppm"
 
 #include "inverse.glsl"
 #include "transpose.glsl"

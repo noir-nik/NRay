@@ -7,10 +7,6 @@
 [submodule "deps/spdlog"]
 	path = deps/spdlog
 	url = https://github.com/gabime/spdlog.git
-[submodule "deps/imgui"]
-	path = deps/imgui
-	url = https://github.com/ocornut/imgui.git
-	branch = docking
 [submodule "deps/entt"]
 	path = deps/entt
 	url = https://github.com/skypjack/entt.git
@@ -20,3 +16,10 @@
 [submodule "deps/glfw"]
 	path = deps/glfw
 	url = https://github.com/glfw/glfw.git
+[submodule "deps/vma"]
+	path = deps/vma
+	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
+[submodule "deps/imgui"]
+	path = deps/imgui
+	url = https://github.com/ocornut/imgui.git
+	branch = docking

@@ -3,7 +3,7 @@
 #ifdef USE_MODULES
 import Lmath;
 #else
-#include "Lmath.cxx"
+#include "Lmath.cppm"
 #endif
 #include <string>
 #include <cstdint>

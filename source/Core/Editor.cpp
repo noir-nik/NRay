@@ -1,18 +1,28 @@
 #ifdef USE_MODULES
+module Editor;
 import Lmath;
+import VulkanBackend;
+import imgui;
+import Log;
+import stl;
 #else
-#include "Lmath.cxx"
-#endif
-#include "Editor.hpp"
-#include "VulkanBase.hpp"
-#include "Base.hpp"
-#include <UI.hpp>
-#include <cstdio>
-#include <imgui/imgui.h>
-#include <imgui/imgui_internal.h>
-#include <string_view>
-
+#include "Lmath.cppm"
+#include "VulkanBackend.cppm"
+#include "imgui.cppm"
+#include "Editor.cppm"
+#include "Log.cppm"
 #include <fstream>
+#endif
+
+#include "Macros.h"
+
+// #include "Base.hpp"
+// #include <UI.hpp>
+// #include <cstdio>
+// #include <imgui/imgui.h>
+// #include <imgui/imgui_internal.h>
+// #include <string_view>
+
 
 #define STYLE_PATH "assets/"
 
@@ -58,7 +68,7 @@ bool EditorContext::SaveStyle(const char* filename, const ImGuiStyle& style) {
 		}
 	}
 
-	if (style.WindowMenuButtonPosition != defaultStyle.WindowMenuButtonPosition)      fprintf(f, "[WindowMenuButtonPosition]\n   %1.3f\n",       style.WindowMenuButtonPosition);
+	if (style.WindowMenuButtonPosition != defaultStyle.WindowMenuButtonPosition)      fprintf(f, "[WindowMenuButtonPosition]\n   %1.3d\n",       style.WindowMenuButtonPosition);
     if (style.TouchExtraPadding[0] != defaultStyle.TouchExtraPadding[0]
 		|| style.TouchExtraPadding[1] != defaultStyle.TouchExtraPadding[1])           fprintf(f, "[TouchExtraPadding]\n          %1.3f %1.3f\n", style.TouchExtraPadding[0], style.TouchExtraPadding[1]);
     if (style.ColumnsMinSpacing != defaultStyle.ColumnsMinSpacing)                    fprintf(f, "[ColumnsMinSpacing]\n          %1.3f\n",       style.ColumnsMinSpacing);
@@ -296,7 +306,7 @@ void EditorContext::RenderUI() {
 	ImGui::Separator();
 
 	static const char* sceneObjects[] = { "Camera", "Light", "Cube", "Sphere", "Plane" };
-	for (int i = 0; i < IM_ARRAYSIZE(sceneObjects); i++) {
+	for (int i = 0; i < ARRAY_SIZE(sceneObjects); i++) {
 		ImGui::Selectable(sceneObjects[i]);
 	}
 	ImGui::End();
@@ -632,12 +642,12 @@ void EditorContext::StyleEditor() {
                     ImGui::LogToClipboard();
                 else
                     ImGui::LogToTTY();
-                ImGui::LogText("ImVec4* colors = ImGui::GetStyle().Colors;" IM_NEWLINE);
+                ImGui::LogText("ImVec4* colors = ImGui::GetStyle().Colors;\n");
                 for (int i = 0; i < ImGuiCol_COUNT; i++) {
                     const ImVec4& col = style.Colors[i];
                     const char* name = ImGui::GetStyleColorName(i);
                     if (!output_only_modified || memcmp(&col, &ref.Colors[i], sizeof(ImVec4)) != 0)
-                        ImGui::LogText("colors[ImGuiCol_%s]%*s= ImVec4(%.2ff, %.2ff, %.2ff, %.2ff);" IM_NEWLINE,
+                        ImGui::LogText("colors[ImGuiCol_%s]%*s= ImVec4(%.2ff, %.2ff, %.2ff, %.2ff);\n",
                             name, 23 - (int)strlen(name), "", col.x, col.y, col.z, col.w);
                 }
                 ImGui::LogFinish();
@@ -657,7 +667,7 @@ void EditorContext::StyleEditor() {
                 "Left-click on color square to open color picker,\n"
                 "Right-click to open edit options menu.");
 
-            ImGui::SetNextWindowSizeConstraints(ImVec2(0.0f, ImGui::GetTextLineHeightWithSpacing() * 10), ImVec2(FLT_MAX, FLT_MAX));
+            ImGui::SetNextWindowSizeConstraints(ImVec2(0.0f, ImGui::GetTextLineHeightWithSpacing() * 10), ImVec2(std::numeric_limits<float>::max(), std::numeric_limits<float>::max()));
             ImGui::BeginChild("##colors", ImVec2(0, 0), ImGuiChildFlags_Borders | ImGuiChildFlags_NavFlattened, ImGuiWindowFlags_AlwaysVerticalScrollbar | ImGuiWindowFlags_AlwaysHorizontalScrollbar);
             ImGui::PushItemWidth(ImGui::GetFontSize() * -12);
             for (int i = 0; i < ImGuiCol_COUNT; i++)
@@ -696,7 +706,7 @@ void EditorContext::StyleEditor() {
             ImGuiIO& io = ImGui::GetIO();
             ImFontAtlas* atlas = io.Fonts;
             HelpMarker("Read FAQ and docs/FONTS.md for details on font loading.");
-            ImGui::ShowFontAtlas(atlas);
+            // ImGui::ShowFontAtlas(atlas);
 
             // Post-baking font scaling. Note that this is NOT the nice way of scaling fonts, read below.
             // (we enforce hard clamping manually as by default DragFloat/SliderFloat allows CTRL+Click text to get out of bounds).

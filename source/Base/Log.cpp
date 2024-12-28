@@ -1,9 +1,21 @@
-#include "Log.hpp"
+#ifdef USE_MODULES
+module;
+#endif
 
+#ifdef USE_MODULES
+module Log;
+import spdlog;
+import stl;
+#else
+#define SPDLOG_COMPILED_LIB
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/sinks/basic_file_sink.h>
+#include "Log.cppm"
+#endif
+
 
 std::shared_ptr<spdlog::logger> Logger::_logger;
+
 constexpr bool log_to_file = 0;
 constexpr bool use_time_in_log_filename = 1;
 

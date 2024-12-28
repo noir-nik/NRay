@@ -1,6 +1,12 @@
+#ifdef USE_MODULES
+import Lmath;
+import VulkanBackend;
+#else
+#include "Lmath.cppm"
+#include "VulkanBackend.cppm"
 #include "Pch.hpp"
 
-#include "VulkanBase.hpp"
+#endif
 #include "Bindless.h"
 #include "FileManager.hpp"
 

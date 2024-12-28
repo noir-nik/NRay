@@ -1,7 +1,12 @@
-#include "Pch.hpp"
+#ifdef USE_MODULES
+import Lmath;
+import VulkanBackend;
+#else
+#include "Lmath.cppm"
+#include "VulkanBackend.cppm"
 #include "TestCommon.hpp"
-#include "FileManager.hpp"
-#include "VulkanBase.hpp"
+#include "FileManager.cppm"
+#endif
 
 using Pixel = Lmath::float4;
 

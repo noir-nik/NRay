@@ -1,6 +1,13 @@
-#include "Pch.hpp"
-
-#include "FileManager.hpp"
+#ifdef USE_MODULES
+module FileManager;
+import Log;
+import stl;
+#else
+#include "Log.cppm"
+#include "FileManager.cppm"
+#include <filesystem>
+#include <fstream>
+#endif
 
 std::vector<char> FileManager::ReadRawBytes(const std::string& filename) {
 	std::ifstream file(filename, std::ios::ate | std::ios::binary);

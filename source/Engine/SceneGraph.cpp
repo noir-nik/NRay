@@ -1,9 +1,10 @@
 #ifdef USE_MODULES
+module SceneGraph;
 import Lmath;
 #else
-#include "Lmath.cxx"
+#include "Lmath.cppm"
+#include "SceneGraph.cppm"
 #endif
-#include "SceneGraph.hpp"
 
 using namespace Lmath;
 
