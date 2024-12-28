@@ -6,7 +6,7 @@ TARGET := NRay
 STATIC_LINK := 0
 COMPILE_IMGUI := 1
 
-USE_MODULES := 0
+USE_MODULES := 1
 USE_HEADER_UNITS := 1
 
 ifeq ($(CC),g++)
@@ -97,6 +97,7 @@ LIB_PATH := $(PLATFORM_BUILD_DIR)/lib
 SUBMODULE_LIBS := $(foreach lib,$(SUBMODULE_LIBS_LIST),$(LIB_PATH)/lib$(lib).a)
 OBJS_BUILD_DIR := $(PLATFORM_BUILD_DIR)/objs
 MODULES_BUILD_DIR := $(PLATFORM_BUILD_DIR)/modules
+MODULES_BUILD_DIR_CLANGD := $(PLATFORM_BUILD_DIR)/modules-clangd
 HEADERS_BUILD_DIR := $(PLATFORM_BUILD_DIR)/headers
 
 ifeq ($(USE_MODULES), 1)
@@ -183,6 +184,7 @@ CPP_MODULE_SRCS := \
 	$(wildcard $(SRC_CORE)/*.cppm) \
 	$(wildcard $(SRC_ENGINE)/*.cppm) \
 	$(wildcard $(SRC_RESOURCES)/*.cppm) \
+	$(wildcard $(SRC_SHADERS)/*.cppm) \
 	$(wildcard $(SRC_TEST)/*.cppm) \
 	$(wildcard $(SRC_FEATURE)/*.cppm) \
 
@@ -273,6 +275,7 @@ build_target: $(TARGET)
 _WINBDIR := $(subst /,\,$(PLATFORM_BUILD_DIR))
 _WOBDIR := $(subst /,\,$(OBJS_BUILD_DIR))
 _WMBDIR := $(subst /,\,$(MODULES_BUILD_DIR))
+_WMBDIRC := $(subst /,\,$(MODULES_BUILD_DIR_CLANGD))
 _WHBDIR := $(subst /,\,$(HEADERS_BUILD_DIR))
 create_dirs:
 ifeq ($(OS),Windows_NT)
@@ -282,6 +285,7 @@ ifeq ($(OS),Windows_NT)
 	@cmd /c if not exist $(_WINBDIR) mkdir $(_WINBDIR)
 	@cmd /c if not exist $(_WOBDIR) mkdir $(_WOBDIR)
 	@cmd /c if not exist $(_WMBDIR) mkdir $(_WMBDIR)
+	@cmd /c if not exist $(_WMBDIRC) mkdir $(_WMBDIRC)
 	@cmd /c if not exist $(_WHBDIR) mkdir $(_WHBDIR)
 	@cmd /c if not exist $(_WINBDIR)\imgui mkdir $(_WINBDIR)\imgui
 # @cmd /c if not exist $(_WINBDIR)\stb mkdir $(_WINBDIR)\stb
@@ -298,6 +302,7 @@ else
 	$(PLATFORM_BUILD_DIR) \
 	$(OBJS_BUILD_DIR) \
 	$(MODULES_BUILD_DIR) \
+	$(MODULES_BUILD_DIR_CLANGD) \
 	$(HEADERS_BUILD_DIR) \
 	$(PLATFORM_BUILD_DIR)/imgui \
 	$(PLATFORM_BUILD_DIR)/glfw \
@@ -507,13 +512,28 @@ $(MODULES_BUILD_DIR)/stl.pcm: source/Base/stl.cppm
 
 
 # ============================================ Modules ===================================================
-
 modules: CXXFLAGS += -fprebuilt-module-path=$(MODULES_BUILD_DIR) -D USE_MODULES -fmodule-file-deps
 modules: $(CPP_MODULE_DEPENDENCIES_FILE) $(EXTERNAL_MODULE_TARGETS) $(CPP_MODULE_TARGETS) 
 
-ifeq (modules,$(MAKECMDGOALS))
+CLANGD_MODULE_TARGETS := $(subst $(MODULES_BUILD_DIR),$(MODULES_BUILD_DIR_CLANGD),$(CPP_MODULE_TARGETS) $(EXTERNAL_MODULE_TARGETS) $(STL_MODULE_TARGET))
+
+# $(info $(CPP_MODULE_TARGETS) $(EXTERNAL_MODULE_TARGETS) $(STL_MODULE_TARGET))
+# $(info $(CLANGD_MODULE_TARGETS))
+
+modules_clangd: modules
+modules_clangd: $(CLANGD_MODULE_TARGETS)
+
+$(MODULES_BUILD_DIR_CLANGD)/%.pcm: $(MODULES_BUILD_DIR)/%.pcm
+	@rm -f $@
+	@cp $< $@
+# ln -sf $< $@
+# @echo "mklink $(subst /,\,$@) ..\modules\$(notdir $<)"
+
+# ifeq (modules,$(MAKECMDGOALS))
+ifeq ($(findstring modules,$(MAKECMDGOALS)),modules)
 include $(CPP_MODULE_DEPENDENCIES_FILE)
 endif
+
 
 # $(_MBD)/*.pcm: 
 
@@ -698,6 +718,11 @@ cleanheaders:
 
 cleanmodules:
 	@rm -f $(MODULES_BUILD_DIR)/*
+# @rm -f $(MODULES_BUILD_DIR_CLANGD)/*
+	@echo "=== Cleaned ==="
+
+cleancl:
+	@rm -f $(MODULES_BUILD_DIR_CLANGD)/*
 	@echo "=== Cleaned ==="
 
 cleanlib:

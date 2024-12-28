@@ -1,4 +1,3 @@
-#include <minwindef.h>
 #ifdef USE_MODULES
 module Editor;
 import Lmath;
@@ -491,6 +490,8 @@ bool Context::Viewport(Runtime::Viewport& ctx) {
 	// ImGui::PopStyleVar();
 	// ImGui::PopStyleColor();
 	ImGui::End();
+	if (showDebugWindow) DebugWindow(ctx.camera);	
+
 	return viewport_changed;
 }
 
@@ -601,7 +602,6 @@ void Context::Draw(Runtime::Data const& ctx) {
 	
 	if (showDemoWindow) ImGui::ShowDemoWindow();
 	if (showStyleEditor) StyleEditor(); 
-	// if (showDebugWindow) DebugWindow(*ctx.camera);	
 	// ctx.RenderUI();
 }
 

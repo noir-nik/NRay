@@ -3,12 +3,10 @@ export module Window;
 #define _WINDOW_EXPORT export
 import VulkanBackend;
 import Lmath.types;
-// import Runtime;
 import Types;
 import glfw;
 import UI;
 import stl;
-// import Assert;
 #else
 #pragma once
 #define _WINDOW_EXPORT
@@ -22,15 +20,6 @@ import stl;
 #include <chrono>
 #include <vector>
 #include <string>
-#endif
-
-
-#ifdef USE_MODULES
-
-#define _WINDOW_EXPORT export
-#else
-#define _WINDOW_EXPORT
-#include "Lmath.cppm"
 #endif
 
 _WINDOW_EXPORT
@@ -173,7 +162,7 @@ public:
 	// void* uiDrawData = nullptr;
 
 	Window(int width, int height, const char* name = "NRay", void* imguiStyle = nullptr);
-	inline virtual ~Window(){ if(alive) Destroy(); }
+	inline ~Window(){ if(alive) Destroy(); }
 	void ApplyChanges();
 	void UpdateFramebufferSize();
 	void Update();

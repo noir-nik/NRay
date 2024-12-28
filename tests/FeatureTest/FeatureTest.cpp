@@ -49,6 +49,7 @@ using namespace Lmath;
 
 using Pixel = vec4;
 namespace {
+using namespace Types;
 struct DrawViewportInfo;
 
 struct AppContext : DeleteCopyDeleteMove {
@@ -63,8 +64,8 @@ struct AppContext : DeleteCopyDeleteMove {
 	// float4x4 worldViewInv;
 	// float4x4 worldViewProjInv;
 
-	// vkw::SampleCount sampleCount = vkw::SampleCount::_4;
-	vkw::SampleCount sampleCount = vkw::SampleCount::_1;
+	vkw::SampleCount sampleCount = vkw::SampleCount::_4;
+	// vkw::SampleCount sampleCount = vkw::SampleCount::_1;
 	// vkw::Format renderFormat = vkw::Format::RGBA16_sfloat;
 	vkw::Format renderFormat = vkw::Format::RGBA8_UNORM;
 	

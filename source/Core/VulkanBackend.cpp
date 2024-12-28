@@ -19,6 +19,7 @@ module VulkanBackend;
 import vk_mem_alloc;
 import Lmath;
 import glfw;
+import Window;
 import Types;
 import Log;
 import Util;
@@ -61,6 +62,7 @@ import imgui_impl_vulkan;
 
 static const char *VK_ERROR_STRING(VkResult result);
 namespace vkw {
+using namespace Types;
 struct Instance;
 struct PhysicalDevice;
 struct DeviceResource;
