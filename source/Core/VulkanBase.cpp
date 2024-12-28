@@ -24,8 +24,8 @@
 #include "vk_mem_alloc.h"
 
 #define IMGUI_VULKAN_DEBUG_REPORT
-#include <imgui/imgui_impl_vulkan.h>
-#include <imgui/imgui_impl_glfw.h>
+#include <imgui/backends/imgui_impl_vulkan.h>
+#include <imgui/backends/imgui_impl_glfw.h>
 #include <GLFW/glfw3.h>
 
 static const char *VK_ERROR_STRING(VkResult result);

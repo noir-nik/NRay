@@ -5,20 +5,23 @@ CC := g++
 # CC := cl
 TARGET := nRay
 
-COMPILE_IMGUI := 0
+COMPILE_IMGUI := 1
 STATIC_LINK := 0
 
 mkfile_path := $(abspath $(lastword $(MAKEFILE_LIST)))
 DEPS_PATH := deps
 
 
-SUBMODULE_LIBS := fastgltf fmt
+SUBMODULE_LIBS := fastgltf spdlog imgui
 
 
-INCLUDES := -Isource/Core -Isource/Base -Isource/Shaders -Ideps\fastgltf\include
+INCLUDES := -Isource/Core -Isource/Base -Isource/Shaders -Ideps -Ideps/fastgltf/include -Ideps/spdlog/include -Ideps/fmt/include -Ideps/imgui -Ideps/imgui/backends
 CXXFLAGS := -MMD -MP $(INCLUDES) -DENGINE
-LDFLAGS := -Lbin/lib
-LIBS := spdlog
+LDFLAGS :=  
+LIBS := 
+
+ARFLAGS = rcs
+
 
 ifeq ($(STATIC_LINK), 1)
 	LDFLAGS += -static -static-libgcc -static-libstdc++
@@ -29,7 +32,7 @@ endif
 BIN_DIR := bin
 
 ifeq ($(OS),Windows_NT)
-	LDFLAGS += -fuse-ld=lld
+	LDFLAGS += -fuse-ld=lld -Lbin/lib
 	LIBS := $(LIBS)  glfw3 Gdi32 vulkan-1
 	LIB_PATH := $(dir $(mkfile_path))bin/lib
 	LIB_BUILD_DIR := build
@@ -43,7 +46,8 @@ ifeq ($(OS),Windows_NT)
 	CLEAN_OBJ := $(RM) $(OBJ_DIR)
 else
 	CC := g++
-	LIBS := $(LIBS) vulkan fmt glfw GL m
+	LDFLAGS += -lpthread -Lbin/lib-linux
+	LIBS := $(LIBS) vulkan glfw GL m
 	LIB_PATH := $(dir $(mkfile_path))bin/lib-linux
 	LIB_BUILD_DIR := build-linux
 	OBJ_DIR := build-linux
@@ -67,7 +71,9 @@ SRC_BASE := source/base
 SRC_TEST := tests
 
 ifeq ($(COMPILE_IMGUI), 1)
-SRC_IMGUI := bin/imgui
+SRC_IMGUI := deps/imgui
+SRC_IMGUI_BACKENDS := deps/imgui/backends
+# SRC_IMGUI_BACKENDS := deps/imgui/backends/imgui_impl_vulkan.cpp deps/imgui/backends/imgui_impl_glfw.cpp
 else
 LIBS := imgui $(LIBS)
 endif
@@ -125,7 +131,13 @@ OBJS := \
 	$(patsubst $(SRC_BASE)/%.cpp, $(OBJ_DIR)/%.$(OBJ_EXT), $(wildcard $(SRC_BASE)/*.cpp)) \
 	$(patsubst $(SRC_TEST)/%.cpp, $(OBJ_DIR)/%.$(OBJ_EXT), $(wildcard $(SRC_TEST)/*.cpp)) \
 	$(patsubst $(TST_FEATURE)/%.cpp, $(OBJ_DIR)/%.$(OBJ_EXT), $(wildcard $(TST_FEATURE)/*.cpp)) \
-	$(patsubst $(SRC_IMGUI)/%.cpp, $(OBJ_DIR)/%.$(OBJ_EXT), $(wildcard $(SRC_IMGUI)/*.cpp)) \
+
+IMGUI_OBJS := 	$(patsubst $(SRC_IMGUI)/%.cpp, $(SRC_IMGUI_BACKENDS)/%.$(OBJ_EXT), $(wildcard $(SRC_IMGUI)/*.cpp)) \
+	$(patsubst $(SRC_IMGUI_BACKENDS)/imgui_impl_%.cpp, $(SRC_IMGUI_BACKENDS)/imgui_impl_%.$(OBJ_EXT), $(filter $(SRC_IMGUI_BACKENDS)/imgui_impl_glfw.cpp $(SRC_IMGUI_BACKENDS)/imgui_impl_vulkan.cpp, $(wildcard $(SRC_IMGUI_BACKENDS)/*.cpp))) \
+
+$(info $(IMGUI_OBJS))
+
+
 # $(patsubst %.cpp, $(OBJ_DIR)/%.o, $(TST_CPP_RAW)) \
 
 # $(patsubst $(TST_NEURALSFD)/%.cpp, $(OBJ_DIR)/%.o, $(wildcard $(TST_NEURALSFD)/*.cpp)) \
@@ -198,9 +210,13 @@ $(OBJ_DIR)/%.$(OBJ_EXT): $(TST_HELLOTRIANGLE)/%.cpp # tests/HelloTriangle
 $(OBJ_DIR)/%.$(OBJ_EXT): $(TST_WINDOW)/%.cpp # tests/Window
 	@echo "Compiling $<"
 	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
-$(OBJ_DIR)/%.$(OBJ_EXT): $(SRC_IMGUI)/%.cpp # imgui/
+	
+$(SRC_IMGUI_BACKENDS)/%.$(OBJ_EXT): $(SRC_IMGUI)/%.cpp # imgui/
 	@echo "Compiling $<"
-	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
+	@$(CC) $(CXXFLAGS) -DIMGUI_IMPL_VULKAN -DIMGUI_IMPL_GLFW $(-O)$@ $(-C) $<
+$(SRC_IMGUI_BACKENDS)/%.$(OBJ_EXT): $(SRC_IMGUI_BACKENDS)/%.cpp # imgui/backends/
+	@echo "Compiling $<"
+	@$(CC) $(CXXFLAGS) -DIMGUI_IMPL_VULKAN -DIMGUI_IMPL_GLFW $(-O)$@ $(-C) $<
 # Run
 run:
 	@./$(TARGET)
@@ -234,11 +250,6 @@ rm:
 CMAKE_FLAGS :=  -DCMAKE_LIBRARY_OUTPUT_DIRECTORY=$(LIB_PATH) \
 				-DCMAKE_ARCHIVE_OUTPUT_DIRECTORY=$(LIB_PATH)
 
-
-
-
-
-
 ifeq ($(OS),Windows_NT)
 CMAKE_CXX_FLAGS := -target x86_64-w64-mingw32
 CMAKE_FLAGS +=  -G "MinGW Makefiles" \
@@ -267,3 +278,11 @@ endif
 $(LIB_PATH)/libfmt.a:
 	cmake $(DEPS_PATH)/fmt -B$(DEPS_PATH)/fmt/$(LIB_BUILD_DIR) ${CMAKE_FLAGS} -DCMAKE_CXX_FLAGS="$(CMAKE_CXX_FLAGS)" -DFMT_TEST=OFF
 	cmake --build $(DEPS_PATH)/fmt/$(LIB_BUILD_DIR)
+
+$(LIB_PATH)/libspdlog.a:
+	cmake --fresh $(DEPS_PATH)/spdlog -B$(DEPS_PATH)/spdlog/$(LIB_BUILD_DIR) ${CMAKE_FLAGS} -DCMAKE_CXX_FLAGS="$(CMAKE_CXX_FLAGS)" -DSPDLOG_BUILD_TESTS=OFF 
+# -DSPDLOG_FMT_EXTERNAL=ON -Dfmt_DIR="$(DEPS_PATH)/fmt/$(LIB_BUILD_DIR)"
+	cmake --build $(DEPS_PATH)/spdlog/$(LIB_BUILD_DIR)
+
+$(LIB_PATH)/libimgui.a: $(IMGUI_OBJS)
+	$(AR) $(ARFLAGS) $@ $^
