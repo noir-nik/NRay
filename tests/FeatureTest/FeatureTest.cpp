@@ -582,11 +582,12 @@ void ScrollCallback(Window *window, double xoffset, double yoffset){
 }
 
 void FramebufferCallback(Window* window, int width, int height) {
-	// DEBUG_TRACE("Window {} framebuffer resized to {}x{}", window->GetName(), width, height);
 	if (width == 0 || height == 0) {return;}
-	camera.proj = perspectiveX(60.0f, (float)width / height, 0.01f, 1000.0f); // TODO: move to size callback
-	// LOG_INFO("RecreateFrameResources {} callback", window->GetName());
-	
+	camera.proj = width > height
+	? perspectiveX(60.0f, (float)width / height, 0.01f, 1000.0f)
+	: perspectiveY(60.0f, (float)height / width, 0.01f, 1000.0f);
+
+	// LOG_INFO("RecreateFrameResources {} callback", window->GetName());	
 	ctx->RecreateFrameResources(window);
 }
 

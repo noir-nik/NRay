@@ -917,10 +917,10 @@ inline float4x4 perspective(float const fov, float const aspect, float const zNe
 }
 
 inline float4x4 perspectiveX(float fovX, float aspect, float near, float far) {
-	float tanHalfFovx = tan(fovX * DEG_TO_RAD / 2.0f);
+	float tanHalfFov = tanf(fovX * DEG_TO_RAD / 2.0f);
 	float4x4 result;
-	result(0, 0) = 1.0f / tanHalfFovx;
-	result(1, 1) = aspect * 1.0f / (tanHalfFovx);
+	result(0, 0) = 1.0f / tanHalfFov;
+	result(1, 1) = aspect * 1.0f / (tanHalfFov);
 	result(2, 2) = -(far + near) / (far - near);
 	result(3, 2) = -1.0f;
 	result(2, 3) = -(2.0f * far * near) / (far - near);
@@ -929,10 +929,10 @@ inline float4x4 perspectiveX(float fovX, float aspect, float near, float far) {
 }
 
 inline float4x4 perspectiveY(float fovY, float aspect, float near, float far) {
-	float tanHalfFovy = tan(fovY * DEG_TO_RAD / 2.0f);
+	float tanHalfFov = tanf(fovY * DEG_TO_RAD / 2.0f);
 	float4x4 result;
-	result(0, 0) = 1.0f / (aspect * tanHalfFovy);
-	result(1, 1) = 1.0f / tanHalfFovy;
+	result(0, 0) = aspect * 1.0f / (tanHalfFov);
+	result(1, 1) = 1.0f / tanHalfFov;
 	result(2, 2) = -(far + near) / (far - near);
 	result(3, 2) = -1.0f;
 	result(2, 3) = -(2.0f * far * near) / (far - near);
