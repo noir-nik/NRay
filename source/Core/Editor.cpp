@@ -446,13 +446,13 @@ bool Context::Viewport(Runtime::Viewport& ctx) {
 		}
 		auto w = ImGui::GetCurrentWindowRead();
 		auto r = w->ClipRect;
-		auto new_viewport = ivec4 (r.Min.x, r.Min.y, r.Max.x - r.Min.x, r.Max.y - r.Min.y);
-		viewport_changed = ctx.viewport != new_viewport;
+		auto new_rect = ivec4 (r.Min.x, r.Min.y, r.Max.x, r.Max.y);
+		viewport_changed = ctx.rect != new_rect;
 		if (viewport_changed) {
 			// LOG_INFO("Viewport changed");
-			ctx.viewport = new_viewport;
-			// ctx.viewportChanged = true;
-			ctx.camera.updateProj(ctx.viewport.z, ctx.viewport.w);
+			ctx.rect = new_rect;
+			// ctx.rectChanged = true;
+			ctx.camera.updateProj(ctx.rect.z - ctx.rect.x, ctx.rect.w - ctx.rect.y);
 		}
 		auto& io = ImGui::GetIO();
 		bool hoveringRect = ImGui::IsMouseHoveringRect(r.Min, r.Max);
@@ -657,7 +657,7 @@ void Setup(SceneGraph* sceneGraph){
 			{Runtime::Viewport{}},
 		}},
 		{"Mesh", {
-
+			{Runtime::Viewport{}},
 		}},
 	};
 }

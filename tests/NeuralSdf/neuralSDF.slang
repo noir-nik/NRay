@@ -160,31 +160,25 @@ float3 getNormal(float3 p) {
 }
 
 float3 getLight(float3 p, float3 rd, float3 color) {
-    // Источник света (позиция)
+    // Light source position
     float3 lightSource = float3(20.0, 40.0, 30.0);
 
-    // Вектор от точки к свету - L
+    // Vector from point to light - L
     // float3 L = normalize(lightSource - p);
     float3 L = normalize(float3(0.707, 0.0, 0.707));
-    // Нормаль точки p - N
+    // Normal of point p - N
     float3 N = getNormal(p);
-    // Вектор из p в камеру - V
+    // Vector from p to camera - V
     float3 V = -rd;
-    // Отраженный свет - R
+    // Reflected light - R
     float3 R = reflect(-L, N);
 
-    // return N;
-    //  float3 specColor = float3(0.5);
-    //  float3 specular = specColor * pow(clamp(dot(R, V), 0.0, 1.0), 10.0);
     float3 diffuse = color * clamp(dot(L, N), 0.0, 1.0);
-    // float3 diffuse = color * clamp(dot(L, N), 0.0, 1.0);
     float3 ambient = color * 0.05;
     float3 fresnel = 0.10 * color * pow(1.0 + dot(rd, N), 3.0);
-    // return diffuse;
-    // return ambient;
-    // return fresnel;
     return diffuse + ambient + fresnel;
 }
+
 float map(float value, float min1, float max1, float min2, float max2) {
     return min2 + (value - min1) * (max2 - min2) / (max1 - min1);
 }

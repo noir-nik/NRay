@@ -50,7 +50,6 @@ using namespace Lmath;
 
 using Pixel = vec4;
 namespace {
-// using namespace Types;
 struct DrawViewportInfo;
 
 struct AppContext : DeleteCopyDeleteMove {
@@ -413,7 +412,7 @@ void AppContext::DrawWindow(Entity window) {
 			// cmd.BeginRendering({{{{resource.colorImage, resource.resolveImage}}}, {}, fullWindowRect});
 		};
 		for (auto v : windowData.viewportsToRender) {
-			auto& viewport = v->viewport;
+			ivec4 viewport(v->rect.x, v->rect.y, v->rect.z - v->rect.x, v->rect.w - v->rect.y);
 			viewport_A = viewport;
 			ivec4 flipped (viewport.x, viewport.y + viewport.w, viewport.z, -viewport.w);
 			cmd.SetViewport(flipped);

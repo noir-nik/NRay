@@ -6,7 +6,6 @@ module;
 #define _STRUCTS_EXPORT
 #endif
 
-#include <cstdint>
 
 #ifdef USE_MODULES
 export module Structs;

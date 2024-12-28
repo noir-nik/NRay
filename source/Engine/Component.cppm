@@ -26,7 +26,7 @@ using namespace Lmath;
 struct Name {
     std::string name;
     
-    Name(const std::string_view& name) : name(name) {}
+    inline Name(const std::string_view& name) : name(name) {}
 };
 
 struct Transform {
@@ -35,7 +35,7 @@ struct Transform {
 
 	bool dirty;
 
-	Transform(bool dirty = true) : dirty(dirty) {}
+	inline Transform(bool dirty = true) : dirty(dirty) {}
 };
 
 

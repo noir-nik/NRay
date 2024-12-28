@@ -34,6 +34,7 @@ import imgui_impl_vulkan;
 #include "Lmath.cppm"
 #include "VulkanBackend.cppm"
 #include "Types.cppm"
+#include "Structs.cppm"
 #include "Log.cppm"
 #include "imgui_impl_vulkan.cppm"
 #include "imgui_impl_glfw.cppm"
@@ -64,7 +65,6 @@ import imgui_impl_vulkan;
 
 static const char *VK_ERROR_STRING(VkResult result);
 namespace vkw {
-// using namespace Types;
 struct Instance;
 struct PhysicalDevice;
 struct DeviceResource;
@@ -2100,7 +2100,6 @@ void Instance::Create(){
 		}
 	}
 	
-	
 	uint32_t glfwExtensionCount = 0;
 	if (_ctx.presentRequested) {
 		// get all extensions required by glfw
@@ -2155,13 +2154,14 @@ void Instance::Create(){
 		.ppEnabledExtensionNames = activeExtensionsNames.data(),
 	};
 
+	VkValidationFeaturesEXT validationFeaturesInfo;
+	VkValidationFeatureEnableEXT enableFeatures[] = {
+		VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
+		VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
+		VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT,
+	};
 	if (validation_features) {
-		static const VkValidationFeatureEnableEXT enableFeatures[] = {
-			VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
-			VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
-			VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT,
-		};
-		VkValidationFeaturesEXT validationFeaturesInfo = {
+		validationFeaturesInfo = {
 			.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT,
 			.pNext                         = createInfo.pNext,
 			.enabledValidationFeatureCount = ARRAY_SIZE(enableFeatures),
@@ -2181,14 +2181,13 @@ void Instance::Create(){
 	createInfo.enabledExtensionCount = static_cast<uint32_t>(activeExtensionsNames.size());
     createInfo.ppEnabledExtensionNames = activeExtensionsNames.data();
 
-
+	VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo;
 	if (_ctx.enableValidationLayers) {
 		createInfo.enabledLayerCount = activeLayersNames.size();
 		createInfo.ppEnabledLayerNames = activeLayersNames.data();
 
 		// we need to set up a separate logger just for the instance creation/destruction
 		// because our "default" logger is created after
-		VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo;
 		PopulateDebugMessengerCreateInfo(debugCreateInfo);
 		debugCreateInfo.pNext = createInfo.pNext;
 		createInfo.pNext      = &debugCreateInfo;

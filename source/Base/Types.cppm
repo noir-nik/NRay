@@ -27,27 +27,3 @@ _TYPES_EXPORT using f64 = double;
 
 
 _TYPES_EXPORT using EntityType = u32;
-
-_TYPES_EXPORT 
-namespace Types {
-	
-struct DeleteCopy {
-	DeleteCopy() = default;
-	DeleteCopy(const DeleteCopy&) = delete;
-	DeleteCopy& operator=(const DeleteCopy&) = delete;
-	DeleteCopy(DeleteCopy&&) = default;
-	DeleteCopy& operator=(DeleteCopy&&) = default;
-	~DeleteCopy() = default;
-};
-
-struct DeleteCopyDeleteMove {
-	DeleteCopyDeleteMove() = default;
-	DeleteCopyDeleteMove(const DeleteCopyDeleteMove&) = delete;
-	DeleteCopyDeleteMove& operator=(const DeleteCopyDeleteMove&) = delete;
-	DeleteCopyDeleteMove(DeleteCopyDeleteMove&&) = delete;
-	DeleteCopyDeleteMove& operator=(DeleteCopyDeleteMove&&) = delete;
-	inline ~DeleteCopyDeleteMove() = default;
-};
-
-} // namespace Types
-

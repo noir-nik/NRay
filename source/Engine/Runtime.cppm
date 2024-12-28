@@ -2,7 +2,6 @@
 export module Runtime;
 #define _RUNTIMECONTEXT_EXPORT export
 export import SceneGraph;
-import Types;
 import Lmath;
 import stl;
 #else
@@ -60,16 +59,20 @@ struct Camera {
 	float zFar = 1000.0f;
 };
 
-struct Viewport {
+struct PanelBase {
 	Camera camera{};
-	ivec4 viewport{};
+	ivec4 rect{};
 };
 
-struct Outliner {
+struct Viewport : PanelBase {
+};
+
+struct Outliner : PanelBase {
 	SceneGraph* sceneGraph;
+	Outliner(SceneGraph* sceneGraph) : sceneGraph(sceneGraph) {}
 };
 
-struct Properties {
+struct Properties : PanelBase {
 	
 };
 
