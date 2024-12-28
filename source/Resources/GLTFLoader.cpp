@@ -134,7 +134,7 @@ auto LoadTexture(fastgltf::Asset& asset, size_t textureIndex) -> Texture {
 		image.data);
 	
 	// TODO: do this in external asset -> vulkan parser
- 	/* 
+ 	
 	if (data) {
 		auto [magFilterGltf, minFilterGltf] = GetFilters(asset, imageIndex);
 		auto magFilter = magFilterGltf == fastgltf::Filter::Nearest ? vkw::Filter::Nearest : vkw::Filter::Linear;
@@ -240,7 +240,7 @@ void LoadTextures(fastgltf::Asset& asset, Data& loadedData) {
 		loadedData.textures.push_back(LoadTexture(asset, imageIndex));
 	}
 }
- */
+ 
 
 /* 
 bool LoadMaterial(fastgltf::Asset& asset, size_t materialIndex) {

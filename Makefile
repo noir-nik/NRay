@@ -1,9 +1,7 @@
 # CC := g++
-# CC := ccache g++
 CC := clang++
-# CC := ccache clang++
 # CC := cl
-TARGET := nRay
+TARGET := NRay
 
 STATIC_LINK := 0
 COMPILE_IMGUI := 1
@@ -26,24 +24,25 @@ DEPS_PATH := deps
 OPT_DEBUG := -O0
 OPT_RELEASE := -O2
 
-INCLUDES := -Isource/Core \
-            -Isource/Base \
-            -Isource/Shaders \
-            -Isource/Engine \
-            -Isource/Resources \
-            -Ideps \
-            -Ideps/fastgltf/include \
-            -Ideps/spdlog/include \
-            -Ideps/glfw/include \
-			-Ideps/vma/include \
-            -Ideps/fmt/include \
-            -Ideps/imgui \
-            -Ideps/imgui/backends \
-            -Ideps/entt/src \
-            -Ideps/stb \
-			-Ideps/modules \
-			-Ideps/modules/imgui \
-			-Ideps/modules/stb \
+INCLUDES := \
+	-Isource/Core \
+	-Isource/Base \
+	-Isource/Shaders \
+	-Isource/Engine \
+	-Isource/Resources \
+	-Ideps \
+	-Ideps/fastgltf/include \
+	-Ideps/spdlog/include \
+	-Ideps/glfw/include \
+	-Ideps/vma/include \
+	-Ideps/fmt/include \
+	-Ideps/imgui \
+	-Ideps/imgui/backends \
+	-Ideps/entt/src \
+	-Ideps/stb \
+	-Ideps/modules \
+	-Ideps/modules/imgui \
+	-Ideps/modules/stb \
 
 -O := -o
 -OUT := -o
@@ -217,8 +216,6 @@ OBJS_FASTGLTF := $(patsubst $(SRC_FASTGLTF)/%.cpp, $(PLATFORM_BUILD_DIR)/fastglt
 SRC_SIMDJSON :=  $(DEPS_PATH)/fastgltf/deps/simdjson
 OBJS_SIMDJSON := $(patsubst $(SRC_SIMDJSON)/%.cpp, $(PLATFORM_BUILD_DIR)/simdjson/%.$(OBJ_EXT), $(SRC_SIMDJSON)/simdjson.cpp)
 
-$(info $(OBJS_SIMDJSON))
-
 # spdlog
 SRC_SPDLOG := $(DEPS_PATH)/spdlog/src
 OBJS_SPDLOG := $(patsubst $(SRC_SPDLOG)/%.cpp, $(PLATFORM_BUILD_DIR)/spdlog/%.$(OBJ_EXT), $(wildcard $(SRC_SPDLOG)/*.cpp))
@@ -376,7 +373,8 @@ EXTERNAL_MODULES_DIR := deps/modules
 EXTERNAL_MODULES := \
 	$(patsubst %.cppm,%,$(notdir $(wildcard $(EXTERNAL_MODULES_DIR)/*.cppm))) \
 	$(patsubst %.cppm,%,$(notdir $(wildcard $(EXTERNAL_MODULES_DIR)/imgui/*.cppm))) \
-	$(patsubst %.cppm,%,$(notdir $(wildcard $(EXTERNAL_MODULES_DIR)/stb/*.cppm)))
+	$(patsubst %.cppm,%,$(notdir $(wildcard $(EXTERNAL_MODULES_DIR)/stb/*.cppm))) \
+	fastgltf 
 
 EXTERNAL_MODULE_TARGETS := $(foreach module,$(EXTERNAL_MODULES),$(MODULES_BUILD_DIR)/$(module).pcm) 
 

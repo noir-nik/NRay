@@ -257,9 +257,14 @@ typedef struct uchar4
 
 typedef struct float3x3
 {
-	float3 m_col[3];
+	inline float3x3() { identity(); }
 
-	inline float3x3() {}
+	inline void identity()
+	{
+		m_col[0] = float3{ 1.0f, 0.0f, 0.0f };
+		m_col[1] = float3{ 0.0f, 1.0f, 0.0f };
+		m_col[2] = float3{ 0.0f, 0.0f, 1.0f };
+	}
 
 	inline float3x3(const float4x4& from4x4);
 
@@ -269,10 +274,13 @@ typedef struct float3x3
 	inline float3 get_row(int i) const { return float3{ m_col[0][i], m_col[1][i], m_col[2][i]}; }
 	inline void   set_row(int i, const float3& a_col) { m_col[0][i] = a_col[0]; m_col[1][i] = a_col[1]; m_col[2][i] = a_col[2]; }
 
+	inline       float3& col(int i)       { return m_col[i]; }
+	inline const float3& col(int i) const { return m_col[i]; }
+
 	inline float& operator()(int row, int col)       { return m_col[col][row]; }
 	inline float  operator()(int row, int col) const { return m_col[col][row]; }
 	
-	// inline float3x3 inverse() const { return inverse3x3(*this); }
+	float3 m_col[3];
 } mat3;
 
 typedef struct float4x4
@@ -300,26 +308,20 @@ typedef struct float4x4
 
 	inline void identity()
 	{
-	m_col[0] = float4{ 1.0f, 0.0f, 0.0f, 0.0f };
-	m_col[1] = float4{ 0.0f, 1.0f, 0.0f, 0.0f };
-	m_col[2] = float4{ 0.0f, 0.0f, 1.0f, 0.0f };
-	m_col[3] = float4{ 0.0f, 0.0f, 0.0f, 1.0f };
+		m_col[0] = float4{ 1.0f, 0.0f, 0.0f, 0.0f };
+		m_col[1] = float4{ 0.0f, 1.0f, 0.0f, 0.0f };
+		m_col[2] = float4{ 0.0f, 0.0f, 1.0f, 0.0f };
+		m_col[3] = float4{ 0.0f, 0.0f, 0.0f, 1.0f };
 	}
 
 	inline float4 get_col(int i) const                { return m_col[i]; }
 	inline void   set_col(int i, const float4& a_col) { m_col[i] = a_col; }
 
 	inline float4 get_row(int i) const { return float4{ m_col[0][i], m_col[1][i], m_col[2][i], m_col[3][i] }; }
-	inline void   set_row(int i, const float4& a_col)
-	{
-	m_col[0][i] = a_col[0];
-	m_col[1][i] = a_col[1];
-	m_col[2][i] = a_col[2];
-	m_col[3][i] = a_col[3];
-	}
+	inline void   set_row(int i, const float4& a_col) { m_col[0][i] = a_col[0]; m_col[1][i] = a_col[1]; m_col[2][i] = a_col[2]; m_col[3][i] = a_col[3]; }
 
-	inline float4& col(int i)       { return m_col[i]; }
-	inline const float4&  col(int i) const { return m_col[i]; }
+	inline       float4& col(int i)       { return m_col[i]; }
+	inline const float4& col(int i) const { return m_col[i]; }
 
 	inline float& operator()(int row, int col)       { return m_col[col][row]; }
 	inline float  operator()(int row, int col) const { return m_col[col][row]; }
@@ -354,12 +356,7 @@ typedef struct float4x4
 		row.row  = a_row;
 		return row;
 	}
-
-	// inline void decompose(float3& translation, float3& rotation, float3& scale) const;
-	// inline float4x4 transpose() const { return transpose4x4(*this); }
-	// inline float4x4 inverse() const { return inverse4x4(*this); }
-	// inline float4x4 affineInverse() const { return affineInverse4x4(*this); }
-
+	
 	float4 m_col[4];
 } mat4;
 

@@ -451,10 +451,15 @@ struct SubmitInfo {
 	Flags64    signalStages    = PipelineStage::None;
 };
 
+struct ImagePair {
+	const Image& colorAttachment;
+	const Image* resolveImage = nullptr;
+};
+
 struct RenderingInfo {
-	const std::vector<std::span<const Image>>& colorAttachs;
-	Image depthAttach = {};
-	vec4 viewport = vec4(0.0f);
+	const std::span<ImagePair const> colorAttachs;
+	Image const& depthAttach;
+	ivec4 renderArea = ivec4(0.0f);
 	ivec4 scissor = ivec4(0);
 	uint32_t layerCount = 1;
 };
@@ -484,11 +489,13 @@ struct Command {
 
 
 	void BeginRendering(const RenderingInfo& info);
+	void SetViewport(ivec4 const& viewport);
+	void SetScissor(ivec4 const& scissor);
 	void EndRendering();
 	// void BeginPresent();
 	// void EndPresent();
 	void BindPipeline(Pipeline& pipeline);
-	void PushConstants(void* data, uint32_t size);
+	void PushConstants(const Pipeline& pipeline, void* data, uint32_t size);
 
 	// void BuildBLAS(BLAS& blas);
 	// void BuildTLAS(TLAS& tlas, const std::vector<BLASInstance>& instances);

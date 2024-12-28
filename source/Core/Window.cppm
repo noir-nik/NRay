@@ -3,6 +3,7 @@ export module Window;
 #define _WINDOW_EXPORT export
 import VulkanBackend;
 import Lmath.types;
+// import Runtime;
 import Types;
 import glfw;
 import UI;
@@ -11,17 +12,16 @@ import stl;
 #else
 #pragma once
 #define _WINDOW_EXPORT
+#include "VulkanBackend.cppm"
+#include "Lmath.types.cppm"
+// #include "Runtime.cppm"
+#include "Types.cppm"
+#include "glfw.cppm"
+#include "UI.cppm"
+
 #include <chrono>
 #include <vector>
 #include <string>
-
-#include "glfw.cppm"
-
-#include "UI.cppm"
-
-#include "Lmath.types.cppm"
-#include "VulkanBackend.cppm"
-#include "Types.cppm"
 #endif
 
 
@@ -31,8 +31,6 @@ import stl;
 #else
 #define _WINDOW_EXPORT
 #include "Lmath.cppm"
-#include "VulkanBackend.cppm"
-#include "Types.cppm"
 #endif
 
 _WINDOW_EXPORT
@@ -165,12 +163,16 @@ class Window {
 	void (*charModsCallback)           (Window *window, unsigned int codepoint, int mods)            = nullptr;
 	void (*dropCallback)               (Window *window, int path_count, const char *paths[])         = nullptr;
 		
+	Window& operator=(const Window&) = delete;
+	Window& operator=(Window&&) = delete;
+	Window(const Window&) = delete;
+	Window(Window&&) = delete;
+
 public:
 	vkw::SwapChain swapChain;
+	// void* uiDrawData = nullptr;
 
 	Window(int width, int height, const char* name = "NRay", void* imguiStyle = nullptr);
-	Window& operator=(const Window&) = delete;
-	Window(const Window&) = delete;
 	inline virtual ~Window(){ if(alive) Destroy(); }
 	void ApplyChanges();
 	void UpdateFramebufferSize();

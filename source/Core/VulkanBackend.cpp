@@ -188,16 +188,7 @@ struct Context {
 };
 static Context _ctx;
 
-struct DeleteCopyMove {
-	DeleteCopyMove() = default;
-	DeleteCopyMove(const DeleteCopyMove&) = delete;
-	DeleteCopyMove& operator=(const DeleteCopyMove&) = delete;
-	DeleteCopyMove(DeleteCopyMove&&) = default;
-	DeleteCopyMove& operator=(DeleteCopyMove&&) = default;
-	virtual ~DeleteCopyMove() = default;
-};
-
-struct Instance: DeleteCopyMove {
+struct Instance: DeleteCopyDeleteMove {
 	VkInstance handle = VK_NULL_HANDLE;
 	VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
 	VkDebugReportCallbackEXT debugReport = VK_NULL_HANDLE;
@@ -219,7 +210,7 @@ struct Instance: DeleteCopyMove {
 
 };
 
-struct PhysicalDevice: DeleteCopyMove {
+struct PhysicalDevice: DeleteCopyDeleteMove {
 
 	UID uid;
 	VkPhysicalDevice handle = VK_NULL_HANDLE;
@@ -270,7 +261,7 @@ struct QueueResource {
 
 
 
-struct DeviceResource: DeleteCopyMove {
+struct DeviceResource: DeleteCopyDeleteMove {
 	UID uid;
 	DeviceResource(UID uid) : uid(uid) {
 		pipelineLibrary.device = this;
@@ -498,7 +489,7 @@ struct CommandResource {
 	// DeviceResource* device = nullptr;
 	// uint32_t queueFamily = ~0;
 	QueueResource* queue = nullptr;
-	PipelineResource* currentPipeline = nullptr;
+	// PipelineResource* currentPipeline = nullptr;
 
 	VkCommandPool pool = VK_NULL_HANDLE;
 	VkCommandBuffer buffer = VK_NULL_HANDLE;
@@ -516,7 +507,7 @@ struct CommandResource {
 };
 
 
-struct SwapChainResource: DeleteCopyMove {
+struct SwapChainResource: DeleteCopyDeleteMove {
 	DeviceResource* device = nullptr;
 	// VkDevice device = VK_NULL_HANDLE;
 	VkSurfaceKHR surface = VK_NULL_HANDLE;	
@@ -1652,42 +1643,42 @@ Command::Command() {
 
 void Command::BeginRendering(const RenderingInfo& info) {
 
-	vec4 viewport = info.viewport;
-	if (info.viewport == vec4(0.0f)) {
+	ivec4 renderArea = info.renderArea;
+	if (renderArea == ivec4(0.0f)) {
 		if (info.colorAttachs.size() > 0) {
-			viewport.z = info.colorAttachs[0][0].width;
-			viewport.w = info.colorAttachs[0][0].height;
+			renderArea.z = info.colorAttachs[0].colorAttachment.width;
+			renderArea.w = info.colorAttachs[0].colorAttachment.height;
 		} else if (info.depthAttach.resource) {
-			viewport.z = info.depthAttach.width;
-			viewport.w = info.depthAttach.height;
+			renderArea.z = info.depthAttach.width;
+			renderArea.w = info.depthAttach.height;
 		}
 	}
 
-	ivec2 offset(viewport.x, viewport.y);
-	uvec2 extent(viewport.z, viewport.w);
+	ivec2 offset(renderArea.x, renderArea.y);
+	uvec2 extent(renderArea.z, renderArea.w);
 	
-
 	std::vector<VkRenderingAttachmentInfoKHR> colorAttachInfos;
 	colorAttachInfos.reserve(info.colorAttachs.size());
 	for (auto& colorAttach: info.colorAttachs) {
-		DEBUG_ASSERT(colorAttach.size() > 0 && colorAttach.size() < 3, "Invalid color attachment count.");
+		// DEBUG_ASSERT(colorAttach.size() > 0 && colorAttach.size() < 3, "Invalid color attachment count.");
 		colorAttachInfos.emplace_back(VkRenderingAttachmentInfoKHR{
 			.sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR,
-			.imageView   = colorAttach[0].resource->view,
+			.imageView   = colorAttach.colorAttachment.resource->view,
 			.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 			.loadOp      = VK_ATTACHMENT_LOAD_OP_CLEAR,
 			.storeOp     = VK_ATTACHMENT_STORE_OP_STORE,
 			.clearValue  = {
 				.color   = { 
-					.float32 = { 0.1f, 0.1f, 0.1f, 0.0f },
+					.float32 = { 0.1f, 0.2f, 0.1f, 0.0f },
 				}
 			}
 		});
-		if (colorAttach.size() > 1) {
-			DEBUG_ASSERT(std::min(colorAttach[0].resource->samples, resource->device->physicalDevice->maxSamples) > SampleCount::_1,
-				"[Command::BeginRendering] Using MSAA with maxSamples == 1 on device.");
+		if (colorAttach.resolveImage != nullptr) {
+			if(std::min(colorAttach.colorAttachment.resource->samples, resource->device->physicalDevice->maxSamples) == SampleCount::_1) {
+				LOG_WARN("[Command::BeginRendering] Using MSAA with maxSamples == 1 on device.");
+			}
 			colorAttachInfos.back().resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;
-			colorAttachInfos.back().resolveImageView = colorAttach[1].resource->view;
+			colorAttachInfos.back().resolveImageView = colorAttach.resolveImage->resource->view;
 			colorAttachInfos.back().resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 		}
 	}
@@ -1726,48 +1717,33 @@ void Command::BeginRendering(const RenderingInfo& info) {
 		};
 		renderingInfo.pDepthAttachment = &depthAttachInfo;
 	}
+	vkCmdBeginRendering(resource->buffer, &renderingInfo);
+}
 	
-	VkViewport vk_viewport {
+void Command::SetViewport(ivec4 const& viewport) {
+	VkViewport vkViewport {
+		.x        = static_cast<float>(viewport.x),
+		.y        = static_cast<float>(viewport.y),
+		.width    = static_cast<float>(viewport.z),
+		.height   = static_cast<float>(viewport.w),
 		.minDepth = 0.0f,
 		.maxDepth = 1.0f,
 	};
-	
-	constexpr bool flip_y = true;
-
-	if (flip_y){
-		vk_viewport = {
-			.x      =  viewport.x,
-			.y      =  viewport.w,
-			.width  =  viewport.z,
-			.height = -viewport.w,
-		};
-	} else {
-		vk_viewport = {
-			.x      =  viewport.x,
-			.y      =  viewport.y,
-			.width  =  viewport.z,
-			.height =  viewport.w
-		};
-	};
-
-	VkRect2D vk_scissor;
-	if (info.scissor == ivec4(0)){
-		vk_scissor = { offset.x, offset.y, extent.x, extent.y };
-	} else {
-		vk_scissor = {
-			.offset = { info.scissor.x, info.scissor.y },
-			.extent = {
-				.width  = static_cast<uint32_t>(info.scissor.z),
-				.height = static_cast<uint32_t>(info.scissor.w)
-			}
-		};
-	}
-
-	vkCmdSetViewport(resource->buffer, 0, 1, &vk_viewport);
-	vkCmdSetScissor(resource->buffer, 0, 1, &vk_scissor);
-
-	vkCmdBeginRendering(resource->buffer, &renderingInfo);
+	vkCmdSetViewport(resource->buffer, 0, 1, &vkViewport);
 }
+
+void Command::SetScissor(ivec4 const& scissor) {
+	VkRect2D vkScissor {
+		.offset = { scissor.x, scissor.y },
+		.extent = {
+			.width  = static_cast<uint32_t>(scissor.z),
+			.height = static_cast<uint32_t>(scissor.w)
+		}
+	};
+	vkCmdSetScissor(resource->buffer, 0, 1, &vkScissor);
+}
+
+
 void Command::EndRendering() {
 	vkCmdEndRendering(resource->buffer);
 }
@@ -1846,11 +1822,11 @@ void Command::BindPipeline(Pipeline& pipeline) {
 	vkCmdBindDescriptorSets(resource->buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->layout, 0, 1, &resource->descriptorSet, 0, nullptr);
 	// vkCmdBindDescriptorSets(resource->buffer, (VkPipelineBindPoint)pipeline.point, pipeline.resource->layout, 0, 1, &_ctx.descriptorSet, 0, nullptr);
 
-	resource->currentPipeline = pipeline.resource.get();
+	// resource->currentPipeline = pipeline.resource.get();
 }
 
-void Command::PushConstants(void* data, uint32_t size) {
-	vkCmdPushConstants(resource->buffer, resource->currentPipeline->layout, VK_SHADER_STAGE_ALL, 0, size, data);
+void Command::PushConstants(const Pipeline& pipeline, void* data, uint32_t size) {
+	vkCmdPushConstants(resource->buffer, pipeline.resource->layout, VK_SHADER_STAGE_ALL, 0, size, data);
 }
 
 // vkWaitForFences + vkResetFences +
@@ -1886,7 +1862,7 @@ void Command::BeginCommandBuffer() {
 
 void Command::EndCommandBuffer() {
 	vkEndCommandBuffer(resource->buffer); 
-	resource->currentPipeline = {};
+	// resource->currentPipeline = {};
 }
 
 void Device::WaitQueue(Queue* queue) {
@@ -2273,7 +2249,7 @@ void Context::GetPhysicalDevices() {
 	for (const auto& device: devices) {
 		// device->physicalDevices->handle.insert({UIDGenerator::Next(), PhysicalDevice()});
 		auto uid = UIDGenerator::Next();
-		auto res = _ctx.physicalDevices.try_emplace(uid, PhysicalDevice(uid, device));
+		auto res = _ctx.physicalDevices.try_emplace(uid, uid, device);
 		auto& physicalDevice = res.first->second;
 		physicalDevice.GetDetails();
 	};

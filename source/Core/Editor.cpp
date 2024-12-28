@@ -31,15 +31,12 @@ namespace Editor {
 using namespace Lmath;
 struct Context;
 
-struct Panel {
-	const char* name;
-	void (Context::*draw)(Runtime::Context& ctx) = nullptr;
-};
+
 
 struct Tab {
 	std::string name;
-	std::vector<Panel> panels;
-	void Draw(Runtime::Context& ctx);
+	std::vector<Runtime::Panel> panels;
+	void Draw(Runtime::Data const& ctx);
 };
 
 struct Context {
@@ -59,28 +56,25 @@ struct Context {
 	ImGuiStyle defaultStyle;
 	ImGuiStyle style;
 
+	SceneGraph* sceneGraph;
+
 	std::vector<NodeIndex> selectedNodes;
 	NodeIndex activeNode = -1;
-	std::vector<Tab> tabs {
-		{"View3d", {
-			{"Outliner", &Context::OutlinerWindow},
-			{"Properties", &Context::PropertiesWindow},
-		}},
-		{"Mesh", {
+	std::vector<Tab> tabs;
 
-		}},
-	};
+	void SetupWindow(Runtime::WindowData& windowData);
 
-	void MainMenu(Runtime::Context& ctx);
+	void MainMenu(Runtime::Data const& ctx);
 	void RenderUI();
 	void StyleWindow(); 
 	void StyleEditor();
 
-	void Draw(Runtime::Context& ctx);
+	void Draw(Runtime::Data const& ctx);
 
 	void DebugWindow(Runtime::Camera& camera);
-	void OutlinerWindow(Runtime::Context& ctx);
-	void PropertiesWindow(Runtime::Context& ctx);
+	void Viewport(Runtime::Viewport& ctx);
+	void OutlinerWindow(Runtime::Outliner& ctx);
+	void PropertiesWindow(Runtime::Data const& ctx);
 	
 	bool SaveStyle(const char* filename,const ImGuiStyle& style);
 	bool LoadStyle(const char* filename,ImGuiStyle& style);
@@ -92,14 +86,43 @@ struct Context {
 	inline static const char* GetStyleVarName(ImGuiStyleVar idx);
 } editorContext;
 
-void Tab::Draw(Runtime::Context& ctx) {
+struct PanelVisitor {
+	void operator()(Runtime::Viewport& ctx) const {
+		editorContext.Viewport(ctx);
+	}
+	
+	void operator()(Runtime::Outliner& ctx) const {
+		editorContext.OutlinerWindow(ctx);
+	}
+	
+	void operator()(Runtime::Properties&) const {
+		// std::cout << "Properties Panel\n";
+	}
+};
+/* 
+void Tab::Draw(Runtime::Data const& ctx) {
 	for (auto& panel : panels) {
 		(editorContext.*panel.draw)(ctx);
 	}
 }
+ */
 
-void Context::MainMenu(Runtime::Context& ctx) {
-	if (!ImGui::BeginMainMenuBar()) return;
+void Context::SetupWindow(Runtime::WindowData& windowData) {
+	if (windowData.main) {
+		// windowData.panels.emplace_back(Runtime::Outliner{});
+		// windowData.panels.emplace_back(Runtime::Viewport{.viewport = {0, 0, 500, 500}});
+	}
+}
+
+void Context::MainMenu(Runtime::Data const& ctx) {
+	ImGui::PushStyleColor(ImGuiCol_MenuBarBg, ImVec4(0.09f, 0.09f, 0.09f, 1.0f));
+	if (!ImGui::BeginMainMenuBar()) {
+		LOG_WARN("Failed to create main menu bar");
+		ImGui::PopStyleColor();
+		return;
+	}
+	ImGui::PopStyleColor();
+
 	ImGuiIO& io = ImGui::GetIO();
 	io.WantCaptureMouse |= io.WantCaptureKeyboard;
 	
@@ -134,6 +157,7 @@ void Context::MainMenu(Runtime::Context& ctx) {
 		ImGui::MenuItem("About");
 		ImGui::EndMenu();
 	}
+
 	/* if (ImGui::BeginTabBar("TabBar", ImGuiTabBarFlags_None)){
 		if (ImGui::BeginTabItem("View3D")) {
 			if (ImGui::Begin("Viewport", nullptr, ImGuiWindowFlags_NoDecoration)) {
@@ -162,13 +186,15 @@ void Context::MainMenu(Runtime::Context& ctx) {
 		ImGui::EndTabBar();
 	} */
 
+	PanelVisitor visitor;
 	if (ImGui::BeginTabBar("TabBar", ImGuiTabBarFlags_None)){
 		for (auto& tab : tabs) {
 			if (ImGui::BeginTabItem(tab.name.c_str())) {
 				for (auto& panel : tab.panels) {
-					(editorContext.*panel.draw)(ctx);
+					std::visit(visitor, panel);
 				}
 				ImGui::EndTabItem();
+				ctx.windowData->tabPanels = tab.panels;
 			}
 		}
 		ImGui::EndTabBar();
@@ -347,7 +373,43 @@ void Context::displayNode(const SceneGraph& sceneGraph, const NodeIndex nodeInde
 	ImGui::PopID();
 }
 
-void Context::OutlinerWindow(Runtime::Context& ctx) {
+void Context::Viewport(Runtime::Viewport& ctx) {
+	// ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.0f);
+	// ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+	ImGuiWindowFlags flags {
+		ImGuiWindowFlags_NoCollapse
+		// | ImGuiWindowFlags_NoMove
+		| ImGuiWindowFlags_NoDecoration
+		| ImGuiWindowFlags_MenuBar
+		| ImGuiWindowFlags_NoBackground
+	};
+	if (ImGui::Begin("Viewport", nullptr, flags) ) {
+		if (ImGui::BeginMenuBar()) {
+			if (ImGui::Button("Add")) {
+				//
+			}
+			ImGui::EndMenuBar();
+		}
+		auto w = ImGui::GetCurrentWindowRead();
+		auto r = w->ClipRect;
+		// printf("Rect: (%f, %f, %f, %f)\n", r.Min.x, r.Min.y, r.Max.x, r.Max.y);
+		auto new_viewport = ivec4 (r.Min.x, r.Min.y, r.Max.x - r.Min.x, r.Max.y - r.Min.y);
+		// LOG_INFO("Viewport new: ({}, {}, {}, {})", new_viewport.x, new_viewport.y, new_viewport.z, new_viewport.w);
+		// LOG_INFO("Viewport old: ({}, {}, {}, {})", ctx.viewport.x, ctx.viewport.y, ctx.viewport.z, ctx.viewport.w);
+		if (ctx.viewport != new_viewport) {
+			// LOG_INFO("Viewport changed");
+			ctx.viewport = new_viewport;
+			// ctx.viewportChanged = true;
+			ctx.camera.updateProj(ctx.viewport.z, ctx.viewport.w);
+		}
+	}
+	// ImGui::PopStyleVar();
+	// ImGui::PopStyleColor();
+	ImGui::End();
+}
+
+
+void Context::OutlinerWindow(Runtime::Outliner& ctx) {
 	const ImGuiTreeNodeFlags parent_flags {
 		ImGuiTreeNodeFlags_OpenOnArrow       |
 		ImGuiTreeNodeFlags_OpenOnDoubleClick |
@@ -368,20 +430,32 @@ void Context::OutlinerWindow(Runtime::Context& ctx) {
 		ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "%s", ctx.sceneGraph->Get(node).name());
 	}
 */
-	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
-	if (ImGui::Begin("Outliner", nullptr, 0/* ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoDecoration*/) ) {
+	if (ImGui::Begin("Outliner", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_MenuBar) ) {
+		if (ImGui::BeginMenuBar()) {
+			if (ImGui::BeginMenu("Edit")) {
+				if (ImGui::MenuItem("Copy")) {
+					// Copy();
+				}
+				if (ImGui::MenuItem("Paste")) {
+					// Paste();
+				}
+				ImGui::EndMenu();
+			}
+			ImGui::EndMenuBar();
+		}
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
 		if (ImGui::TreeNodeEx("Scene Graph", parent_flags | ImGuiTreeNodeFlags_DefaultOpen)) {
 			for (const auto& nodeIndex : ctx.sceneGraph->GetCurrentScene().children) {
 				displayNode(*ctx.sceneGraph, nodeIndex, parent_flags);
 			}
 			ImGui::TreePop();
 		}
+		ImGui::PopStyleVar();
 	}
-	ImGui::PopStyleVar();
 	ImGui::End();
 }
 
-void Context::PropertiesWindow(Runtime::Context& ctx) {
+void Context::PropertiesWindow(Runtime::Data const& ctx) {
 	// if (ImGui::Begin("Properties", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove)) {
 	// }
 	// ImGui::End();
@@ -430,23 +504,29 @@ void Hover_Example() {
 }
  */
 
-void Context::Draw(Runtime::Context& ctx) {
-	editorContext.MainMenu(ctx);
+void Context::Draw(Runtime::Data const& ctx) {
+	if (ctx.windowData->main) {
+		editorContext.MainMenu(ctx);
+	}
+	// sizeof (Runtime::Panel1);
+	// sizeof (Runtime::Panel);
 	
 	if (showDemoWindow) ImGui::ShowDemoWindow();
 	if (showStyleEditor) StyleEditor(); 
-	if (showDebugWindow) DebugWindow(*ctx.camera);	
+	// if (showDebugWindow) DebugWindow(*ctx.camera);	
 	// ctx.RenderUI();
 }
 
-void Draw(Runtime::Context& ctx) {
+void Draw(Runtime::Data const& ctx) {
 	editorContext.Draw(ctx);
 }
 
 void BeginFrame() {
 	vkw::ImGuiNewFrame();
 	ImGui::NewFrame();
-	ImGui::DockSpaceOverViewport(ImGui::GetWindowDockID(), 0, /* ImGuiDockNodeFlags_PassthruCentralNode |  */ImGuiDockNodeFlags_AutoHideTabBar);
+	ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0,0,0,0));
+	ImGui::DockSpaceOverViewport(ImGui::GetWindowDockID(), 0, ImGuiDockNodeFlags_PassthruCentralNode | ImGuiDockNodeFlags_AutoHideTabBar);
+	ImGui::PopStyleColor();
 }
 
 UiDrawData* EndFrame() {
@@ -454,7 +534,7 @@ UiDrawData* EndFrame() {
 	return static_cast<UiDrawData*>(ImGui::GetDrawData());
 }
 
-void Setup(){
+void Setup(SceneGraph* sceneGraph){
 
 	editorContext.defaultStyle = ImGui::GetStyle();
 
@@ -480,7 +560,22 @@ void Setup(){
 	active_hovered = { 0.0f, 0.0f, 1.0f, 1.0f };
 
 
+	editorContext.sceneGraph = sceneGraph;
 
+	editorContext.tabs = {
+		{"View3d", {
+			{Runtime::Outliner{sceneGraph}},
+			{Runtime::Properties{}},
+			{Runtime::Viewport{}},
+		}},
+		{"Mesh", {
+
+		}},
+	};
+}
+
+void SetupWindow(Runtime::WindowData& windowData){
+	editorContext.SetupWindow(windowData);
 }
 
 UiStyle* GetStyle() {
@@ -730,6 +825,24 @@ bool Context::LoadStyle(const char* filename, ImGuiStyle& style) {
     return true;
 }
 
+void drawWindowRects(ImGuiWindow* window) {
+	auto drawList          = ImGui::GetForegroundDrawList();
+	auto OuterRectClipped  = window->OuterRectClipped;
+	auto InnerRect         = window->InnerRect;
+	auto InnerClipRect     = window->InnerClipRect;
+	auto WorkRect          = window->WorkRect;
+	auto ParentWorkRect    = window->ParentWorkRect;
+	auto ClipRect          = window->ClipRect;
+	auto ContentRegionRect = window->ContentRegionRect;
+	drawList->AddRect(OuterRectClipped.Min, OuterRectClipped.Max, ImGui::Col32(255, 0, 0, 255));
+	drawList->AddRect(InnerRect.Min, InnerRect.Max, ImGui::Col32(0, 255, 0, 255));
+	drawList->AddRect(InnerClipRect.Min, InnerClipRect.Max, ImGui::Col32(0, 0, 255, 255));
+	drawList->AddRect(WorkRect.Min, WorkRect.Max, ImGui::Col32(255, 255, 0, 255));
+	drawList->AddRect(ParentWorkRect.Min, ParentWorkRect.Max, ImGui::Col32(0, 255, 255, 255));
+	drawList->AddRect(ClipRect.Min, ClipRect.Max, ImGui::Col32(255, 0, 255, 255));
+	drawList->AddRect(ContentRegionRect.Min, ContentRegionRect.Max, ImGui::Col32(0, 0, 0, 255));
+}
+
 static void HelpMarker(const char* desc) {
     ImGui::TextDisabled("(?)");
     if (ImGui::BeginItemTooltip())
@@ -841,6 +954,7 @@ void Context::StyleEditor() {
 				ImGui::SliderFloat("SeparatorTextBorderSize", &style.SeparatorTextBorderSize, 0.0f, 10.0f, "%.0f");
 				ImGui::SliderFloat2("SeparatorTextAlign", (float*)&style.SeparatorTextAlign, 0.0f, 1.0f, "%.2f");
 				ImGui::SliderFloat2("SeparatorTextPadding", (float*)&style.SeparatorTextPadding, 0.0f, 40.0f, "%.0f");
+				ImGui::SliderFloat("DockingSeparatorSize", &style.DockingSeparatorSize, 0.0f, 10.0f, "%.0f");
 				ImGui::SliderFloat("LogSliderDeadzone", &style.LogSliderDeadzone, 0.0f, 12.0f, "%.0f");
 
 				ImGui::SeparatorText("Tooltips");

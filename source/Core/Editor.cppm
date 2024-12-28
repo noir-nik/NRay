@@ -12,10 +12,11 @@ _EDITOR_EXPORT
 namespace Editor {
 	using UiDrawData = void;
 	using UiStyle = void;
-	void Setup();
+	void Setup(SceneGraph* sceneGraph);
+	void SetupWindow(Runtime::WindowData& windowData);
 	void Finish();
     void BeginFrame();
-	void Draw(Runtime::Context& rtc);
+	void Draw(Runtime::Data const& data);
     UiDrawData* EndFrame();
 	UiStyle* GetStyle();
 };

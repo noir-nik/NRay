@@ -17,8 +17,8 @@ import Phong;
 import GLTFLoader;
 import entt;
 import UI;
-import Types;
 import Runtime;
+import Types;
 #else
 #include "Lmath.cppm"
 #include "VulkanBackend.cppm"
@@ -49,15 +49,15 @@ using namespace Lmath;
 
 using Pixel = vec4;
 namespace {
-struct AppContext {
+struct DrawViewportInfo;
+
+struct AppContext : DeleteCopyDeleteMove {
 	vkw::Pipeline pipeline;
 
 	vkw::Pipeline glTFPipeline;
 	// vkw::Pipeline computePipeline;
 
 	uint32_t width, height;
-
-	Editor::UiDrawData* imDrawData = nullptr;
 
 	// float4x4 viewMat;
 	// float4x4 worldViewInv;
@@ -82,7 +82,7 @@ struct AppContext {
 	Entity phongMaterial;
 	Entity phongLight;
 
-	Runtime::Context runtimeContext;
+	// Runtime::Context runtimeContext;
 
 	Project project;
 	inline Entity CreateEntity(const std::string_view& name = "") {
@@ -95,12 +95,6 @@ struct AppContext {
 
 	// std::vector<Entity> meshes;
 
-	AppContext () = default;
-	AppContext (const AppContext&) = delete;
-	AppContext& operator=(const AppContext&) = delete;
-	AppContext (AppContext&&) = delete;
-	AppContext& operator=(AppContext&&) = delete;
-	
 	void CreateShaders();
 	void CreateWindowResources(Entity window);
 	void UploadBuffers();
@@ -108,20 +102,30 @@ struct AppContext {
 	void viewport();
 	void RenderUI();
 	void DrawImgui(Entity window);
-	void DrawViewport(Entity window, int4 size);
+	void DrawViewport(vkw::Command& cmd, Runtime::Camera const& camera);
 	void RecreateFrameResources(Window* window);
 
 };
+static AppContext* ctx;
 
-struct WindowImageResource {
+struct WindowImageResource : DeleteCopyDeleteMove {
 	vkw::Image colorImage;
 	vkw::Image depthImage;
 	vkw::Image resolveImage;
 };
 
-static AppContext* ctx;
+struct DrawViewportInfo {
+	vkw::Command&            cmd;
+	Window&                  windowHandle;
+	WindowImageResource&     resource;
+	vkw::Image &              targetImage;
+};
 
-static Runtime::Camera camera(vec3(0.0f, 0.0f, 30.0f), vec3(0.0f, 0.0f, 0.0f), vec3(0.0f, 1.0f, 0.0f));
+constexpr auto fov = 60.0f;
+constexpr auto zNear = 0.01f;
+constexpr auto zFar = 1000.0f;
+
+// static Runtime::Camera camera(vec3(0.0f, 0.0f, 30.0f), vec3(0.0f, 0.0f, 0.0f), vec3(0.0f, 1.0f, 0.0f));
 
 struct Vertex {
 	vec3 pos;
@@ -188,7 +192,7 @@ const std::vector<Vertex> vertices = {
 };
 
 void AppContext::CreateShaders() {
-	auto resource = mainWindow.Get<WindowImageResource>();
+	auto& resource = mainWindow.Get<WindowImageResource>();
 	pipeline = device.CreatePipeline({
 		.point = vkw::PipelinePoint::Graphics,
 		.stages = {
@@ -293,98 +297,117 @@ void AppContext::UploadBuffers() {
 	sceneGraph.DebugPrint();
 }
 
+void AppContext::DrawViewport(vkw::Command& cmd, Runtime::Camera const& camera) {
 
-void AppContext::DrawViewport(Entity window, int4 viewport) {
-	auto& windowHandle = window.Get<Window>();
-	auto& resource = window.Get<WindowImageResource>();
-	auto glfwWindow = windowHandle.GetGLFWwindow();
 	Phong::PhongConstants constants{};
-	constants.viewProj = camera.proj * camera.view | affineInverse;
+	constants.viewProj = camera.proj * (camera.view | affineInverse);
 	constants.light = phongLight.Get<Phong::PhongLight>();
 	constants.material = phongMaterial.Get<Phong::PhongMaterial>();
 	constants.cameraPosition = camera.getPosition();
 
 	// LOG_INFO("Viewport: {}, {}, {}, {}", viewport.x, viewport.y, viewport.z, viewport.w); 
 
-	auto cmd = windowHandle.swapChain.GetCommandBuffer();
-	cmd.BeginCommandBuffer();
-	if (!windowHandle.swapChain.AcquireImage()) return;
-	vkw::Image& img = windowHandle.swapChain.GetCurrentImage();
-
 	// cmd.Barrier(resource.renderImage, {vkw::ImageLayout::TransferDst});
 	// cmd.ClearColorImage(resource.renderImage, {0.7f, 0.0f, 0.4f, 1.0f});
-	if (sampleCount == vkw::SampleCount::_1) {
-		cmd.BeginRendering({{{{resource.resolveImage}}}, {resource.depthImage}, vec4(viewport)});
-		// cmd.BeginRendering({{{{resource.resolveImage}}}, {}, vec4(viewport)});
-	} else {
-		cmd.BeginRendering({{{{resource.colorImage, resource.resolveImage}}}, {resource.depthImage}, vec4(viewport)});
-		// cmd.BeginRendering({{{{resource.colorImage, resource.resolveImage}}}, {}, vec4(viewport)});
-	}
-	;
-	
+
 	cmd.BindPipeline(glTFPipeline);
 	auto registry = project.GetSceneGraph().registry;
 	for (auto& meshNode : registry->view<Component::Mesh>()) {
-		// constants.model = meshNode.Get<Component::Transform>().global;
 		constants.model = registry->get<Component::Transform>(meshNode).global;
-		// print name
-		// printf("%s\n", meshNode.Get<Component::Name>().name.c_str());
-		cmd.PushConstants(&constants, sizeof(constants));
-		// auto& mesh = meshNode.Get<Component::Mesh>();
-		auto& mesh = registry->get<Component::Mesh>(meshNode);
+		cmd.PushConstants(glTFPipeline, &constants, sizeof(constants));
+		Component::Mesh& mesh = registry->get<Component::Mesh>(meshNode);
 		cmd.DrawMesh(mesh->vertexBuffer, mesh->indexBuffer, mesh->indexBuffer.size / sizeof(uint32_t));
 	}
 
 /* 
 	FeatureTestConstants debugConstants{
-		.view = inverse4x4(camera.view),
+		.view = camera.view | affineInverse,
 		.proj = camera.proj,
-		.viewProj = camera.proj * inverse4x4(camera.view),
+		.viewProj = camera.proj * (camera.view | affineInverse),
 	};
 	cmd.BindPipeline(pipeline);
 	cmd.PushConstants(&debugConstants, sizeof(debugConstants));
 	cmd.BindVertexBuffer(cubeVertexBuffer);
 	cmd.Draw(vertices.size(), 1, 0, 0);
  */
-	cmd.DrawImGui(imDrawData);
 
-	cmd.EndRendering();
-	
-	cmd.Barrier(resource.resolveImage, {vkw::ImageLayout::TransferSrc});
-	cmd.Barrier(img, {vkw::ImageLayout::TransferDst});
-	cmd.Blit({
-		.dst = img,
-		.src = resource.resolveImage,
-		.dstRegion = viewport,
-		.srcRegion = viewport,
-	});
-	cmd.Barrier(img, {vkw::ImageLayout::Present});
 
 }
 
 void AppContext::DrawWindow(Entity window) {
 	auto& windowHandle = window.Get<Window>();
+	auto& windowData   = window.Get<Runtime::WindowData>();
+	auto& resource     = window.Get<WindowImageResource>();
+	auto& cmd          = windowHandle.swapChain.GetCommandBuffer();
 	windowHandle.SetUIContextCurrent();
-	Editor::BeginFrame();
-	Editor::Draw(runtimeContext);
-	imDrawData = static_cast<Editor::UiDrawData*>(Editor::EndFrame());
 
-	
-	DrawViewport(window, int4(0, 0, windowHandle.GetSize().x, windowHandle.GetSize().y));
-	if (windowHandle.swapChain.GetDirty()) {
-		LOG_WARN("RecordCommands: Swapchain dirty");
-		return;
-	}
-	windowHandle.swapChain.SubmitAndPresent();
-	if (windowHandle.swapChain.GetDirty()) {
-		LOG_WARN("SubmitAndPresent: Swapchain dirty");
-		return;
-	}
+	Editor::BeginFrame();
+	Editor::Draw({&ctx->project.GetSceneGraph(), &windowData});
+	auto uiDrawData = Editor::EndFrame();
+
 	// ImGuiIO& io = ImGui::GetIO();
 	// if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
 	// 	ImGui::UpdatePlatformWindows();
 	// 	ImGui::RenderPlatformWindowsDefault();
 	// }
+
+	cmd.BeginCommandBuffer();
+	if (!windowHandle.swapChain.AcquireImage()) {
+		LOG_WARN("AcquireImage: Swapchain dirty");
+		return;
+	}
+	auto& targetImage = windowHandle.swapChain.GetCurrentImage();
+	
+	ivec4 fullWindowRect(0, 0, windowHandle.GetWidth(), windowHandle.GetHeight());
+	if (sampleCount == vkw::SampleCount::_1) {
+		cmd.BeginRendering({{{{resource.resolveImage}}}, {resource.depthImage}, fullWindowRect});
+		// cmd.BeginRendering({{{{resource.resolveImage}}}, {}, fullWindowRect});
+	} else {
+		cmd.BeginRendering({{{{resource.colorImage, &resource.resolveImage}}}, {resource.depthImage}, fullWindowRect});
+		// cmd.BeginRendering({{{{resource.colorImage, resource.resolveImage}}}, {}, fullWindowRect});
+	};
+
+	cmd.SetScissor(fullWindowRect);
+	std::span<Runtime::Panel> panels;
+	if (windowData.main) {
+		panels = windowData.tabPanels;
+	} else{
+		panels = windowData.panels;
+	}
+
+	for (auto& panel : panels) {
+		if (std::holds_alternative<Runtime::Viewport>(panel)) {
+			auto& v = std::get<Runtime::Viewport>(panel);
+			auto &viewport = v.viewport;
+			ivec4 flipped (viewport.x, viewport.y + viewport.w, viewport.z, -viewport.w);
+			// ivec4 flipped = viewport;
+			// LOG_INFO("Viewport: {}, {}, {}, {}", flipped.x, flipped.y, flipped.z, flipped.w);
+			cmd.SetViewport(flipped);
+			DrawViewport(cmd, v.camera);
+		}
+	}
+
+	cmd.DrawImGui(uiDrawData);
+
+	cmd.EndRendering();
+	
+	cmd.Barrier(resource.resolveImage, {vkw::ImageLayout::TransferSrc});
+	cmd.Barrier(targetImage, {vkw::ImageLayout::TransferDst});
+	ivec4 blitRegion = fullWindowRect;
+	cmd.Blit({
+		.dst = targetImage,
+		.src = resource.resolveImage,
+		.dstRegion = blitRegion,
+		.srcRegion = blitRegion,
+	});
+	cmd.Barrier(targetImage, {vkw::ImageLayout::Present});
+
+	windowHandle.swapChain.SubmitAndPresent();
+	if (windowHandle.swapChain.GetDirty()) {
+		LOG_WARN("SubmitAndPresent: Swapchain dirty");
+		return;
+	}
+
 	windowHandle.AddFramesToDraw(-1);
 	windowHandle.SetFrameCount((windowHandle.GetFrameCount() + 1) % (1 << 15));
 }
@@ -403,6 +426,8 @@ void KeyCallback(Window* window, int key, int scancode, int action, int mods) {
 		// 	ctx->CreateWindowResources(window);
 		// 	break;
 		// }
+
+/* 		
 		case GLFW::Key::W:
 			camera.view = translate4x4({0, 0, -0.02f}) * camera.view;
 			break;
@@ -416,6 +441,8 @@ void KeyCallback(Window* window, int key, int scancode, int action, int mods) {
 			camera.view = translate4x4({-0.02f, 0, 0}) * camera.view;
 			break;
 		case GLFW::Key::G: {
+
+
 				// auto& io = ImGui::GetIO();
 				// auto& fonts = io.Fonts;
 				// unsigned char* texData;
@@ -434,7 +461,10 @@ void KeyCallback(Window* window, int key, int scancode, int action, int mods) {
 				// }
 				// FileManager::SaveBMP("font.bmp", texData4.data(), texWidth, texHeight);
 				// break;
-		}
+		} */
+
+
+
 		// case GLFW::Key::J: {
 		// 	ImGuiIO& io = ImGui::GetIO();
 		// 	const float fontSize = 17.0f;
@@ -502,14 +532,14 @@ Hit MouseHitTest (Window *window, double xpos, double ypos) {
 	return Hit::Client;
 }
 
-
 void CursorPosCallback (Window *window, double xpos, double ypos) {
+	window->AddFramesToDraw(1);
+/* 
 	const auto& camera_right = camera.getRight();
 	const auto& camera_up = camera.getUp();
 	const auto& camera_forward = camera.getForward();
 	auto& camera_pos = camera.getPosition();
 
-	window->AddFramesToDraw(1);
 
 
 	// Hit hit = MouseHitTest(window, xpos, ypos);
@@ -558,8 +588,8 @@ void CursorPosCallback (Window *window, double xpos, double ypos) {
 	if (mouse.buttons[GLFW::MouseButton::Left]) {
 		// window->AddFramesToDraw(1);
 	}
+ */
 }
-
 void MouseButtonCallback(Window* window, int button, int action, int mods) {
 	if (action != GLFW::Repeat) {
 		window->AddFramesToDraw(2);
@@ -581,9 +611,7 @@ void ScrollCallback(Window *window, double xoffset, double yoffset){
 
 void FramebufferCallback(Window* window, int width, int height) {
 	if (width == 0 || height == 0) {return;}
-	camera.proj = width > height
-	? perspectiveX(60.0f, (float)width / height, 0.01f, 1000.0f)
-	: perspectiveY(60.0f, (float)height / width, 0.01f, 1000.0f);
+	// camera.setProj(fov, width, height, zNear, zFar);
 
 	// LOG_INFO("RecreateFrameResources {} callback", window->GetName());	
 	ctx->RecreateFrameResources(window);
@@ -730,17 +758,19 @@ void FeatureTestApplication::Setup() {
 	UI::Init();
 	ctx->width = info->width;
 	ctx->height = info->height;
-	Editor::Setup();
+	Editor::Setup(&ctx->project.GetSceneGraph());
 
-	ctx->runtimeContext.camera = &camera;
-	ctx->runtimeContext.sceneGraph = &ctx->project.GetSceneGraph();
+	// ctx->runtimeContext.camera = &camera;
+	// ctx->runtimeContext.sceneGraph = &ctx->project.GetSceneGraph();
 
-	camera.proj = perspective(60.0f, (float)ctx->width / ctx->height, 0.01f, 1000.0f);
+	// camera.setProj(fov, ctx->width, ctx->height, zNear, zFar);
 
 	// auto window = new Window(ctx->width, ctx->height, "NRay");
 	auto mainWindow = ctx->CreateEntity("Main Window");
 	auto style = Editor::GetStyle();
 	mainWindow.Add<Window>(ctx->width, ctx->height, "NRay", style);
+	auto& windowData = mainWindow.Add<Runtime::WindowData>(true);
+	// Editor::SetupWindow(windowData);
 	mainWindow.Add<WindowImageResource>();
 	Window& windowHandle = mainWindow.Get<Window>();
 	windowHandle.SetEntityHandle(static_cast<EntityType>(mainWindow.entity));

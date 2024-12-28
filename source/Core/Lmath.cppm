@@ -41,6 +41,34 @@ inline float clamp(float u, float a, float b) { return min(max(a, u), b); }
 
 constexpr inline float DEG_TO_RAD = 3.14159265358979323846f / 180.0f;
 
+inline int4 operator+(const int4 a, const int4 b) { return int4{a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w}; }
+inline int4 operator-(const int4 a, const int4 b) { return int4{a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w}; }
+inline int4 operator*(const int4 a, const int4 b) { return int4{a.x * b.x, a.y * b.y, a.z * b.z, a.w * b.w}; }
+inline int4 operator/(const int4 a, const int4 b) { return int4{a.x / b.x, a.y / b.y, a.z / b.z, a.w / b.w}; }
+
+inline int4 operator * (const int4 a, int b) { return int4{a.x * b, a.y * b, a.z * b, a.w * b}; }
+inline int4 operator / (const int4 a, int b) { return int4{a.x / b, a.y / b, a.z / b, a.w / b}; }
+inline int4 operator * (int a, const int4 b) { return int4{a * b.x, a * b.y, a * b.z, a * b.w}; }
+inline int4 operator / (int a, const int4 b) { return int4{a / b.x, a / b.y, a / b.z, a / b.w}; }
+
+inline int4 operator + (const int4 a, int b) { return int4{a.x + b, a.y + b, a.z + b, a.w + b}; }
+inline int4 operator - (const int4 a, int b) { return int4{a.x - b, a.y - b, a.z - b, a.w - b}; }
+inline int4 operator + (int a, const int4 b) { return int4{a + b.x, a + b.y, a + b.z, a + b.w}; }
+inline int4 operator - (int a, const int4 b) { return int4{a - b.x, a - b.y, a - b.z, a - b.w}; }
+
+inline int4& operator *= (int4& a, const int4 b) { a.x *= b.x; a.y *= b.y; a.z *= b.z; a.w *= b.w;  return a; }
+inline int4& operator /= (int4& a, const int4 b) { a.x /= b.x; a.y /= b.y; a.z /= b.z; a.w /= b.w;  return a; }
+inline int4& operator *= (int4& a, int b) { a.x *= b; a.y *= b; a.z *= b; a.w *= b;  return a; }
+inline int4& operator /= (int4& a, int b) { a.x /= b; a.y /= b; a.z /= b; a.w /= b;  return a; }
+
+inline int4& operator += (int4& a, const int4 b) { a.x += b.x; a.y += b.y; a.z += b.z; a.w += b.w;  return a; }
+inline int4& operator -= (int4& a, const int4 b) { a.x -= b.x; a.y -= b.y; a.z -= b.z; a.w -= b.w;  return a; }
+inline int4& operator += (int4& a, int b) { a.x += b; a.y += b; a.z += b; a.w += b;  return a; }
+inline int4& operator -= (int4& a, int b) { a.x -= b; a.y -= b; a.z -= b; a.w -= b;  return a; }
+
+inline void store (int* p, const int4 a_val)  { memcpy((void*)p, (void*)&a_val, sizeof(int)*4); }
+inline void load  (const int* p, int4& a_val) { memcpy((void*)&a_val, (void*)p, sizeof(int)*4); }
+
 inline float3 operator+(const float3 a, const float3 b) { return float3{a.x + b.x, a.y + b.y, a.z + b.z}; }
 inline float3 operator-(const float3 a, const float3 b) { return float3{a.x - b.x, a.y - b.y, a.z - b.z}; }
 inline float3 operator*(const float3 a, const float3 b) { return float3{a.x * b.x, a.y * b.y, a.z * b.z}; }
@@ -99,6 +127,7 @@ inline float3 cross(const float3 a, const float3 b)
 
 
 inline bool operator==(const int4& a, const int4& b) { return a.x == b.x && a.y == b.y && a.z == b.z && a.w == b.w; }
+inline bool operator!=(const int4& a, const int4& b) { return a.x != b.x || a.y != b.y || a.z != b.z || a.w != b.w; }
 
 inline float4 operator+(const float4 a, const float4 b) { return float4{a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w}; }
 inline float4 operator-(const float4 a, const float4 b) { return float4{a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w}; }
@@ -586,31 +615,34 @@ inline float4x4 perspective(float const fov, float const aspect, float const zNe
 	return res;
 }
 
-inline float4x4 perspectiveX(float fovX, float aspect, float near, float far) {
+inline float4x4 perspectiveX(float fovX, float aspect, float zNear, float zFar)
+{
 	float tanHalfFov = tanf(fovX * DEG_TO_RAD / 2.0f);
 	float4x4 result;
 	result(0, 0) = 1.0f / tanHalfFov;
 	result(1, 1) = aspect * 1.0f / (tanHalfFov);
-	result(2, 2) = -(far + near) / (far - near);
+	result(2, 2) = -(zFar + zNear) / (zFar - zNear);
 	result(3, 2) = -1.0f;
-	result(2, 3) = -(2.0f * far * near) / (far - near);
+	result(2, 3) = -(2.0f * zFar * zNear) / (zFar - zNear);
 	result(3, 3) = 0.0f;
 	return result;
 }
 
-inline float4x4 perspectiveY(float fovY, float aspect, float near, float far) {
+inline float4x4 perspectiveY(float fovY, float aspect, float zNear, float zFar)
+{
 	float tanHalfFov = tanf(fovY * DEG_TO_RAD / 2.0f);
 	float4x4 result;
 	result(0, 0) = aspect * 1.0f / (tanHalfFov);
 	result(1, 1) = 1.0f / tanHalfFov;
-	result(2, 2) = -(far + near) / (far - near);
+	result(2, 2) = -(zFar + zNear) / (zFar - zNear);
 	result(3, 2) = -1.0f;
-	result(2, 3) = -(2.0f * far * near) / (far - near);
+	result(2, 3) = -(2.0f * zFar * zNear) / (zFar - zNear);
 	result(3, 3) = 0.0f;
 	return result;
 }
 
-inline void decompose(float4x4 const& m, float3& translation, float3& rotation, float3& scale) {
+inline void decompose(float4x4 const& m, float3& translation, float3& rotation, float3& scale)
+{
     // Extract translation
     translation.x = m.m_col[3].x;
     translation.y = m.m_col[3].y;
