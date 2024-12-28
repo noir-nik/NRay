@@ -19,8 +19,12 @@ def extract_imports(file_path):
             if match:
                 module_name = match.group(1)
                 imports.append(module_name)
-    return imports
 
+            match = re.match(r"\s*export\s+import\s+([a-zA-Z0-9_\.]+)", line)
+            if match:
+                module_name = match.group(1)
+                imports.append(module_name)
+    return imports
 def find_files_with_extension(directories, extension):
     """Recursively find all files with the given extension in a list of directories."""
     matched_files = []

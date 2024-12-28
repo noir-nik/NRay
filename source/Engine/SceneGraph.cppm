@@ -4,15 +4,18 @@ export module SceneGraph;
 import Component;
 import Entity;
 import stl;
+import Types;
 #else
 #pragma once
 #define _SCENEGRAPH_EXPORT
 #include "Component.cppm"
 #include "Entity.cppm"
+#include "Types.cppm"
 #endif
 
 _SCENEGRAPH_EXPORT
 struct SceneGraph {
+	using NodeIndex = uint32_t;
 	SceneGraph(const SceneGraph&) = delete;
 	SceneGraph& operator=(const SceneGraph&) = delete;
 	SceneGraph(SceneGraph&&) = delete;
@@ -22,16 +25,19 @@ struct SceneGraph {
 		Node(Entity entity = {nullptr, Entity::Null}) : entity(entity) {};
 		
 		Entity entity;
-		std::vector<uint32_t> children;
+		std::vector<NodeIndex> children;
 
 		friend SceneGraph;
+
+		const char* name() const { return entity.Get<Component::Name>().name.c_str(); }
 	};
 
 	Node root; // Has scene indices as children
-	std::vector<size_t> scenes; // with top level objects as children
+	// std::vector<NodeIndex> scenes; // with top level objects as children
 	std::vector<Node> nodes; // only objects
 
-	size_t currentScene = 0;
+	NodeIndex currentScene = 0;
+
 	Registry* registry;
 	SceneGraph(Registry* registry) : registry(registry) {
 		root.entity = CreateEntity("Root");
@@ -52,9 +58,19 @@ struct SceneGraph {
 		return nodes[currentScene];
 	}
 
+	inline Node& Get(NodeIndex index) {	return nodes[index]; }
+	inline const Node& Get(NodeIndex index) const { return nodes[index]; }
+
+	NodeIndex AddNode(const std::string_view& name) {
+		nodes.emplace_back(CreateEntity(name));
+		nodes.back().entity.Add<Component::Transform>(false);
+		return nodes.size() - 1;
+	}
+
 	void AddScene(const std::string_view& name) {
 		nodes.emplace_back(CreateEntity(name));
 		nodes.back().entity.Add<Component::Transform>(false);
+		// scenes.push_back(nodes.size() - 1);
 	}
 
 	inline void resize(std::size_t size) {

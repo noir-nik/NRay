@@ -18,6 +18,7 @@ import GLTFLoader;
 import entt;
 import UI;
 import Types;
+import RuntimeContext;
 #else
 #include "Lmath.cppm"
 #include "VulkanBackend.cppm"
@@ -41,6 +42,8 @@ import Types;
 #include <vector>
 
 #include "Types.cppm"
+
+#include "RuntimeContext.cppm"
 #endif
 
 
@@ -83,6 +86,8 @@ struct AppContext {
 
 
 	Editor editor;
+
+	RuntimeContext runtimeContext;
 
 	Project project;
 	inline Entity CreateEntity(const std::string_view& name = "") {
@@ -363,8 +368,9 @@ void AppContext::DrawWindow(Entity window) {
 	auto& windowHandle = window.Get<Window>();
 	windowHandle.SetUIContextCurrent();
 	editor.BeginFrame();
-	editor.Draw(camera);
-	imguiDrawData = editor.EndFrame();
+	editor.Draw(runtimeContext);
+	imguiDrawData = static_cast<ImDrawData*>(editor.EndFrame());
+
 	
 	RecordCommands(window);
 	if (windowHandle.swapChain.GetDirty()) {
@@ -500,10 +506,10 @@ Hit MouseHitTest (Window *window, double xpos, double ypos) {
 
 
 void CursorPosCallback (Window *window, double xpos, double ypos) {
-	auto& camera_right = camera.getRight();
-	auto& camera_up = camera.getUp();
-	auto& camera_forward = camera.getForward();
-	vec3 camera_pos = camera.getPosition();
+	const auto& camera_right = camera.getRight();
+	const auto& camera_up = camera.getUp();
+	const auto& camera_forward = camera.getForward();
+	auto& camera_pos = camera.getPosition();
 
 	window->AddFramesToDraw(1);
 
@@ -527,7 +533,7 @@ void CursorPosCallback (Window *window, double xpos, double ypos) {
 		{
 		case GLFW::Mod::Alt: {
 			auto zoom_factor = camera.zoom_factor * length(camera_pos - camera.focus);
-			auto movement =  (zoom_factor * mouse.deltaPos.x) * camera_forward;
+			auto movement = (zoom_factor * mouse.deltaPos.x) * camera_forward;
 			camera.view = translate4x4(movement) * camera.view;
 			// camera.focus += movement;
 			break;
@@ -545,9 +551,9 @@ void CursorPosCallback (Window *window, double xpos, double ypos) {
 	}
 	if (mouse.buttons[GLFW::MouseButton::Middle]) {
 		auto move_factor = camera.move_factor * length(camera_pos - camera.focus);
-		auto movement =  move_factor * (camera_up * -mouse.deltaPos.y + camera_right * mouse.deltaPos.x); 
+		auto movement = move_factor * (camera_up * -mouse.deltaPos.y + camera_right * mouse.deltaPos.x); 
 		// printf("%f %f %f\n", movement.x, movement.y, movement.z);
-		camera.focus += movement;
+		// camera.focus += movement;
 		camera.view = translate4x4(movement) * camera.view;
 		// window->AddFramesToDraw(1);
 	}
@@ -575,7 +581,7 @@ void ScrollCallback(Window *window, double xoffset, double yoffset){
 void FramebufferCallback(Window* window, int width, int height) {
 	// DEBUG_TRACE("Window {} framebuffer resized to {}x{}", window->GetName(), width, height);
 	if (width == 0 || height == 0) {return;}
-	camera.proj = perspective(60.0f, (float)width / height, 0.01f, 1000.0f); // TODO: move to size callback
+	camera.proj = perspectiveX(60.0f, (float)width / height, 0.01f, 1000.0f); // TODO: move to size callback
 	// LOG_INFO("RecreateFrameResources {} callback", window->GetName());
 	
 	ctx->RecreateFrameResources(window);
@@ -724,6 +730,9 @@ void FeatureTestApplication::Setup() {
 	ctx->height = info->height;
 	ctx->editor.Setup();
 
+	ctx->runtimeContext.camera = &camera;
+	ctx->runtimeContext.sceneGraph = &ctx->project.GetSceneGraph();
+
 	camera.proj = perspective(60.0f, (float)ctx->width / ctx->height, 0.01f, 1000.0f);
 
 	// auto window = new Window(ctx->width, ctx->height, "NRay");
@@ -762,7 +771,7 @@ void DrawOrRemoveWindows() {
 			if (!windowHandle.GetIconified()) {
 				// Recreate swapchain if needed
 				if (windowHandle.GetSwapchainDirty() || windowHandle.GetFramebufferResized()) {
-					// LOG_INFO("DIRTY FRAME RESOURCES");
+					LOG_INFO("DIRTY FRAME RESOURCES");
 					windowHandle.UpdateFramebufferSize();
 					ctx->device.WaitIdle();
 					windowHandle.RecreateSwapchain();

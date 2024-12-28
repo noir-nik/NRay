@@ -10,16 +10,16 @@ CompileFlags:
     -Ideps,
     -Ideps/fastgltf/include,
     -Ideps/spdlog/include,
-	-Ideps/glfw/include,
-	-Ideps/vma/include,
+    -Ideps/glfw/include,
+    -Ideps/vma/include,
     -Ideps/fmt/include,
     -Ideps/imgui,
     -Ideps/imgui/backends,
     -Ideps/entt/src,
     -Ideps/stb,
-	-Ideps/modules,
-	-Ideps/modules/imgui,
-	-Ideps/modules/stb,
+    -Ideps/modules,
+    -Ideps/modules/imgui,
+    -Ideps/modules/stb,
 
     -Ideps/fastgltf/deps/simdjson,
     --target=x86_64-w64-windows-gnu,
@@ -27,13 +27,14 @@ CompileFlags:
     # -DUSE_HEADER_UNITS,
     -DUSE_MODULES,
     -fprebuilt-module-path=build/win/modules,
+    -Wno-pragma-once-outside-header
   ]
-  
-#Diagnostics:
-#  Suppress: [
-#    pch-langopt-mismatch,
-#    pch_langopt_mismatch,
-#    note_ovl_candidate_arity,
-#    note_ovl_candidate_bad_conv_incomplete,
-#    pch_langopt_mismatch
-#  ]
+
+    #Diagnostics:
+    #  Suppress: [
+    #    pch-langopt-mismatch,
+    #    pch_langopt_mismatch,
+    #    note_ovl_candidate_arity,
+    #    note_ovl_candidate_bad_conv_incomplete,
+    #    pch_langopt_mismatch
+    #  ]

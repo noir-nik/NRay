@@ -5,12 +5,14 @@ import VulkanBackend;
 import imgui;
 import Log;
 import stl;
+import RuntimeContext;
 #else
 #include "Lmath.cppm"
 #include "VulkanBackend.cppm"
 #include "imgui.cppm"
 #include "Editor.cppm"
 #include "Log.cppm"
+
 #include <fstream>
 #endif
 
@@ -34,9 +36,12 @@ struct EditorContext {
 	void StyleEditor();
 
 	void DebugWindow(Objects::Camera& camera);
+	void OutlinerWindow(RuntimeContext& ctx);
 	
 	bool SaveStyle(const char* filename,const ImGuiStyle& style);
 	bool LoadStyle(const char* filename,ImGuiStyle& style);
+
+	bool IsSelected(SceneGraph::NodeIndex node);
 
 	bool ShowStyleEditor = false;
 	bool ShowStyleSelector = false;
@@ -44,10 +49,13 @@ struct EditorContext {
 
 	ImGuiStyle defaultStyle;
 	ImGuiStyle style;
+
+	std::vector<SceneGraph::NodeIndex> selectedNodes;
+	SceneGraph::NodeIndex activeNode = -1;
 	// ImGuiIO& io;
 
 	inline static const char* GetStyleVarName(ImGuiStyleVar idx);
-} ctx;
+} editorContext;
 
 bool EditorContext::SaveStyle(const char* filename, const ImGuiStyle& style) {
 	// Write .style file
@@ -223,7 +231,6 @@ bool EditorContext::LoadStyle(const char* filename, ImGuiStyle& style) {
     return true;
 }
 
-
 void EditorContext::MainMenu() {
 	if (!ImGui::BeginMainMenuBar()) return;
 	ImGuiIO& io = ImGui::GetIO();
@@ -298,7 +305,6 @@ void EditorContext::MainMenu() {
 	// 	ImGui::End();
 	// }
 }
-
 
 void EditorContext::RenderUI() {
 	ImGui::Begin("Scene Panel", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove);
@@ -391,17 +397,62 @@ void EditorContext::DebugWindow(Objects::Camera& camera) {
 			ImGui::Text("%.2f, %.2f, %.2f, %.2f",
 				camera.view[i][0], camera.view[i][1], camera.view[i][2], camera.view[i][3]);
 		}
+		/* ImGui::Separator();
+		for (int i = 0; i < 4; i++) {
+			ImGui::Text("%.2f, %.2f, %.2f, %.2f",
+				camera.proj[i][0], camera.proj[i][1], camera.proj[i][2], camera.proj[i][3]);
+		} */
 	}
 
 	ImGui::End();
 }
 
+bool EditorContext::IsSelected(SceneGraph::NodeIndex node) {
+	return std::find_if(selectedNodes.begin(), selectedNodes.end(), [&](const SceneGraph::NodeIndex other) {
+		return node == other;
+	}) != selectedNodes.end();
+}
 
-void Editor::Draw(Objects::Camera& camera) {
+void displayNode(const SceneGraph& sceneGraph, const SceneGraph::NodeIndex nodeIndex, ImGuiTreeNodeFlags flags) {
+	ImGui::PushID(nodeIndex);
+	const auto& node = sceneGraph.Get(nodeIndex);
+	if (node.children.size() == 0) {
+		flags |= ImGuiTreeNodeFlags_Leaf;
+		flags |= ImGuiTreeNodeFlags_Bullet;
+	}
+	if (ImGui::TreeNodeEx(node.name(), flags)) {
+		for (const auto& child : node.children) {
+			displayNode(sceneGraph, child, flags); // Recursively display children
+		}
+		ImGui::TreePop();
+	}
+	ImGui::PopID();
+}
+
+void EditorContext::OutlinerWindow(RuntimeContext& ctx) {
+	const ImGuiTreeNodeFlags parent_flags =
+		ImGuiTreeNodeFlags_OpenOnArrow       |
+		ImGuiTreeNodeFlags_OpenOnDoubleClick |
+		ImGuiTreeNodeFlags_SpanFullWidth;
+
+	if (ImGui::Begin("Outliner", nullptr, parent_flags)) {
+		if (ImGui::TreeNodeEx("Scene Graph", parent_flags)) {
+			for (const auto& nodeIndex : ctx.sceneGraph->GetCurrentScene().children) {
+				displayNode(*ctx.sceneGraph, nodeIndex, parent_flags);
+			}
+			ImGui::TreePop();
+		}
+	}
+	ImGui::End();
+}
+
+void Editor::Draw(RuntimeContext& ctx) {
 	ImGui::ShowDemoWindow();
-	ctx.MainMenu();
+	editorContext.MainMenu();
 
-	ctx.DebugWindow(camera);
+	editorContext.DebugWindow(*ctx.camera);
+
+	editorContext.OutlinerWindow(ctx);
 
 	// ctx.StyleWindow();
 	
@@ -413,33 +464,32 @@ void Editor::BeginFrame() {
 	ImGui::NewFrame();
 }
 
-ImDrawData* Editor::EndFrame() {
+Editor::UiDrawData* Editor::EndFrame() {
 	ImGui::Render();
-	return ImGui::GetDrawData();
+	return static_cast<UiDrawData*>(ImGui::GetDrawData());
 }
 
 void Editor::Setup(){
 
-	ctx.defaultStyle = ImGui::GetStyle();
+	editorContext.defaultStyle = ImGui::GetStyle();
 
 	ImGuiStyle& style = ImGui::GetStyle();
-	ImGuiStyle& ref = ctx.style;
+	ImGuiStyle& ref = editorContext.style;
 
-	if (ctx.LoadStyle(STYLE_PATH"style.ini", style)) {
+	if (editorContext.LoadStyle(STYLE_PATH"style.ini", style)) {
 		LOG_INFO("Loaded style");
 		ref = style;
 	} else {
 		LOG_WARN("Failed to load style");
-		style = ctx.defaultStyle;
-		ref = ctx.defaultStyle;
+		style = editorContext.defaultStyle;
+		ref = editorContext.defaultStyle;
 	}
 
 }
 
-ImGuiStyle* Editor::GetStyle() {
-	return &ctx.style;
+Editor::UiStyle* Editor::GetStyle() {
+	return static_cast<UiStyle*>(&editorContext.style);
 }
-
 
 inline const char* EditorContext::GetStyleVarName(ImGuiStyleVar idx) {
 	switch (idx) {

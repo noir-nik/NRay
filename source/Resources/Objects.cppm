@@ -58,11 +58,16 @@ struct Camera {
 		view = lookAt(position, focus, up).inverse();
 	}
 	
+	inline vec3& getRight()    { return view.col(0).xyz(); }
+	inline vec3& getUp()       { return view.col(1).xyz(); }
+	inline vec3& getForward()  { return view.col(2).xyz(); }
+	inline vec3& getPosition() { return view.col(3).xyz(); }
+
 	inline const vec3& getRight()    const { return view.col(0).xyz(); }
 	inline const vec3& getUp()       const { return view.col(1).xyz(); }
 	inline const vec3& getForward()  const { return view.col(2).xyz(); }
 	inline const vec3& getPosition() const { return view.col(3).xyz(); }
-
+	
 	vec3 focus;
     mat4 view;
 	mat4 proj;

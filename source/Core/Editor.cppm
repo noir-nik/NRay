@@ -2,21 +2,23 @@
 export module Editor;
 #define _EDITOR_EXPORT export
 import Objects;
-import imgui;
+import RuntimeContext;
 #else
 #pragma once
 #define _EDITOR_EXPORT
-#include <imgui/imgui.h>
 #include "Objects.cppm"
+#include "RuntimeContext.cppm"
 #endif
 
 _EDITOR_EXPORT
 struct Editor {
+	using UiDrawData = void;
+	using UiStyle = void;
 	void Setup();
 	void Finish();
     void BeginFrame();
-	void Draw(Objects::Camera& camera);
-    ImDrawData* EndFrame();
+	void Draw(RuntimeContext& rtc);
+    UiDrawData* EndFrame();
 	
-	ImGuiStyle* GetStyle();
+	UiStyle* GetStyle();
 };

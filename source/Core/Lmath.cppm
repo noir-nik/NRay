@@ -30,7 +30,7 @@ inline float clamp(float u, float a, float b) { return std::min(std::max(a, u), 
 inline uint  clamp(uint u,  uint a,  uint b)  { return std::min(std::max(a, u), b); }
 inline int   clamp(int u,   int a,   int b)   { return std::min(std::max(a, u), b); }
 
-constexpr inline float DEG_TO_RAD   = float(3.14159265358979323846f) / 180.0f;
+constexpr inline float DEG_TO_RAD = 3.14159265358979323846f / 180.0f;
 
 struct uint4;
 struct int4;
@@ -469,9 +469,9 @@ struct float4x4
 	}
 
 	inline explicit float4x4(float A0, float A1, float A2, float A3,
-														float A4, float A5, float A6, float A7,
-														float A8, float A9, float A10, float A11,
-														float A12, float A13, float A14, float A15)
+							float A4, float A5, float A6, float A7,
+							float A8, float A9, float A10, float A11,
+							float A12, float A13, float A14, float A15)
 	{
 		m_col[0] = float4{ A0, A4, A8,	A12 };
 		m_col[1] = float4{ A1, A5, A9,	A13 };
@@ -507,33 +507,33 @@ struct float4x4
 
 	struct RowTmp 
 	{
-	float4x4* self;
-	int       row;
-	inline float& operator[](int col)       { return self->m_col[col][row]; }
-	inline float  operator[](int col) const { return self->m_col[col][row]; }
+		float4x4* self;
+		int       row;
+		inline float& operator[](int col)       { return self->m_col[col][row]; }
+		inline float  operator[](int col) const { return self->m_col[col][row]; }
 	};
 
 	inline RowTmp operator[](int a_row) 
 	{
-	RowTmp row;
-	row.self = this;
-	row.row  = a_row;
-	return row;
+		RowTmp row;
+		row.self = this;
+		row.row  = a_row;
+		return row;
 	}
 
 	struct ConstRowTmp 
 	{
-	const float4x4* self;
-	int             row;
-	inline float operator[](int col) const { return self->m_col[col][row]; }
+		const float4x4* self;
+		int             row;
+		inline float operator[](int col) const { return self->m_col[col][row]; }
 	};
 
 	inline ConstRowTmp operator[](int a_row) const 
 	{
-	ConstRowTmp row;
-	row.self = this;
-	row.row  = a_row;
-	return row;
+		ConstRowTmp row;
+		row.self = this;
+		row.row  = a_row;
+		return row;
 	}
 
 	inline void decompose(float3& translation, float3& rotation, float3& scale) const;
@@ -723,10 +723,10 @@ inline float4x4 operator*(float4x4 m1, float4x4 m2)
 inline float4x4 transpose4x4(const float4x4& m1)
 {
 	float4x4 res;
-	res.set_col(0, float4{m1(0, 0), m1(1, 0), m1(2, 0), m1(3, 0)});
-	res.set_col(1, float4{m1(0, 1), m1(1, 1), m1(2, 1), m1(3, 1)});
-	res.set_col(2, float4{m1(0, 2), m1(1, 2), m1(2, 2), m1(3, 2)});
-	res.set_col(3, float4{m1(0, 3), m1(1, 3), m1(2, 3), m1(3, 3)});
+	res.set_row(0, float4{m1(0, 0), m1(1, 0), m1(2, 0), m1(3, 0)});
+	res.set_row(1, float4{m1(0, 1), m1(1, 1), m1(2, 1), m1(3, 1)});
+	res.set_row(2, float4{m1(0, 2), m1(1, 2), m1(2, 2), m1(3, 2)});
+	res.set_row(3, float4{m1(0, 3), m1(1, 3), m1(2, 3), m1(3, 3)});
 	return res;
 }
 
@@ -886,10 +886,20 @@ inline float4x4 lookAt(float3 eye, float3 center, float3 up)
 	return M;
 }
 
-inline float4x4 perspective(float const fovy, float const aspect, float const zNear, float const zFar)
+inline float4x4 perspective(float const fov, float const aspect, float const zNear, float const zFar, bool useFovX = true)
 {
-	const float ymax = zNear * tanf(fovy * 3.14159265358979323846f / 360.0f);
-	const float xmax = ymax * aspect;
+	float ymax, xmax;
+
+	if (useFovX) {
+		// Using horizontal field of view (fovx)
+		xmax = zNear * tanf(fov * DEG_TO_RAD / 2.0f);
+		ymax = xmax / aspect;
+	} else {
+		// Using vertical field of view (fovy)
+		ymax = zNear * tanf(fov * DEG_TO_RAD / 2.0f);
+		xmax = ymax * aspect;
+	}
+
 	const float left = -xmax;
 	const float right = +xmax;
 	const float bottom = -ymax;
@@ -904,6 +914,30 @@ inline float4x4 perspective(float const fovy, float const aspect, float const zN
 	res.m_col[2] = float4{ (right + left) / temp2,  (top + bottom) / temp3, (-zFar - zNear) / temp4, -1.0 };
 	res.m_col[3] = float4{ 0.0f, 0.0f, (-temp * zFar) / temp4, 0.0f };
 	return res;
+}
+
+inline float4x4 perspectiveX(float fovX, float aspect, float near, float far) {
+	float tanHalfFovx = tan(fovX * DEG_TO_RAD / 2.0f);
+	float4x4 result;
+	result(0, 0) = 1.0f / tanHalfFovx;
+	result(1, 1) = aspect * 1.0f / (tanHalfFovx);
+	result(2, 2) = -(far + near) / (far - near);
+	result(3, 2) = -1.0f;
+	result(2, 3) = -(2.0f * far * near) / (far - near);
+	result(3, 3) = 0.0f;
+	return result;
+}
+
+inline float4x4 perspectiveY(float fovY, float aspect, float near, float far) {
+	float tanHalfFovy = tan(fovY * DEG_TO_RAD / 2.0f);
+	float4x4 result;
+	result(0, 0) = 1.0f / (aspect * tanHalfFovy);
+	result(1, 1) = 1.0f / tanHalfFovy;
+	result(2, 2) = -(far + near) / (far - near);
+	result(3, 2) = -1.0f;
+	result(2, 3) = -(2.0f * far * near) / (far - near);
+	result(3, 3) = 0.0f;
+	return result;
 }
 
 inline void float4x4::decompose(float3& translation, float3& rotation, float3& scale) const {
