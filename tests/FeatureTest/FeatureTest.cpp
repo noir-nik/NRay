@@ -563,10 +563,13 @@ void CursorPosCallback (Window *window, double xpos, double ypos) {
 }
 
 void MouseButtonCallback(Window* window, int button, int action, int mods) {
+	if (action != GLFW::Repeat) {
+		window->AddFramesToDraw(2);
+	}
 	switch (button) {
 	case GLFW::MouseButton::Left:
 		// if (action == GLFW::PRESS) {
-			window->AddFramesToDraw(2);
+			// window->AddFramesToDraw(1);
 		// }
 		break;
 	default:

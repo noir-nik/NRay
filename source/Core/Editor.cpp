@@ -29,7 +29,7 @@ import RuntimeContext;
 #define STYLE_PATH "assets/"
 
 struct EditorContext {
-	
+	using NodeIndex = SceneGraph::NodeIndex;
 	void MainMenu();
 	void RenderUI();
 	void StyleWindow(); 
@@ -41,7 +41,9 @@ struct EditorContext {
 	bool SaveStyle(const char* filename,const ImGuiStyle& style);
 	bool LoadStyle(const char* filename,ImGuiStyle& style);
 
-	bool IsSelected(SceneGraph::NodeIndex node);
+	uint32_t FindSelected(NodeIndex nodeIndex);
+	void Select(NodeIndex nodeIndex);
+	void displayNode(const SceneGraph& sceneGraph, const NodeIndex nodeIndex, ImGuiTreeNodeFlags flags);
 
 	bool ShowStyleEditor = false;
 	bool ShowStyleSelector = false;
@@ -50,8 +52,8 @@ struct EditorContext {
 	ImGuiStyle defaultStyle;
 	ImGuiStyle style;
 
-	std::vector<SceneGraph::NodeIndex> selectedNodes;
-	SceneGraph::NodeIndex activeNode = -1;
+	std::vector<NodeIndex> selectedNodes;
+	NodeIndex activeNode = -1;
 	// ImGuiIO& io;
 
 	inline static const char* GetStyleVarName(ImGuiStyleVar idx);
@@ -267,7 +269,7 @@ void EditorContext::MainMenu() {
 	}
 	if (ImGui::BeginTabBar("TabBar", ImGuiTabBarFlags_None)){
 		if (ImGui::BeginTabItem("View3D")) {
-			// stuff in tab here
+			ImGui::Text("View3D");
 			ImGui::EndTabItem();
 		}
 		if (ImGui::BeginTabItem("Mesh")) {
@@ -407,45 +409,141 @@ void EditorContext::DebugWindow(Objects::Camera& camera) {
 	ImGui::End();
 }
 
-bool EditorContext::IsSelected(SceneGraph::NodeIndex node) {
-	return std::find_if(selectedNodes.begin(), selectedNodes.end(), [&](const SceneGraph::NodeIndex other) {
-		return node == other;
-	}) != selectedNodes.end();
+uint32_t EditorContext::FindSelected(NodeIndex nodeIndex) {
+	auto it = std::find_if(selectedNodes.begin(), selectedNodes.end(), [&](const NodeIndex other) {
+		return nodeIndex == other;
+	});
+	return it == selectedNodes.end() ? -1 : it - selectedNodes.begin();
 }
 
-void displayNode(const SceneGraph& sceneGraph, const SceneGraph::NodeIndex nodeIndex, ImGuiTreeNodeFlags flags) {
-	ImGui::PushID(nodeIndex);
-	const auto& node = sceneGraph.Get(nodeIndex);
-	if (node.children.size() == 0) {
-		flags |= ImGuiTreeNodeFlags_Leaf;
-		flags |= ImGuiTreeNodeFlags_Bullet;
+void EditorContext::Select(NodeIndex nodeIndex) {
+	bool holdingCtrl = ImGui::IsKeyDown(ImGuiKey_LeftCtrl);
+	int index = FindSelected(nodeIndex);
+	if (index != -1 && holdingCtrl) {
+		selectedNodes.erase(selectedNodes.begin() + index);
 	}
-	if (ImGui::TreeNodeEx(node.name(), flags)) {
+	if (!holdingCtrl) {
+		selectedNodes.clear();
+	}
+	selectedNodes.push_back(nodeIndex);
+	activeNode = nodeIndex;
+}
+
+ImVec4 header_color;
+ImVec4 selected_hovered;
+ImVec4 active_col;
+ImVec4 active_hovered;
+
+void EditorContext::displayNode(const SceneGraph& sceneGraph, const NodeIndex nodeIndex, ImGuiTreeNodeFlags flags) {
+	
+	const auto& node = sceneGraph.Get(nodeIndex);
+	ImGuiTreeNodeFlags child_flags = flags;
+	if (node.children.size() == 0) {
+		child_flags |= ImGuiTreeNodeFlags_Leaf;
+	}
+	bool is_active = nodeIndex == activeNode;
+	bool is_selected = FindSelected(nodeIndex) != -1;
+	// bool is_hovered = ImGui::IsItemHovered();
+
+	ImGui::PushID(nodeIndex);
+	if (is_active) {
+		child_flags |= ImGuiTreeNodeFlags_Bullet;
+	}
+	if (is_selected) {
+		child_flags |= ImGuiTreeNodeFlags_Selected;
+	}
+	bool open = ImGui::TreeNodeEx(node.name(), child_flags);
+	// if (ImGui::IsItemDeactivated()) {
+	// if (ImGui::IsItemClicked()) {
+	if (ImGui::IsItemHovered(ImGuiHoveredFlags_None) && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+		Select(nodeIndex);
+	}
+	if (open) {
 		for (const auto& child : node.children) {
 			displayNode(sceneGraph, child, flags); // Recursively display children
 		}
 		ImGui::TreePop();
+		
 	}
 	ImGui::PopID();
 }
 
 void EditorContext::OutlinerWindow(RuntimeContext& ctx) {
-	const ImGuiTreeNodeFlags parent_flags =
+	const ImGuiTreeNodeFlags parent_flags {
 		ImGuiTreeNodeFlags_OpenOnArrow       |
 		ImGuiTreeNodeFlags_OpenOnDoubleClick |
-		ImGuiTreeNodeFlags_SpanFullWidth;
-
-	if (ImGui::Begin("Outliner", nullptr, parent_flags)) {
-		if (ImGui::TreeNodeEx("Scene Graph", parent_flags)) {
+		ImGuiTreeNodeFlags_SpanFullWidth |
+		ImGuiTreeNodeFlags_FramePadding
+	};
+	/* 
+	ImGui::Separator();
+	if (activeNode != -1) {
+		ImGui::Text("Active: ");
+		ImGui::SameLine();
+		ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "%s", ctx.sceneGraph->Get(activeNode).name());
+		ImGui::Separator();
+	}
+	ImGui::Text("Selected: ");
+	for (const auto& node : selectedNodes) {
+		ImGui::SameLine();
+		ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "%s", ctx.sceneGraph->Get(node).name());
+	}
+ */
+	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
+	if (ImGui::Begin("Outliner", nullptr)) {
+		if (ImGui::TreeNodeEx("Scene Graph", parent_flags | ImGuiTreeNodeFlags_DefaultOpen)) {
 			for (const auto& nodeIndex : ctx.sceneGraph->GetCurrentScene().children) {
 				displayNode(*ctx.sceneGraph, nodeIndex, parent_flags);
 			}
 			ImGui::TreePop();
 		}
 	}
+	ImGui::PopStyleVar();
 	ImGui::End();
 }
 
+/* 
+namespace ImGui{
+void TextWithHoverColor(ImVec4 col, const char* fmt, ...)
+{
+    ImGuiContext& g = *GImGui;
+    ImGuiWindow* window = GetCurrentWindow();
+    if (window->SkipItems)
+        return;
+
+    // Format text
+    va_list args;
+    va_start(args, fmt);
+    const char* text_begin = g.TempBuffer.Data;
+    const char* text_end = g.TempBuffer.Data + ImFormatStringV(g.TempBuffer.Data, ARRAY_SIZE(g.TempBuffer), fmt, args);
+    va_end(args);
+
+    // Layout
+    const ImVec2 text_pos(window->DC.CursorPos.x, window->DC.CursorPos.y + window->DC.CurrLineTextBaseOffset);
+    const ImVec2 text_size = CalcTextSize(text_begin, text_end);
+    ImRect bb(text_pos.x, text_pos.y, text_pos.x + text_size.x, text_pos.y + text_size.y);
+    ItemSize(text_size, 0.0f);
+    if (!ItemAdd(bb, 0))
+        return;
+
+    // Render
+    bool hovered = IsItemHovered();
+    if (hovered)
+        PushStyleColor(ImGuiCol_Text, col);
+    RenderText(bb.Min, text_begin, text_end, false);
+    if (hovered)
+        PopStyleColor();
+}
+}
+
+void Hover_Example() {
+	if (ImGui::Begin("Hover Example")) {
+		const char* item_label = "Hover me!";
+		ImGui::TextWithHoverColor(ImVec4(0.0f, 0.0f, 1.0f, 1.0f), "%s", item_label);
+	}
+	ImGui::End();
+}
+ */
 void Editor::Draw(RuntimeContext& ctx) {
 	ImGui::ShowDemoWindow();
 	editorContext.MainMenu();
@@ -462,6 +560,7 @@ void Editor::Draw(RuntimeContext& ctx) {
 void Editor::BeginFrame() {
 	vkw::ImGuiNewFrame();
 	ImGui::NewFrame();
+	ImGui::DockSpaceOverViewport(ImGui::GetWindowDockID(), 0, ImGuiDockNodeFlags_PassthruCentralNode);
 }
 
 Editor::UiDrawData* Editor::EndFrame() {
@@ -484,6 +583,15 @@ void Editor::Setup(){
 		style = editorContext.defaultStyle;
 		ref = editorContext.defaultStyle;
 	}
+
+	header_color = ImGui::GetStyleColorVec4(ImGuiCol_Header);
+	// selected_hovered = ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered);
+	// active_col = ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered);
+	// active_hovered = ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered);
+
+	selected_hovered = { 1.0f, 0.0f, 0.0f, 1.0f };
+	active_col = { 0.0f, 1.0f, 0.0f, 1.0f };
+	active_hovered = { 0.0f, 0.0f, 1.0f, 1.0f };
 
 }
 
@@ -608,6 +716,9 @@ void EditorContext::StyleEditor() {
 			// style = ref;
 		}
 	}
+    if (ImGui::Button("Reset Style")) {
+        ImGui::GetStyle() = defaultStyle; // Reset to default style
+    }
     ImGui::SameLine();
     HelpMarker(
         "Save/Revert in local non-persistent storage. Default Colors definition are not affected. "
@@ -751,6 +862,28 @@ void EditorContext::StyleEditor() {
                 ImGui::TextUnformatted(name);
                 ImGui::PopID();
             }
+			int iii = 13490135;
+			auto color_select = [&](const char* name, ImVec4& color) -> void {
+                ImGui::PushID(iii++);
+                if (ImGui::Button("?")){
+
+				}
+                ImGui::SetItemTooltip("Flash given color to identify places where it is used.");
+                ImGui::SameLine();
+                ImGui::ColorEdit4("##color", (float*)&color, ImGuiColorEditFlags_AlphaBar | alpha_flags);
+                ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
+                ImGui::TextUnformatted(name);
+                ImGui::PopID();
+			};
+			// auto& header_color = ImGui::GetStyleColorVec4(ImGuiCol_Header);
+			// auto& selected_hovered = ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered);
+			// auto& active_col = ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered);
+			// auto& active_hovered = ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered);
+
+			color_select("Selected Hovered", selected_hovered);
+			color_select("Active Hovered", active_hovered);
+			color_select("Active", active_col);
+			
             ImGui::PopItemWidth();
             ImGui::EndChild();
 

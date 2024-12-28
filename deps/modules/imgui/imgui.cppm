@@ -207,7 +207,7 @@ namespace ImGui
     export using ImGui::GetColorU32;
     export using ImGui::GetColorU32;
     export using ImGui::GetColorU32;
-    export using ::ImVec4;
+    export using ImGui::GetStyleColorVec4;
     export using ImGui::GetCursorScreenPos;
     export using ImGui::SetCursorScreenPos;
     export using ImGui::GetContentRegionAvail;

@@ -8,7 +8,7 @@ TARGET := nRay
 COMPILE_IMGUI := 1
 STATIC_LINK := 0
 
-USE_MODULES := 1
+USE_MODULES := 0
 USE_HEADER_UNITS := 1
 
 ifeq ($(CC),g++)
