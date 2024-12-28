@@ -458,17 +458,21 @@ struct ImagePair {
 
 struct RenderingInfo {
 	const std::span<ImagePair const> colorAttachs;
-	Image const& depthAttach;
+	Image const& depthAttach = {};
 	ivec4 renderArea = ivec4(0.0f);
 	ivec4 scissor = ivec4(0);
 	uint32_t layerCount = 1;
 };
 
+struct RegionPair {
+	ivec4 dst;
+	ivec4 src;
+};
+
 struct BlitInfo {
 	Image dst;
 	Image src;
-	ivec4 dstRegion = {};
-	ivec4 srcRegion = {};
+	const std::span<const RegionPair> regions = {};
 	Filter filter = Filter::Linear;
 };
 

@@ -3438,30 +3438,39 @@ void Command::ClearColorImage(Image& img, const float4& color) {
 void Command::Blit(BlitInfo const& info) {	
 	auto dst = info.dst;
 	auto src = info.src;
-	ivec4 dstRegion = info.dstRegion;
-	ivec4 srcRegion = info.srcRegion;
+	auto regions = info.regions;
 
-	if (info.srcRegion == ivec4{}) {srcRegion = {0, 0, (int)src.width, (int)src.height};}
-	if (info.dstRegion == ivec4{}) {dstRegion = {0, 0, (int)dst.width, (int)dst.height};}
-	
-	VkImageBlit2 blitRegion = {
-		.sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2,
-		.pNext = nullptr,
-		.srcSubresource{
-			.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
-			.mipLevel       = 0,
-			.baseArrayLayer = 0,
-			.layerCount     = 1,
-		},
-		.srcOffsets = {{srcRegion.x, srcRegion.y, 0}, {srcRegion.z, srcRegion.w, 1}},
-		.dstSubresource{
-			.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
-			.mipLevel       = 0,
-			.baseArrayLayer = 0,
-			.layerCount     = 1,
-		},
-		.dstOffsets = {{dstRegion.x, dstRegion.y, 0}, {dstRegion.z, dstRegion.w, 1}},
-	};
+	std::span<const RegionPair> fullRegions = {{{
+		{0, 0, (int)dst.width, (int)dst.height},
+		{0, 0, (int)src.width, (int)src.height}
+	}}};
+
+	if (regions.empty()) {
+		regions = fullRegions;
+	}
+
+	std::vector<VkImageBlit2> blitRegions;
+	blitRegions.reserve(regions.size());
+	for (auto& region: regions) {
+		blitRegions.emplace_back(VkImageBlit2{
+			.sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2,
+			.pNext = nullptr,
+			.srcSubresource{
+				.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+				.mipLevel       = 0,
+				.baseArrayLayer = 0,
+				.layerCount     = 1,
+			},
+			.srcOffsets = {{region.src.x, region.src.y, 0}, {region.src.z, region.src.w, 1}},
+			.dstSubresource{
+				.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
+				.mipLevel       = 0,
+				.baseArrayLayer = 0,
+				.layerCount     = 1,
+			},
+			.dstOffsets = {{region.dst.x, region.dst.y, 0}, {region.dst.z, region.dst.w, 1}},
+		});
+	}
 
 	VkBlitImageInfo2 blitInfo {
 		.sType          = VK_STRUCTURE_TYPE_BLIT_IMAGE_INFO_2,
@@ -3470,8 +3479,8 @@ void Command::Blit(BlitInfo const& info) {
 		.srcImageLayout = (VkImageLayout)src.layout,
 		.dstImage       = dst.resource->image,
 		.dstImageLayout = (VkImageLayout)dst.layout,
-		.regionCount    = 1,
-		.pRegions       = &blitRegion,
+		.regionCount    = static_cast<uint32_t>(blitRegions.size()),
+		.pRegions       = blitRegions.data(),
 		.filter         = Cast::VkFilter(info.filter),
 	};
 

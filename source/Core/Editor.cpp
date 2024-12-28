@@ -1,3 +1,4 @@
+#include <minwindef.h>
 #ifdef USE_MODULES
 module Editor;
 import Lmath;
@@ -72,8 +73,8 @@ struct Context {
 	void Draw(Runtime::Data const& ctx);
 
 	void DebugWindow(Runtime::Camera& camera);
-	void Viewport(Runtime::Viewport& ctx);
-	void OutlinerWindow(Runtime::Outliner& ctx);
+	bool Viewport(Runtime::Viewport& ctx);
+	bool OutlinerWindow(Runtime::Outliner& ctx);
 	void PropertiesWindow(Runtime::Data const& ctx);
 	
 	bool SaveStyle(const char* filename,const ImGuiStyle& style);
@@ -87,16 +88,19 @@ struct Context {
 } editorContext;
 
 struct PanelVisitor {
-	void operator()(Runtime::Viewport& ctx) const {
-		editorContext.Viewport(ctx);
+	bool operator()(Runtime::Viewport& ctx) const {
+		return editorContext.Viewport(ctx);
+		return 0;
 	}
 	
-	void operator()(Runtime::Outliner& ctx) const {
-		editorContext.OutlinerWindow(ctx);
+	bool operator()(Runtime::Outliner& ctx) const {
+		return editorContext.OutlinerWindow(ctx);
+		return 0;
 	}
 	
-	void operator()(Runtime::Properties&) const {
+	bool operator()(Runtime::Properties&) const {
 		// std::cout << "Properties Panel\n";
+		return 0;
 	}
 };
 /* 
@@ -191,7 +195,10 @@ void Context::MainMenu(Runtime::Data const& ctx) {
 		for (auto& tab : tabs) {
 			if (ImGui::BeginTabItem(tab.name.c_str())) {
 				for (auto& panel : tab.panels) {
-					std::visit(visitor, panel);
+					bool updated = std::visit(visitor, panel);
+					if (updated) {
+						ctx.windowData->viewportsToRender.push_back(&std::get<Runtime::Viewport>(panel));
+					}
 				}
 				ImGui::EndTabItem();
 				ctx.windowData->tabPanels = tab.panels;
@@ -259,7 +266,7 @@ void Context::StyleWindow() {
 
 void Context::DebugWindow(Runtime::Camera& camera) {
 
-	if (ImGui::Begin("Debug Window", nullptr)) {
+	if (ImGui::Begin("Debug Window", 0, ImGuiWindowFlags_NoDocking)) {
 		ImGui::Text("Camera Focus: (%.2f, %.2f, %.2f)", camera.focus.x, camera.focus.y, camera.focus.z);
 
 		// static float position[3] = { 0.0f, 2.0f, -30.0f };
@@ -267,36 +274,34 @@ void Context::DebugWindow(Runtime::Camera& camera) {
 		static float cameraUp[3] = { 0.0f, 1.0f, 0.0f };
 
 		
-		Lmath::float3 position;
-		Lmath::float3 rotation;
-		Lmath::float3 scale;
+		float3 position, rotation, scale;
 		camera.view | affineInverse | std::tie(position, rotation, scale);
 
 		// ImGui::SliderFloat3("Camera Position", position.M, -50.0f, 50.0f);
 		// ImGui::SliderFloat3("Camera Focus", rotation.M, -50.0f, 50.0f);
 		// ImGui::SliderFloat3("Camera Up", cameraUp, -1.0f, 1.0f);
 
-		// camera.view = Lmath::inverse4x4(Lmath::lookAt(Lmath::vec3(position[0], position[1], position[2]),
-		// 	Lmath::vec3(rotation[0], rotation[1], rotation[2]),
-		// 	Lmath::vec3(cameraUp[0], cameraUp[1], cameraUp[2])));
+		// camera.view = inverse4x4(lookAt(vec3(position[0], position[1], position[2]),
+		// 	vec3(rotation[0], rotation[1], rotation[2]),
+		// 	vec3(cameraUp[0], cameraUp[1], cameraUp[2])));
 
-		// camera.view = Lmath::lookAt(Lmath::vec3(position[0], position[1], position[2]),
-		// 	Lmath::vec3(rotation[0], rotation[1], rotation[2]),
-		// 	Lmath::vec3(cameraUp[0], cameraUp[1], cameraUp[2]));
+		// camera.view = lookAt(vec3(position[0], position[1], position[2]),
+		// 	vec3(rotation[0], rotation[1], rotation[2]),
+		// 	vec3(cameraUp[0], cameraUp[1], cameraUp[2]));
 
 
 		ImGui::Text("Camera Position: (%.2f, %.2f, %.2f)", position.x, position.y, position.z);
 		ImGui::Text("Camera Rotation: (%.2f, %.2f, %.2f)", rotation.x, rotation.y, rotation.z);
 		ImGui::Text("Camera Scale: (%.2f, %.2f, %.2f)", scale.x, scale.y, scale.z);
 
-		auto printMat4 = [](const Lmath::float4x4& m) {
+		auto printMat4 = [](const float4x4& m) {
 			for (int i = 0; i < 4; i++) {
 				ImGui::Text("%.2f, %.2f, %.2f, %.2f",
 					m[i][0], m[i][1], m[i][2], m[i][3]);
 			}
 		};
 
-		auto printMat3 = [](const Lmath::float3x3& m) {
+		auto printMat3 = [](const float3x3& m) {
 			for (int i = 0; i < 3; i++) {
 				ImGui::Text("%.2f, %.2f, %.2f",
 					m(i, 0), m(i, 1), m(i, 2));
@@ -373,7 +378,52 @@ void Context::displayNode(const SceneGraph& sceneGraph, const NodeIndex nodeInde
 	ImGui::PopID();
 }
 
-void Context::Viewport(Runtime::Viewport& ctx) {
+bool ProcessViewportInput(Runtime::Viewport& ctx) {
+	auto& io = ImGui::GetIO();
+	if (io.MouseDown[ImGuiMouseButton_Left] + io.MouseDown[ImGuiMouseButton_Right] + io.MouseDown[ImGuiMouseButton_Middle] > 1) {
+		return 0;
+	}
+	auto& camera = ctx.camera;
+	const auto& camera_right = camera.getRight();
+	const auto& camera_up = camera.getUp();
+	const auto& camera_forward = camera.getForward();
+	auto& camera_pos = camera.getPosition();
+
+	// LOG_INFO("Viewport input");
+
+	if (io.MouseDown[ImGuiMouseButton_Right]) {
+		if(io.KeyAlt) {
+			auto zoom_factor = camera.zoom_factor * length(camera_pos - camera.focus);
+			auto movement = (zoom_factor * io.MouseDelta.x) * camera_forward;
+			camera.view = translate4x4(movement) * camera.view;
+			// camera.focus += movement;
+		} else {
+			camera_pos -= camera.focus;
+			// camera.view = rotate4x4(camera_up, io.MouseDelta.x * camera.rotation_factor) * rotate4x4(camera_right, io.MouseDelta.y * camera.rotation_factor)  * camera.view; // trackball
+			camera.view = rotate4x4Y((camera_up.y > 0 ? 1.0f : -1.0f) * io.MouseDelta.x * camera.rotation_factor) * rotate4x4(camera_right, io.MouseDelta.y * camera.rotation_factor)  * camera.view;
+			camera_pos += camera.focus;
+		}
+		// window->AddFramesToDraw(1);
+		return 1;
+	} 
+	if (io.MouseDown[ImGuiMouseButton_Middle]) {
+		auto move_factor = camera.move_factor * length(camera_pos - camera.focus);
+		auto movement = move_factor * (camera_up * -io.MouseDelta.y + camera_right * io.MouseDelta.x); 
+		// printf("%f %f %f\n", movement.x, movement.y, movement.z);
+		// camera.focus += movement;
+		camera.view = translate4x4(movement) * camera.view;
+		// window->AddFramesToDraw(1);
+		return 1;
+	}
+
+	if (io.MouseDown[ImGuiMouseButton_Left]) {
+		// window->AddFramesToDraw(1);		
+		return 1;
+	}
+	return 0;
+}
+
+bool Context::Viewport(Runtime::Viewport& ctx) {
 	// ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.0f);
 	// ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
 	ImGuiWindowFlags flags {
@@ -383,6 +433,7 @@ void Context::Viewport(Runtime::Viewport& ctx) {
 		| ImGuiWindowFlags_MenuBar
 		| ImGuiWindowFlags_NoBackground
 	};
+	bool viewport_changed = false;
 	if (ImGui::Begin("Viewport", nullptr, flags) ) {
 		if (ImGui::BeginMenuBar()) {
 			if (ImGui::Button("Add")) {
@@ -392,24 +443,39 @@ void Context::Viewport(Runtime::Viewport& ctx) {
 		}
 		auto w = ImGui::GetCurrentWindowRead();
 		auto r = w->ClipRect;
-		// printf("Rect: (%f, %f, %f, %f)\n", r.Min.x, r.Min.y, r.Max.x, r.Max.y);
 		auto new_viewport = ivec4 (r.Min.x, r.Min.y, r.Max.x - r.Min.x, r.Max.y - r.Min.y);
-		// LOG_INFO("Viewport new: ({}, {}, {}, {})", new_viewport.x, new_viewport.y, new_viewport.z, new_viewport.w);
-		// LOG_INFO("Viewport old: ({}, {}, {}, {})", ctx.viewport.x, ctx.viewport.y, ctx.viewport.z, ctx.viewport.w);
-		if (ctx.viewport != new_viewport) {
+		viewport_changed = ctx.viewport != new_viewport;
+		if (viewport_changed) {
 			// LOG_INFO("Viewport changed");
 			ctx.viewport = new_viewport;
 			// ctx.viewportChanged = true;
 			ctx.camera.updateProj(ctx.viewport.z, ctx.viewport.w);
 		}
+		auto& io = ImGui::GetIO();
+		auto hoveringRect = ImGui::IsMouseHoveringRect(r.Min, r.Max);
+		auto contentHoverable = ImGui::IsWindowContentHoverable(w);
+		auto windowHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
+		auto dragging = ImGui::IsMouseDragging(ImGuiMouseButton_Left, 0.0f);
+		auto drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
+		ImGui::Text("Hovering: %s", hoveringRect ? "true" : "false");
+		ImGui::Text("Content Hoverable: %s", contentHoverable ? "true" : "false");
+		ImGui::Text("Hovered: %s", windowHovered ? "true" : "false");
+		ImGui::Text("Dragging: %s", dragging ? "true" : "false");
+		ImGui::Text("Drag Delta: (%f, %f)", drag_delta.x, drag_delta.y);
+		ImGui::Text("Mouse delta: (%f, %f)", io.MouseDelta.x, io.MouseDelta.y);
+
+		if (hoveringRect && contentHoverable && windowHovered) {
+			viewport_changed |= ProcessViewportInput(ctx);
+		}
 	}
 	// ImGui::PopStyleVar();
 	// ImGui::PopStyleColor();
 	ImGui::End();
+	return viewport_changed;
 }
 
 
-void Context::OutlinerWindow(Runtime::Outliner& ctx) {
+bool Context::OutlinerWindow(Runtime::Outliner& ctx) {
 	const ImGuiTreeNodeFlags parent_flags {
 		ImGuiTreeNodeFlags_OpenOnArrow       |
 		ImGuiTreeNodeFlags_OpenOnDoubleClick |
@@ -453,6 +519,7 @@ void Context::OutlinerWindow(Runtime::Outliner& ctx) {
 		ImGui::PopStyleVar();
 	}
 	ImGui::End();
+	return 0;
 }
 
 void Context::PropertiesWindow(Runtime::Data const& ctx) {
@@ -505,6 +572,7 @@ void Hover_Example() {
  */
 
 void Context::Draw(Runtime::Data const& ctx) {
+	ctx.windowData->viewportsToRender.clear();
 	if (ctx.windowData->main) {
 		editorContext.MainMenu(ctx);
 	}

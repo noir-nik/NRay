@@ -110,8 +110,11 @@ static AppContext* ctx;
 
 struct WindowImageResource : DeleteCopyDeleteMove {
 	vkw::Image colorImage;
-	vkw::Image depthImage;
 	vkw::Image resolveImage;
+	vkw::Image depthImage;
+	vkw::Image uiColorImage;
+	vkw::Image uiResolveImage;
+
 };
 
 struct DrawViewportInfo {
@@ -238,6 +241,7 @@ void AppContext::CreateShaders() {
 // }
 
 void AppContext::CreateWindowResources(Entity window) {
+	using namespace std::literals;
 	Window &windowHandle = window.Get<Window>();
 	windowHandle.CreateSwapchain(device, queue);
 	windowHandle.CreateUI(sampleCount);
@@ -267,7 +271,7 @@ void AppContext::CreateWindowResources(Entity window) {
 		.height = maxSize.y,
 		.format = renderFormat,
 		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::TransferSrc,
-		.name = windowHandle.GetName(),
+		.name = windowHandle.GetName() + "_resolve"s,
 	});
 	
 	resource.colorImage = device.CreateImage({
@@ -276,7 +280,24 @@ void AppContext::CreateWindowResources(Entity window) {
 		.format = renderFormat,
 		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::TransientAttachment,
 		.samples = sampleCount,
-		.name = windowHandle.GetName(),
+		.name = windowHandle.GetName() + "_color"s,
+	});
+	
+	resource.uiResolveImage = device.CreateImage({
+		.width = maxSize.x,
+		.height = maxSize.y,
+		.format = renderFormat,
+		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::TransferSrc,
+		.name = windowHandle.GetName() + "_ui_resolve"s,
+	});
+	
+	resource.uiColorImage = device.CreateImage({
+		.width = maxSize.x,
+		.height = maxSize.y,
+		.format = renderFormat,
+		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::TransientAttachment,
+		.samples = sampleCount,
+		.name = windowHandle.GetName() + "_ui_color"s,
 	});
 }
 
@@ -358,16 +379,8 @@ void AppContext::DrawWindow(Entity window) {
 	}
 	auto& targetImage = windowHandle.swapChain.GetCurrentImage();
 	
-	ivec4 fullWindowRect(0, 0, windowHandle.GetWidth(), windowHandle.GetHeight());
-	if (sampleCount == vkw::SampleCount::_1) {
-		cmd.BeginRendering({{{{resource.resolveImage}}}, {resource.depthImage}, fullWindowRect});
-		// cmd.BeginRendering({{{{resource.resolveImage}}}, {}, fullWindowRect});
-	} else {
-		cmd.BeginRendering({{{{resource.colorImage, &resource.resolveImage}}}, {resource.depthImage}, fullWindowRect});
-		// cmd.BeginRendering({{{{resource.colorImage, resource.resolveImage}}}, {}, fullWindowRect});
-	};
 
-	cmd.SetScissor(fullWindowRect);
+/* 	
 	std::span<Runtime::Panel> panels;
 	if (windowData.main) {
 		panels = windowData.tabPanels;
@@ -385,20 +398,51 @@ void AppContext::DrawWindow(Entity window) {
 			cmd.SetViewport(flipped);
 			DrawViewport(cmd, v.camera);
 		}
+	} */
+
+	ivec4 fullWindowRect(0, 0, windowHandle.GetWidth(), windowHandle.GetHeight());
+	cmd.SetScissor(fullWindowRect);
+
+	// Viewports
+	if (!windowData.viewportsToRender.empty()) {
+		if (sampleCount == vkw::SampleCount::_1) {
+			cmd.BeginRendering({{{{resource.resolveImage}}}, {resource.depthImage}, fullWindowRect});
+			// cmd.BeginRendering({{{{resource.resolveImage}}}, {}, fullWindowRect});
+		} else {
+			cmd.BeginRendering({{{{resource.colorImage, &resource.resolveImage}}}, {resource.depthImage}, fullWindowRect});
+			// cmd.BeginRendering({{{{resource.colorImage, resource.resolveImage}}}, {}, fullWindowRect});
+		};
+		for (auto v : windowData.viewportsToRender) {
+			auto& viewport = v->viewport;
+			ivec4 flipped (viewport.x, viewport.y + viewport.w, viewport.z, -viewport.w);
+			cmd.SetViewport(flipped);
+			DrawViewport(cmd, v->camera);
+		}
+		cmd.EndRendering();
 	}
 
+	// UI
+	if (sampleCount == vkw::SampleCount::_1) {
+		cmd.BeginRendering({{{{resource.uiResolveImage}}}, {}, fullWindowRect});
+	} else {
+		cmd.BeginRendering({{{{resource.uiColorImage, &resource.uiResolveImage}}}, {}, fullWindowRect});
+	};
 	cmd.DrawImGui(uiDrawData);
-
 	cmd.EndRendering();
 	
 	cmd.Barrier(resource.resolveImage, {vkw::ImageLayout::TransferSrc});
+	cmd.Barrier(resource.uiResolveImage, {vkw::ImageLayout::TransferSrc});
 	cmd.Barrier(targetImage, {vkw::ImageLayout::TransferDst});
 	ivec4 blitRegion = fullWindowRect;
 	cmd.Blit({
 		.dst = targetImage,
 		.src = resource.resolveImage,
-		.dstRegion = blitRegion,
-		.srcRegion = blitRegion,
+		.regions = {{{blitRegion, blitRegion}}},
+	});
+	cmd.Blit({
+		.dst = targetImage,
+		.src = resource.uiResolveImage,
+		.regions = {{{blitRegion, blitRegion}}},
 	});
 	cmd.Barrier(targetImage, {vkw::ImageLayout::Present});
 

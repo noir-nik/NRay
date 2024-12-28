@@ -96,6 +96,9 @@ struct WindowData {
 	bool main = false;
 	std::vector<Panel> panels;
 	std::span<Panel> tabPanels;
+	
+	std::vector<Viewport*> viewportsToRender;
+
 
 	WindowData(bool main) : main(main) {}
 
