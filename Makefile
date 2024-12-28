@@ -53,7 +53,7 @@ LIB_EXT := a
 DEFINES := -DENGINE
 # -DUSE_VLA
 
-CXXFLAGS := -MMD -MP $(INCLUDES) $(DEFINES) -std=c++20 -Wall -Wno-vla
+CXXFLAGS := -MMD -MP $(INCLUDES) $(DEFINES) -std=c++20 -Wno-vla
 
 ifeq ($(STATIC_LINK), 1)
 	LDFLAGS += -static -static-libgcc -static-libstdc++
@@ -235,7 +235,8 @@ OBJS_FMT := $(patsubst $(SRC_FMT)/%.cc, $(PLATFORM_BUILD_DIR)/fmt/%.$(OBJ_EXT), 
 # $(patsubst %.cpp, $(PLATFORM_BUILD_DIR)/%.o, $(SRC_CPP_RAW)) \
 
 
-all: release
+all: create_dirs release
+debug: create_dirs
 
 .PHONY: debug
 ifeq ($(CC),cl)
@@ -368,6 +369,11 @@ CPP_HEADER_TARGETS := \
 CPP_MODULE_DEPENDENCIES_FILE := $(BUILD_DIR)/cpp_module_dependencies.mk
 
 $(BUILD_DIR)/%.mk: scripts/generate_cpp_module_dependencies.py $(CPP_MODULE_SRCS) $(SRCS)
+ifeq ($(OS),Windows_NT)
+	@cmd /c if not exist $(BUILD_DIR) mkdir $(BUILD_DIR)
+else
+	@mkdir -p $(BUILD_DIR)
+endif
 	@echo "Generating $(CPP_MODULE_DEPENDENCIES_FILE)"
 	@PYTHON $< > $@
 
@@ -417,7 +423,7 @@ endif
 _MBD := $(MODULES_BUILD_DIR)
 _OBD := $(OBJS_BUILD_DIR)
 ifeq ($(USE_MODULES), 1)
-include $(CPP_MODULE_DEPENDENCIES_FILE)
+-include $(CPP_MODULE_DEPENDENCIES_FILE)
 endif
 # $(TARGET): $(OBJS) $(OBJS_IMGUI) $(OBJS_STB)
 $(TARGET): \
@@ -548,7 +554,7 @@ $(MODULES_BUILD_DIR_CLANGD)/%.pcm: $(MODULES_BUILD_DIR)/%.pcm
 
 # ifeq (modules,$(MAKECMDGOALS))
 ifeq ($(findstring modules,$(MAKECMDGOALS)),modules)
-include $(CPP_MODULE_DEPENDENCIES_FILE)
+-include $(CPP_MODULE_DEPENDENCIES_FILE)
 endif
 
 
@@ -569,7 +575,6 @@ endif
 # _MBD := $(MODULES_BUILD_DIR)
 # _OBD := $(OBJS_BUILD_DIR)
 
-# include $(CPP_MODULE_DEPENDENCIES_FILE)
 
 $(_MBD)/%.pcm: source/Core/%.cppm
 # @rm -f $@

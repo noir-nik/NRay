@@ -6,8 +6,6 @@ import Log;
 #endif
 #include "tests/Test.hpp"
 
-
-// Example
 int main(int argc, char* argv[])
 {
 	Logger::Init();

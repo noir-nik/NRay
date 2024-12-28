@@ -190,12 +190,18 @@ void Context::MainMenu(Runtime::Data const& ctx) {
 	} */
 
 	PanelVisitor visitor;
+	static Editor::Tab* lastTab = nullptr;
+	bool tabUpdated = false;
 	if (ImGui::BeginTabBar("TabBar", ImGuiTabBarFlags_None)){
 		for (auto& tab : tabs) {
 			if (ImGui::BeginTabItem(tab.name.c_str())) {
+				if (lastTab != &tab) {
+					tabUpdated = true;
+					lastTab = &tab;
+				}
 				for (auto& panel : tab.panels) {
 					bool updated = std::visit(visitor, panel);
-					if (updated) {
+					if (std::holds_alternative<Runtime::Viewport>(panel) && (updated || tabUpdated)) {
 						ctx.windowData->viewportsToRender.push_back(&std::get<Runtime::Viewport>(panel));
 					}
 				}
@@ -300,12 +306,6 @@ void Context::DebugWindow(Runtime::Camera& camera) {
 			}
 		};
 
-		auto printMat3 = [](const float3x3& m) {
-			for (int i = 0; i < 3; i++) {
-				ImGui::Text("%.2f, %.2f, %.2f",
-					m(i, 0), m(i, 1), m(i, 2));
-			}
-		};
 		ImGui::Text("View");
 		printMat4(camera.view);
 		/*
@@ -388,8 +388,6 @@ bool ProcessViewportInput(Runtime::Viewport& ctx, ImGuiKeyChord mods, float rota
 	const auto& camera_forward = camera.getForward();
 	auto& camera_pos = camera.getPosition();
 
-	// LOG_INFO("Viewport input");
-
 	vec2 deltaPos = {-io.MouseDelta.x, -io.MouseDelta.y};
 
 	if (io.MouseDown[ImGuiMouseButton_Right]) {
@@ -402,7 +400,8 @@ bool ProcessViewportInput(Runtime::Viewport& ctx, ImGuiKeyChord mods, float rota
 		} else {
 			camera_pos -= camera.focus;
 			// camera.view = rotate4x4(camera_up, deltaPos.x * camera.rotation_factor) * rotate4x4(camera_right, deltaPos.y * camera.rotation_factor)  * camera.view; // trackball
-			(camera.view |= rotate(camera_right, deltaPos.y * camera.rotation_factor)) |= rotateY(rotation_sign * deltaPos.x * camera.rotation_factor);
+			camera.view |= rotate(camera_right, deltaPos.y * camera.rotation_factor);
+			camera.view |= rotateY(rotation_sign * deltaPos.x * camera.rotation_factor);
 			camera_pos += camera.focus;
 		}
 		// window->AddFramesToDraw(1);
@@ -424,7 +423,7 @@ bool ProcessViewportInput(Runtime::Viewport& ctx, ImGuiKeyChord mods, float rota
 	}
 	return 0;
 }
-static inline bool    operator!=(const ImVec2& lhs, const ImVec2& rhs)  { return lhs.x != rhs.x || lhs.y != rhs.y; }
+// static inline bool operator!=(const ImVec2& lhs, const ImVec2& rhs)  { return lhs.x != rhs.x || lhs.y != rhs.y; }
 
 bool Context::Viewport(Runtime::Viewport& ctx) {
 	// ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.0f);
@@ -485,7 +484,7 @@ bool Context::Viewport(Runtime::Viewport& ctx) {
 		if (proc) {
 			viewport_changed |= ProcessViewportInput(ctx, mods, rotation_sign);
 		}
-		ImGui::Text("Viewport changed: %s", viewport_changed ? "true" : "false");
+		// ImGui::Text("Viewport changed: %s", viewport_changed ? "true" : "false");
 	}
 	// ImGui::PopStyleVar();
 	// ImGui::PopStyleColor();
@@ -517,7 +516,7 @@ bool Context::OutlinerWindow(Runtime::Outliner& ctx) {
 		ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "%s", ctx.sceneGraph->Get(node).name());
 	}
 */
-	if (ImGui::Begin("Outliner", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_MenuBar) ) {
+	if (ImGui::Begin("Outliner", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_MenuBar) ) {
 		if (ImGui::BeginMenuBar()) {
 			if (ImGui::BeginMenu("Edit")) {
 				if (ImGui::MenuItem("Copy")) {
@@ -657,6 +656,7 @@ void Setup(SceneGraph* sceneGraph){
 			{Runtime::Viewport{}},
 		}},
 		{"Mesh", {
+			{Runtime::Outliner{sceneGraph}},
 			{Runtime::Viewport{}},
 		}},
 	};

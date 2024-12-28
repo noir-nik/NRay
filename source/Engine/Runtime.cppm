@@ -22,7 +22,7 @@ struct Camera {
 	static constexpr float zoom_factor = 0.01f;
 	static constexpr float move_factor = 0.00107f;
 
-	inline Camera(const vec3& position = vec3(0.0f, 0.0f, 30.0f), const vec3& focus = vec3(0.0f, 0.0f, 0.0f), const vec3& up = vec3(0.0f, 1.0f, 0.0f)) : focus(focus) {
+	inline Camera(const vec3& position = vec3(3.0f, 3.0f, 10.0f), const vec3& focus = vec3(0.0f, 0.0f, 0.0f), const vec3& up = vec3(0.0f, 1.0f, 0.0f)) : focus(focus) {
 		view = lookAt(position, focus, up) | affineInverse;
 	}
 	

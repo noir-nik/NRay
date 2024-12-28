@@ -472,7 +472,7 @@ struct RenderingInfo {
 	Image const& depthAttach = {};
 	ivec4 renderArea = ivec4(0.0f);
 	LoadOp loadOpColor = LoadOp::Clear;
-	vec4 clearColor = { 0.1f, 0.2f, 0.1f, 0.0f };
+	vec4 clearColor = { 0.0f, 0.0f, 0.0f, 0.0f };
 	float clearDepth = 1.0f;
 	uint32_t clearStencil = 0;
 	ivec4 scissor = ivec4(0);

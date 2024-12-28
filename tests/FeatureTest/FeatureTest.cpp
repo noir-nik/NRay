@@ -308,7 +308,7 @@ void AppContext::UploadBuffers() {
 	cmd.QueueSubmit({});
 
 	glTF::Loader loader;
-	const char* filepath = "bin/cubes.gltf";
+	const char* filepath = "assets/models/test_scene.gltf";
 	auto res = loader.Load(filepath, project.GetSceneGraph(), device);
 	ASSERT(res, "Failed to load gltf file");
 
@@ -401,12 +401,13 @@ void AppContext::DrawWindow(Entity window) {
 
 	// Viewports
 	if (!windowData.viewportsToRender.empty()) {
+		vec4 clear_color = {0.1f, 0.1f, 0.1f, 1.0f};
 		if (sampleCount == vkw::SampleCount::_1) {
-			cmd.BeginRendering({{{{resource.resolveImage}}}, {resource.depthImage}, fullWindowRect});
-			// cmd.BeginRendering({{{{resource.resolveImage}}}, {}, fullWindowRect});
+			cmd.BeginRendering({{{{resource.resolveImage}}}, {resource.depthImage}, fullWindowRect, vkw::LoadOp::Clear, clear_color});
+			// cmd.BeginRendering({{{{resource.resolveImage}}}, {}, fullWindowRect, vkw::LoadOp::Clear, clear_color});
 		} else {
-			cmd.BeginRendering({{{{resource.colorImage, &resource.resolveImage}}}, {resource.depthImage}, fullWindowRect});
-			// cmd.BeginRendering({{{{resource.colorImage, resource.resolveImage}}}, {}, fullWindowRect});
+			cmd.BeginRendering({{{{resource.colorImage, &resource.resolveImage}}}, {resource.depthImage}, fullWindowRect, vkw::LoadOp::Clear, clear_color});
+			// cmd.BeginRendering({{{{resource.colorImage, resource.resolveImage}}}, {}, fullWindowRect, vkw::LoadOp::Clear, clear_color});
 		};
 		for (auto v : windowData.viewportsToRender) {
 			ivec4 viewport(v->rect.x, v->rect.y, v->rect.z - v->rect.x, v->rect.w - v->rect.y);

@@ -25,20 +25,10 @@ CompileFlags:
     --target=x86_64-w64-windows-gnu,
     -DNRAY_DEBUG,
     # -DUSE_HEADER_UNITS,
-    # -DUSE_MODULES,
+    -DUSE_MODULES,
     -fprebuilt-module-path=build/win/modules-clangd,
     -Wno-pragma-once-outside-header,
-	# -pedantic,
 	-Wimplicit-fallthrough,
-	-Wall,
+	# -Wall,
     -Wno-vla,
   ]
-
-    #Diagnostics:
-    #  Suppress: [
-    #    pch-langopt-mismatch,
-    #    pch_langopt_mismatch,
-    #    note_ovl_candidate_arity,
-    #    note_ovl_candidate_bad_conv_incomplete,
-    #    pch_langopt_mismatch
-    #  ]

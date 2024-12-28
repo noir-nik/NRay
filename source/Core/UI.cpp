@@ -27,7 +27,7 @@ void Init(){
 	sharedFontAtlas = io.Fonts;
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 	// io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
-	// io.IniFilename = nullptr;
+	io.IniFilename = "assets/imgui.ini";
 
 	// io.Fonts->AddFontDefault();
 	const float fontSize = 15.0f;
@@ -64,6 +64,7 @@ void Context::Init(void* imguiStyle) {
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 	// io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 	io.FontDefault = defaultFont;
+	io.IniFilename = "assets/imgui.ini";
 
 	if (imguiStyle != nullptr){
 		ImGui::GetStyle() = *static_cast<ImGuiStyle*>(imguiStyle);
