@@ -1,13 +1,13 @@
 #ifdef USE_MODULES
 export module Objects;
 #define _OBJECTS_EXPORT export
-import Lmath;
+import Lmath.types;
 import VulkanBackend;
 import stl;
 #else
 #pragma once
 #define _OBJECTS_EXPORT
-#include "Lmath.cppm"
+#include "Lmath.types.cppm"
 #include "VulkanBackend.cppm"
 #include <cstdint>
 #include <vector>

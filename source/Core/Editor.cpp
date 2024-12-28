@@ -241,7 +241,7 @@ void EditorContext::DebugWindow(Runtime::Camera& camera) {
 		Lmath::float3 position;
 		Lmath::float3 rotation;
 		Lmath::float3 scale;
-		camera.view.inverse().decompose(position, rotation, scale);
+		camera.view | inverse | std::tie(position, rotation, scale);
 
 		// ImGui::SliderFloat3("Camera Position", position.M, -50.0f, 50.0f);
 		// ImGui::SliderFloat3("Camera Focus", rotation.M, -50.0f, 50.0f);

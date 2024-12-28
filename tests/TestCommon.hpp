@@ -1,8 +1,8 @@
 #pragma once
 #ifdef USE_MODULES
-import Lmath;
+import Lmath.types;
 #else
-#include "Lmath.cppm"
+#include "Lmath.types.cppm"
 #endif
 #include <cstdint>
 

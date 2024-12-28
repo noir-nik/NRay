@@ -1,13 +1,13 @@
 #ifdef USE_MODULES
 export module VulkanBackend;
-import Lmath;
+import Lmath.types;
 import stl;
 import imgui; 
 #define VKW_EXPORT export
 #else
 #pragma once
 #define VKW_EXPORT
-#include "Lmath.cppm"
+#include "Lmath.types.cppm"
 
 #include <cstdint>
 #include <span>

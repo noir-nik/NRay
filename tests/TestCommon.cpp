@@ -1,8 +1,7 @@
 #ifdef USE_MODULES
-import Lmath;
+import Lmath.types;
 import VulkanBackend;
 #else
-#include "Lmath.cppm"
 #include "VulkanBackend.cppm"
 #include "TestCommon.hpp"
 #include "FileManager.cppm"

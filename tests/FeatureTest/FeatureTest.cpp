@@ -304,7 +304,7 @@ void AppContext::DrawViewport(Entity window, int4 viewport) {
 	auto& resource = window.Get<WindowImageResource>();
 	auto glfwWindow = windowHandle.GetGLFWwindow();
 	PhongConstants constants{};
-	constants.viewProj = camera.proj * camera.view.affineInverse();
+	constants.viewProj = camera.proj * camera.view | affineInverse;
 	constants.light = phongLight.Get<PhongLight>();
 	constants.material = phongMaterial.Get<PhongMaterial>();
 	constants.cameraPosition = camera.getPosition();

@@ -23,8 +23,7 @@ struct Camera {
 	static constexpr float move_factor = 0.00107f;
 
 	inline Camera(const vec3& position, const vec3& focus = vec3(0.0f, 0.0f, 0.0f), const vec3& up = vec3(0.0f, 1.0f, 0.0f)) : focus(focus) {
-		// view = affineInverse4x4(lookAt(position, focus, up));
-		view = lookAt(position, focus, up).affineInverse();
+		view = lookAt(position, focus, up) | affineInverse;
 	}
 	
 	inline vec3& getRight()    { return view.col(0).xyz(); }

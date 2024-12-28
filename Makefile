@@ -260,13 +260,13 @@ build_target: create_dirs
 ifeq ($(USE_MODULES), 1)
 build_target: get_cpp_module_dependencies
 else
-build_target: clean_cpp_module_dependencies
+# build_target: clean_cpp_module_dependencies
 endif
 build_target: $(TARGET)
 
-clean_cpp_module_dependencies:
-	@echo "Cleaning cpp module dependencies"
-	@echo "" > $(CPP_MODULE_DEPENDENCIES_FILE)
+# clean_cpp_module_dependencies:
+# @echo "Cleaning cpp module dependencies"
+# @echo "" > $(CPP_MODULE_DEPENDENCIES_FILE)
 
 
 _WINBDIR := $(subst /,\,$(PLATFORM_BUILD_DIR))
@@ -323,6 +323,7 @@ CPP_SYSTEM_HEADERS := \
 	string \
 	string_view \
 	thread \
+	tuple \
 	unordered_map \
 	vector \
 	\
@@ -394,9 +395,9 @@ endif
 # $(OBJS): $(CPP_MODULE_TARGETS)
 _MBD := $(MODULES_BUILD_DIR)
 _OBD := $(OBJS_BUILD_DIR)
-# ifeq ($(USE_MODULES), 1)
-# endif
+ifeq ($(USE_MODULES), 1)
 include $(CPP_MODULE_DEPENDENCIES_FILE)
+endif
 # $(TARGET): $(OBJS) $(OBJS_IMGUI) $(OBJS_STB)
 $(TARGET): \
 	$(OBJS) \

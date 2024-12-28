@@ -1,7 +1,7 @@
 #ifdef USE_MODULES
 export module Component;
 #define _COMPONENT_EXPORT export
-import Lmath;
+import Lmath.types;
 import VulkanBackend;
 import Phong;
 import Objects;
@@ -9,7 +9,7 @@ import stl;
 #else
 #pragma once
 #define _COMPONENT_EXPORT
-#include "Lmath.cppm"
+#include "Lmath.types.cppm"
 #include "VulkanBackend.cppm"
 #include "Phong.cppm"
 #include "Objects.cppm"

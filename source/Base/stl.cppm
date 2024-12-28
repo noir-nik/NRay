@@ -13,6 +13,8 @@ module;
 #include <set>
 #include <span>
 #include <string_view>
+#include <thread>
+#include <tuple>
 #include <unordered_map>
 #include <vector>
 
@@ -54,6 +56,7 @@ export import <span>;
 export import <string>;
 export import <string_view>;
 export import <thread>;
+export import <tuple>;
 export import <unordered_map>;
 export import <vector>;
 

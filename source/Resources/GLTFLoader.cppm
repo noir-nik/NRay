@@ -1,7 +1,6 @@
 #ifdef USE_MODULES
 export module GLTFLoader;
 #define _GLTFLOADER_EXPORT export
-import Lmath;
 import VulkanBackend;
 import Component;
 import SceneGraph;

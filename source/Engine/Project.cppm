@@ -1,14 +1,13 @@
 #ifdef USE_MODULES
 export module Project;
 #define _PROJECT_EXPORT export
-import Lmath;
+import Lmath.types;
 import SceneGraph;
 import Entity;
 import stl;
 #else
 #pragma once
 #define _PROJECT_EXPORT
-#include "Lmath.cppm"
 #include "SceneGraph.cppm"
 #include "Entity.cppm"
 

@@ -1,18 +1,17 @@
 #ifdef USE_MODULES
-import Lmath;
+import Lmath.types;
 import VulkanBackend;
 #else
-#include "Lmath.cppm"
+#include "Lmath.types.cppm"
 #include "VulkanBackend.cppm"
 #endif
-#include "Pch.hpp"
 
 #include "Bindless.h"
-#include "FileManager.hpp"
+#include "FileManager.cppm"
 
-#include "ImageOptimization.hpp"
-#include "../TestCommon.hpp"
-#include "Timer.hpp"
+#include "ImageOptimization.cppm"
+#include "../TestCommon.cppm"
+#include "Timer.cppm"
 
 using Pixel = vec4;
 namespace {
