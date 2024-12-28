@@ -4,6 +4,11 @@ module;
 #pragma once
 #endif
 
+#undef USE_MODULES
+#include "Types.cppm"
+#define USE_MODULES
+
+#define ENTT_ID_TYPE EntityType
 #include <entt/entity/registry.hpp>
 
 // NOLINTBEGIN(misc-unused-using-decls)

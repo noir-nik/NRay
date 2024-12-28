@@ -119,6 +119,8 @@ class Window {
 	std::chrono::high_resolution_clock::time_point lastTime;
 	float deltaTime = .0f;
 
+	EntityType entityHandle;
+
 	std::vector<std::string> pathsDrop;
 
 	// char lastKeyState[GLFW::KEY_LAST + 1];
@@ -177,6 +179,7 @@ public:
 	void Destroy();
 
 	inline GLFWwindow* GetGLFWwindow()                     { return window; }
+	inline EntityType  GetEntityHandle()                   { return entityHandle; }
 	inline void        WaitEvents()                        { glfwWaitEvents(); }
 	inline int         GetWidth()                          { return size.x; }
 	inline int         GetHeight()                         { return size.y; }

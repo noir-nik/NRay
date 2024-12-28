@@ -72,11 +72,8 @@ struct AppContext {
 	vkw::Queue queue;
 	// vkw::Image renderImage;
 
-	Window* mainWindow;
-	std::set<Window*> windows;
-	std::unordered_map<Window*, vkw::Image> colorImages;
-	std::unordered_map<Window*, vkw::Image> depthImages;
-	std::unordered_map<Window*, vkw::Image> resolveImages;
+	Entity mainWindow;
+
 
 	Entity phongMaterial;
 	Entity phongLight;
@@ -85,8 +82,15 @@ struct AppContext {
 	Editor editor;
 
 	Project project;
+	inline Entity CreateEntity(const std::string_view& name = "") {
+		auto entity = Entity(&registry, registry.create());
+		entity.AddComponent<Component::Name>(name);
+		return entity;
+	}
 
-	std::vector<Entity> meshes;
+	Registry registry;
+
+	// std::vector<Entity> meshes;
 
 	AppContext () = default;
 	AppContext (const AppContext&) = delete;
@@ -95,16 +99,23 @@ struct AppContext {
 	AppContext& operator=(AppContext&&) = delete;
 	
 	void CreateShaders();
-	void CreateWindowResources(Window* window);
+	void CreateWindowResources(Entity window);
 	void UploadBuffers();
-	void RecordCommands(Window* window);
+	void RecordCommands(Entity window);
 	void viewport();
 	void RenderUI();
-	void DrawImgui(Window* window);
-	void DrawWindow(Window* window);
+	void DrawImgui(Entity window);
+	void DrawWindow(Entity window);
 	void RecreateFrameResources(Window* window);
 
 };
+
+struct WindowImageResource {
+	vkw::Image colorImage;
+	vkw::Image depthImage;
+	vkw::Image resolveImage;
+};
+
 static AppContext* ctx;
 
 static Objects::Camera camera(vec3(0.0f, 0.0f, 30.0f), vec3(0.0f, 0.0f, 0.0f), vec3(0.0f, 1.0f, 0.0f));
@@ -174,6 +185,7 @@ const std::vector<Vertex> vertices = {
 };
 
 void AppContext::CreateShaders() {
+	auto resource = mainWindow.GetComponent<WindowImageResource>();
 	pipeline = device.CreatePipeline({
 		.point = vkw::PipelinePoint::Graphics,
 		.stages = {
@@ -185,7 +197,7 @@ void AppContext::CreateShaders() {
 		.vertexAttributes = {vkw::Format::RGB32_sfloat, vkw::Format::RGB32_sfloat},
 		.colorFormats = {renderFormat},
 		.useDepth = true,
-		.depthFormat = depthImages[mainWindow].format,
+		.depthFormat = resource.depthImage.format,
 		.samples = sampleCount,
 		.lineTopology = false
 	});
@@ -207,7 +219,7 @@ void AppContext::CreateShaders() {
 		},
 		.colorFormats = {renderFormat},
 		.useDepth = true,
-		.depthFormat = depthImages[mainWindow].format,
+		.depthFormat = resource.depthImage.format,
 		.samples = sampleCount,
 		.lineTopology = false
 	});
@@ -218,48 +230,48 @@ void AppContext::CreateShaders() {
 
 // }
 
-void AppContext::CreateWindowResources(Window* window) {
-	window->CreateSwapchain(device, queue);
-	window->CreateUI(sampleCount);
-	windows.emplace(window);
-	window->AddFramebufferSizeCallback(FramebufferCallback);
-	window->AddMouseButtonCallback(MouseButtonCallback);
-	window->AddWindowRefreshCallback(RefreshCallback);
-	window->AddKeyCallback(KeyCallback);
-	window->AddCursorPosCallback(CursorPosCallback);
-	window->AddScrollCallback(ScrollCallback);
-	window->AddWindowIconifyCallback(IconifyCallback);
+void AppContext::CreateWindowResources(Entity window) {
+	Window &windowHandle = window.GetComponent<Window>();
+	windowHandle.CreateSwapchain(device, queue);
+	windowHandle.CreateUI(sampleCount);
 
-	uint2 maxSize = uint2(window->GetSizeLimits().zw());
+	windowHandle.AddFramebufferSizeCallback(FramebufferCallback);
+	windowHandle.AddMouseButtonCallback(MouseButtonCallback);
+	windowHandle.AddWindowRefreshCallback(RefreshCallback);
+	windowHandle.AddKeyCallback(KeyCallback);
+	windowHandle.AddCursorPosCallback(CursorPosCallback);
+	windowHandle.AddScrollCallback(ScrollCallback);
+	windowHandle.AddWindowIconifyCallback(IconifyCallback);
 
-	depthImages.erase(window);
-	depthImages.try_emplace(window, device.CreateImage({
+	uint2 maxSize = uint2(windowHandle.GetSizeLimits().zw());
+
+	auto& resource = window.GetComponent<WindowImageResource>();
+
+	resource.depthImage = device.CreateImage({
         .width = maxSize.x,
         .height = maxSize.y,
         .format = vkw::Format::D32_sfloat,
         .usage = vkw::ImageUsage::DepthStencilAttachment | vkw::ImageUsage::TransientAttachment,
 		.samples = sampleCount,
         .name = "Depth Attachment"
-    }));
+    });
 
-	resolveImages.erase(window);
-	resolveImages.try_emplace(window, device.CreateImage({
+	resource.resolveImage = device.CreateImage({
 		.width = maxSize.x,
 		.height = maxSize.y,
 		.format = renderFormat,
 		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::TransferSrc,
-		.name = window->GetName(),
-	}));
+		.name = windowHandle.GetName(),
+	});
 	
-	colorImages.erase(window);
-	colorImages.try_emplace(window, device.CreateImage({
+	resource.colorImage = device.CreateImage({
 		.width = maxSize.x,
 		.height = maxSize.y,
 		.format = renderFormat,
 		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::TransientAttachment,
 		.samples = sampleCount,
-		.name = window->GetName(),
-	}));
+		.name = windowHandle.GetName(),
+	});
 }
 
 void AppContext::UploadBuffers() {
@@ -276,18 +288,20 @@ void AppContext::UploadBuffers() {
 	ASSERT(res, "Failed to load gltf file");
 
 	auto& sceneGraph = project.GetSceneGraph();
-	meshes.reserve(sceneGraph.registry->view<Component::Mesh>().size());
-	auto vv = sceneGraph.registry->view<Component::Mesh>();
-	for (auto entity : sceneGraph.registry->view<Component::Mesh>()) {
-		meshes.push_back(Entity(sceneGraph.registry, entity));
-	}
+	// meshes.reserve(sceneGraph.registry->view<Component::Mesh>().size());
+	// auto vv = sceneGraph.registry->view<Component::Mesh>();
+	// for (auto entity : sceneGraph.registry->view<Component::Mesh>()) {
+	// 	meshes.push_back(Entity(sceneGraph.registry, entity));
+	// }
 	sceneGraph.DebugPrint();
 }
 
 
-void AppContext::RecordCommands(Window* window) {
-	auto size = window->GetSize();
-	auto glfwWindow = window->GetGLFWwindow();
+void AppContext::RecordCommands(Entity window) {
+	auto& windowHandle = window.GetComponent<Window>();
+	auto& resource = window.GetComponent<WindowImageResource>();
+	auto size = windowHandle.GetSize();
+	auto glfwWindow = windowHandle.GetGLFWwindow();
 	vec4 viewport = {0, 0, (float)size.x, (float)size.y};
 	PhongConstants constants{};
 	constants.viewProj = camera.proj * inverse4x4(camera.view);
@@ -297,29 +311,32 @@ void AppContext::RecordCommands(Window* window) {
 
 	// LOG_INFO("Viewport: {}, {}, {}, {}", viewport.x, viewport.y, viewport.z, viewport.w); 
 
-	auto cmd = window->swapChain.GetCommandBuffer();
+	auto cmd = windowHandle.swapChain.GetCommandBuffer();
 	cmd.BeginCommandBuffer();
-	if (!window->swapChain.AcquireImage()) return;
-	vkw::Image& img = window->swapChain.GetCurrentImage();
+	if (!windowHandle.swapChain.AcquireImage()) return;
+	vkw::Image& img = windowHandle.swapChain.GetCurrentImage();
 
-	// cmd.Barrier(renderImages[window], {vkw::ImageLayout::TransferDst});
-	// cmd.ClearColorImage(renderImages[window], {0.7f, 0.0f, 0.4f, 1.0f});
+	// cmd.Barrier(resource.renderImage, {vkw::ImageLayout::TransferDst});
+	// cmd.ClearColorImage(resource.renderImage, {0.7f, 0.0f, 0.4f, 1.0f});
 	if (sampleCount == vkw::SampleCount::_1) {
-		cmd.BeginRendering({{{resolveImages[window]}}}, {depthImages[window]}, 1, viewport);
-		// cmd.BeginRendering({{{resolveImages[window]}}}, {}, 1, viewport);
+		cmd.BeginRendering({{{resource.resolveImage}}}, {resource.depthImage}, 1, viewport);
+		// cmd.BeginRendering({{{resource.resolveImage}}}, {}, 1, viewport);
 	} else {
-		cmd.BeginRendering({{{colorImages[window], resolveImages[window]}}}, {depthImages[window]}, 1, viewport);
-		// cmd.BeginRendering({{{colorImages[window], resolveImages[window]}}}, {}, 1, viewport);
+		cmd.BeginRendering({{{resource.colorImage, resource.resolveImage}}}, {resource.depthImage}, 1, viewport);
+		// cmd.BeginRendering({{{resource.colorImage, resource.resolveImage}}}, {}, 1, viewport);
 	}
 	;
 	
 	cmd.BindPipeline(glTFPipeline);
-	for (auto& meshNode : meshes) {
-		constants.model = meshNode.GetComponent<Component::Transform>().global;
+	auto registry = project.GetSceneGraph().registry;
+	for (auto& meshNode : registry->view<Component::Mesh>()) {
+		// constants.model = meshNode.GetComponent<Component::Transform>().global;
+		constants.model = registry->get<Component::Transform>(meshNode).global;
 		// print name
 		// printf("%s\n", meshNode.GetComponent<Component::Name>().name.c_str());
 		cmd.PushConstants(&constants, sizeof(constants));
-		auto& mesh = meshNode.GetComponent<Component::Mesh>();
+		// auto& mesh = meshNode.GetComponent<Component::Mesh>();
+		auto& mesh = registry->get<Component::Mesh>(meshNode);
 		cmd.DrawMesh(mesh->vertexBuffer, mesh->indexBuffer, mesh->indexBuffer.size / sizeof(uint32_t));
 	}
 
@@ -338,26 +355,27 @@ void AppContext::RecordCommands(Window* window) {
 
 	cmd.EndRendering();
 	
-	cmd.Barrier(resolveImages[window], {vkw::ImageLayout::TransferSrc});
+	cmd.Barrier(resource.resolveImage, {vkw::ImageLayout::TransferSrc});
 	cmd.Barrier(img, {vkw::ImageLayout::TransferDst});
-	cmd.Blit(img, resolveImages[window], {0, 0, size.x, size.y}, {0, 0, size.x, size.y});
+	cmd.Blit(img, resource.resolveImage, {0, 0, size.x, size.y}, {0, 0, size.x, size.y});
 	cmd.Barrier(img, {vkw::ImageLayout::Present});
 
 }
 
-void AppContext::DrawWindow(Window* window) {
-	window->SetUIContextCurrent();
+void AppContext::DrawWindow(Entity window) {
+	auto& windowHandle = window.GetComponent<Window>();
+	windowHandle.SetUIContextCurrent();
 	editor.BeginFrame();
 	editor.Draw(camera);
 	imguiDrawData = editor.EndFrame();
 	
 	RecordCommands(window);
-	if (window->swapChain.GetDirty()) {
+	if (windowHandle.swapChain.GetDirty()) {
 		LOG_WARN("RecordCommands: Swapchain dirty");
 		return;
 	}
-	window->swapChain.SubmitAndPresent();
-	if (window->swapChain.GetDirty()) {
+	windowHandle.swapChain.SubmitAndPresent();
+	if (windowHandle.swapChain.GetDirty()) {
 		LOG_WARN("SubmitAndPresent: Swapchain dirty");
 		return;
 	}
@@ -366,8 +384,8 @@ void AppContext::DrawWindow(Window* window) {
 	// 	ImGui::UpdatePlatformWindows();
 	// 	ImGui::RenderPlatformWindowsDefault();
 	// }
-	window->AddFramesToDraw(-1);
-	window->SetFrameCount((window->GetFrameCount() + 1) % (1 << 15));
+	windowHandle.AddFramesToDraw(-1);
+	windowHandle.SetFrameCount((windowHandle.GetFrameCount() + 1) % (1 << 15));
 }
 
 void KeyCallback(Window* window, int key, int scancode, int action, int mods) {
@@ -377,13 +395,13 @@ void KeyCallback(Window* window, int key, int scancode, int action, int mods) {
 	switch (action){
 	case GLFW::Press:
 		switch (glfwkey) {
-		case GLFW::Key::N: {
-			static int windowCount = 1;
-			std::string name = "w" + std::to_string(windowCount++);
-			auto window = new Window(ctx->width, ctx->height, name.c_str());
-			ctx->CreateWindowResources(window);
-			break;
-		}
+		// case GLFW::Key::N: {
+		// 	static int windowCount = 1;
+		// 	std::string name = "w" + std::to_string(windowCount++);
+		// 	auto window = new Window(ctx->width, ctx->height, name.c_str());
+		// 	ctx->CreateWindowResources(window);
+		// 	break;
+		// }
 		case GLFW::Key::W:
 			camera.view = translate4x4({0, 0, -0.02f}) * camera.view;
 			break;
@@ -562,12 +580,13 @@ void FramebufferCallback(Window* window, int width, int height) {
 	if (width == 0 || height == 0) {return;}
 	camera.proj = perspective(60.0f, (float)width / height, 0.01f, 1000.0f); // TODO: move to size callback
 	// LOG_INFO("RecreateFrameResources {} callback", window->GetName());
+	
 	ctx->RecreateFrameResources(window);
 }
 
 void RefreshCallback(Window* window) {
 	window->AddFramesToDraw(1);
-	ctx->DrawWindow(window);
+	ctx->DrawWindow(Entity(&ctx->registry, static_cast<entt::entity>(window->GetEntityHandle())));
 }
 
 void IconifyCallback(Window* window, int iconified) {
@@ -708,11 +727,16 @@ void FeatureTestApplication::Setup() {
 
 	camera.proj = perspective(60.0f, (float)ctx->width / ctx->height, 0.01f, 1000.0f);
 
-	auto window = new Window(ctx->width, ctx->height, "NRay");
-	ctx->queue = {vkw::QueueFlagBits::Graphics | vkw::QueueFlagBits::Compute | vkw::QueueFlagBits::Transfer, window->GetGLFWwindow()};
+	// auto window = new Window(ctx->width, ctx->height, "NRay");
+	auto mainWindow = ctx->CreateEntity("Main Window");
+	mainWindow.AddComponent<Window>(ctx->width, ctx->height, "NRay");
+	mainWindow.AddComponent<WindowImageResource>();
+	Window& windowHandle = mainWindow.GetComponent<Window>();
+	
+	ctx->queue = {vkw::QueueFlagBits::Graphics | vkw::QueueFlagBits::Compute | vkw::QueueFlagBits::Transfer, windowHandle.GetGLFWwindow()};
 	ctx->device = vkw::CreateDevice({&ctx->queue});
-	ctx->mainWindow = window;
-	ctx->CreateWindowResources(window);
+	ctx->mainWindow = mainWindow;
+	ctx->CreateWindowResources(mainWindow);
 
 	ctx->cubeVertexBuffer = ctx->device.CreateBuffer({
 		vertices.size() * sizeof(Vertex),
@@ -725,30 +749,30 @@ void FeatureTestApplication::Setup() {
 	ctx->CreateShaders();
 }
 
-bool DrawOrRemoveWindow(Window* window) {
-	window->ApplyChanges();
-	if (window->GetAlive()) {
-		// LOG_INFO("Iconified {}", window->GetIconified());
-		if (!window->GetIconified()) {
+bool DrawOrRemoveWindow(Entity window) {
+	auto& windowHandle = window.GetComponent<Window>();
+	auto& resource = window.GetComponent<WindowImageResource>();
+	windowHandle.ApplyChanges();
+	if (windowHandle.GetAlive()) {
+		// LOG_INFO("Iconified {}", windowHandle.GetIconified());
+		if (!windowHandle.GetIconified()) {
 			// Recreate swapchain if needed
-			if (window->GetSwapchainDirty() || window->GetFramebufferResized()) {
+			if (windowHandle.GetSwapchainDirty() || windowHandle.GetFramebufferResized()) {
 				// LOG_INFO("DIRTY FRAME RESOURCES");
-				window->UpdateFramebufferSize();
+				windowHandle.UpdateFramebufferSize();
 				ctx->device.WaitIdle();
-				window->RecreateSwapchain();
-				window->SetFramebufferResized(false);
-				window->AddFramesToDraw(1);
+				windowHandle.RecreateSwapchain();
+				windowHandle.SetFramebufferResized(false);
+				windowHandle.AddFramesToDraw(1);
 			}
 			// Draw if needed
-			if (window->GetDrawNeeded()){
-				ctx->DrawWindow(window);
+			if (windowHandle.GetDrawNeeded()){
+				ctx->DrawWindow({&ctx->registry, static_cast<entt::entity>(windowHandle.GetEntityHandle())});
 			}
 		}
 		return false;
 	} else {
-		ctx->depthImages.erase(window);
-		ctx->colorImages.erase(window);
-		ctx->resolveImages.erase(window);
+		ctx->registry.remove(window.entity);
 		if (window == ctx->mainWindow) {
 			ctx->mainWindow = nullptr;
 		}

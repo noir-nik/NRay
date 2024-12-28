@@ -8,7 +8,7 @@ TARGET := nRay
 COMPILE_IMGUI := 1
 STATIC_LINK := 0
 
-USE_MODULES := 0
+USE_MODULES := 1
 USE_HEADER_UNITS := 1
 
 ifeq ($(CC),g++)
@@ -622,19 +622,29 @@ endif
 
 $(PLATFORM_BUILD_DIR)/glfw/%.$(OBJ_EXT): $(SRC_GLFW)/%.c # glfw/
 	@echo "Compiling $(notdir $<)"
-	@$(CC) -x c $(filter-out -std=c++20,$(CXXFLAGS)) -c $< $(-O)$@ -D$(GLFW_PLATFORM)
+	@$(CC) -x c $(filter-out -std=c++20,$(CXXFLAGS)) -c $< $(-O)$@ -D$(GLFW_PLATFORM) -Wno-unused-command-line-argument
 
 ifeq ($(findstring clang,$(CC)),clang)
 _CLANG_FASTGLTF := -femulated-tls
 endif
 
+
 # Fastgltf
-$(PLATFORM_BUILD_DIR)/fastgltf/%.$(OBJ_EXT): $(SRC_FASTGLTF)/%.cpp # fastgltf/
+$(PLATFORM_BUILD_DIR)/fastgltf/%.$(OBJ_EXT): $(SRC_FASTGLTF)/%.cpp
 	@echo "Compiling $(notdir $<)"
 	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $< -I$(DEPS_PATH)/fastgltf/include/ -I$(DEPS_PATH)/fastgltf/deps/simdjson $(_CLANG_FASTGLTF)
 
 # Simdjson
-$(PLATFORM_BUILD_DIR)/fastgltf/%.$(OBJ_EXT): $(SRC_SIMDJSON)/%.cpp # simdjson/
+SIMDJSON_TARGET_VERSION := 3.9.4
+$(SRC_SIMDJSON)/simdjson.cpp:
+	@echo "Downloading $(notdir $@) v$(SIMDJSON_TARGET_VERSION)"
+	@curl -L -o $@ https://raw.githubusercontent.com/simdjson/simdjson/v$(SIMDJSON_TARGET_VERSION)/singleheader/simdjson.cpp
+
+$(SRC_SIMDJSON)/simdjson.h:
+	@echo "Downloading $(notdir $@) v$(SIMDJSON_TARGET_VERSION)"
+	@curl -L -o $@ https://raw.githubusercontent.com/simdjson/simdjson/v$(SIMDJSON_TARGET_VERSION)/singleheader/simdjson.h
+
+$(PLATFORM_BUILD_DIR)/fastgltf/%.$(OBJ_EXT): $(SRC_SIMDJSON)/%.cpp $(SRC_SIMDJSON)/%.h # simdjson/
 	@echo "Compiling $(notdir $<)"
 	@$(CC) -MMD -MP $(-O)$@ $(-C) $< -I$(DEPS_PATH)/fastgltf/deps/simdjson -O3 $(_CLANG_LIBFLAGS)
 
