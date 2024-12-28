@@ -398,15 +398,15 @@ void LoadNode(fastgltf::Asset& asset, const int gltfNodeIndex, std::unordered_ma
 	auto& newNode = sceneGraph.nodes[offset + gltfNodeIndex];
 	newNode.entity = sceneGraph.CreateEntity(glTFNode.name);
 	DEBUG_TRACE("Loading node {}", glTFNode.name.c_str());
-	newNode.entity.AddComponent<Component::Transform>();
+	newNode.entity.Add<Component::Transform>();
 	if (glTFNode.meshIndex.has_value()) {
 		Component::Mesh mesh = meshMap[glTFNode.meshIndex.value()];
-		newNode.entity.AddComponent<Component::Mesh>(mesh); //todo: fix
+		newNode.entity.Add<Component::Mesh>(mesh); //todo: fix
 	} else {
 		// todo : empty, volume flags
 	}
 
-	auto& local = newNode.entity.GetComponent<Component::Transform>().local;
+	auto& local = newNode.entity.Get<Component::Transform>().local;
 	std::visit(
 		fastgltf::visitor {
 		[&](fastgltf::math::fmat4x4& matrix) {

@@ -9,7 +9,7 @@ import Lmath;
 /* 
 Entity Project::CreateEntity(const std::string_view& name) {
 	auto entity = Entity(&registry, registry.create());
-	entity.AddComponent<Component::Name>(name);
+	entity.Add<Component::Name>(name);
 	return entity;
 }
  */

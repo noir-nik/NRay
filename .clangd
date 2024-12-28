@@ -25,7 +25,7 @@ CompileFlags:
     --target=x86_64-w64-windows-gnu,
     -DNRAY_DEBUG,
     # -DUSE_HEADER_UNITS,
-    -DUSE_MODULES,
+    # -DUSE_MODULES,
     -fprebuilt-module-path=build/win/modules,
   ]
   

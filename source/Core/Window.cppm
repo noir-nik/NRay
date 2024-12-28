@@ -180,6 +180,7 @@ public:
 
 	inline GLFWwindow* GetGLFWwindow()                     { return window; }
 	inline EntityType  GetEntityHandle()                   { return entityHandle; }
+	inline void        SetEntityHandle(EntityType handle)  { entityHandle = handle; }
 	inline void        WaitEvents()                        { glfwWaitEvents(); }
 	inline int         GetWidth()                          { return size.x; }
 	inline int         GetHeight()                         { return size.y; }

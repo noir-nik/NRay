@@ -17,6 +17,7 @@ import Phong;
 import GLTFLoader;
 import entt;
 import UI;
+import Types;
 #else
 #include "Lmath.cppm"
 #include "VulkanBackend.cppm"
@@ -38,6 +39,8 @@ import UI;
 #include <cstdio>
 #include <set>
 #include <vector>
+
+#include "Types.cppm"
 #endif
 
 
@@ -84,7 +87,7 @@ struct AppContext {
 	Project project;
 	inline Entity CreateEntity(const std::string_view& name = "") {
 		auto entity = Entity(&registry, registry.create());
-		entity.AddComponent<Component::Name>(name);
+		entity.Add<Component::Name>(name);
 		return entity;
 	}
 
@@ -185,7 +188,7 @@ const std::vector<Vertex> vertices = {
 };
 
 void AppContext::CreateShaders() {
-	auto resource = mainWindow.GetComponent<WindowImageResource>();
+	auto resource = mainWindow.Get<WindowImageResource>();
 	pipeline = device.CreatePipeline({
 		.point = vkw::PipelinePoint::Graphics,
 		.stages = {
@@ -231,7 +234,7 @@ void AppContext::CreateShaders() {
 // }
 
 void AppContext::CreateWindowResources(Entity window) {
-	Window &windowHandle = window.GetComponent<Window>();
+	Window &windowHandle = window.Get<Window>();
 	windowHandle.CreateSwapchain(device, queue);
 	windowHandle.CreateUI(sampleCount);
 
@@ -245,7 +248,7 @@ void AppContext::CreateWindowResources(Entity window) {
 
 	uint2 maxSize = uint2(windowHandle.GetSizeLimits().zw());
 
-	auto& resource = window.GetComponent<WindowImageResource>();
+	auto& resource = window.Get<WindowImageResource>();
 
 	resource.depthImage = device.CreateImage({
         .width = maxSize.x,
@@ -288,25 +291,20 @@ void AppContext::UploadBuffers() {
 	ASSERT(res, "Failed to load gltf file");
 
 	auto& sceneGraph = project.GetSceneGraph();
-	// meshes.reserve(sceneGraph.registry->view<Component::Mesh>().size());
-	// auto vv = sceneGraph.registry->view<Component::Mesh>();
-	// for (auto entity : sceneGraph.registry->view<Component::Mesh>()) {
-	// 	meshes.push_back(Entity(sceneGraph.registry, entity));
-	// }
 	sceneGraph.DebugPrint();
 }
 
 
 void AppContext::RecordCommands(Entity window) {
-	auto& windowHandle = window.GetComponent<Window>();
-	auto& resource = window.GetComponent<WindowImageResource>();
+	auto& windowHandle = window.Get<Window>();
+	auto& resource = window.Get<WindowImageResource>();
 	auto size = windowHandle.GetSize();
 	auto glfwWindow = windowHandle.GetGLFWwindow();
 	vec4 viewport = {0, 0, (float)size.x, (float)size.y};
 	PhongConstants constants{};
 	constants.viewProj = camera.proj * inverse4x4(camera.view);
-	constants.light = phongLight.GetComponent<PhongLight>();
-	constants.material = phongMaterial.GetComponent<PhongMaterial>();
+	constants.light = phongLight.Get<PhongLight>();
+	constants.material = phongMaterial.Get<PhongMaterial>();
 	constants.cameraPosition = camera.getPosition();
 
 	// LOG_INFO("Viewport: {}, {}, {}, {}", viewport.x, viewport.y, viewport.z, viewport.w); 
@@ -330,12 +328,12 @@ void AppContext::RecordCommands(Entity window) {
 	cmd.BindPipeline(glTFPipeline);
 	auto registry = project.GetSceneGraph().registry;
 	for (auto& meshNode : registry->view<Component::Mesh>()) {
-		// constants.model = meshNode.GetComponent<Component::Transform>().global;
+		// constants.model = meshNode.Get<Component::Transform>().global;
 		constants.model = registry->get<Component::Transform>(meshNode).global;
 		// print name
-		// printf("%s\n", meshNode.GetComponent<Component::Name>().name.c_str());
+		// printf("%s\n", meshNode.Get<Component::Name>().name.c_str());
 		cmd.PushConstants(&constants, sizeof(constants));
-		// auto& mesh = meshNode.GetComponent<Component::Mesh>();
+		// auto& mesh = meshNode.Get<Component::Mesh>();
 		auto& mesh = registry->get<Component::Mesh>(meshNode);
 		cmd.DrawMesh(mesh->vertexBuffer, mesh->indexBuffer, mesh->indexBuffer.size / sizeof(uint32_t));
 	}
@@ -363,7 +361,7 @@ void AppContext::RecordCommands(Entity window) {
 }
 
 void AppContext::DrawWindow(Entity window) {
-	auto& windowHandle = window.GetComponent<Window>();
+	auto& windowHandle = window.Get<Window>();
 	windowHandle.SetUIContextCurrent();
 	editor.BeginFrame();
 	editor.Draw(camera);
@@ -700,7 +698,7 @@ void FeatureTestApplication::Create() {
 	ctx = new AppContext();
 
 	ctx->phongMaterial = ctx->project.CreateEntity("PhongMaterial");
-	// phongMaterial.AddComponent<PhongMaterial>();
+	// phongMaterial.Add<PhongMaterial>();
 	PhongMaterial phongMat = {
 		.ambient = vec3(0.1, 0.1, 0.1),
 		.diffuse = vec3(0.8, 0.8, 0.8),
@@ -729,9 +727,10 @@ void FeatureTestApplication::Setup() {
 
 	// auto window = new Window(ctx->width, ctx->height, "NRay");
 	auto mainWindow = ctx->CreateEntity("Main Window");
-	mainWindow.AddComponent<Window>(ctx->width, ctx->height, "NRay");
-	mainWindow.AddComponent<WindowImageResource>();
-	Window& windowHandle = mainWindow.GetComponent<Window>();
+	mainWindow.Add<Window>(ctx->width, ctx->height, "NRay");
+	mainWindow.Add<WindowImageResource>();
+	Window& windowHandle = mainWindow.Get<Window>();
+	windowHandle.SetEntityHandle(static_cast<EntityType>(mainWindow.entity));
 	
 	ctx->queue = {vkw::QueueFlagBits::Graphics | vkw::QueueFlagBits::Compute | vkw::QueueFlagBits::Transfer, windowHandle.GetGLFWwindow()};
 	ctx->device = vkw::CreateDevice({&ctx->queue});
@@ -749,36 +748,37 @@ void FeatureTestApplication::Setup() {
 	ctx->CreateShaders();
 }
 
-bool DrawOrRemoveWindow(Entity window) {
-	auto& windowHandle = window.GetComponent<Window>();
-	auto& resource = window.GetComponent<WindowImageResource>();
-	windowHandle.ApplyChanges();
-	if (windowHandle.GetAlive()) {
-		// LOG_INFO("Iconified {}", windowHandle.GetIconified());
-		if (!windowHandle.GetIconified()) {
-			// Recreate swapchain if needed
-			if (windowHandle.GetSwapchainDirty() || windowHandle.GetFramebufferResized()) {
-				// LOG_INFO("DIRTY FRAME RESOURCES");
-				windowHandle.UpdateFramebufferSize();
-				ctx->device.WaitIdle();
-				windowHandle.RecreateSwapchain();
-				windowHandle.SetFramebufferResized(false);
-				windowHandle.AddFramesToDraw(1);
+void DrawOrRemoveWindows() {
+	auto registry = &ctx->registry;
+	auto view = registry->view<Window>();
+	for (auto w: view) {
+		auto& windowHandle = registry->get<Window>(w);
+		auto& resource = registry->get<WindowImageResource>(w);
+		windowHandle.ApplyChanges();
+		if (windowHandle.GetAlive()) {
+			// LOG_INFO("Iconified {}", windowHandle.GetIconified());
+			if (!windowHandle.GetIconified()) {
+				// Recreate swapchain if needed
+				if (windowHandle.GetSwapchainDirty() || windowHandle.GetFramebufferResized()) {
+					// LOG_INFO("DIRTY FRAME RESOURCES");
+					windowHandle.UpdateFramebufferSize();
+					ctx->device.WaitIdle();
+					windowHandle.RecreateSwapchain();
+					windowHandle.SetFramebufferResized(false);
+					windowHandle.AddFramesToDraw(1);
+				}
+				// Draw if needed
+				if (windowHandle.GetDrawNeeded()){
+					ctx->DrawWindow({&ctx->registry, static_cast<entt::entity>(windowHandle.GetEntityHandle())});
+				}
 			}
-			// Draw if needed
-			if (windowHandle.GetDrawNeeded()){
-				ctx->DrawWindow({&ctx->registry, static_cast<entt::entity>(windowHandle.GetEntityHandle())});
+		} else {
+			registry->destroy(w);
+			if (w == ctx->mainWindow.entity) {
+				ctx->mainWindow.entity = Entity::Null;
 			}
+			// window->Destroy();
 		}
-		return false;
-	} else {
-		ctx->registry.remove(window.entity);
-		if (window == ctx->mainWindow) {
-			ctx->mainWindow = nullptr;
-		}
-		// window->Destroy();
-		delete window;
-		return true;
 	}
 }
 
@@ -786,18 +786,24 @@ static int loopCount = 0;
 void FeatureTestApplication::MainLoop() {
 	auto c = ctx;
 	lastFrameTime = std::chrono::high_resolution_clock::now();
-	while (ctx->mainWindow != nullptr) {
-		std::any_of( ctx->windows.begin(), ctx->windows.end(), [](const auto &window) {
-			return window->GetDrawNeeded();
+	while (ctx->mainWindow.entity != Entity::Null) {
+		// std::any_of( ctx->windows.begin(), ctx->windows.end(), [](const auto &window) {
+		// ctx->registry.any_of( ctx->windows.begin(), ctx->windows.end(), [](const auto &window) {
+		auto registry = &ctx->registry;
+		auto view = registry->view<Window>();//view->remove(ctx->mainWindow.entity);
+		std::any_of( view.begin(), view.end(), [registry](const auto &window) {
+			auto& windowHandle = registry->get<Window>(window);
+			return windowHandle.GetDrawNeeded();
 		}) ? WindowManager::PollEvents() : WindowManager::WaitEvents();
 
 		auto& sceneGraph = ctx->project.GetSceneGraph();
-		sceneGraph.UpdateTransforms(sceneGraph.root, sceneGraph.root.entity.GetComponent<Component::Transform>());
+		sceneGraph.UpdateTransforms(sceneGraph.root, sceneGraph.root.entity.Get<Component::Transform>());
 
-		std::erase_if(ctx->windows, [](const auto &window) {
-			return DrawOrRemoveWindow(window);
-		});
-		// BatterySaver();
+		// registry->erase_if(1, Func func)
+		// std::erase_if(ctx->windows, [](const auto &window) {
+		// 	return DrawOrRemoveWindow(window);
+		// });
+		DrawOrRemoveWindows();
 	}
 	ctx->device.WaitIdle();
 }
@@ -805,9 +811,10 @@ void FeatureTestApplication::MainLoop() {
 void FeatureTestApplication::Finish() {
 	ctx->project.Destroy();
 	UI::Destroy();
-	for (auto& window : ctx->windows) {
-		delete window;
+	for (auto& window : ctx->registry.view<Window>()) {
+		ctx->registry.destroy(window);
 	}
+	
 
 	delete ctx;
 	vkw::Destroy();

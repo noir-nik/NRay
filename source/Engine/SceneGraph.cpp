@@ -9,7 +9,7 @@ import Lmath;
 using namespace Lmath;
 
 void SceneGraph::UpdateTransforms(Node &node, const Component::Transform& parentTransform) {
-	auto& transform = node.entity.GetComponent<Component::Transform>();
+	auto& transform = node.entity.Get<Component::Transform>();
 
 	if (transform.dirty ||  parentTransform.dirty ) {
 		transform.global = parentTransform.global * transform.local;
@@ -30,7 +30,7 @@ void SceneGraph::DebugPrintTree(const Node&  node, int indent) {
 	for (int i = 0; i < indent; i++) {
 		printf("  ");
 	}
-	printf("%s\n", node.entity.GetComponent<Component::Name>().name.c_str());
+	printf("%s\n", node.entity.Get<Component::Name>().name.c_str());
 	for (auto& childIndex : node.children) {
 		DebugPrintTree(nodes[childIndex], indent + 1);
 	}

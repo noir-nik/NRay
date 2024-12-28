@@ -25,43 +25,43 @@ struct Entity {
 	// using Type = entt::registry::entity_type;
 	using Type = EntityType;
 	// template<typename Type, typename... Args>
-	// inline Type& AddComponent(Args&&... args);
+	// inline Type& Add(Args&&... args);
 	
 	// template<typename Type>
-	// inline void RemoveComponent();
+	// inline void Remove();
 
 	// template<typename Type>
-	// inline Type& GetComponent();
+	// inline Type& Get();
 
 	// template<typename Type>
-	// inline bool HasComponent();
+	// inline bool Has();
 	
     [[nodiscard]] std::size_t hash() const {
         return std::hash<Type>{}(static_cast<Type>(entity));
     }
 
 	template<typename Type, typename... Args>
-	inline Type& AddComponent(Args&&... args) {
+	inline Type& Add(Args&&... args) {
 		return registry->emplace<Type>(entity, std::forward<Args>(args)...);
 	}
 
 	template<typename Type>
-	inline void RemoveComponent() {
+	inline void Remove() {
 		registry->remove<Type>(entity);
 	}
 
 	template<typename Type>
-	inline Type& GetComponent() {
+	inline Type& Get() {
 		return registry->get<Type>(entity);
 	}
 
 	template<typename Type>
-	inline const Type& GetComponent() const {
+	inline const Type& Get() const {
 		return registry->get<Type>(entity);
 	}
 
 	template<typename Type>
-	inline bool HasComponent() {
+	inline bool Has() {
 		return registry->any_of<Type>(entity);
 	}
 

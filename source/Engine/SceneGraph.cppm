@@ -35,7 +35,7 @@ struct SceneGraph {
 	Registry* registry;
 	SceneGraph(Registry* registry) : registry(registry) {
 		root.entity = CreateEntity("Root");
-		root.entity.AddComponent<Component::Transform>(false);
+		root.entity.Add<Component::Transform>(false);
 
 		// Add Default scene
 		AddScene("Scene");
@@ -44,7 +44,7 @@ struct SceneGraph {
 
 	inline Entity CreateEntity(const std::string_view& name) {
 		Entity entity = {registry, registry->create()};
-		entity.AddComponent<Component::Name>(name);
+		entity.Add<Component::Name>(name);
 		return entity;
 	}
 
@@ -54,7 +54,7 @@ struct SceneGraph {
 
 	void AddScene(const std::string_view& name) {
 		nodes.emplace_back(CreateEntity(name));
-		nodes.back().entity.AddComponent<Component::Transform>(false);
+		nodes.back().entity.Add<Component::Transform>(false);
 	}
 
 	inline void resize(std::size_t size) {
