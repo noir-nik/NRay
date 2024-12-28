@@ -63,8 +63,8 @@ struct AppContext : DeleteCopyDeleteMove {
 	// float4x4 worldViewInv;
 	// float4x4 worldViewProjInv;
 
-	vkw::SampleCount sampleCount = vkw::SampleCount::_4;
-	// vkw::SampleCount sampleCount = vkw::SampleCount::_1;
+	// vkw::SampleCount sampleCount = vkw::SampleCount::_4;
+	vkw::SampleCount sampleCount = vkw::SampleCount::_1;
 	// vkw::Format renderFormat = vkw::Format::RGBA16_sfloat;
 	vkw::Format renderFormat = vkw::Format::RGBA8_UNORM;
 	
@@ -326,8 +326,6 @@ void AppContext::DrawViewport(vkw::Command& cmd, Runtime::Camera const& camera) 
 	constants.material = phongMaterial.Get<Phong::PhongMaterial>();
 	constants.cameraPosition = camera.getPosition();
 
-	// LOG_INFO("Viewport: {}, {}, {}, {}", viewport.x, viewport.y, viewport.z, viewport.w); 
-
 	// cmd.Barrier(resource.renderImage, {vkw::ImageLayout::TransferDst});
 	// cmd.ClearColorImage(resource.renderImage, {0.7f, 0.0f, 0.4f, 1.0f});
 
@@ -339,7 +337,6 @@ void AppContext::DrawViewport(vkw::Command& cmd, Runtime::Camera const& camera) 
 		Component::Mesh& mesh = registry->get<Component::Mesh>(meshNode);
 		cmd.DrawMesh(mesh->vertexBuffer, mesh->indexBuffer, mesh->indexBuffer.size / sizeof(uint32_t));
 	}
-
 /* 
 	FeatureTestConstants debugConstants{
 		.view = camera.view | affineInverse,
@@ -351,7 +348,6 @@ void AppContext::DrawViewport(vkw::Command& cmd, Runtime::Camera const& camera) 
 	cmd.BindVertexBuffer(cubeVertexBuffer);
 	cmd.Draw(vertices.size(), 1, 0, 0);
  */
-
 
 }
 
@@ -403,6 +399,8 @@ void AppContext::DrawWindow(Entity window) {
 	ivec4 fullWindowRect(0, 0, windowHandle.GetWidth(), windowHandle.GetHeight());
 	cmd.SetScissor(fullWindowRect);
 
+	static ivec4 viewport_A;
+
 	// Viewports
 	if (!windowData.viewportsToRender.empty()) {
 		if (sampleCount == vkw::SampleCount::_1) {
@@ -414,6 +412,7 @@ void AppContext::DrawWindow(Entity window) {
 		};
 		for (auto v : windowData.viewportsToRender) {
 			auto& viewport = v->viewport;
+			viewport_A = viewport;
 			ivec4 flipped (viewport.x, viewport.y + viewport.w, viewport.z, -viewport.w);
 			cmd.SetViewport(flipped);
 			DrawViewport(cmd, v->camera);
@@ -421,29 +420,30 @@ void AppContext::DrawWindow(Entity window) {
 		cmd.EndRendering();
 	}
 
-	// UI
-	if (sampleCount == vkw::SampleCount::_1) {
-		cmd.BeginRendering({{{{resource.uiResolveImage}}}, {}, fullWindowRect});
-	} else {
-		cmd.BeginRendering({{{{resource.uiColorImage, &resource.uiResolveImage}}}, {}, fullWindowRect});
-	};
-	cmd.DrawImGui(uiDrawData);
-	cmd.EndRendering();
-	
+	// Blit viewport to swapchain image
 	cmd.Barrier(resource.resolveImage, {vkw::ImageLayout::TransferSrc});
-	cmd.Barrier(resource.uiResolveImage, {vkw::ImageLayout::TransferSrc});
 	cmd.Barrier(targetImage, {vkw::ImageLayout::TransferDst});
-	ivec4 blitRegion = fullWindowRect;
+	ivec4 blitRect = {viewport_A.x, viewport_A.y, viewport_A.z + viewport_A.x, viewport_A.w + viewport_A.y};
 	cmd.Blit({
 		.dst = targetImage,
 		.src = resource.resolveImage,
-		.regions = {{{blitRegion, blitRegion}}},
+		.regions = {{{blitRect, blitRect}}},
 	});
-	cmd.Blit({
-		.dst = targetImage,
-		.src = resource.uiResolveImage,
-		.regions = {{{blitRegion, blitRegion}}},
-	});
+	
+	// Render ui to swapchain image
+	cmd.BeginRendering({{{{targetImage}}}, {}, fullWindowRect, vkw::LoadOp::Load});
+	cmd.DrawImGui(uiDrawData);
+	cmd.EndRendering();
+	
+	// cmd.Barrier(resource.uiResolveImage, {vkw::ImageLayout::TransferSrc});
+	// ivec4 blitRegion = fullWindowRect;
+	// LOG_INFO("Viewport_A: {}, {}, {}, {}", viewport_A.x, viewport_A.y, viewport_A.z, viewport_A.w);
+	// cmd.Blit({
+	// 	.dst = targetImage,
+	// 	.src = resource.uiResolveImage,
+	// 	.regions = {{{blitRegion, blitRegion}}},
+	// });
+	
 	cmd.Barrier(targetImage, {vkw::ImageLayout::Present});
 
 	windowHandle.swapChain.SubmitAndPresent();

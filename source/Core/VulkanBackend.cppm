@@ -456,10 +456,22 @@ struct ImagePair {
 	const Image* resolveImage = nullptr;
 };
 
+enum class LoadOp {
+	Load = 0,
+	Clear = 1,
+	DontCare = 2,
+	NoneExt = 1000400000,
+	MaxEnum = 0x7FFFFFFF, 
+};
+
 struct RenderingInfo {
 	const std::span<ImagePair const> colorAttachs;
 	Image const& depthAttach = {};
 	ivec4 renderArea = ivec4(0.0f);
+	LoadOp loadOpColor = LoadOp::Clear;
+	vec4 clearColor = { 0.1f, 0.2f, 0.1f, 0.0f };
+	float clearDepth = 1.0f;
+	uint32_t clearStencil = 0;
 	ivec4 scissor = ivec4(0);
 	uint32_t layerCount = 1;
 };

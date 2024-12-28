@@ -523,7 +523,8 @@ struct SwapChainResource: DeleteCopyDeleteMove {
 	std::vector<Command> commands; // Owns all command resources
 
 	// // preferred, warn if not available
-	VkFormat colorFormat = VK_FORMAT_B8G8R8A8_UNORM;
+	// VkFormat colorFormat = VK_FORMAT_B8G8R8A8_UNORM;
+	VkFormat colorFormat = VK_FORMAT_R8G8B8A8_UNORM;
 	// VkFormat colorFormat = VK_FORMAT_B8G8R8A8_SRGB;
 	VkColorSpaceKHR colorSpace  = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
 	VkPresentModeKHR presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
@@ -1642,6 +1643,9 @@ Command::Command() {
 }
 
 void Command::BeginRendering(const RenderingInfo& info) {
+	auto& clearColor = info.clearColor;
+	auto& clearDepth = info.clearDepth;
+	auto& clearStencil = info.clearStencil;
 
 	ivec4 renderArea = info.renderArea;
 	if (renderArea == ivec4(0.0f)) {
@@ -1665,11 +1669,11 @@ void Command::BeginRendering(const RenderingInfo& info) {
 			.sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR,
 			.imageView   = colorAttach.colorAttachment.resource->view,
 			.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-			.loadOp      = VK_ATTACHMENT_LOAD_OP_CLEAR,
+			.loadOp      = static_cast<VkAttachmentLoadOp>(info.loadOpColor),
 			.storeOp     = VK_ATTACHMENT_STORE_OP_STORE,
 			.clearValue  = {
 				.color   = { 
-					.float32 = { 0.1f, 0.2f, 0.1f, 0.0f },
+					.float32 = { clearColor.x , clearColor.y, clearColor.z, clearColor.w }
 				}
 			}
 		});
@@ -1710,8 +1714,8 @@ void Command::BeginRendering(const RenderingInfo& info) {
 			.storeOp = info.depthAttach.usage & ImageUsage::TransientAttachment ? VK_ATTACHMENT_STORE_OP_DONT_CARE: VK_ATTACHMENT_STORE_OP_STORE,
 			.clearValue {
 				.depthStencil = {
-					.depth = 1.0f,
-					.stencil = 0
+					.depth   = clearDepth,
+					.stencil = clearStencil
 				},
 			}
 		};
@@ -3558,7 +3562,8 @@ void SwapChainResource::CreateImGui(GLFWwindow* window, SampleCount sampleCount)
 		.DescriptorPool      = device->imguiDescriptorPool,
 		.MinImageCount       = surfaceCapabilities.minImageCount,
 		.ImageCount          = (uint32_t)imageResources.size(),
-		.MSAASamples         = (VkSampleCountFlagBits)std::min(device->physicalDevice->maxSamples, sampleCount),
+		// .MSAASamples         = (VkSampleCountFlagBits)std::min(device->physicalDevice->maxSamples, sampleCount),
+		.MSAASamples         = VK_SAMPLE_COUNT_1_BIT,
 		.PipelineCache       = device->pipelineCache,
 		.UseDynamicRendering = true,
 		.PipelineRenderingCreateInfo = {

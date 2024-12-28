@@ -32,7 +32,7 @@ namespace Editor {
 using namespace Lmath;
 struct Context;
 
-
+void drawWindowRects(ImGuiWindow* window);
 
 struct Tab {
 	std::string name;
@@ -378,7 +378,7 @@ void Context::displayNode(const SceneGraph& sceneGraph, const NodeIndex nodeInde
 	ImGui::PopID();
 }
 
-bool ProcessViewportInput(Runtime::Viewport& ctx) {
+bool ProcessViewportInput(Runtime::Viewport& ctx, ImGuiKeyChord mods, float rotation_sign) {
 	auto& io = ImGui::GetIO();
 	if (io.MouseDown[ImGuiMouseButton_Left] + io.MouseDown[ImGuiMouseButton_Right] + io.MouseDown[ImGuiMouseButton_Middle] > 1) {
 		return 0;
@@ -391,16 +391,20 @@ bool ProcessViewportInput(Runtime::Viewport& ctx) {
 
 	// LOG_INFO("Viewport input");
 
+	vec2 deltaPos = {-io.MouseDelta.x, -io.MouseDelta.y};
+
 	if (io.MouseDown[ImGuiMouseButton_Right]) {
-		if(io.KeyAlt) {
+		auto res = mods & ImGuiMod_Alt;
+		if(mods & ImGuiMod_Alt) {
+			printf("Alt pressed\n");
 			auto zoom_factor = camera.zoom_factor * length(camera_pos - camera.focus);
-			auto movement = (zoom_factor * io.MouseDelta.x) * camera_forward;
+			auto movement = (zoom_factor * deltaPos.x) * camera_forward;
 			camera.view = translate4x4(movement) * camera.view;
 			// camera.focus += movement;
 		} else {
 			camera_pos -= camera.focus;
-			// camera.view = rotate4x4(camera_up, io.MouseDelta.x * camera.rotation_factor) * rotate4x4(camera_right, io.MouseDelta.y * camera.rotation_factor)  * camera.view; // trackball
-			camera.view = rotate4x4Y((camera_up.y > 0 ? 1.0f : -1.0f) * io.MouseDelta.x * camera.rotation_factor) * rotate4x4(camera_right, io.MouseDelta.y * camera.rotation_factor)  * camera.view;
+			// camera.view = rotate4x4(camera_up, deltaPos.x * camera.rotation_factor) * rotate4x4(camera_right, deltaPos.y * camera.rotation_factor)  * camera.view; // trackball
+			camera.view = rotate4x4Y(rotation_sign * deltaPos.x * camera.rotation_factor) * rotate4x4(camera_right, deltaPos.y * camera.rotation_factor)  * camera.view;
 			camera_pos += camera.focus;
 		}
 		// window->AddFramesToDraw(1);
@@ -408,7 +412,7 @@ bool ProcessViewportInput(Runtime::Viewport& ctx) {
 	} 
 	if (io.MouseDown[ImGuiMouseButton_Middle]) {
 		auto move_factor = camera.move_factor * length(camera_pos - camera.focus);
-		auto movement = move_factor * (camera_up * -io.MouseDelta.y + camera_right * io.MouseDelta.x); 
+		auto movement = move_factor * (camera_up * -deltaPos.y + camera_right * deltaPos.x); 
 		// printf("%f %f %f\n", movement.x, movement.y, movement.z);
 		// camera.focus += movement;
 		camera.view = translate4x4(movement) * camera.view;
@@ -422,6 +426,7 @@ bool ProcessViewportInput(Runtime::Viewport& ctx) {
 	}
 	return 0;
 }
+static inline bool    operator!=(const ImVec2& lhs, const ImVec2& rhs)  { return lhs.x != rhs.x || lhs.y != rhs.y; }
 
 bool Context::Viewport(Runtime::Viewport& ctx) {
 	// ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.0f);
@@ -429,7 +434,7 @@ bool Context::Viewport(Runtime::Viewport& ctx) {
 	ImGuiWindowFlags flags {
 		ImGuiWindowFlags_NoCollapse
 		// | ImGuiWindowFlags_NoMove
-		| ImGuiWindowFlags_NoDecoration
+		// | ImGuiWindowFlags_NoDecoration
 		| ImGuiWindowFlags_MenuBar
 		| ImGuiWindowFlags_NoBackground
 	};
@@ -455,17 +460,45 @@ bool Context::Viewport(Runtime::Viewport& ctx) {
 		auto hoveringRect = ImGui::IsMouseHoveringRect(r.Min, r.Max);
 		auto contentHoverable = ImGui::IsWindowContentHoverable(w);
 		auto windowHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
-		auto dragging = ImGui::IsMouseDragging(ImGuiMouseButton_Left, 0.0f);
-		auto drag_delta = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left);
+		auto dragging_l = ImGui::IsMouseDragging(ImGuiMouseButton_Left, 0.0f);
+		auto dragging_r = ImGui::IsMouseDragging(ImGuiMouseButton_Right, 0.0f);
+		auto dragging_m = ImGui::IsMouseDragging(ImGuiMouseButton_Middle, 0.0f);
+		auto drag_delta_l = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left, 0.0f);
+		auto drag_delta_r = ImGui::GetMouseDragDelta(ImGuiMouseButton_Right, 0.0f);
+		auto drag_delta_m = ImGui::GetMouseDragDelta(ImGuiMouseButton_Middle, 0.0f);
+		auto drag_delta = ImVec2(drag_delta_l.x + drag_delta_r.x + drag_delta_m.x, drag_delta_l.y + drag_delta_r.y + drag_delta_m.y);
 		ImGui::Text("Hovering: %s", hoveringRect ? "true" : "false");
 		ImGui::Text("Content Hoverable: %s", contentHoverable ? "true" : "false");
 		ImGui::Text("Hovered: %s", windowHovered ? "true" : "false");
-		ImGui::Text("Dragging: %s", dragging ? "true" : "false");
+		// ImGui::Text("Dragging: %s", dragging ? "true" : "false");
 		ImGui::Text("Drag Delta: (%f, %f)", drag_delta.x, drag_delta.y);
 		ImGui::Text("Mouse delta: (%f, %f)", io.MouseDelta.x, io.MouseDelta.y);
+		ImGui::TextColored(io.WantCaptureMouse ? ImVec4(0,1,0,1) : ImVec4(1,0,0,1), "WantCaptureMouse: %s", io.WantCaptureMouse ? "true" : "false");
+		ImGui::TextColored(io.WantCaptureKeyboard ? ImVec4(0,1,0,1) : ImVec4(1,0,0,1), "WantCaptureKeyboard: %s", io.WantCaptureKeyboard ? "true" : "false");
+		// ImGui::ResetMouseDragDelta()
+		// ImGui::ResetMouseDragDelta()
+		// auto& p = io.MouseClickedPos[1];
+		static int prev_dragging = 0;
+		static bool proc = 0;
+		auto dragging = dragging_l || dragging_r || dragging_m;
+		static float rotation_sign;
+		static ImGuiKeyChord mods;
+		if (dragging != prev_dragging) {
+			if (!prev_dragging) {
+				proc = hoveringRect && contentHoverable && windowHovered;
+				rotation_sign = ctx.camera.getUp().y > 0 ? 1.0f : -1.0f;
+				mods = io.KeyMods;
+				printf ("Start dragging\n");
+			} else {
+				printf ("Stop dragging\n");
+				proc = 0;
+			}
+			prev_dragging = !prev_dragging;
+		}
+		drawWindowRects(w);
 
-		if (hoveringRect && contentHoverable && windowHovered) {
-			viewport_changed |= ProcessViewportInput(ctx);
+		if (proc) {
+			viewport_changed |= ProcessViewportInput(ctx, mods, rotation_sign);
 		}
 	}
 	// ImGui::PopStyleVar();
