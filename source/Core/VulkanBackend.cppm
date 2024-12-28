@@ -459,6 +459,13 @@ struct SubmitInfo {
 	Flags64    signalStages    = PipelineStage::None;
 };
 
+struct RenderingInfo {
+	const std::vector<std::span<const Image>>& colorAttachs;
+	Image depthAttach = {};
+	uint32_t layerCount = 1;
+	vec4 viewport = {};
+	ivec4 scissor = {};
+};
 
 struct Command {
 	std::shared_ptr<CommandResource> resource;
@@ -476,7 +483,7 @@ struct Command {
 	void ClearColorImage(Image& image, const float4& color);
 
 
-	void BeginRendering(const std::vector<std::span<const Image>>& colorAttachs, Image depthAttach = {}, uint32_t layerCount = 1, vec4 viewport = {}, ivec4 scissor = {});
+	void BeginRendering(const RenderingInfo& info);
 	void EndRendering();
 	// void BeginPresent();
 	// void EndPresent();

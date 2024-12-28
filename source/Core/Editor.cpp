@@ -61,6 +61,7 @@ struct EditorContext {
 	std::vector<Tab> tabs {
 		{"View3d", {
 			{"Outliner", &EditorContext::OutlinerWindow},
+			{"Properties", &EditorContext::PropertiesWindow},
 		}},
 		{"Mesh", {
 
@@ -76,6 +77,7 @@ struct EditorContext {
 
 	void DebugWindow(Objects::Camera& camera);
 	void OutlinerWindow(RuntimeContext& ctx);
+	void PropertiesWindow(RuntimeContext& ctx);
 	
 	bool SaveStyle(const char* filename,const ImGuiStyle& style);
 	bool LoadStyle(const char* filename,ImGuiStyle& style);
@@ -258,15 +260,26 @@ void EditorContext::DebugWindow(Objects::Camera& camera) {
 		ImGui::Text("Camera Rotation: (%.2f, %.2f, %.2f)", rotation.x, rotation.y, rotation.z);
 		ImGui::Text("Camera Scale: (%.2f, %.2f, %.2f)", scale.x, scale.y, scale.z);
 
-		for (int i = 0; i < 4; i++) {
-			ImGui::Text("%.2f, %.2f, %.2f, %.2f",
-				camera.view[i][0], camera.view[i][1], camera.view[i][2], camera.view[i][3]);
-		}
-		/* ImGui::Separator();
-		for (int i = 0; i < 4; i++) {
-			ImGui::Text("%.2f, %.2f, %.2f, %.2f",
-				camera.proj[i][0], camera.proj[i][1], camera.proj[i][2], camera.proj[i][3]);
-		} */
+		auto printMat4 = [](const Lmath::float4x4& m) {
+			for (int i = 0; i < 4; i++) {
+				ImGui::Text("%.2f, %.2f, %.2f, %.2f",
+					m[i][0], m[i][1], m[i][2], m[i][3]);
+			}
+		};
+
+		auto printMat3 = [](const Lmath::float3x3& m) {
+			for (int i = 0; i < 3; i++) {
+				ImGui::Text("%.2f, %.2f, %.2f",
+					m(i, 0), m(i, 1), m(i, 2));
+			}
+		};
+		ImGui::Text("View");
+		printMat4(camera.view);
+		/*
+		ImGui::Separator();
+		ImGui::Text("Projection");
+		printMat4(camera.proj); 
+		*/
 	}
 
 	ImGui::End();
@@ -351,9 +364,9 @@ void EditorContext::OutlinerWindow(RuntimeContext& ctx) {
 		ImGui::SameLine();
 		ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "%s", ctx.sceneGraph->Get(node).name());
 	}
- */
+*/
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
-	if (ImGui::Begin("Outliner", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove)) {
+	if (ImGui::Begin("Outliner", nullptr, 0/* ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoDecoration*/) ) {
 		if (ImGui::TreeNodeEx("Scene Graph", parent_flags | ImGuiTreeNodeFlags_DefaultOpen)) {
 			for (const auto& nodeIndex : ctx.sceneGraph->GetCurrentScene().children) {
 				displayNode(*ctx.sceneGraph, nodeIndex, parent_flags);
@@ -363,6 +376,12 @@ void EditorContext::OutlinerWindow(RuntimeContext& ctx) {
 	}
 	ImGui::PopStyleVar();
 	ImGui::End();
+}
+
+void EditorContext::PropertiesWindow(RuntimeContext& ctx) {
+	// if (ImGui::Begin("Properties", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove)) {
+	// }
+	// ImGui::End();
 }
 
 /* 
@@ -424,7 +443,7 @@ void Editor::Draw(RuntimeContext& ctx) {
 void Editor::BeginFrame() {
 	vkw::ImGuiNewFrame();
 	ImGui::NewFrame();
-	ImGui::DockSpaceOverViewport(ImGui::GetWindowDockID(), 0, ImGuiDockNodeFlags_PassthruCentralNode);
+	ImGui::DockSpaceOverViewport(ImGui::GetWindowDockID(), 0, /* ImGuiDockNodeFlags_PassthruCentralNode |  */ImGuiDockNodeFlags_AutoHideTabBar);
 }
 
 Editor::UiDrawData* Editor::EndFrame() {

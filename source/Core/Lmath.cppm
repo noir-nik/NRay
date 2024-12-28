@@ -560,6 +560,15 @@ struct float3x3
 		m_col[1] = from4x4.m_col[1].xyz();
 		m_col[2] = from4x4.m_col[2].xyz();
 	}
+
+	inline float3 get_col(int i) const                { return m_col[i]; }
+	inline void   set_col(int i, const float3& a_col) { m_col[i] = a_col; }
+
+	inline float3 get_row(int i) const { return float3{ m_col[0][i], m_col[1][i], m_col[2][i]}; }
+	inline void   set_row(int i, const float3& a_col) { m_col[0][i] = a_col[0]; m_col[1][i] = a_col[1]; m_col[2][i] = a_col[2]; }
+
+	inline float& operator()(int row, int col)       { return m_col[col][row]; }
+	inline float  operator()(int row, int col) const { return m_col[col][row]; }
 	
 	inline float3x3 inverse() const { return inverse3x3(*this); }
 };
@@ -577,15 +586,15 @@ inline float3x3 inverse3x3(const float3x3& m)
 	float3x3 res;
 
 	res.m_col[0].x = (e * i - f * h) * inv_det;
-	res.m_col[1].x = (c * h - b * i) * inv_det;
-	res.m_col[2].x = (b * f - c * e) * inv_det;
+	res.m_col[0].y = (c * h - b * i) * inv_det;
+	res.m_col[0].z = (b * f - c * e) * inv_det;
 
-	res.m_col[0].y = (f * g - d * i) * inv_det;
+	res.m_col[1].x = (f * g - d * i) * inv_det;
 	res.m_col[1].y = (a * i - c * g) * inv_det;
-	res.m_col[2].y = (c * d - a * f) * inv_det;
+	res.m_col[1].z = (c * d - a * f) * inv_det;
 
-	res.m_col[0].z = (d * h - e * g) * inv_det;
-	res.m_col[1].z = (b * g - a * h) * inv_det;
+	res.m_col[2].x = (d * h - e * g) * inv_det;
+	res.m_col[2].y = (b * g - a * h) * inv_det;
 	res.m_col[2].z = (a * e - b * d) * inv_det;
 
 	return res;
@@ -820,9 +829,9 @@ inline float4x4 affineInverse4x4(const float4x4& m) {
 	auto inv = inverse3x3(m);
 	auto l = -(inv * m.m_col[3].xyz());
 	float4x4 res;
-	res.m_col[0] = float4{ inv.m_col[0].x, inv.m_col[0].y, inv.m_col[0].z, 0.0f };
-	res.m_col[1] = float4{ inv.m_col[1].x, inv.m_col[1].y, inv.m_col[1].z, 0.0f };
-	res.m_col[2] = float4{ inv.m_col[2].x, inv.m_col[2].y, inv.m_col[2].z, 0.0f };
+	res.set_col(0, float4{ inv.m_col[0].x, inv.m_col[0].y, inv.m_col[0].z, 0.0f });
+	res.set_col(1, float4{ inv.m_col[1].x, inv.m_col[1].y, inv.m_col[1].z, 0.0f });
+	res.set_col(2, float4{ inv.m_col[2].x, inv.m_col[2].y, inv.m_col[2].z, 0.0f });
 	res.m_col[3] = float4{ l.x, l.y, l.z, 1.0f };
 	return res;
 }

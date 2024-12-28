@@ -101,13 +101,10 @@ MODULES_BUILD_DIR := $(PLATFORM_BUILD_DIR)/modules
 HEADERS_BUILD_DIR := $(PLATFORM_BUILD_DIR)/headers
 
 ifeq ($(USE_MODULES), 1)
-
-# Use map
-# MODULE_NAMES_MAP := $(foreach module,$(CPP_MODULES),-fmodule-file=$(MAIN_MODULE_TARGET):$(module)=$(MODULES_BUILD_DIR)/$(module).pcm)
-# CXXFLAGS += -fprebuilt-module-path=$(MODULES_BUILD_DIR) -D USE_MODULES $(MODULE_NAMES_MAP)
-
 CXXFLAGS += -fprebuilt-module-path=$(MODULES_BUILD_DIR) -D USE_MODULES  -fmodule-file-deps
 LDFLAGS += $(MODULES_BUILD_DIR)/*.pcm -fprebuilt-module-path=$(MODULES_BUILD_DIR)
+# MODULE_NAMES_MAP := $(foreach module,$(CPP_MODULES),-fmodule-file=$(MAIN_MODULE_TARGET):$(module)=$(MODULES_BUILD_DIR)/$(module).pcm)
+# CXXFLAGS += $(MODULE_NAMES_MAP)
 endif
 
 ifeq ($(USE_HEADER_UNITS), 1)
@@ -386,14 +383,11 @@ $(TARGET): $(SUBMODULE_LIBS)
 ifeq ($(USE_HEADER_UNITS), 1)
 $(STL_MODULE_TARGET) : $(CPP_SYSTEM_HEADER_TARGETS)
 endif
-ifeq ($(USE_MODULES), 1)
+
 # $(OBJS): $(CPP_MODULE_TARGETS)
 _MBD := $(MODULES_BUILD_DIR)
 _OBD := $(OBJS_BUILD_DIR)
 include $(CPP_MODULE_DEPENDENCIES_FILE)
-endif
-
-
 
 # $(TARGET): $(OBJS) $(OBJS_IMGUI) $(OBJS_STB)
 $(TARGET): \
@@ -498,10 +492,11 @@ $(MODULES_BUILD_DIR)/stl.pcm: source/Base/stl.cppm
 
 # ============================================ Modules ===================================================
 
+modules: CXXFLAGS += -fprebuilt-module-path=$(MODULES_BUILD_DIR) -D USE_MODULES -fmodule-file-deps
+modules: $(CPP_MODULE_TARGETS) 
 
+# $(_MBD)/*.pcm: 
 
-
-# build_modules: $(CPP_MODULE_TARGETS)
 # build_modules: build_internal_modules
 
 # .NOTPARALLEL: build_internal_modules

@@ -109,7 +109,7 @@ struct AppContext {
 	void CreateShaders();
 	void CreateWindowResources(Entity window);
 	void UploadBuffers();
-	void RecordCommands(Entity window);
+	void DrawViewport(Entity window);
 	void viewport();
 	void RenderUI();
 	void DrawImgui(Entity window);
@@ -299,14 +299,14 @@ void AppContext::UploadBuffers() {
 }
 
 
-void AppContext::RecordCommands(Entity window) {
+void AppContext::DrawViewport(Entity window, int2 size) {
 	auto& windowHandle = window.Get<Window>();
 	auto& resource = window.Get<WindowImageResource>();
 	auto size = windowHandle.GetSize();
 	auto glfwWindow = windowHandle.GetGLFWwindow();
 	vec4 viewport = {0, 0, (float)size.x, (float)size.y};
 	PhongConstants constants{};
-	constants.viewProj = camera.proj * inverse4x4(camera.view);
+	constants.viewProj = camera.proj * camera.view.affineInverse();
 	constants.light = phongLight.Get<PhongLight>();
 	constants.material = phongMaterial.Get<PhongMaterial>();
 	constants.cameraPosition = camera.getPosition();
@@ -372,7 +372,7 @@ void AppContext::DrawWindow(Entity window) {
 	imguiDrawData = static_cast<ImDrawData*>(editor.EndFrame());
 
 	
-	RecordCommands(window);
+	DrawViewport(window);
 	if (windowHandle.swapChain.GetDirty()) {
 		LOG_WARN("RecordCommands: Swapchain dirty");
 		return;
