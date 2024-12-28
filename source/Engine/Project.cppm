@@ -30,9 +30,9 @@ public:
 		return entity;
 	}
 
-	SceneGraph& GetSceneGraph() { return sceneGraph; }
+	inline SceneGraph& GetSceneGraph() { return sceneGraph; }
 
-	void Destroy() {
+	inline void Destroy() {
 		registry.clear();
 	}
 

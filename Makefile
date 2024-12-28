@@ -49,7 +49,11 @@ INCLUDES := \
 OBJ_EXT := o
 LIB_EXT := a
 -C := -c
-CXXFLAGS := -MMD -MP $(INCLUDES) -DENGINE -std=c++20
+
+DEFINES := -DENGINE
+# -DUSE_VLA
+
+CXXFLAGS := -MMD -MP $(INCLUDES) $(DEFINES) -std=c++20 -Wno-vla
 
 ifeq ($(STATIC_LINK), 1)
 	LDFLAGS += -static -static-libgcc -static-libstdc++
@@ -98,11 +102,12 @@ SUBMODULE_LIBS := $(foreach lib,$(SUBMODULE_LIBS_LIST),$(LIB_PATH)/lib$(lib).a)
 OBJS_BUILD_DIR := $(PLATFORM_BUILD_DIR)/objs
 MODULES_BUILD_DIR := $(PLATFORM_BUILD_DIR)/modules
 MODULES_BUILD_DIR_CLANGD := $(PLATFORM_BUILD_DIR)/modules-clangd
+MODULES_OBJS_DIR := $(PLATFORM_BUILD_DIR)/modules-objs
 HEADERS_BUILD_DIR := $(PLATFORM_BUILD_DIR)/headers
 
 ifeq ($(USE_MODULES), 1)
 CXXFLAGS += -fprebuilt-module-path=$(MODULES_BUILD_DIR) -D USE_MODULES  -fmodule-file-deps
-LDFLAGS += $(MODULES_BUILD_DIR)/*.pcm -fprebuilt-module-path=$(MODULES_BUILD_DIR)
+# LDFLAGS += $(MODULES_BUILD_DIR)/*.pcm -fprebuilt-module-path=$(MODULES_BUILD_DIR)
 # MODULE_NAMES_MAP := $(foreach module,$(CPP_MODULES),-fmodule-file=$(MAIN_MODULE_TARGET):$(module)=$(MODULES_BUILD_DIR)/$(module).pcm)
 # CXXFLAGS += $(MODULE_NAMES_MAP)
 endif
@@ -275,6 +280,7 @@ build_target: $(TARGET)
 _WINBDIR := $(subst /,\,$(PLATFORM_BUILD_DIR))
 _WOBDIR := $(subst /,\,$(OBJS_BUILD_DIR))
 _WMBDIR := $(subst /,\,$(MODULES_BUILD_DIR))
+_WMODIR := $(subst /,\,$(MODULES_OBJS_DIR))
 _WMBDIRC := $(subst /,\,$(MODULES_BUILD_DIR_CLANGD))
 _WHBDIR := $(subst /,\,$(HEADERS_BUILD_DIR))
 create_dirs:
@@ -285,6 +291,7 @@ ifeq ($(OS),Windows_NT)
 	@cmd /c if not exist $(_WINBDIR) mkdir $(_WINBDIR)
 	@cmd /c if not exist $(_WOBDIR) mkdir $(_WOBDIR)
 	@cmd /c if not exist $(_WMBDIR) mkdir $(_WMBDIR)
+	@cmd /c if not exist $(_WMODIR) mkdir $(_WMODIR)
 	@cmd /c if not exist $(_WMBDIRC) mkdir $(_WMBDIRC)
 	@cmd /c if not exist $(_WHBDIR) mkdir $(_WHBDIR)
 	@cmd /c if not exist $(_WINBDIR)\imgui mkdir $(_WINBDIR)\imgui
@@ -302,6 +309,7 @@ else
 	$(PLATFORM_BUILD_DIR) \
 	$(OBJS_BUILD_DIR) \
 	$(MODULES_BUILD_DIR) \
+	$(MODULES_OBJS_DIR) \
 	$(MODULES_BUILD_DIR_CLANGD) \
 	$(HEADERS_BUILD_DIR) \
 	$(PLATFORM_BUILD_DIR)/imgui \
@@ -386,6 +394,8 @@ EXTERNAL_MODULE_TARGETS := $(foreach module,$(EXTERNAL_MODULES),$(MODULES_BUILD_
 MAIN_MODULE_TARGET := NRay
 CPP_MODULE_TARGETS := $(foreach module,$(CPP_MODULES),$(MODULES_BUILD_DIR)/$(module).pcm)
 
+CPP_MODULE_OBJS := $(patsubst %.pcm, $(MODULES_OBJS_DIR)/%.o, $(notdir $(CPP_MODULE_TARGETS) $(EXTERNAL_MODULE_TARGETS)))
+
 # $(CPP_MODULE_TARGETS) : get_cpp_module_dependencies
 # .PHONY: get_cpp_module_dependencies
 get_cpp_module_dependencies: $(CPP_MODULE_DEPENDENCIES_FILE)
@@ -417,6 +427,11 @@ $(TARGET): \
 	$(OBJS_FASTGLTF) \
 	$(OBJS_SIMDJSON) \
 	$(OBJS_SPDLOG) \
+
+ifeq ($(USE_MODULES), 1)
+$(TARGET): $(CPP_MODULE_OBJS)
+endif
+	
 	
 # $(OBJS_STB) \
 # $(OBJS_FMT)
@@ -498,6 +513,7 @@ _STL_MODULE_FLAGS := \
 # $(STL_MODULE_TARGET) : $(CPP_SYSTEM_HEADER_TARGETS)
 
 $(MODULES_BUILD_DIR)/stl.pcm: source/Base/stl.cppm
+# @rm -f $@
 	@echo "Compiling module stl"
 	@$(CC) $(_STL_MODULE_FLAGS) --precompile -c -x c++-module $< -o $@
 
@@ -506,6 +522,7 @@ $(MODULES_BUILD_DIR)/stl.pcm: source/Base/stl.cppm
 # deps/modules/entt.cppm: entt-entity-registry.pcm 
 
 # $(MODULES_BUILD_DIR)/entt.pcm: $(HEADERS_BUILD_DIR)/entt-entity-registry.pcm 
+# @rm -f $@
 # 	@echo "Compiling module entt"
 # 	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) -fmodule-file=$< --precompile -c -x c++-module $< -o $@
 
@@ -555,26 +572,32 @@ endif
 # include $(CPP_MODULE_DEPENDENCIES_FILE)
 
 $(_MBD)/%.pcm: source/Core/%.cppm
+# @rm -f $@
 	@echo "Compiling module $(notdir $<)"
 	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
 $(_MBD)/%.pcm: source/Base/%.cppm
+# @rm -f $@
 	@echo "Compiling module $(notdir $<)"
 	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
 $(_MBD)/%.pcm: source/Engine/%.cppm
+# @rm -f $@
 	@echo "Compiling module $(notdir $<)"
 	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
 $(_MBD)/%.pcm: source/Resources/%.cppm
+# @rm -f $@
 	@echo "Compiling module $(notdir $<)"
 	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
 $(_MBD)/%.pcm: source/Shaders/%.cppm
+# @rm -f $@
 	@echo "Compiling module $(notdir $<)"
 	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
 $(_MBD)/%.pcm: $(SRC_FEATURE)/%.cppm
+# @rm -f $@
 	@echo "Compiling module $(notdir $<)"
 	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
@@ -582,27 +605,40 @@ $(_MBD)/%.pcm: $(SRC_FEATURE)/%.cppm
 # build_external_modules: $(EXTERNAL_MODULE_TARGETS)
 
 $(_MBD)/%.pcm: $(EXTERNAL_MODULES_DIR)/%.cppm
+# @rm -f $@
 	@echo "Compiling module $(notdir $<)"
 	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@ -Wno-nullability-completeness
 
 $(_MBD)/%.pcm: $(EXTERNAL_MODULES_DIR)/imgui/%.cppm
+# @rm -f $@
 	@echo "Compiling module $(notdir $<)"
 	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
 $(_MBD)/%.pcm: $(EXTERNAL_MODULES_DIR)/stb/%.cppm
+# @rm -f $@
 	@echo "Compiling module $(notdir $<)"
 	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
 # #entt
 # $(_MBD)/%.pcm: deps\entt\src\entt\entity\registry.hpp
+# @rm -f $@
 # 	@echo "Compiling module $(notdir $<)"
 # 	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
 # fastgltf
 $(_MBD)/%.pcm: deps/fastgltf/src/%.ixx
+# @rm -f $@
 	@echo "Compiling module $(notdir $<)"
 	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
+
+# ========================== Module Objs =============================
+
+$(MODULES_OBJS_DIR)/%.o: $(MODULES_BUILD_DIR)/%.pcm
+	@echo "Compiling $(notdir $<)"
+	@$(CC) $(CXXFLAGS) -c $< -o $@ -Wno-unused-command-line-argument
+
+# ====================================================================
 
 # ============================================ Libraries ===================================================
 

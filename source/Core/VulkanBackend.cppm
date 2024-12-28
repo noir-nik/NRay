@@ -22,7 +22,7 @@ import imgui;
 
 _VKW_EXPORT
 namespace vkw {
-using namespace Lmath;
+using namespace Lmath; 
 
 using Flags = uint32_t;
 using Flags64 = uint64_t;
@@ -266,7 +266,7 @@ struct Queue {
 	}
 
 private:
-	friend Device CreateDevice(const std::vector<Queue*>& queues);
+	friend Device CreateDevice(const std::span<Queue*> queues);
 	friend Device;
 	friend class SwapChain;
 	friend class DeviceResource;
@@ -595,7 +595,7 @@ void UnmapBuffer(Buffer& buffer);
 
 
 void Init(bool requestPresent = true);
-Device CreateDevice(const std::vector<Queue*>& queues);
+Device CreateDevice(const std::span<Queue*> queues);
 void Destroy();
 
 void ImGuiNewFrame();

@@ -28,7 +28,7 @@ struct SceneGraph {
 
 		friend SceneGraph;
 
-		const char* name() const { return entity.Get<Component::Name>().name.c_str(); }
+		inline const char* name() const { return entity.Get<Component::Name>().name.c_str(); }
 	};
 
 	Node root; // Has scene indices as children
@@ -53,7 +53,7 @@ struct SceneGraph {
 		return entity;
 	}
 
-	Node& GetCurrentScene() {
+	inline Node& GetCurrentScene() {
 		return nodes[currentScene];
 	}
 

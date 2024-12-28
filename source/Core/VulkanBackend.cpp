@@ -21,6 +21,7 @@ import Lmath;
 import glfw;
 import Window;
 import Types;
+import Structs;
 import Log;
 import Util;
 import stl;
@@ -52,6 +53,7 @@ import imgui_impl_vulkan;
 
 #endif
 
+#define USE_VLA
 #include "Macros.h"
 
 #ifdef NRAY_DEBUG
@@ -62,7 +64,7 @@ import imgui_impl_vulkan;
 
 static const char *VK_ERROR_STRING(VkResult result);
 namespace vkw {
-using namespace Types;
+// using namespace Types;
 struct Instance;
 struct PhysicalDevice;
 struct DeviceResource;
@@ -426,7 +428,7 @@ struct DeviceResource: DeleteCopyDeleteMove {
 		// VK_EXT_SHADER_ATOMIC_FLOAT_EXTENSION_NAME,
 	};
 
-	void Create(const std::vector<Queue*>& queues);
+	void Create(std::span<Queue*> queues);
 	void Destroy();
 		
 	void createDescriptorSetLayout();
@@ -652,7 +654,7 @@ void Init(bool requestPresent) {
 	_ctx.GetPhysicalDevices();
 }
 
-Device CreateDevice(const std::vector<Queue*>& queues) {
+Device CreateDevice(const std::span<Queue*> queues) {
 	auto uid = UIDGenerator::Next();
 	Device device;
 	device.resource = std::make_shared<DeviceResource>(uid);
@@ -1099,29 +1101,25 @@ Pipeline DeviceResource::CreatePipeline(const PipelineDesc& desc) { // External 
 void DeviceResource::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipeline) {
 	pipeline.point = desc.point; // Graphics or Compute
 
-	std::vector<VkPipelineShaderStageCreateInfo> shaderStages;
-	shaderStages.reserve(desc.stages.size());
-	std::vector<VkShaderModule> shaderModules;
-	shaderModules.reserve(desc.stages.size());
-	for (auto& stage: desc.stages) {
+	VLA(VkPipelineShaderStageCreateInfo, shaderStages, desc.stages.size());
+	VLA(VkShaderModule, shaderModules, desc.stages.size());
+	for (auto i = 0; auto& stage: desc.stages) {
 		std::vector<char> bytes = LoadShader(stage);
 		VkShaderModuleCreateInfo createInfo{};
-		VkShaderModule shaderModule;
 		createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
 		createInfo.codeSize = bytes.size();
 		createInfo.pCode = (const uint32_t*)(bytes.data());
-		auto result = vkCreateShaderModule(handle, &createInfo, _ctx.allocator, &shaderModule);
+		auto result = vkCreateShaderModule(handle, &createInfo, _ctx.allocator, &shaderModules[i]);
 		DEBUG_VK(result, "Failed to create shader module!");
 		ASSERT(result == VK_SUCCESS, "Failed to create shader module!");
-		shaderModules.push_back(shaderModule);
-		VkPipelineShaderStageCreateInfo shaderStageInfo {
+		shaderStages[i] = {
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 			.stage = (VkShaderStageFlagBits)stage.stage,
-			.module = shaderModule,
+			.module = shaderModules[i],
 			.pName = stage.entryPoint.c_str(),
 			.pSpecializationInfo = nullptr,
 		};
-		shaderStages.push_back(shaderStageInfo);
+		i++;
 	}
 
 	// std::vector<VkDescriptorSetLayout> layouts;
@@ -1201,16 +1199,16 @@ void DeviceResource::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipe
 			.maxDepthBounds        = 1.0f,
 		};
 
-		std::vector<VkVertexInputAttributeDescription> attributeDescs;
-		attributeDescs.reserve(desc.vertexAttributes.size());
+
+		VLA(VkVertexInputAttributeDescription, attributeDescs, desc.vertexAttributes.size());
 		uint32_t attributeSize = 0;
 		for (size_t i = 0; auto& format: desc.vertexAttributes) {
-			attributeDescs.emplace_back(VkVertexInputAttributeDescription{
-				.location = static_cast<uint32_t>(i++),
+			attributeDescs[i++] = VkVertexInputAttributeDescription{
+				.location = static_cast<uint32_t>(i),
 				.binding = 0,
 				.format = (VkFormat)format,
 				.offset = attributeSize
-			});
+			};
 			switch (format) {
 			case Format::RG32_sfloat:   attributeSize += 2 * sizeof(float); break;
 			case Format::RGB32_sfloat:  attributeSize += 3 * sizeof(float); break;
@@ -1328,16 +1326,15 @@ void DeviceResource::PipelineLibrary::CreateVertexInputInterface(VertexInputInfo
 		.primitiveRestartEnable = VK_FALSE,
 	};
 
-	std::vector<VkVertexInputAttributeDescription> attributeDescs;
-	attributeDescs.reserve(info.vertexAttributes.size());
+	VLA(VkVertexInputAttributeDescription, attributeDescs, info.vertexAttributes.size());
 	uint32_t attributeSize = 0;
 	for (size_t i = 0; auto& format: info.vertexAttributes) {
-		attributeDescs.emplace_back(VkVertexInputAttributeDescription{
-			.location = static_cast<uint32_t>(i++),
+		attributeDescs[i++] = VkVertexInputAttributeDescription{
+			.location = static_cast<uint32_t>(i),
 			.binding = 0,
 			.format = (VkFormat)format,
 			.offset = attributeSize
-		});
+		};
 		switch (format) {
 		case Format::RG32_sfloat:   attributeSize += 2 * sizeof(float); break;
 		case Format::RGB32_sfloat:  attributeSize += 3 * sizeof(float); break;
@@ -1663,11 +1660,10 @@ void Command::BeginRendering(const RenderingInfo& info) {
 	ivec2 offset(renderArea.x, renderArea.y);
 	uvec2 extent(renderArea.z, renderArea.w);
 	
-	std::vector<VkRenderingAttachmentInfoKHR> colorAttachInfos;
-	colorAttachInfos.reserve(info.colorAttachs.size());
-	for (auto& colorAttach: info.colorAttachs) {
+	VLA(VkRenderingAttachmentInfoKHR, colorAttachInfos, info.colorAttachs.size());
+	for (auto i = 0; auto& colorAttach: info.colorAttachs) {
 		// DEBUG_ASSERT(colorAttach.size() > 0 && colorAttach.size() < 3, "Invalid color attachment count.");
-		colorAttachInfos.emplace_back(VkRenderingAttachmentInfoKHR{
+		colorAttachInfos[i++] = {
 			.sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR,
 			.imageView   = colorAttach.colorAttachment.resource->view,
 			.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -1678,7 +1674,7 @@ void Command::BeginRendering(const RenderingInfo& info) {
 					.float32 = { clearColor.x , clearColor.y, clearColor.z, clearColor.w }
 				}
 			}
-		});
+		};
 		if (colorAttach.resolveImage != nullptr) {
 			if(std::min(colorAttach.colorAttachment.resource->samples, resource->device->physicalDevice->maxSamples) == SampleCount::_1) {
 				LOG_WARN("[Command::BeginRendering] Using MSAA with maxSamples == 1 on device.");
@@ -2370,7 +2366,7 @@ uint32_t PhysicalDevice::GetQueueFamilyIndex(VkQueueFlags desiredFlags, VkQueueF
 	return bestFamily;
 }
 
-void DeviceResource::Create(const std::vector<Queue*>& queues) {
+void DeviceResource::Create(std::span<Queue*> queues) {
 	std::unordered_map<uint32_t, uint32_t> queuesToCreate; // <family index, queue count>
 	queuesToCreate.reserve(queues.size());
 	std::vector<uint32_t> filledUpFamilies; // Track filled up families
@@ -3455,10 +3451,9 @@ void Command::Blit(BlitInfo const& info) {
 		regions = fullRegions;
 	}
 
-	std::vector<VkImageBlit2> blitRegions;
-	blitRegions.reserve(regions.size());
-	for (auto& region: regions) {
-		blitRegions.emplace_back(VkImageBlit2{
+	VLA(VkImageBlit2, blitRegions, regions.size());	
+	for (auto i = 0; auto& region: regions) {
+		blitRegions[i++] = {
 			.sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2,
 			.pNext = nullptr,
 			.srcSubresource{
@@ -3475,7 +3470,7 @@ void Command::Blit(BlitInfo const& info) {
 				.layerCount     = 1,
 			},
 			.dstOffsets = {{region.dst.x, region.dst.y, 0}, {region.dst.z, region.dst.w, 1}},
-		});
+		};
 	}
 
 	VkBlitImageInfo2 blitInfo {

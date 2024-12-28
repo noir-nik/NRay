@@ -27,7 +27,8 @@ CompileFlags:
     # -DUSE_HEADER_UNITS,
     -DUSE_MODULES,
     -fprebuilt-module-path=build/win/modules-clangd,
-    -Wno-pragma-once-outside-header
+    -Wno-pragma-once-outside-header,
+    -Wno-vla
   ]
 
     #Diagnostics:

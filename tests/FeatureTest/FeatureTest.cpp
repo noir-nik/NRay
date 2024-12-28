@@ -19,6 +19,7 @@ import entt;
 import UI;
 import Runtime;
 import Types;
+import Structs;
 #else
 #include "Lmath.cppm"
 #include "VulkanBackend.cppm"
@@ -49,7 +50,7 @@ using namespace Lmath;
 
 using Pixel = vec4;
 namespace {
-using namespace Types;
+// using namespace Types;
 struct DrawViewportInfo;
 
 struct AppContext : DeleteCopyDeleteMove {
@@ -812,7 +813,8 @@ void FeatureTestApplication::Setup() {
 	windowHandle.SetEntityHandle(static_cast<EntityType>(mainWindow.entity));
 	
 	ctx->queue = {vkw::QueueFlagBits::Graphics | vkw::QueueFlagBits::Compute | vkw::QueueFlagBits::Transfer, windowHandle.GetGLFWwindow()};
-	ctx->device = vkw::CreateDevice({&ctx->queue});
+	vkw::Queue* queues[] = {&ctx->queue};
+	ctx->device = vkw::CreateDevice(queues);
 	ctx->mainWindow = mainWindow;
 	ctx->CreateWindowResources(mainWindow);
 
