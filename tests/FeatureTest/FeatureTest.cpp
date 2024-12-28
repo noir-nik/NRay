@@ -30,7 +30,7 @@ struct AppContext {
 	// float4x4 worldViewInv;
 	// float4x4 worldViewProjInv;
 
-	vkw::SampleCount sampleCount = vkw::SampleCount::_1;
+	vkw::SampleCount sampleCount = vkw::SampleCount::_4;
 	// vkw::Format renderFormat = vkw::Format::RGBA16_sfloat;
 	vkw::Format renderFormat = vkw::Format::RGBA8_unorm;
 	
@@ -170,6 +170,7 @@ void AppContext::CreateShaders() {
 
 void AppContext::CreateWindowResources(Window* window) {
 	window->CreateSwapchain(ctx.device, ctx.queue);
+	window->CreateUI(sampleCount);
 	ctx.windows.emplace(window);
 	window->AddFramebufferSizeCallback(FramebufferCallback);
 	window->AddMouseButtonCallback(MouseButtonCallback);

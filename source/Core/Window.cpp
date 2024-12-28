@@ -178,9 +178,9 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 
 	if (action == GLFW_PRESS) {
 		switch (key) {
-		case GLFW_KEY_ESCAPE:
-			pWindow->SetShouldClose(true);
-			break;
+		// case GLFW_KEY_ESCAPE:
+		// 	pWindow->SetShouldClose(true);
+		// 	break;
 		case GLFW_KEY_F11: {
 			auto moden = pWindow->GetMode();
 			// LOG_INFO("Window {} mode: {}", pWindow->GetName(), (int)mode);

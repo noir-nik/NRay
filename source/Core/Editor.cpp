@@ -106,7 +106,7 @@ bool EditorContext::LoadStyle(const char* filename, ImGuiStyle& style) {
 	int line_number = 0;
 	while (std::getline(file, line)) {
 		++line_number;
-		printf("line: %s\n", line.data());
+		// printf("line: %s\n", line.data());
 		if (var_info.Type == ImGuiDataType_COUNT) {
 			bool found = 0;
 			size_t name_start = line.find_first_of("[");
@@ -115,7 +115,7 @@ bool EditorContext::LoadStyle(const char* filename, ImGuiStyle& style) {
 			if (name_end == std::string::npos) continue;
 			name = std::string_view(line.begin() + name_start + 1, line.begin() + name_end);
 			if (name.empty()) continue;
-			printf("name: %s\n", name.data());
+			// printf("name: %s\n", name.data());
 
 			for (auto i = 0; i != ImGuiStyleVar_COUNT; i++) {
 				if (name == GetStyleVarName(i)) {
@@ -230,8 +230,8 @@ void EditorContext::MainMenu() {
 		ImGui::MenuItem("Undo");
 		ImGui::MenuItem("Redo");
 		ImGui::MenuItem("Style Editor", "", &ShowStyleEditor);
-		ImGui::MenuItem("Style Selector", "", &ShowStyleSelector);
-		ImGui::MenuItem("Font Selector", "", &ShowFontSelector);
+		// ImGui::MenuItem("Style Selector", "", &ShowStyleSelector);
+		// ImGui::MenuItem("Font Selector", "", &ShowFontSelector);
 		ImGui::EndMenu();
 	}
 
@@ -269,16 +269,16 @@ void EditorContext::MainMenu() {
 		StyleEditor();
 		ImGui::End();
 	}
-	if (ShowStyleSelector){
-		ImGui::Begin("Style Selector", &ShowStyleSelector);
-		ImGui::ShowStyleSelector("Colors##Selector");
-		ImGui::End();
-	}
-	if (ShowFontSelector){
-		ImGui::Begin("Font Selector", &ShowFontSelector);
-		ImGui::ShowFontSelector("Fonts##Selector");
-		ImGui::End();
-	}
+	// if (ShowStyleSelector){
+	// 	ImGui::Begin("Style Selector", &ShowStyleSelector);
+	// 	ImGui::ShowStyleSelector("Colors##Selector");
+	// 	ImGui::End();
+	// }
+	// if (ShowFontSelector){
+	// 	ImGui::Begin("Font Selector", &ShowFontSelector);
+	// 	ImGui::ShowFontSelector("Fonts##Selector");
+	// 	ImGui::End();
+	// }
 }
 
 
@@ -341,7 +341,8 @@ void EditorContext::StyleWindow() {
 void Editor::Draw() {
 	ImGui::ShowDemoWindow();
 	ctx.MainMenu();
-	ctx.StyleWindow();
+	// ctx.StyleWindow();
+	
 	// ctx.RenderUI();
 }
 
@@ -360,8 +361,18 @@ void Editor::Setup(){
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
 
-	ctx.style = ImGui::GetStyle();
-	ctx.defaultStyle = ctx.style;
+	// io.IniFilename = nullptr;
+
+	ctx.defaultStyle = ImGui::GetStyle();
+
+	if (ctx.LoadStyle(STYLE_PATH"style.ini", ImGui::GetStyle())) {
+		LOG_INFO("Loaded style");
+		ctx.style = ImGui::GetStyle();
+	} else {
+		LOG_WARN("Failed to load style");
+		ImGui::GetStyle() = ctx.defaultStyle;
+		ctx.style = ctx.defaultStyle;
+	}
 
 	// io.ConfigFlags |= ImGuiConfigFlags_DockingEnable
 
@@ -455,8 +466,7 @@ inline const char* EditorContext::GetStyleVarName(ImGuiStyleVar idx) {
 //     HoverFlagsForTooltipNav = ImGuiHoveredFlags_NoSharedDelay | ImGuiHoveredFlags_DelayNormal | ImGuiHoveredFlags_AllowWhenDisabled;
 // }
 
-static void HelpMarker(const char* desc)
-{
+static void HelpMarker(const char* desc) {
     ImGui::TextDisabled("(?)");
     if (ImGui::BeginItemTooltip())
     {

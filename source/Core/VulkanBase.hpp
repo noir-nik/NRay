@@ -472,6 +472,7 @@ public:
 	Command&    GetCommandBuffer();
 
 	void Create(Device& device, vkw::Queue& queue, GLFWwindow* window, uint32_t width, uint32_t height);
+	void CreateUI(SampleCount sampleCount);
 	void Destroy();
 	void Recreate(uint32_t width, uint32_t height);
 	bool AcquireImage();

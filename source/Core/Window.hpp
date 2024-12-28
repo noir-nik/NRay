@@ -216,6 +216,7 @@ public:
 	inline void        AddFramesToDraw(int value)           { framesToDraw += value; }
 
 	inline void        CreateSwapchain(vkw::Device& device, vkw::Queue& queue){ if (!swapChainAlive) swapChain.Create(device, queue, window, size.x, size.y); swapChainAlive = true; }
+	inline void        CreateUI(vkw::SampleCount sampleCount) { swapChain.CreateUI(sampleCount); }
 	inline void        RecreateSwapchain()                 { ASSERT(swapChainAlive, "RecreateSwapchain: Swapchain is not alive"); swapChain.Recreate(size.x, size.y);} 
 	inline bool        GetSwapchainDirty()                 { return swapChain.GetDirty(); }
 	inline auto&       GetSwapchain()                      { return swapChain; }

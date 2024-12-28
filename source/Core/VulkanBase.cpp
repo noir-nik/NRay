@@ -454,7 +454,7 @@ struct SwapChainResource: DeleteCopyMove {
 	void Create(std::vector<Image>& swapChainImages, uint32_t width, uint32_t height, bool is_recreation = false);
 	void Destroy(bool is_recreation = false);
 
-	void CreateImGui(GLFWwindow* window);
+	void CreateImGui(GLFWwindow* window, SampleCount sampleCount);
 	void DestroyImGui();
 
 	inline VkSemaphore GetImageAvailableSemaphore(uint32_t currentFrame) { return imageAvailableSemaphores[currentFrame]; }
@@ -2723,10 +2723,14 @@ void SwapChain::Create(Device& device, vkw::Queue& queue, GLFWwindow* window, ui
 	// LOG_INFO("Created Swapchain {}", _ctx.swapChains.size());
 
 	// after commands
-	resource->CreateImGui(window);
+	
 	currentFrame = 0;
 	currentImageIndex = 0;
 	dirty = false;
+}
+
+void SwapChain::CreateUI(SampleCount sampleCount) {
+	resource->CreateImGui(window, sampleCount);
 }
 
 void SwapChain::Destroy(){
@@ -2747,7 +2751,7 @@ void ImGuiCheckVulkanResult(VkResult res) {
 	DEBUG_VK(res, "Imgui error: {}", VK_ERROR_STRING(res));
 }
 
-void SwapChainResource::CreateImGui(GLFWwindow* window) {
+void SwapChainResource::CreateImGui(GLFWwindow* window, SampleCount sampleCount) {
 	if (_ctx.imguiInitialized) return;
 	_ctx.imguiInitialized = true;
 	std::vector <Format> colorFormats = { vkw::Format::RGBA8_unorm};
@@ -2761,7 +2765,7 @@ void SwapChainResource::CreateImGui(GLFWwindow* window) {
 		.DescriptorPool      = device->imguiDescriptorPool,
 		.MinImageCount       = surfaceCapabilities.minImageCount,
 		.ImageCount          = (uint32_t)imageResources.size(),
-		.MSAASamples         = (VkSampleCountFlagBits)device->physicalDevice->numSamples,
+		.MSAASamples         = (VkSampleCountFlagBits)std::min(device->physicalDevice->maxSamples, sampleCount),
 		.PipelineCache       = device->pipelineCache,
 		.UseDynamicRendering = true,
 		.PipelineRenderingCreateInfo{
