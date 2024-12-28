@@ -27,15 +27,15 @@ import stl;
 
 #ifdef USE_MODULES
 
-#define WINDOW_EXPORT export
+#define _WINDOW_EXPORT export
 #else
-#define WINDOW_EXPORT
+#define _WINDOW_EXPORT
 #include "Lmath.cppm"
 #include "VulkanBackend.cppm"
 #include "Types.cppm"
 #endif
 
-WINDOW_EXPORT
+_WINDOW_EXPORT
 class WindowManager;
 enum class WindowMode {
 	Windowed,
@@ -69,7 +69,7 @@ void CharModsCallback    (GLFWwindow *window, unsigned int codepoint, int mods);
 void DropCallback        (GLFWwindow *window, int path_count, const char *paths[]);
 }
 
-WINDOW_EXPORT
+_WINDOW_EXPORT
 struct Mouse {
 	float       scroll      = .0f;
 	float       deltaScroll = .0f;
@@ -98,10 +98,10 @@ private:
 	friend void _InputCallbacks::CharModsCallback    (GLFWwindow *window, unsigned int codepoint, int mods);
 	friend void _InputCallbacks::DropCallback        (GLFWwindow *window, int path_count, const char *paths[]);
 };
-WINDOW_EXPORT
+_WINDOW_EXPORT
 extern Mouse mouse;
 
-WINDOW_EXPORT
+_WINDOW_EXPORT
 class Window {
 	friend class WindowManager;
 	GLFWwindow*   window             = nullptr;
@@ -168,7 +168,7 @@ class Window {
 public:
 	vkw::SwapChain swapChain;
 
-	Window(int width, int height, const char* name = "Engine");
+	Window(int width, int height, const char* name = "NRay", void* imguiStyle = nullptr);
 	Window& operator=(const Window&) = delete;
 	Window(const Window&) = delete;
 	inline virtual ~Window(){ if(alive) Destroy(); }
@@ -233,7 +233,7 @@ public:
 	inline void        SetFramesToDraw(int value)           { framesToDraw = value; }
 
 	inline void        CreateSwapchain(vkw::Device& device, vkw::Queue& queue){ if (!swapChainAlive) swapChain.Create(device, queue, window, size.x, size.y); swapChainAlive = true; }
-	inline void        CreateUI(vkw::SampleCount sampleCount) { UIContext.Init(); swapChain.CreateUI(sampleCount); }
+	inline void        CreateUI(vkw::SampleCount sampleCount) {swapChain.CreateUI(sampleCount); }
 	inline void        SetUIContextCurrent()               { UIContext.SetCurrent(); }
 	inline void        RecreateSwapchain()                 { if(!swapChainAlive)return; swapChain.Recreate(size.x, size.y);} 
 	inline bool        GetSwapchainDirty()                 { return swapChain.GetDirty(); }

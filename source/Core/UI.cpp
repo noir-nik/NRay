@@ -57,13 +57,17 @@ void Destroy() {
 }
 
 
-void Context::Init() {
+void Context::Init(void* imguiStyle) {
 	context = ImGui::CreateContext(sharedFontAtlas);
 	SetCurrent();
 	auto& io = ImGui::GetIO();
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 	// io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 	io.FontDefault = defaultFont;
+
+	if (imguiStyle != nullptr){
+		ImGui::GetStyle() = *static_cast<ImGuiStyle*>(imguiStyle);
+	}
 }
 
 void Context::SetCurrent(){

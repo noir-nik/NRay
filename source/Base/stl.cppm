@@ -53,6 +53,7 @@ export import <set>;
 export import <span>;
 export import <string>;
 export import <string_view>;
+export import <thread>;
 export import <unordered_map>;
 export import <vector>;
 

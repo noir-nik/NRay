@@ -398,7 +398,6 @@ void EditorContext::DebugWindow(Objects::Camera& camera) {
 
 
 void Editor::Draw(Objects::Camera& camera) {
-
 	ImGui::ShowDemoWindow();
 	ctx.MainMenu();
 
@@ -423,15 +422,22 @@ void Editor::Setup(){
 
 	ctx.defaultStyle = ImGui::GetStyle();
 
-	if (ctx.LoadStyle(STYLE_PATH"style.ini", ImGui::GetStyle())) {
+	ImGuiStyle& style = ImGui::GetStyle();
+	ImGuiStyle& ref = ctx.style;
+
+	if (ctx.LoadStyle(STYLE_PATH"style.ini", style)) {
 		LOG_INFO("Loaded style");
-		ctx.style = ImGui::GetStyle();
+		ref = style;
 	} else {
 		LOG_WARN("Failed to load style");
-		ImGui::GetStyle() = ctx.defaultStyle;
-		ctx.style = ctx.defaultStyle;
+		style = ctx.defaultStyle;
+		ref = ctx.defaultStyle;
 	}
 
+}
+
+ImGuiStyle* Editor::GetStyle() {
+	return &ctx.style;
 }
 
 
@@ -519,12 +525,12 @@ void EditorContext::StyleEditor() {
     // (without a reference style pointer, we will use one compared locally as a reference)
     ImGuiStyle& style = ImGui::GetStyle();
 	ImGuiStyle& ref = this->style; 
-    static ImGuiStyle ref_saved_style;
+    // static ImGuiStyle ref_saved_style;
 
     ImGui::PushItemWidth(ImGui::GetWindowWidth() * 0.50f);
 
-    if (ImGui::ShowStyleSelector("Colors##Selector"))
-        ref_saved_style = style;
+    // if (ImGui::ShowStyleSelector("Colors##Selector"))
+        // ref_saved_style = style;
     ImGui::ShowFontSelector("Fonts##Selector");
 
     // Simplified Settings (expose floating-pointer border sizes as boolean representing 0.0f or 1.0f)

@@ -288,7 +288,7 @@ void WindowManager::Finish() {
 }
 
 // Window factory
-Window::Window(int width, int height, const char* name): size( width, height ), name(name) {
+Window::Window(int width, int height, const char* name, void* imguiStyle): size( width, height ), name(name) {
 
 	if (!WindowManager::is_initialized) {
 		WindowManager::Init();
@@ -321,6 +321,8 @@ Window::Window(int width, int height, const char* name): size( width, height ), 
 	glfwSetCharCallback              (window, _InputCallbacks::CharCallback       );
 	glfwSetCharModsCallback          (window, _InputCallbacks::CharModsCallback   );
 	glfwSetDropCallback              (window, _InputCallbacks::DropCallback       );
+
+	UIContext.Init(imguiStyle); 
 
 	ApplyChanges();
 }

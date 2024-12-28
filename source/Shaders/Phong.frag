@@ -87,4 +87,3 @@ void main() {
 	phong = pow(phong, vec3(0.454545));
 	outColor = vec4(phong, 1.0); 
 }
-

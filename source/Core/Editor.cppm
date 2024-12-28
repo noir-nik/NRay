@@ -17,4 +17,6 @@ struct Editor {
     void BeginFrame();
 	void Draw(Objects::Camera& camera);
     ImDrawData* EndFrame();
+	
+	ImGuiStyle* GetStyle();
 };

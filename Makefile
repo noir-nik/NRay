@@ -318,6 +318,7 @@ CPP_SYSTEM_HEADERS := \
 	span \
 	string \
 	string_view \
+	thread \
 	unordered_map \
 	vector \
 	\
@@ -458,33 +459,6 @@ $(OBJS_BUILD_DIR)/%.$(OBJ_EXT): $(SRC_WINDOW)/%.cpp # tests/Window
 
 # ============================================ Headers ===================================================
 
-# CPP_SYSTEM_HEADERS := \
-# 	array \
-# 	atomic \
-# 	fstream \
-# 	map \
-# 	memory \
-# 	mutex \
-# 	numeric \
-# 	set \
-# 	span \
-# 	string_view \
-# 	unordered_map \
-# 	vector \
-# 	\
-# 	cassert \
-# 	cmath \
-# 	csignal \
-# 	cstddef \
-# 	cstdint \
-# 	cstdlib \
-
-
-
-# cstring
-
-
-
 HEADER_FLAGS := $(filter-out -fmodule-file-deps,$(CXXFLAGS)) \
 	-Wno-pragma-system-header-outside-header \
 	-Wno-user-defined-literals \
@@ -533,8 +507,9 @@ $(MODULES_BUILD_DIR)/stl.pcm: source/Base/stl.cppm
 # .NOTPARALLEL: build_internal_modules
 # build_internal_modules: $(CPP_MODULE_TARGETS)
 
-
-MODULE_FLAGS := $(filter-out -fmodule-file-deps,$(CXXFLAGS))
+# MODULE_FLAGS := $(filter-out -fmodule-file-deps,$(CXXFLAGS))
+# $(info $(CXXFLAGS))
+# $(info $(filter-out -fmodule-file-deps,$(CXXFLAGS)))
 
 # $(patsubst $(MODULES_BUILD_DIR)/%.pcm,$(MODULES_BUILD_DIR)/$(MAIN_MODULE_TARGET)-%.pcm, $@)
 # $(MODULES_BUILD_DIR)/%.pcm: source/Core/%.cppm
@@ -546,52 +521,52 @@ MODULE_FLAGS := $(filter-out -fmodule-file-deps,$(CXXFLAGS))
 
 $(_MBD)/%.pcm: source/Core/%.cppm
 	@echo "Compiling module $(notdir $<)"
-	@$(CC) $(MODULE_FLAGS) --precompile -c -x c++-module $< -o $@
+	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
 $(_MBD)/%.pcm: source/Base/%.cppm
 	@echo "Compiling module $(notdir $<)"
-	@$(CC) $(MODULE_FLAGS) --precompile -c -x c++-module $< -o $@
+	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
 $(_MBD)/%.pcm: source/Engine/%.cppm
 	@echo "Compiling module $(notdir $<)"
-	@$(CC) $(MODULE_FLAGS) --precompile -c -x c++-module $< -o $@
+	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
 $(_MBD)/%.pcm: source/Resources/%.cppm
 	@echo "Compiling module $(notdir $<)"
-	@$(CC) $(MODULE_FLAGS) --precompile -c -x c++-module $< -o $@
+	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
 $(_MBD)/%.pcm: source/Shaders/%.cppm
 	@echo "Compiling module $(notdir $<)"
-	@$(CC) $(MODULE_FLAGS) --precompile -c -x c++-module $< -o $@
+	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
 $(_MBD)/%.pcm: $(SRC_FEATURE)/%.cppm
 	@echo "Compiling module $(notdir $<)"
-	@$(CC) $(MODULE_FLAGS) --precompile -c -x c++-module $< -o $@
+	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
 
 # build_external_modules: $(EXTERNAL_MODULE_TARGETS)
 
 $(_MBD)/%.pcm: $(EXTERNAL_MODULES_DIR)/%.cppm
 	@echo "Compiling module $(notdir $<)"
-	@$(CC) $(MODULE_FLAGS) --precompile -c -x c++-module $< -o $@ -Wno-nullability-completeness
+	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@ -Wno-nullability-completeness
 
 $(_MBD)/%.pcm: $(EXTERNAL_MODULES_DIR)/imgui/%.cppm
 	@echo "Compiling module $(notdir $<)"
-	@$(CC) $(MODULE_FLAGS) --precompile -c -x c++-module $< -o $@
+	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
 $(_MBD)/%.pcm: $(EXTERNAL_MODULES_DIR)/stb/%.cppm
 	@echo "Compiling module $(notdir $<)"
-	@$(CC) $(MODULE_FLAGS) --precompile -c -x c++-module $< -o $@
+	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
 # #entt
 # $(_MBD)/%.pcm: deps\entt\src\entt\entity\registry.hpp
 # 	@echo "Compiling module $(notdir $<)"
-# 	@$(CC) $(MODULE_FLAGS) --precompile -c -x c++-module $< -o $@
+# 	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
 # fastgltf
 $(_MBD)/%.pcm: deps/fastgltf/src/%.ixx
 	@echo "Compiling module $(notdir $<)"
-	@$(CC) $(MODULE_FLAGS) --precompile -c -x c++-module $< -o $@
+	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
 
 # ============================================ Libraries ===================================================

@@ -41,13 +41,13 @@ namespace entt {
 	// export using entt::storage_for;
 
 	namespace internal {	
-		using ::entt::internal::operator==;
-		using ::entt::internal::operator!=;
-		using ::entt::internal::operator<;
-		using ::entt::internal::operator>;
-		using ::entt::internal::operator<=;
-		using ::entt::internal::operator>=;
-		using ::entt::internal::operator-;
+		using internal::operator==;
+		using internal::operator!=;
+		using internal::operator<;
+		using internal::operator>;
+		using internal::operator<=;
+		using internal::operator>=;
+		using internal::operator-;
 	};
 
 	using entt::operator+;

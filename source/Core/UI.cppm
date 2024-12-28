@@ -11,9 +11,11 @@ _UI_EXPORT
 namespace UI {
 
 struct Context {
-	void Init();
+	void Init(void* imguiStyle = nullptr);
 	void Destroy();
 	void SetCurrent(); // Thanks ImGui
+
+	void* GetHandle() { return context; }
 private:
 	void* context = nullptr;
 };

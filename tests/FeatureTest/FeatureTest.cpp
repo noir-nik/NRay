@@ -237,7 +237,6 @@ void AppContext::CreateWindowResources(Entity window) {
 	Window &windowHandle = window.Get<Window>();
 	windowHandle.CreateSwapchain(device, queue);
 	windowHandle.CreateUI(sampleCount);
-
 	windowHandle.AddFramebufferSizeCallback(FramebufferCallback);
 	windowHandle.AddMouseButtonCallback(MouseButtonCallback);
 	windowHandle.AddWindowRefreshCallback(RefreshCallback);
@@ -583,6 +582,8 @@ void FramebufferCallback(Window* window, int width, int height) {
 }
 
 void RefreshCallback(Window* window) {
+	auto size = window->GetSize();
+	if (size.x == 0 || size.y == 0) {return;}
 	window->AddFramesToDraw(1);
 	ctx->DrawWindow(Entity(&ctx->registry, static_cast<entt::entity>(window->GetEntityHandle())));
 }
@@ -719,15 +720,16 @@ void FeatureTestApplication::Setup() {
 	vkw::Init();
 
 	UI::Init();
-	ctx->editor.Setup();
 	ctx->width = info->width;
 	ctx->height = info->height;
+	ctx->editor.Setup();
 
 	camera.proj = perspective(60.0f, (float)ctx->width / ctx->height, 0.01f, 1000.0f);
 
 	// auto window = new Window(ctx->width, ctx->height, "NRay");
 	auto mainWindow = ctx->CreateEntity("Main Window");
-	mainWindow.Add<Window>(ctx->width, ctx->height, "NRay");
+	auto style = ctx->editor.GetStyle();
+	mainWindow.Add<Window>(ctx->width, ctx->height, "NRay", style);
 	mainWindow.Add<WindowImageResource>();
 	Window& windowHandle = mainWindow.Get<Window>();
 	windowHandle.SetEntityHandle(static_cast<EntityType>(mainWindow.entity));
@@ -789,20 +791,17 @@ void FeatureTestApplication::MainLoop() {
 	while (ctx->mainWindow.entity != Entity::Null) {
 		// std::any_of( ctx->windows.begin(), ctx->windows.end(), [](const auto &window) {
 		// ctx->registry.any_of( ctx->windows.begin(), ctx->windows.end(), [](const auto &window) {
-		auto registry = &ctx->registry;
-		auto view = registry->view<Window>();//view->remove(ctx->mainWindow.entity);
-		std::any_of( view.begin(), view.end(), [registry](const auto &window) {
-			auto& windowHandle = registry->get<Window>(window);
-			return windowHandle.GetDrawNeeded();
-		}) ? WindowManager::PollEvents() : WindowManager::WaitEvents();
-
 		auto& sceneGraph = ctx->project.GetSceneGraph();
 		sceneGraph.UpdateTransforms(sceneGraph.root, sceneGraph.root.entity.Get<Component::Transform>());
 
-		// registry->erase_if(1, Func func)
-		// std::erase_if(ctx->windows, [](const auto &window) {
-		// 	return DrawOrRemoveWindow(window);
-		// });
+		auto registry = &ctx->registry;
+		auto view = registry->view<Window>();//view->remove(ctx->mainWindow.entity);
+		std::any_of( view.begin(), view.end(), [registry](const auto &window) {
+			Window& windowHandle = registry->get<Window>(window);
+			// std::this_thread::sleep_for(std::chrono::duration<float>(1.0f / 60.0f));
+			return windowHandle.GetDrawNeeded();
+		}) ? WindowManager::PollEvents() : WindowManager::WaitEvents();
+		
 		DrawOrRemoveWindows();
 	}
 	ctx->device.WaitIdle();

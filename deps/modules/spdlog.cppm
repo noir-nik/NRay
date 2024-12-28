@@ -13,23 +13,24 @@ module;
 #ifdef USE_MODULES
 export module spdlog;
 
+export
 namespace spdlog {
-	export using spdlog::logger;
-	export using spdlog::sink_ptr;
-	export using spdlog::register_logger;
-	export using spdlog::set_default_logger;
+	using spdlog::logger;
+	using spdlog::sink_ptr;
+	using spdlog::register_logger;
+	using spdlog::set_default_logger;
 
 	namespace sinks {
-		export using spdlog::sinks::stdout_color_sink_mt;
-		export using spdlog::sinks::basic_file_sink_mt;
+		using sinks::stdout_color_sink_mt;
+		using sinks::basic_file_sink_mt;
 	} // namespace sinks
 
 	namespace details {
-		export using spdlog::details::registry;
+		using details::registry;
 	} // namespace details
 
 	namespace level {
-		export using spdlog::level::level_enum;
+		using level::level_enum;
 	} // namespace level
 } // namespace spdlog
 
