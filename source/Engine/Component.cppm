@@ -1,14 +1,14 @@
 #ifdef USE_MODULES
 export module Component;
 #define _COMPONENT_EXPORT export
-import Lmath.types;
+import Lmath;
 import Phong;
 import Objects;
 import stl;
 #else
 #pragma once
 #define _COMPONENT_EXPORT
-#include "Lmath.types.cppm"
+#include "Lmath_types.h"
 #include "Phong.cppm"
 #include "Objects.cppm"
 

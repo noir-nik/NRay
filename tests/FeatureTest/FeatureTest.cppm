@@ -2,10 +2,10 @@
 #ifdef USE_MODULES
 export module FeatureTest;
 #define _FEATURETEST_EXPORT export
-import Lmath.types;
+import Lmath;
 #else
 #pragma once
-#include "Lmath.types.cppm"
+#include "Lmath_types.h"
 #define _FEATURETEST_EXPORT
 #endif // USE_MODULES
 using namespace Lmath;

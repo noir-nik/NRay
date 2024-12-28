@@ -1,5 +1,5 @@
 #ifdef USE_MODULES
-import Lmath.types;
+import Lmath;
 import VulkanBackend;
 #else
 #include "VulkanBackend.cppm"

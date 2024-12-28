@@ -1,6 +1,6 @@
 #ifdef USE_MODULES
 export module VulkanBackend;
-import Lmath.types;
+import Lmath;
 import stl;
 import imgui; 
 
@@ -8,7 +8,7 @@ import imgui;
 #else
 #pragma once
 #define _VKW_EXPORT
-#include "Lmath.types.cppm"
+#include "Lmath_types.h"
 
 #include <cstdint>
 #include <span>
@@ -575,6 +575,9 @@ struct Device {
 	Buffer CreateBuffer(const BufferDesc& desc);
 	Image CreateImage(const ImageDesc& desc);
 	Pipeline CreatePipeline(const PipelineDesc& desc);
+
+	void CreateDefaultImages(Queue transferQueue);
+	Image& GetErrorImage();
 
 	Queue GetQueue(QueueFlags flags);
 	Command& GetCommandBuffer(const Queue& queue);

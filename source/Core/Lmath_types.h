@@ -1,13 +1,5 @@
-#ifdef USE_MODULES
-export module Lmath.types;
-#define LMATH_EXPORT export 
-#else
 #pragma once
-#define LMATH_EXPORT
-#endif
 
-
-LMATH_EXPORT
 namespace Lmath 
 {
 typedef unsigned int uint;

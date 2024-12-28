@@ -301,6 +301,8 @@ struct DeviceResource: DeleteCopyDeleteMove {
 	std::vector<int32_t> availableTLASRID;
 	std::vector<int32_t> availableStorageImageRID;
 
+	Image errorImage;
+
 	struct SamplerDescHash {
 		size_t operator()(const SamplerDesc& desc) const {
 			size_t hash = 0;
@@ -468,17 +470,7 @@ struct DeviceResource: DeleteCopyDeleteMove {
 	void DestroyBindlessDescriptorResources();
 
 	VkSampler CreateSampler(SamplerDesc const& desc);
-
-	VkSampler getSampler(SamplerDesc const& desc) { 
-		auto sampler = samplers.find(desc);
-		if (sampler == samplers.end()) {
-			VkSampler sampler = CreateSampler(desc);
-			samplers[desc] = sampler;
-			return sampler;
-		} else {
-			return sampler->second;
-		}
-	}
+	VkSampler GetSampler(SamplerDesc const& desc = {});
 
 	void SetDebugUtilsObjectName(const VkDebugUtilsObjectNameInfoEXT& pNameInfo);
 	
@@ -510,11 +502,11 @@ struct DeviceResource: DeleteCopyDeleteMove {
 			vkDestroyPipeline(handle, pipeline, _ctx.allocator);
 		}
 
+		errorImage = {};
 		staging = {};
 		stagingCpu = nullptr;
+
 		DestroyBindlessDescriptorResources();
-		vmaDestroyAllocator(vmaAllocator);
-		// vkDestroySampler(handle, , _ctx.allocator);
 		for (auto& [_, sampler] : samplers) {
 			vkDestroySampler(handle, sampler, _ctx.allocator);
 		}
@@ -522,6 +514,9 @@ struct DeviceResource: DeleteCopyDeleteMove {
 		for (auto& [_, queue] : uniqueQueues) {
 			queue->command.resource.reset();
 		}
+		
+		vmaDestroyAllocator(vmaAllocator);
+
 		vkDestroyDevice(handle, _ctx.allocator);
 		DEBUG_TRACE("Destroyed logical device");
 		handle = VK_NULL_HANDLE;
@@ -946,7 +941,7 @@ Image Device::CreateImage(const ImageDesc& desc) {
         // }
 
 		VkDescriptorImageInfo descriptorInfo = {
-			.sampler = resource->getSampler(desc.sampler),
+			.sampler = resource->GetSampler(desc.sampler),
 			.imageView = res->view,
 			.imageLayout = (VkImageLayout)newLayout,
 		};
@@ -964,7 +959,7 @@ Image Device::CreateImage(const ImageDesc& desc) {
 	}
 	if (desc.usage & ImageUsage::Storage) {
 		VkDescriptorImageInfo descriptorInfo = {
-			.sampler     = resource->getSampler(desc.sampler),
+			.sampler     = resource->GetSampler(desc.sampler),
 			.imageView   = res->view,
 			.imageLayout = VK_IMAGE_LAYOUT_GENERAL,
 		};
@@ -997,6 +992,41 @@ Image Device::CreateImage(const ImageDesc& desc) {
 	return image;
 }
 
+void Device::CreateDefaultImages(Queue transferQueue){
+	constexpr int nullImageSize = 16;
+	auto& errorImage = GetErrorImage();
+	
+	errorImage = CreateImage({
+		.extent = {nullImageSize, nullImageSize},
+		.format = vkw::Format::RGBA8_UNORM,
+		.usage = vkw::ImageUsage::Sampled | vkw::ImageUsage::TransferDst,
+		.sampler = {vkw::Filter::Nearest, vkw::Filter::Nearest, vkw::MipmapMode::Nearest},
+		.name = "Error Texture"
+	});
+
+	LOG_INFO("Created null image {}", errorImage.RID());
+
+	uint32_t magenta = packRGBA8(vec4(1, 0, 1, 1));
+	uint32_t black = packRGBA8(vec4(0, 0, 0, 1));
+	std::array<uint32_t, nullImageSize * nullImageSize> pixels;
+	for (int x = 0; x < nullImageSize; ++x) {
+		for (int y = 0; y < nullImageSize; ++y) {
+			pixels[x * nullImageSize + y] = ((x % 2) ^ (y % 2)) ? magenta : black;
+		}
+	}
+
+	auto cmd = GetCommandBuffer(transferQueue);
+	cmd.Begin();
+	cmd.Barrier(errorImage, {vkw::ImageLayout::TransferDst});
+	cmd.Copy(errorImage, &pixels[0], pixels.size() * sizeof(pixels[0]));
+	cmd.End();
+	cmd.QueueSubmit({});
+}
+
+
+Image& Device::GetErrorImage(){
+	return resource->errorImage;
+}
 
 void Command::Dispatch(const uvec3& groups) {
 	vkCmdDispatch(resource->buffer, groups.x, groups.y, groups.z);
@@ -1766,7 +1796,7 @@ void Command::BeginRendering(const RenderingInfo& info) {
 	}
 	vkCmdBeginRendering(resource->buffer, &renderingInfo);
 }
-	
+
 void Command::SetViewport(ivec4 const& viewport) {
 	VkViewport vkViewport {
 		.x        = static_cast<float>(viewport.x),
@@ -2647,9 +2677,7 @@ void DeviceResource::Create(std::span<Queue*> queues) {
 		vkGetDeviceQueue(handle, q->resource->familyIndex, q->resource->index, &q->resource->handle);
 	}
 
-	SamplerDesc genericSamplerDesc {};
-	genericSampler = CreateSampler(genericSamplerDesc);
-	samplers[genericSamplerDesc] = genericSampler;
+	genericSampler = GetSampler();
 	
 	if (_ctx.enableValidationLayers) {
 		vkSetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetDeviceProcAddr(handle, "vkSetDebugUtilsObjectNameEXT");
@@ -3554,16 +3582,16 @@ VkSampler DeviceResource::CreateSampler(SamplerDesc const& desc) {
 		.addressModeW = Cast::VkSamplerAddressMode(desc.wrapW),
 		.mipLodBias = 0.0f,
 		
-		.anisotropyEnable = desc.maxAnisotropy == 0.0f ? VK_FALSE : physicalDevice->physicalFeatures2.features.samplerAnisotropy,
+		.anisotropyEnable = desc.anisotropyEnable == false ? VK_FALSE : physicalDevice->physicalFeatures2.features.samplerAnisotropy,
 		.maxAnisotropy = desc.maxAnisotropy,
-		.compareEnable = VK_FALSE,
-		.compareOp = VK_COMPARE_OP_ALWAYS,
+		.compareEnable = desc.compareEnable == false ? VK_FALSE : VK_TRUE,
+		.compareOp = (VkCompareOp)desc.compareOp,
 
 		.minLod = desc.minLod,
 		.maxLod = desc.maxLod,
 
-		.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
-		.unnormalizedCoordinates = VK_FALSE,
+		.borderColor = (VkBorderColor)desc.borderColor,
+		.unnormalizedCoordinates = desc.unnormalizedCoordinates,
 	};
 
 	VkSampler sampler = VK_NULL_HANDLE;
@@ -3572,6 +3600,17 @@ VkSampler DeviceResource::CreateSampler(SamplerDesc const& desc) {
 	ASSERT(vkRes == VK_SUCCESS, "Failed to create texture sampler!");
 
 	return sampler;
+}
+
+VkSampler DeviceResource::GetSampler(SamplerDesc const& desc) { 
+	auto sampler = samplers.find(desc);
+	if (sampler == samplers.end()) {
+		VkSampler sampler = CreateSampler(desc);
+		samplers[desc] = sampler;
+		return sampler;
+	} else {
+		return sampler->second;
+	}
 }
 
 size_t Pipeline::Stage::Hash() const {

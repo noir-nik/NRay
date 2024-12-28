@@ -2,7 +2,7 @@
 export module Window;
 #define _WINDOW_EXPORT export
 import VulkanBackend;
-import Lmath.types;
+import Lmath;
 import Types;
 import glfw;
 import UI;
@@ -11,7 +11,7 @@ import stl;
 #pragma once
 #define _WINDOW_EXPORT
 #include "VulkanBackend.cppm"
-#include "Lmath.types.cppm"
+#include "Lmath_types.h"
 // #include "Runtime.cppm"
 #include "Types.cppm"
 #include "glfw.cppm"

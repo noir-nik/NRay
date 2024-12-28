@@ -1,7 +1,7 @@
 #ifdef USE_MODULES
 export module Project;
 #define _PROJECT_EXPORT export
-import Lmath.types;
+import Lmath;
 import SceneGraph;
 import Entity;
 import stl;

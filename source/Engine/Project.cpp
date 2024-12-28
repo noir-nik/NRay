@@ -1,8 +1,8 @@
 #ifdef USE_MODULES
 module Project;
-import Lmath.types;
+import Lmath;
 #else
-#include "Lmath.types.cppm"
+#include "Lmath_types.h"
 #include "Project.cppm"
 #endif
 

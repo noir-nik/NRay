@@ -5,9 +5,9 @@
 #ifdef USE_MODULES
 export module Phong;
 #define _PHONG_EXPORT export
-import Lmath.types;
+import Lmath;
 #else
-#include "Lmath.types.cppm"
+#include "Lmath_types.h"
 #define _PHONG_EXPORT
 #endif // USE_MODULES
 namespace Phong {

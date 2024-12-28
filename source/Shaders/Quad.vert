@@ -12,7 +12,7 @@ const vec3 QUAD[6] = {
 layout(location = 3) out vec2 fragUV;
 
 void main() {
-    vec3 fragPos = QUAD[gl_VertexIndex] * 0.5;
+    vec3 fragPos = QUAD[gl_VertexIndex];
     fragUV = (fragPos*0.5 + 0.5).xy;
     gl_Position = vec4(fragPos, 1.0);
 }

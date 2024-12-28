@@ -312,7 +312,6 @@ void LoadMesh(fastgltf::Asset& asset, size_t meshIndex, Component::Mesh& mesh, v
 		// Normals
 		auto normals = p.findAttribute("NORMAL");
 		if (normals != p.attributes.end()) {
-
 			fastgltf::iterateAccessorWithIndex<vec3>(asset, asset.accessors[normals->accessorIndex],
 				[&](vec3 v, size_t index) {
 					mesh->vertices[initialVertex + index].normal = v;
@@ -322,7 +321,6 @@ void LoadMesh(fastgltf::Asset& asset, size_t meshIndex, Component::Mesh& mesh, v
 		// UV
 		auto uv = p.findAttribute("TEXCOORD_0");
 		if (uv != p.attributes.end()) {
-
 			fastgltf::iterateAccessorWithIndex<vec2>(asset, asset.accessors[uv->accessorIndex],
 				[&](vec2 v, size_t index) {
 					mesh->vertices[initialVertex + index].uv.x = v.x;
@@ -336,6 +334,15 @@ void LoadMesh(fastgltf::Asset& asset, size_t meshIndex, Component::Mesh& mesh, v
 			fastgltf::iterateAccessorWithIndex<vec4>(asset, asset.accessors[colors->accessorIndex],
 				[&](vec4 v, size_t index) {
 					mesh->vertices[initialVertex + index].color = v;
+				});
+		}
+
+		// Tangent
+		auto tangent = p.findAttribute("TANGENT");
+		if (tangent != p.attributes.end()) {
+			fastgltf::iterateAccessorWithIndex<vec3>(asset, asset.accessors[tangent->accessorIndex],
+				[&](vec3 v, size_t index) {
+					mesh->vertices[initialVertex + index].tangent = v;
 				});
 		}
 	}

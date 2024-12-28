@@ -73,8 +73,6 @@ struct AppContext : DeleteCopyDeleteMove {
 	
 	vkw::Format depthFormat = vkw::Format::D32_sfloat;
 
-	vkw::Image nullImage;
-
 	// vkw::Buffer outputImage;
 	vkw::Buffer cubeVertexBuffer;
 	vkw::Device device;
@@ -262,36 +260,7 @@ void AppContext::CreateShaders() {
 }
 
 void AppContext::CreateImages() {
-	constexpr int nullImageSize = 16;
-	ctx->nullImage = device.CreateImage({
-		.extent = {nullImageSize, nullImageSize},
-		.format = vkw::Format::RGBA8_UNORM,
-		.usage = vkw::ImageUsage::Sampled | vkw::ImageUsage::TransferDst,
-		.sampler = {vkw::Filter::Nearest, vkw::Filter::Nearest, vkw::MipmapMode::Nearest},
-		.name = "Null Texture"
-	});
-
-	LOG_INFO("Created null image {}", ctx->nullImage.RID());
-
-	// vec4 nullPixel = {1.0f, 0.0f, 1.0f, 1.0f};
-	// uint32_t nullPixel = 0x000000ff;
-	// uint32_t nullPixel = packRGBA8({1.0f, 0.0f, 1.0f, 1.0f});
-
-	uint32_t magenta = packRGBA8(vec4(1, 0, 1, 1));
-	uint32_t black = packRGBA8(vec4(0, 0, 0, 0));
-	std::array<uint32_t, nullImageSize *nullImageSize > pixels; //for 16x16 checkerboard texture
-	for (int x = 0; x < nullImageSize; ++x) {
-		for (int y = 0; y < nullImageSize; ++y) {
-			pixels[y*nullImageSize + x] = ((x % 2) ^ (y % 2)) ? magenta : black;
-		}
-	}
-
-	auto cmd = device.GetCommandBuffer(queue);
-	cmd.Begin();
-	cmd.Barrier(ctx->nullImage, {vkw::ImageLayout::TransferDst});
-	cmd.Copy(ctx->nullImage, &pixels[0], pixels.size() * sizeof(pixels[0]));
-	cmd.End();
-	cmd.QueueSubmit({});
+	device.CreateDefaultImages(queue);
 }
 
 void AppContext::CreateWindowResources(Entity window) {

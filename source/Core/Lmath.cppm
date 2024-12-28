@@ -4,16 +4,15 @@ module;
 #else
 #pragma once
 #define LMATH_EXPORT
-#include "Lmath.types.cppm"
 #endif
 
 #include <cmath>
 #include <cstring>
 #include <tuple>
+#include "Lmath_types.h"
 
 #ifdef USE_MODULES
 export module Lmath;
-export import Lmath.types;
 #endif
 
 #if defined(_MSC_VER)
@@ -34,6 +33,35 @@ export import Lmath.types;
 
 LMATH_EXPORT
 namespace Lmath {
+
+using Lmath::uint;
+using Lmath::uchar;
+
+using Lmath::int2;
+using Lmath::int3;
+using Lmath::int4;
+using Lmath::uint2;
+using Lmath::uint3;
+using Lmath::uint4;
+using Lmath::float2;
+using Lmath::float3;
+using Lmath::float4;
+
+using Lmath::float3x3;
+using Lmath::float4x4;
+
+using Lmath::ivec2;
+using Lmath::ivec3;
+using Lmath::ivec4;
+using Lmath::uvec2;
+using Lmath::uvec3;
+using Lmath::uvec4;
+using Lmath::vec2;
+using Lmath::vec3;
+using Lmath::vec4;
+
+using Lmath::mat3;
+using Lmath::mat4;
 
 inline int   min(const int   a, const int   b) { return (a < b) ? a : b; }
 inline int   max(const int   a, const int   b) { return (a > b) ? a : b; }
