@@ -1,12 +1,12 @@
 #ifdef USE_MODULES
 module UI;
-import VulkanBackend;
+import vulkan_backend;
 import Log;
-import stl;
+import std;
 import imgui;
 #else
 #include "UI.cppm"
-#include "VulkanBackend.cppm"
+#include "vulkan_backend.hpp"
 #include "imgui.cppm"
 #include "Log.cppm"
 
@@ -30,8 +30,11 @@ void Init(){
 	io.IniFilename = "assets/imgui.ini";
 
 	// io.Fonts->AddFontDefault();
-	const float fontSize = 15.0f;
-	for (const auto& entry : std::filesystem::directory_iterator("assets/fonts")) {
+	ImFontConfig config;
+	config.MergeMode = true;
+
+	float const fontSize = 15.0f;
+	for (auto const& entry : std::filesystem::directory_iterator("assets/fonts")) {
 		if (entry.path().extension() == ".ttf" || entry.path().extension() == ".otf") {
 			// auto font = io.Fonts->AddFontFromFileTTF(entry.path().string().c_str(), fontSize);
 			// if (font && entry.path().filename() == "InterVariable.ttf") {
@@ -43,6 +46,10 @@ void Init(){
 					LOG_WARN("Failed to load font: {}", entry.path().string());
 					defaultFont = sharedFontAtlas->AddFontDefault();
 				}
+			} else {
+				config.GlyphMinAdvanceX = 13.0f; // Use if you want to make the icon monospaced
+				// static const ImWchar icon_ranges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
+				io.Fonts->AddFontFromFileTTF(entry.path().string().c_str(), 13.0f/* , &config */);
 			}
 		}
 	}
@@ -52,7 +59,7 @@ void Init(){
 
 void Destroy() {
 	ImGui::SetCurrentContext(setupContext);
-	// vkw::ImGuiShutdown();
+	// vb::ImGuiShutdown();
 	ImGui::DestroyContext(setupContext);
 }
 
@@ -77,7 +84,7 @@ void Context::SetCurrent(){
 
 void Context::Destroy() {
 	SetCurrent();
-	vkw::ImGuiShutdown();
+	vb::ImGuiShutdown();
 	ImGui::DestroyContext(static_cast<ImGuiContext*>(context));
 }
 

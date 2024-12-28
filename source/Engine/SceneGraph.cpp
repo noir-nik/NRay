@@ -1,24 +1,28 @@
 #ifdef USE_MODULES
 module SceneGraph;
-import Lmath;
+import lmath;
+import std.compat;
 #else
-#include "Lmath.cppm"
+#include "lmath.hpp"
 #include "SceneGraph.cppm"
 #endif
 
-using namespace Lmath;
+using namespace lmath;
 
-void SceneGraph::UpdateTransforms(Node &node, const Component::Transform& parentTransform) {
+void SceneGraph::UpdateTransforms(Node &node, Component::Transform const& parentTransform) {
 	auto& transform = node.entity.Get<Component::Transform>();
 
-	if (transform.dirty ||  parentTransform.dirty ) {
+	if (transform.dirtyGlobal || parentTransform.dirtyGlobal) {
+		if (transform.dirtyLocal) {
+			transform.update();
+		}
 		transform.global = parentTransform.global * transform.local;
 	}
 	
 	for (auto& childIndex : node.children) {
 		UpdateTransforms(nodes[childIndex], transform);
 	}
-	transform.dirty = false;
+	transform.dirtyGlobal = false;
 }
 
 
@@ -26,7 +30,7 @@ void SceneGraph::DebugPrint() {
 	DebugPrintTree(root, 0);
 }
 
-void SceneGraph::DebugPrintTree(const Node&  node, int indent) {
+void SceneGraph::DebugPrintTree(Node const& node, int indent) {
 	for (int i = 0; i < indent; i++) {
 		printf("  ");
 	}

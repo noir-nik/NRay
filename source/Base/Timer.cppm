@@ -1,7 +1,7 @@
 #ifdef USE_MODULES
 export module Timer;
 #define _TIMER_EXPORT export
-import stl;
+import std;
 #else
 #pragma once
 #define _TIMER_EXPORT

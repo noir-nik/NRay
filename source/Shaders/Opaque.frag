@@ -1,5 +1,6 @@
 #version 460
 #extension GL_GOOGLE_include_directive : enable
+#include "Indexing.h"
 #include "Opaque.h"
 #include "Pbr.h"
 

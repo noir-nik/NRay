@@ -1,10 +1,10 @@
 #pragma once
 #ifdef USE_MODULES
-import Lmath;
+import lmath;
 #else
-#include "Lmath_types.h"
+#include "lmath_types.hpp"
 #endif
 #include <cstdint>
 
 
-void fillUV(Lmath::float4* image, int width, int height);
+void fillUV(lmath::float4* image, int width, int height);

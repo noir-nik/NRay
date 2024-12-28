@@ -9,7 +9,7 @@ module;
 #ifdef USE_MODULES
 export module Log;
 import spdlog;
-import stl;
+import std;
 #else
 #include <spdlog/spdlog.h>
 #endif
@@ -62,7 +62,7 @@ void DEBUG_TRACE(spdlog::format_string_t<Args...> fmt, Args &&...args) {
 }
 export template <typename... Args>
 void DEBUG_ASSERT(bool condition, spdlog::format_string_t<Args...> fmt, Args &&...args) {
-	if (!(condition)) { Logger::Get()->error(fmt, std::forward<Args>(args)...); exit(1); }
+	if (!(condition)) { Logger::Get()->error(fmt, std::forward<Args>(args)...); std::exit(1); }
 }
 
 #else
@@ -74,7 +74,7 @@ void DEBUG_ASSERT(...) {}
 
 export template <typename... Args>
 void ASSERT(bool condition, spdlog::format_string_t<Args...> fmt, Args &&...args) {
-	if (!(condition)) { Logger::Get()->error(fmt, std::forward<Args>(args)...); exit(1); }
+	if (!(condition)) { Logger::Get()->error(fmt, std::forward<Args>(args)...); std::exit(1); }
 }
 #else
 

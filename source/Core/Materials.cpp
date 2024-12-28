@@ -6,45 +6,45 @@ module;
 
 #ifdef USE_MODULES
 module Materials;
-import VulkanBackend;
+import vulkan_backend;
 #else
-#include "VulkanBackend.cppm"
+#include "vulkan_backend.hpp"
 #include "Materials.cppm"
 #endif
 
-void Materials::Init(vkw::Device device, vkw::Queue queue, uint capacity){
+void Materials::Init(vb::Device device, vb::Queue queue, uint capacity){
 	this->device = device;
 	this->queue = queue;
-	bufferCapacity = capacity;
+	buffer_capacity = capacity;
 }
 
 auto Materials::Expand() -> void {
 	buffers.emplace_back(device.CreateBuffer({
-		bufferCapacity * sizeof(GpuTypes::Material), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst, vkw::Memory::GPU, "Materials[" + std::to_string(buffers.size()) + "]"
+		buffer_capacity * sizeof(GpuTypes::Material), vb::BufferUsage::Storage | vb::BufferUsage::TransferDst, vb::Memory::GPU, "Materials[" + std::to_string(buffers.size()) + "]"
 	}));
-	auto size = availableSlots.size();
-	availableSlots.resize(size + bufferCapacity);
-	uint idx = bufferCapacity * buffers.size();
-	for (uint i = 0; i < bufferCapacity; ++i) {
-		availableSlots[size + i] = --idx;
+	auto size = available_slots.size();
+	available_slots.resize(size + buffer_capacity);
+	uint idx = buffer_capacity * buffers.size();
+	for (uint i = 0; i < buffer_capacity; ++i) {
+		available_slots[size + i] = --idx;
 	}
 }
 
 auto Materials::CreateSlot() -> uint {
-	if (availableSlots.empty()) [[unlikely]] Expand();
-	auto id = availableSlots.back();
-	availableSlots.pop_back();
+	if (available_slots.empty()) [[unlikely]] Expand();
+	auto id = available_slots.back();
+	available_slots.pop_back();
 	return id;
 }
 
 auto Materials::FreeSlot(uint materialID) -> void {
-	availableSlots.push_back(materialID);
+	available_slots.push_back(materialID);
 }
 
-auto Materials::GetBuffer(uint materialID) -> vkw::Buffer& {
-	return buffers[materialID / bufferCapacity];
+auto Materials::GetBuffer(uint materialID) -> vb::Buffer& {
+	return buffers[materialID / buffer_capacity];
 }
 
 auto Materials::GetOffset(uint materialID) -> uint {
-	return (materialID % bufferCapacity) * sizeof(GpuTypes::Material);
+	return (materialID % buffer_capacity) * sizeof(GpuTypes::Material);
 }

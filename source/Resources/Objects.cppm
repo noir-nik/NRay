@@ -1,21 +1,21 @@
 #ifdef USE_MODULES
 export module Objects;
 #define _OBJECTS_EXPORT export
-import Lmath;
-import VulkanBackend;
-import stl;
+import lmath;
+import vulkan_backend;
+import std;
 #else
 #pragma once
 #define _OBJECTS_EXPORT
-#include "Lmath_types.h"
-#include "VulkanBackend.cppm"
+#include "lmath_types.hpp"
+#include "vulkan_backend.hpp"
 #include <cstdint>
 #include <vector>
 #endif
 
 _OBJECTS_EXPORT
 namespace Objects {
-using namespace Lmath;
+using namespace lmath;
 
 struct Vertex {
 	vec3  position;

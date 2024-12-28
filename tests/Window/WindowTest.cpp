@@ -1,10 +1,10 @@
 #ifdef USE_MODULES
-import Lmath;
-import VulkanBackend;
+import lmath;
+import vulkan_backend;
 import window;
 #else
-#include "Lmath.cppm"
-#include "VulkanBackend.cppm"
+#include "lmath.hpp"
+#include "vulkan_backend.hpp"
 #include "Window.cppm"
 #endif
 
@@ -19,13 +19,13 @@ import window;
 
 #include <unistd.h>
 
-using namespace Lmath;
+using namespace lmath;
 
 using Pixel = vec4;
 namespace {
 struct Context {
-	vkw::Pipeline pipeline;
-	// vkw::Pipeline computePipeline;
+	vb::Pipeline pipeline;
+	// vb::Pipeline computePipeline;
 
 	uint32_t width, height;
 
@@ -33,14 +33,14 @@ struct Context {
 	// float4x4 worldViewInv;
 	// float4x4 worldViewProjInv;
 
-	// vkw::Buffer outputImage;
-	vkw::Buffer vertexBuffer;
+	// vb::Buffer outputImage;
+	vb::Buffer vertexBuffer;
 	
-	// vkw::Image renderImage;
+	// vb::Image renderImage;
 
 	Window* mainWindow;
 	std::set<Window*> windows;
-	std::unordered_map<Window*, vkw::Image> renderImages;
+	std::unordered_map<Window*, vb::Image> renderImages;
 
 	void CreateImages(uint32_t width, uint32_t height);
 	void CreateShaders();
@@ -60,18 +60,18 @@ const std::vector<Vertex> vertices = {
 };
 
 void Context::CreateShaders() {
-	pipeline = vkw::CreatePipeline({
-		.point = vkw::PipelinePoint::Graphics,
+	pipeline = vb::CreatePipeline({
+		.point = vb::PipelinePoint::Graphics,
 		.stages = {
-			{.stage = vkw::ShaderStage::Vertex, .path = "tests/WindowTest/WindowTest.vert"},
-			{.stage = vkw::ShaderStage::Fragment, .path = "tests/WindowTest/WindowTest.frag"},
+			{.stage = vb::ShaderStage::Vertex, .path = "tests/WindowTest/WindowTest.vert"},
+			{.stage = vb::ShaderStage::Fragment, .path = "tests/WindowTest/WindowTest.frag"},
 		},
 		.name = "Window pipeline",
 		// pos2 + color3
-		.vertexAttributes = {vkw::Format::RG32_sfloat, vkw::Format::RGB32_sfloat},
+		.vertexAttributes = {vb::Format::RG32_sfloat, vb::Format::RGB32_sfloat},
 		// .colorFormats = {ctx.albedo.format, ctx.normal.format, ctx.material.format, ctx.emission.format},
-		.colorFormats = {vkw::Format::RGBA16_sfloat},
-		// .colorFormats = {vkw::Format::RGBA8_unorm},
+		.colorFormats = {vb::Format::RGBA16_sfloat},
+		// .colorFormats = {vb::Format::RGBA8_unorm},
 		.useDepth = false,
 		// .depthFormat = {ctx.depth.format}
 	});
@@ -85,12 +85,12 @@ void CreateRenderImage(Window* window) {
 	uint32_t width = 3000;
 	uint32_t height = 3000;
 	ctx.renderImages.erase(window);
-	ctx.renderImages.try_emplace(window, vkw::CreateImage({
+	ctx.renderImages.try_emplace(window, vb::CreateImage({
 		.width = width,
 		.height = height,
-		.format = vkw::Format::RGBA16_sfloat,
-		// .format = vkw::Format::RGBA8_unorm,
-		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::TransferSrc | vkw::ImageUsage::TransferDst,
+		.format = vb::Format::RGBA16_sfloat,
+		// .format = vb::Format::RGBA8_unorm,
+		.usage = vb::ImageUsage::ColorAttachment | vb::ImageUsage::TransferSrc | vb::ImageUsage::TransferDst,
 		.name = window->GetName(),
 	}));
 }
@@ -106,7 +106,7 @@ void KeyCallback(Window* window, int key, int scancode, int action, int mods);
 
 
 void UploadBuffers() {
-	auto cmd = vkw::GetCommandBuffer(vkw::Queue::Transfer);
+	auto cmd = vb::GetCommandBuffer(vb::Queue::Transfer);
 	cmd.BeginCommandBuffer();
 	cmd.Copy(ctx.vertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex));
 	cmd.Barrier();
@@ -128,10 +128,10 @@ void RecordCommands(Window* window) {
 	auto cmd = window->swapChain.GetCommandBuffer();
 	cmd.BeginCommandBuffer();
 	if (!window->swapChain.AcquireImage()) return;
-	vkw::Image& img = window->swapChain.GetCurrentImage();
+	vb::Image& img = window->swapChain.GetCurrentImage();
 	
 	// cmd.Copy(ctx.vertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex));
-	cmd.Barrier(ctx.renderImages[window], {vkw::ImageLayout::TransferDst});
+	cmd.Barrier(ctx.renderImages[window], {vb::ImageLayout::TransferDst});
 	cmd.ClearColorImage(ctx.renderImages[window], {0.7f, 0.0f, 0.4f, 1.0f});
 
 	cmd.BeginRendering({ctx.renderImages[window]}, {}, 1, viewport);
@@ -141,10 +141,10 @@ void RecordCommands(Window* window) {
 	cmd.Draw(3, 1, 0, 0);
 	cmd.EndRendering();
 	
-	cmd.Barrier(ctx.renderImages[window], {vkw::ImageLayout::TransferSrc});
-	cmd.Barrier(img, {vkw::ImageLayout::TransferDst});
+	cmd.Barrier(ctx.renderImages[window], {vb::ImageLayout::TransferSrc});
+	cmd.Barrier(img, {vb::ImageLayout::TransferDst});
 	cmd.Blit(img, ctx.renderImages[window], {0, 0, size.x, size.y}, {0, 0, size.x, size.y});
-	cmd.Barrier(img, {vkw::ImageLayout::Present});
+	cmd.Barrier(img, {vb::ImageLayout::Present});
 
 }
 
@@ -205,7 +205,7 @@ void RecreateFrameResources(Window* window) {
 	if (!window->GetAlive()) { /* LOG_WARN("RecreateFrameResources: Window is dead"); */ return;} // important
 	if (window->GetIconified()) {/* LOG_TRACE("RecreateFrameResources: size = 0"); */ return;};
 
-	vkw::WaitIdle();
+	vb::WaitIdle();
 	bool swapChainDirty = window->GetSwapchainDirty();
 	bool framebufferResized = window->GetFramebufferResized();
 	// LOG_INFO("RecreateFrameResources {} {} {} {}", window->GetName(), (void*)window->GetGLFWwindow(), swapChainDirty, framebufferResized);
@@ -242,7 +242,7 @@ void WindowTestApplication::Setup() {
 }
 
 void WindowTestApplication::Create() {
-	vkw::Init();
+	vb::Init();
 	auto window = WindowManager::NewWindow(ctx.width, ctx.height, "wm");
 	ctx.windows.emplace(window);
 	ctx.mainWindow = window;
@@ -253,7 +253,7 @@ void WindowTestApplication::Create() {
 	// window->SetMaxSize(3000, 3000);
 	// ctx.CreateImages(window->GetMonitorWidth(), window->GetMonitorHeight());
 	CreateRenderImage(window);
-	ctx.vertexBuffer = vkw::CreateBuffer(vertices.size() * sizeof(Vertex), vkw::BufferUsage::Vertex, vkw::Memory::GPU, "Vertex Buffer");
+	ctx.vertexBuffer = vb::CreateBuffer(vertices.size() * sizeof(Vertex), vb::BufferUsage::Vertex, vb::Memory::GPU, "Vertex Buffer");
 	UploadBuffers();
 	ctx.CreateShaders();
 }
@@ -283,11 +283,11 @@ void WindowTestApplication::MainLoop() {
             DrawWindow(window);
         }
 	}
-	vkw::WaitIdle();
+	vb::WaitIdle();
 }
 
 void WindowTestApplication::Finish() {
 	ctx = {};
-	vkw::Destroy();
+	vb::Destroy();
 	WindowManager::Finish();
 }

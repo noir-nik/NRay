@@ -7,16 +7,16 @@ module;
 #ifdef USE_MODULES
 export module Camera;
 #define _CAMERA_EXPORT export
-import Lmath;
+import lmath;
 #else
 #pragma once
 #define _CAMERA_EXPORT
-#include "Lmath.cppm"
+#include "lmath.hpp"
 #endif
 
 _CAMERA_EXPORT
 namespace Engine {
-using namespace Lmath;
+using namespace lmath;
 struct Camera {
 	static constexpr float rotation_factor = 0.0025f;
 	static constexpr float zoom_factor = 0.01f;
@@ -31,7 +31,7 @@ struct Camera {
 	float zNear = 0.01f;
 	float zFar = 1000.0f;
 
-	inline Camera(const vec3& position = vec3(3.0f, 3.0f, 10.0f), const vec3& focus = vec3(0.0f, 0.0f, 0.0f), const vec3& up = vec3(0.0f, 1.0f, 0.0f)) : focus(focus) {
+	inline Camera(vec3 const& position = vec3(0.5f, 3.0f, 5.0f), vec3 const& focus = vec3(0.0f, 0.0f, 0.0f), vec3 const& up = vec3(0.0f, 1.0f, 0.0f)) : focus(focus) {
 		view = lookAt(position, focus, up) | affineInverse;
 	}
 	
@@ -47,7 +47,7 @@ struct Camera {
 
 	auto getProj()     const -> mat4 const& { return proj; }
 	auto getView()     const -> mat4 const& { return view; }
-	auto getProjView() const -> mat4 const& { return gpuCamera.projectionView; }
+	auto getProjViewInv() const -> mat4 const& { return gpuCamera.projectionViewInv; }
 	auto getFocus()    const -> vec3 const& { return focus; }
 
 	inline void setProj(float fov, int width, int height, float zNear, float zFar) {
@@ -68,8 +68,9 @@ struct Camera {
 
 
 	void updateProjView() {
-		gpuCamera.projectionView = proj * (view | affineInverse);
+		gpuCamera.projectionViewInv = proj * (view | affineInverse);
 	}
+
 };
 
 } // namespace Engine

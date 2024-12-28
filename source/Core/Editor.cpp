@@ -1,16 +1,25 @@
 #ifdef USE_MODULES
 module Editor;
-import Lmath;
-import VulkanBackend;
+import std;
+import std.compat;
+import lmath;
+import Types;
+import vulkan_backend;
 import imgui;
 import Log;
-import stl;
+import Camera;
+import Entity;
 import Runtime;
+import Structs;
+import Component;
+import entt;
+
 #else
-#include "Lmath.cppm"
-#include "VulkanBackend.cppm"
+#include "lmath.hpp"
+#include "vulkan_backend.hpp"
 #include "imgui.cppm"
 #include "Editor.cppm"
+#include "Camera.cppm"
 #include "Log.cppm"
 
 #include <fstream>
@@ -28,26 +37,25 @@ import Runtime;
 #define STYLE_PATH "assets/"
 
 namespace Editor {
-using namespace Lmath;
+using namespace lmath;
 struct Context;
 
 void drawWindowRects(ImGuiWindow* window);
 
 struct Tab {
 	std::string name;
-	std::vector<Runtime::Panel> panels;
-	void Draw(Runtime::Data const& ctx);
+	std::vector<Panel> panels;
+	void Draw(Data const& ctx);
 };
 
-struct Context {
+static constexpr u32 NodeNotFound = ~0u;
+
+struct Context : Structs::NoCopyNoMove {
 	using NodeIndex = SceneGraph::NodeIndex;
-
-	Context() = default;
-	Context(const Context&) = delete;
-	Context& operator=(const Context&) = delete;
-	Context(Context&&) = default;
-	Context& operator=(Context&&) = default;
-
+	using Transform = Component::Transform;
+	using Material = Component::Material;
+	using Mesh = Component::Mesh;
+	
 	bool showStyleEditor = false;
 	bool showDemoWindow = false;
 	bool showDebugWindow = false;
@@ -59,65 +67,65 @@ struct Context {
 	SceneGraph* sceneGraph;
 
 	std::vector<NodeIndex> selectedNodes;
-	NodeIndex activeNode = -1;
+	NodeIndex activeNode = NodeNotFound;
 	std::vector<Tab> tabs;
 
-	void SetupWindow(Runtime::WindowData& windowData);
+	void SetupWindow(WindowData& windowData);
 
-	void MainMenu(Runtime::Data const& ctx);
+	void MainMenu(Data const& ctx);
 	void RenderUI();
 	void StyleWindow(); 
 	void StyleEditor();
 
-	void Draw(Runtime::Data const& ctx);
+	void Draw(Data const& ctx);
 
-	void DebugWindow(Runtime::Camera& camera);
-	bool Viewport(Runtime::Viewport& ctx);
-	bool OutlinerWindow(Runtime::Outliner& ctx);
-	void PropertiesWindow(Runtime::Data const& ctx);
+	void DebugWindow(Engine::Camera& camera);
+	auto ViewportPanel(Viewport& ctx) -> bool;
+	auto OutlinerPanel(Outliner& ctx) -> bool;
+	auto PropertiesPanel(Properties& ctx) -> bool;
 	
-	bool SaveStyle(const char* filename,const ImGuiStyle& style);
-	bool LoadStyle(const char* filename,ImGuiStyle& style);
+	auto SaveStyle(char const* filename, ImGuiStyle const& style) -> bool;
+	auto LoadStyle(char const* filename, ImGuiStyle& style) -> bool;
 
-	uint32_t FindSelected(NodeIndex nodeIndex);
+	auto FindSelected(NodeIndex nodeIndex) -> u32;
 	void Select(NodeIndex nodeIndex);
-	void displayNode(const SceneGraph& sceneGraph, const NodeIndex nodeIndex, ImGuiTreeNodeFlags flags);
+	void DisplayNode(NodeIndex const nodeIndex, ImGuiTreeNodeFlags flags);
+	auto DisplayTransform(Transform& transform) -> bool;
+	auto DisplayMaterial(Material& material) -> bool;
+	auto DisplayMesh(Mesh& mesh) -> bool;
 
-	inline static const char* GetStyleVarName(ImGuiStyleVar idx);
 } editorContext;
+inline static auto GetStyleVarName(ImGuiStyleVar idx) -> char const*;
 
 struct PanelVisitor {
-	bool operator()(Runtime::Viewport& ctx) const {
-		return editorContext.Viewport(ctx);
-		return 0;
+	bool operator()(Viewport& ctx) const {
+		return editorContext.ViewportPanel(ctx);
 	}
 	
-	bool operator()(Runtime::Outliner& ctx) const {
-		return editorContext.OutlinerWindow(ctx);
-		return 0;
+	bool operator()(Outliner& ctx) const {
+		return editorContext.OutlinerPanel(ctx);
 	}
 	
-	bool operator()(Runtime::Properties&) const {
-		// std::cout << "Properties Panel\n";
-		return 0;
+	bool operator()(Properties& ctx) const {
+		return editorContext.PropertiesPanel(ctx);
 	}
 };
 /* 
-void Tab::Draw(Runtime::Data const& ctx) {
+void Tab::Draw(Data const& ctx) {
 	for (auto& panel : panels) {
 		(editorContext.*panel.draw)(ctx);
 	}
 }
  */
 
-void Context::SetupWindow(Runtime::WindowData& windowData) {
+void Context::SetupWindow(WindowData& windowData) {
 	if (windowData.main) {
-		// windowData.panels.emplace_back(Runtime::Outliner{});
-		// windowData.panels.emplace_back(Runtime::Viewport{.viewport = {0, 0, 500, 500}});
+		// windowData.panels.emplace_back(Outliner{});
+		// windowData.panels.emplace_back(Viewport{.viewport = {0, 0, 500, 500}});
 	}
 }
 
-void Context::MainMenu(Runtime::Data const& ctx) {
+void Context::MainMenu(Data const& ctx) {
 	ImGui::PushStyleColor(ImGuiCol_MenuBarBg, ImVec4(0.09f, 0.09f, 0.09f, 1.0f));
 	if (!ImGui::BeginMainMenuBar()) {
 		LOG_WARN("Failed to create main menu bar");
@@ -201,8 +209,15 @@ void Context::MainMenu(Runtime::Data const& ctx) {
 				}
 				for (auto& panel : tab.panels) {
 					bool updated = std::visit(visitor, panel);
-					if (std::holds_alternative<Runtime::Viewport>(panel) && (updated || tabUpdated)) {
-						ctx.windowData->viewportsToRender.push_back(&std::get<Runtime::Viewport>(panel));
+					if (std::holds_alternative<Viewport>(panel) && (updated || tabUpdated)) {
+						ctx.windowData->viewportsToRender.push_back(&std::get<Viewport>(panel));
+					}
+					else if (std::holds_alternative<Outliner>(panel) && (updated || tabUpdated)) {
+						for (auto& v : tab.panels) {
+							if (std::holds_alternative<Viewport>(v)) {
+								ctx.windowData->viewportsToRender.push_back(&std::get<Viewport>(v));
+							}
+						}
 					}
 				}
 				ImGui::EndTabItem();
@@ -219,7 +234,7 @@ void Context::RenderUI() {
 	ImGui::Text("Scene Objects:");
 	ImGui::Separator();
 
-	static const char* sceneObjects[] = { "Camera", "Light", "Cube", "Sphere", "Plane" };
+	static char const* sceneObjects[] = { "Camera", "Light", "Cube", "Sphere", "Plane" };
 	for (size_t i = 0; i < ARRAY_SIZE(sceneObjects); i++) {
 		ImGui::Selectable(sceneObjects[i]);
 	}
@@ -269,7 +284,14 @@ void Context::StyleWindow() {
 	ImGui::End();
 }
 
-void Context::DebugWindow(Runtime::Camera& camera) {
+void showMat4(float4x4 const& m) {
+	for (int i = 0; i < 4; i++) {
+		ImGui::Text("%.2f, %.2f, %.2f, %.2f",
+			m[i, 0], m[i, 1], m[i, 2], m[i, 3]);
+	}
+};
+
+void Context::DebugWindow(Engine::Camera& camera) {
 
 	if (ImGui::Begin("Debug Window", 0, ImGuiWindowFlags_NoDocking)) {
 		ImGui::Text("Camera Focus: (%.2f, %.2f, %.2f)", camera.focus.x, camera.focus.y, camera.focus.z);
@@ -299,37 +321,29 @@ void Context::DebugWindow(Runtime::Camera& camera) {
 		ImGui::Text("Camera Rotation: (%.2f, %.2f, %.2f)", rotation.x, rotation.y, rotation.z);
 		ImGui::Text("Camera Scale: (%.2f, %.2f, %.2f)", scale.x, scale.y, scale.z);
 
-		auto printMat4 = [](const float4x4& m) {
-			for (int i = 0; i < 4; i++) {
-				ImGui::Text("%.2f, %.2f, %.2f, %.2f",
-					m[i][0], m[i][1], m[i][2], m[i][3]);
-			}
-		};
-
 		ImGui::Text("View");
-		printMat4(camera.view);
+		showMat4(camera.view);
 		/*
 		ImGui::Separator();
 		ImGui::Text("Projection");
-		printMat4(camera.proj); 
+		showMat4(camera.proj); 
 		*/
 	}
 
 	ImGui::End();
 }
 
-static constexpr uint32_t selectedNodeNotFound = ~0u;
-uint32_t Context::FindSelected(NodeIndex nodeIndex) {
-	auto it = std::find_if(selectedNodes.begin(), selectedNodes.end(), [&](const NodeIndex other) {
+auto Context::FindSelected(NodeIndex nodeIndex) -> u32 {
+	auto it = std::find_if(selectedNodes.begin(), selectedNodes.end(), [&](NodeIndex const other) {
 		return nodeIndex == other;
 	});
-	return it == selectedNodes.end() ? selectedNodeNotFound : it - selectedNodes.begin();
+	return it == selectedNodes.end() ? NodeNotFound : it - selectedNodes.begin();
 }
 
 void Context::Select(NodeIndex nodeIndex) {
 	bool holdingCtrl = ImGui::IsKeyDown(ImGuiKey_LeftCtrl);
 	auto index = FindSelected(nodeIndex);
-	if (index != selectedNodeNotFound && holdingCtrl) {
+	if (index != NodeNotFound && holdingCtrl) {
 		selectedNodes.erase(selectedNodes.begin() + index);
 	}
 	if (!holdingCtrl) {
@@ -344,15 +358,15 @@ ImVec4 selected_hovered;
 ImVec4 active_col;
 ImVec4 active_hovered;
 
-void Context::displayNode(const SceneGraph& sceneGraph, const NodeIndex nodeIndex, ImGuiTreeNodeFlags flags) {
+void Context::DisplayNode(NodeIndex const nodeIndex, ImGuiTreeNodeFlags flags) {
 	
-	const auto& node = sceneGraph.Get(nodeIndex);
+	auto const& node = sceneGraph->Get(nodeIndex);
 	ImGuiTreeNodeFlags child_flags = flags;
 	if (node.children.size() == 0) {
 		child_flags |= ImGuiTreeNodeFlags_Leaf;
 	}
 	bool is_active = nodeIndex == activeNode;
-	bool is_selected = FindSelected(nodeIndex) != selectedNodeNotFound;
+	bool is_selected = FindSelected(nodeIndex) != NodeNotFound;
 	// bool is_hovered = ImGui::IsItemHovered();
 
 	ImGui::PushID(nodeIndex);
@@ -369,25 +383,164 @@ void Context::displayNode(const SceneGraph& sceneGraph, const NodeIndex nodeInde
 		Select(nodeIndex);
 	}
 	if (open) {
-		for (const auto& child : node.children) {
-			displayNode(sceneGraph, child, flags); // Recursively display children
+		for (auto const& child : node.children) {
+			DisplayNode(child, flags); // Recursively display children
 		}
 		ImGui::TreePop();
-		
 	}
 	ImGui::PopID();
 }
 
-bool ProcessViewportInput(Runtime::Viewport& ctx, ImGuiKeyChord mods, float rotation_sign) {
+
+auto Context::DisplayTransform(Transform& transform) -> bool {
+	using Type = Transform::Type;
+	auto& position = transform.getTranslation();
+	auto& scale = transform.getScale();
+	bool updated = false;
+
+	auto constexpr dragSpeed = 0.05f;
+
+	float3 rotationEulerDegrees;
+	float4 rotationAxisDegrees;
+	
+	ImGui::SeparatorText("Transform");
+	updated |= ImGui::DragFloat3("Position", position.M, dragSpeed);
+
+	switch (transform.getType()) {
+	case Type::QuaternionXYZW:
+		updated |= ImGui::DragFloat4("Rotation", transform.getRotation().M, dragSpeed);
+		break;
+	case Type::EulerXYZ:
+		rotationEulerDegrees = transform.getRotationEuler() / DEG_TO_RAD;
+		updated |= ImGui::DragFloat3("Rotation", rotationEulerDegrees.M, dragSpeed / DEG_TO_RAD);
+		transform.getRotationEuler() = rotationEulerDegrees * DEG_TO_RAD;
+		break;
+	case Type::AxisAngle:
+		rotationAxisDegrees = transform.getRotationAxisAngle() / DEG_TO_RAD;
+		updated |= ImGui::DragFloat4("Rotation", rotationAxisDegrees.M, dragSpeed / DEG_TO_RAD);
+		transform.getRotationAxisAngle() = rotationAxisDegrees * DEG_TO_RAD;
+		break;
+	}
+	updated |= ImGui::DragFloat3("Scale", scale.M, dragSpeed);
+
+	int newType = static_cast<int>(transform.type);
+	bool updated_type = ImGui::Combo("##", &newType, "Quaternion\0Euler\0AxisAngle\0\0");
+	updated |= updated_type;
+	// if (updated) {ImGui::Text("Updated"); LOG_INFO("Updated"); }
+	if (updated_type) transform.setType(static_cast<Type>(newType));
+/* 
+	ImGui::Text("Decompose");
+	auto [t,r,s] = transform.local | decompose;
+	auto [_,re,_s] = transform.local | decomposeEuler;
+	re /= DEG_TO_RAD;
+	ImGui::Text("Translation: (%.2f, %.2f, %.2f)", t.x, t.y, t.z);
+	ImGui::Text("Rotation: (%.2f, %.2f, %.2f %.2f)", r.x, r.y, r.z, r.w);
+	ImGui::Text("Rotation: (%.2f, %.2f, %.2f)", re.x, re.y, re.z);
+	ImGui::Text("Scale: (%.2f, %.2f, %.2f)", s.x, s.y, s.z);
+ */
+	if (updated) {
+		transform.setDirty();
+		transform.update();
+	}
+	// showMat4(transform.local);
+
+	// ImGui::Text("Children: %d", node.children.size());
+	return updated;
+}
+
+auto Context::DisplayMaterial(Material& material) -> bool {
+	bool updated = false;
+	auto& gpuMaterial = material.gpuMaterial;
+
+	// ImGui::Text("Material %s", material.name.c_str());
+	// ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.1f, 1.0f));
+	// if (ImGui::BeginChild("Material3")) {
+
+		updated |= ImGui::ColorEdit4("Color", gpuMaterial.baseColorFactor.M);
+		updated |= ImGui::ColorEdit3("Emissive", gpuMaterial.emissiveFactor.M);
+		updated |= ImGui::DragFloat("Metallic", &gpuMaterial.metallicFactor, 0.01f, 0.0f, 1.0f);
+		updated |= ImGui::DragFloat("Roughness", &gpuMaterial.roughnessFactor, 0.01f, 0.0f, 1.0f);
+		updated |= ImGui::DragFloat("Normal Scale", &gpuMaterial.normalScale, 0.01f, 0.0f, 1.0f);
+		updated |= ImGui::DragFloat("Occlusion Strength", &gpuMaterial.occlusionStrength, 0.01f, 0.0f, 1.0f);
+		updated |= ImGui::DragFloat("Alpha Cutoff", &gpuMaterial.alphaCutoff, 0.01f, 0.0f, 1.0f);
+	// }
+	// ImGui::EndChild();
+	
+	// ImGui::PopStyleColor();
+	// if (updated) mesh.material.setDirty();
+	// if (updated) mesh.material.update();
+	return updated;
+}
+
+auto Context::DisplayMesh(Mesh& mesh) -> bool {
+	// ImGui::Text("Material %s", material.name.c_str());
+	bool updated = false;
+	// ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.1f, 1.0f));
+	static int selected = -1;
+
+	if (ImGui::BeginChild("Material", {0.0f, 80.0f}, ImGuiChildFlags_ResizeY | ImGuiChildFlags_FrameStyle)) {
+
+		for (int i = 0; auto& p : mesh.primitives)
+		{
+			if (!p.material) continue;
+			// ImGui::ColorButton("##", ImColor(dummy_col), ImGuiColorEditFlags_NoTooltip, color_button_sz);
+ 			// ImGui::SameLine();
+			ImGui::PushID(i);
+			ImVec2 color_button_sz(ImGui::GetFontSize(), ImGui::GetFontSize());
+			ImGui::ColorButton("##", (ImColor)(*p.material->gpuMaterial.baseColorFactor.M), ImGuiColorEditFlags_NoTooltip, color_button_sz);
+			ImGui::SameLine();
+			if (ImGui::Selectable(p.material->name.c_str(), selected == i)){
+				// ImGui::Text("%s", p.material->name.c_str());
+				// ImGui::Text("%s", p.material->name.c_str());
+				selected = i;
+			}
+			ImGui::PopID();
+			++i;
+		}
+	}
+	ImGui::EndChild();
+	// ImGui::SameLine();
+	char const* u = "AAA";
+
+	if (selected != -1) {
+		if (ImGui::BeginCombo("##material", mesh.primitives[selected].material->name.c_str(), ImGuiComboFlags_HeightRegular)) {
+		auto view = sceneGraph->registry->view<Material>();
+		
+		for (int i = 0; auto m : view) {
+			auto& material = sceneGraph->registry->get<Material>(m);
+			if (ImGui::Selectable(material.name.c_str(), selected == i)){
+				// ImGui::Text("%s", p.material->name.c_str());
+				// ImGui::Text("%s", p.material->name.c_str());
+				selected = i;
+			}
+			++i;
+		}
+		ImGui::EndCombo();
+	}
+		updated |= DisplayMaterial(*mesh.primitives[selected].material);
+	}
+
+
+
+	
+
+	
+
+	
+
+	return updated;
+}
+
+auto ProcessViewportInput(Viewport& ctx, ImGuiKeyChord mods, float rotation_sign) -> bool {
 	auto& io = ImGui::GetIO();
 	if (io.MouseDown[ImGuiMouseButton_Left] + io.MouseDown[ImGuiMouseButton_Right] + io.MouseDown[ImGuiMouseButton_Middle] > 1) {
 		return 0;
 	}
 	auto& camera = ctx.camera;
-	const auto& camera_right = camera.getRight();
-	const auto& camera_up = camera.getUp();
-	const auto& camera_forward = camera.getForward();
 	auto& camera_pos = camera.getPosition();
+	auto const& camera_right = camera.getRight();
+	auto const& camera_up = camera.getUp();
+	auto const& camera_forward = camera.getForward();
 
 	vec2 deltaPos = {-io.MouseDelta.x, -io.MouseDelta.y};
 
@@ -396,12 +549,16 @@ bool ProcessViewportInput(Runtime::Viewport& ctx, ImGuiKeyChord mods, float rota
 		if(mods & ImGuiMod_Alt) {
 			auto zoom_factor = camera.zoom_factor * length(camera_pos - camera.focus);
 			auto movement = (zoom_factor * deltaPos.x) * camera_forward;
-			camera.view |= translate(movement);
+			camera.view = camera.view | translate(movement);
 			// camera.focus += movement;
 		} else {
 			camera_pos -= camera.focus;
-			// camera.view = rotate4x4(camera_up, deltaPos.x * camera.rotation_factor) * rotate4x4(camera_right, deltaPos.y * camera.rotation_factor)  * camera.view; // trackball
-			camera.view = camera.view | rotate(camera_right, deltaPos.y * camera.rotation_factor) | rotateY(rotation_sign * deltaPos.x * camera.rotation_factor);
+			// camera.view = rotate4x4(camera_up, deltaPos.x * camera.rotation_factor)
+			//	 * rotate4x4(camera_right, deltaPos.y * camera.rotation_factor)
+			//	 * camera.view; // trackball
+			camera.view = camera.view
+				| rotate(camera_right, deltaPos.y * camera.rotation_factor)
+				| rotateY(rotation_sign * deltaPos.x * camera.rotation_factor);
 			camera_pos += camera.focus;
 		}
 		// window->AddFramesToDraw(1);
@@ -412,7 +569,7 @@ bool ProcessViewportInput(Runtime::Viewport& ctx, ImGuiKeyChord mods, float rota
 		auto movement = move_factor * (camera_up * -deltaPos.y + camera_right * deltaPos.x); 
 		// printf("%f %f %f\n", movement.x, movement.y, movement.z);
 		// camera.focus += movement;
-		camera.view |= translate(movement);
+		camera.view = camera.view | translate(movement);
 		// window->AddFramesToDraw(1);
 		return 1;
 	}
@@ -423,9 +580,9 @@ bool ProcessViewportInput(Runtime::Viewport& ctx, ImGuiKeyChord mods, float rota
 	}
 	return 0;
 }
-// static inline bool operator!=(const ImVec2& lhs, const ImVec2& rhs)  { return lhs.x != rhs.x || lhs.y != rhs.y; }
+// static inline bool operator!=(ImVec2 const& lhs, ImVec2 const& rhs)  { return lhs.x != rhs.x || lhs.y != rhs.y; }
 
-bool Context::Viewport(Runtime::Viewport& ctx) {
+auto Context::ViewportPanel(Viewport& ctx) -> bool {
 	// ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.0f);
 	// ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
 	ImGuiWindowFlags flags {
@@ -495,28 +652,34 @@ bool Context::Viewport(Runtime::Viewport& ctx) {
 }
 
 
-bool Context::OutlinerWindow(Runtime::Outliner& ctx) {
-	const ImGuiTreeNodeFlags parent_flags {
+auto Context::OutlinerPanel(Outliner& ctx) -> bool {
+	ImGuiTreeNodeFlags const parent_flags {
 		ImGuiTreeNodeFlags_OpenOnArrow       |
 		ImGuiTreeNodeFlags_OpenOnDoubleClick |
 		ImGuiTreeNodeFlags_SpanFullWidth |
 		ImGuiTreeNodeFlags_FramePadding
 	};
+	bool updated = false;
 	/* 
 	ImGui::Separator();
 	if (activeNode != -1) {
 		ImGui::Text("Active: ");
 		ImGui::SameLine();
-		ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "%s", ctx.sceneGraph->Get(activeNode).name());
+		ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "%s", sceneGraph->Get(activeNode).name());
 		ImGui::Separator();
 	}
 	ImGui::Text("Selected: ");
-	for (const auto& node : selectedNodes) {
+	for (auto const& node : selectedNodes) {
 		ImGui::SameLine();
-		ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "%s", ctx.sceneGraph->Get(node).name());
+		ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "%s", sceneGraph->Get(node).name());
 	}
 */
-	if (ImGui::Begin("Outliner", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_MenuBar) ) {
+	ImGuiWindowFlags const outliner_flags {
+		ImGuiWindowFlags_NoCollapse |
+		ImGuiWindowFlags_MenuBar |
+		ImGuiWindowFlags_NoTitleBar
+	};
+	if (ImGui::Begin("Outliner", nullptr, outliner_flags) ) {
 		if (ImGui::BeginMenuBar()) {
 			if (ImGui::BeginMenu("Edit")) {
 				if (ImGui::MenuItem("Copy")) {
@@ -531,26 +694,47 @@ bool Context::OutlinerWindow(Runtime::Outliner& ctx) {
 		}
 		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 0));
 		if (ImGui::TreeNodeEx("Scene Graph", parent_flags | ImGuiTreeNodeFlags_DefaultOpen)) {
-			for (const auto& nodeIndex : ctx.sceneGraph->GetCurrentScene().children) {
-				displayNode(*ctx.sceneGraph, nodeIndex, parent_flags);
+			for (auto const& nodeIndex : sceneGraph->GetCurrentScene().children) {
+				DisplayNode(nodeIndex, parent_flags);
 			}
 			ImGui::TreePop();
 		}
 		ImGui::PopStyleVar();
 	}
 	ImGui::End();
-	return 0;
+	return updated;
 }
 
-void Context::PropertiesWindow(Runtime::Data const& ctx) {
-	// if (ImGui::Begin("Properties", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove)) {
-	// }
-	// ImGui::End();
+auto Context::PropertiesPanel(Properties& ctx) -> bool {
+	ImGuiWindowFlags const properties_flags {
+		ImGuiWindowFlags_NoCollapse |
+		ImGuiWindowFlags_MenuBar |
+		ImGuiWindowFlags_NoTitleBar
+	};
+
+	bool updated = false;
+	
+	if (ImGui::Begin("Properties", nullptr, properties_flags) ) {
+
+		if (activeNode != NodeNotFound) {
+			auto& node = sceneGraph->Get(activeNode);
+			auto& transform = node.entity.Get<Component::Transform>();
+			updated |= DisplayTransform(transform);
+
+			if (node.entity.Has<Component::Mesh*>()) {
+				auto& mesh = node.entity.Get<Component::Mesh*>();
+				ImGui::SeparatorText("Materials");
+				updated |= DisplayMesh(*mesh);
+			}
+		}
+	}
+	ImGui::End();
+	return updated;
 }
 
 /* 
 namespace ImGui{
-void TextWithHoverColor(ImVec4 col, const char* fmt, ...)
+void TextWithHoverColor(ImVec4 col, char const* fmt, ...)
 {
     ImGuiContext& g = *GImGui;
     ImGuiWindow* window = GetCurrentWindow();
@@ -560,13 +744,13 @@ void TextWithHoverColor(ImVec4 col, const char* fmt, ...)
     // Format text
     va_list args;
     va_start(args, fmt);
-    const char* text_begin = g.TempBuffer.Data;
-    const char* text_end = g.TempBuffer.Data + ImFormatStringV(g.TempBuffer.Data, ARRAY_SIZE(g.TempBuffer), fmt, args);
+    char const* text_begin = g.TempBuffer.Data;
+    char const* text_end = g.TempBuffer.Data + ImFormatStringV(g.TempBuffer.Data, ARRAY_SIZE(g.TempBuffer), fmt, args);
     va_end(args);
 
     // Layout
-    const ImVec2 text_pos(window->DC.CursorPos.x, window->DC.CursorPos.y + window->DC.CurrLineTextBaseOffset);
-    const ImVec2 text_size = CalcTextSize(text_begin, text_end);
+    ImVec2 const text_pos(window->DC.CursorPos.x, window->DC.CursorPos.y + window->DC.CurrLineTextBaseOffset);
+    ImVec2 const text_size = CalcTextSize(text_begin, text_end);
     ImRect bb(text_pos.x, text_pos.y, text_pos.x + text_size.x, text_pos.y + text_size.y);
     ItemSize(text_size, 0.0f);
     if (!ItemAdd(bb, 0))
@@ -584,32 +768,34 @@ void TextWithHoverColor(ImVec4 col, const char* fmt, ...)
 
 void Hover_Example() {
 	if (ImGui::Begin("Hover Example")) {
-		const char* item_label = "Hover me!";
+		char const* item_label = "Hover me!";
 		ImGui::TextWithHoverColor(ImVec4(0.0f, 0.0f, 1.0f, 1.0f), "%s", item_label);
 	}
 	ImGui::End();
 }
  */
 
-void Context::Draw(Runtime::Data const& ctx) {
-	ctx.windowData->viewportsToRender.clear();
+void Context::Draw(Data const& ctx) {
+	// ctx.windowData->viewportsToRender.clear();
+	if (ctx.windowData->viewportsToRender.size() > 1 )
+		ctx.windowData->viewportsToRender.resize(1);
 	if (ctx.windowData->main) {
 		editorContext.MainMenu(ctx);
 	}
-	// sizeof (Runtime::Panel1);
-	// sizeof (Runtime::Panel);
+	// sizeof (Panel1);
+	// sizeof (Panel);
 	
 	if (showDemoWindow) ImGui::ShowDemoWindow();
 	if (showStyleEditor) StyleEditor(); 
 	// ctx.RenderUI();
 }
 
-void Draw(Runtime::Data const& ctx) {
+void Draw(Data const& ctx) {
 	editorContext.Draw(ctx);
 }
 
 void BeginFrame() {
-	vkw::ImGuiNewFrame();
+	vb::ImGuiNewFrame();
 	ImGui::NewFrame();
 	ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0,0,0,0));
 	ImGui::DockSpaceOverViewport(ImGui::GetWindowDockID(), 0, ImGuiDockNodeFlags_PassthruCentralNode | ImGuiDockNodeFlags_AutoHideTabBar);
@@ -651,18 +837,18 @@ void Setup(SceneGraph* sceneGraph){
 
 	editorContext.tabs = {
 		{"View3d", {
-			{Runtime::Outliner{sceneGraph}},
-			{Runtime::Properties{}},
-			{Runtime::Viewport{}},
+			{Outliner{}},
+			{Properties{}},
+			{Viewport{}},
 		}},
 		{"Mesh", {
-			{Runtime::Outliner{sceneGraph}},
-			{Runtime::Viewport{}},
+			{Outliner{}},
+			{Viewport{}},
 		}},
 	};
 }
 
-void SetupWindow(Runtime::WindowData& windowData){
+void SetupWindow(WindowData& windowData){
 	editorContext.SetupWindow(windowData);
 }
 
@@ -670,7 +856,7 @@ UiStyle* GetStyle() {
 	return static_cast<UiStyle*>(&editorContext.style);
 }
 
-inline const char* Context::GetStyleVarName(ImGuiStyleVar idx) {
+static inline auto GetStyleVarName(ImGuiStyleVar idx) -> char const* {
 	switch (idx) {
 	case ImGuiStyleVar_Alpha:                       return "Alpha";                       // float
 	case ImGuiStyleVar_DisabledAlpha:               return "DisabledAlpha";               // float
@@ -739,7 +925,7 @@ inline const char* Context::GetStyleVarName(ImGuiStyleVar idx) {
 // }
 
 
-bool Context::SaveStyle(const char* filename, const ImGuiStyle& style) {
+auto Context::SaveStyle(char const* filename, ImGuiStyle const& style) -> bool {
 	// Write .style file
 	FILE* f = fopen(filename, "wt");
 	if (!f)  return false;
@@ -750,25 +936,25 @@ bool Context::SaveStyle(const char* filename, const ImGuiStyle& style) {
 		float* pvar = (float*)var_info->GetVarPtr((void*)&style);
 		float* pvarDefault = (float*)var_info->GetVarPtr((void*)&defaultStyle);
 		if (var_info->Count == 1) {
-			if (*pvar != *pvarDefault) fprintf(f, "[%s]\n%1.3f\n", GetStyleVarName(i), *pvar);
 		} else {
+		if (*pvar != *pvarDefault) fprintf(f, "[%s]\n%1.3f\n", GetStyleVarName(i), *pvar);
 			if (pvar[0] != pvarDefault[0] || pvar[1] != pvarDefault[1]) {
-				fprintf(f, "[%s]\n%1.3f %1.3f\n", GetStyleVarName(i), pvar[0], pvar[1]);
 			}
+			fprintf(f, "[%s]\n%1.3f %1.3f\n", GetStyleVarName(i), pvar[0], pvar[1]);
 		}
 	}
 
 	if (style.WindowMenuButtonPosition != defaultStyle.WindowMenuButtonPosition)      fprintf(f, "[WindowMenuButtonPosition]\n   %1.3d\n",       style.WindowMenuButtonPosition);
-    if (style.TouchExtraPadding[0] != defaultStyle.TouchExtraPadding[0]
-		|| style.TouchExtraPadding[1] != defaultStyle.TouchExtraPadding[1])           fprintf(f, "[TouchExtraPadding]\n          %1.3f %1.3f\n", style.TouchExtraPadding[0], style.TouchExtraPadding[1]);
+    if (style.TouchExtraPadding[0] != defaultStyle.TouchExtraPadding[0] ||
+		style.TouchExtraPadding[1] != defaultStyle.TouchExtraPadding[1])              fprintf(f, "[TouchExtraPadding]\n          %1.3f %1.3f\n", style.TouchExtraPadding[0], style.TouchExtraPadding[1]);
     if (style.ColumnsMinSpacing != defaultStyle.ColumnsMinSpacing)                    fprintf(f, "[ColumnsMinSpacing]\n          %1.3f\n",       style.ColumnsMinSpacing);
     if (style.LogSliderDeadzone != defaultStyle.LogSliderDeadzone)                    fprintf(f, "[LogSliderDeadzone]\n          %1.3f\n",       style.LogSliderDeadzone);
     if (style.TabMinWidthForCloseButton != defaultStyle.TabMinWidthForCloseButton)    fprintf(f, "[TabMinWidthForCloseButton]\n  %1.3f\n",       style.TabMinWidthForCloseButton);
     if (style.ColorButtonPosition != defaultStyle.ColorButtonPosition)                fprintf(f, "[ColorButtonPosition]\n        %d\n",          style.ColorButtonPosition);
-    if (style.DisplayWindowPadding[0] != defaultStyle.DisplayWindowPadding[0]
-		|| style.DisplayWindowPadding[1] != defaultStyle.DisplayWindowPadding[1])     fprintf(f, "[DisplayWindowPadding]\n       %1.3f %1.3f\n", style.DisplayWindowPadding[0], style.DisplayWindowPadding[1]);
-    if (style.DisplaySafeAreaPadding[0] != defaultStyle.DisplaySafeAreaPadding[0]
-		|| style.DisplaySafeAreaPadding[1] != defaultStyle.DisplaySafeAreaPadding[1]) fprintf(f, "[DisplaySafeAreaPadding]\n     %1.3f %1.3f\n", style.DisplaySafeAreaPadding[0], style.DisplaySafeAreaPadding[1]);
+    if (style.DisplayWindowPadding[0] != defaultStyle.DisplayWindowPadding[0] ||
+		style.DisplayWindowPadding[1] != defaultStyle.DisplayWindowPadding[1])        fprintf(f, "[DisplayWindowPadding]\n       %1.3f %1.3f\n", style.DisplayWindowPadding[0], style.DisplayWindowPadding[1]);
+    if (style.DisplaySafeAreaPadding[0] != defaultStyle.DisplaySafeAreaPadding[0] ||
+		style.DisplaySafeAreaPadding[1] != defaultStyle.DisplaySafeAreaPadding[1])    fprintf(f, "[DisplaySafeAreaPadding]\n     %1.3f %1.3f\n", style.DisplaySafeAreaPadding[0], style.DisplaySafeAreaPadding[1]);
     if (style.MouseCursorScale != defaultStyle.MouseCursorScale)                      fprintf(f, "[MouseCursorScale]\n           %1.3f\n",       style.MouseCursorScale);
     if (style.AntiAliasedLines != defaultStyle.AntiAliasedLines)                      fprintf(f, "[AntiAliasedLines]\n           %d\n",          style.AntiAliasedLines);
     if (style.AntiAliasedLinesUseTex != defaultStyle.AntiAliasedLinesUseTex)          fprintf(f, "[AntiAliasedLinesUseTex]\n     %d\n",          style.AntiAliasedLinesUseTex);
@@ -782,7 +968,7 @@ bool Context::SaveStyle(const char* filename, const ImGuiStyle& style) {
     if (style.HoverFlagsForTooltipNav != defaultStyle.HoverFlagsForTooltipNav)        fprintf(f, "[HoverFlagsForTooltipNav]\n    %d\n",          style.HoverFlagsForTooltipNav);
 		
 	for (size_t i = 0; i != ImGuiCol_COUNT; i++){
-		const ImVec4& c = style.Colors[i];
+		ImVec4 const& c = style.Colors[i];
 		if (c.x != defaultStyle.Colors[i].x || c.y != defaultStyle.Colors[i].y || c.z != defaultStyle.Colors[i].z || c.w != defaultStyle.Colors[i].w) {
 			fprintf(f, "[%s]\n%1.3f %1.3f %1.3f %1.3f\n", ImGui::GetStyleColorName(i), c.x,c.y,c.z,c.w);
 		}
@@ -794,7 +980,7 @@ bool Context::SaveStyle(const char* filename, const ImGuiStyle& style) {
 	return true;
 }
 
-bool Context::LoadStyle(const char* filename, ImGuiStyle& style) {
+auto Context::LoadStyle(char const* filename, ImGuiStyle& style) -> bool {
     std::ifstream file(filename);
     if (!file.is_open()) {
         return false;
@@ -826,8 +1012,8 @@ bool Context::LoadStyle(const char* filename, ImGuiStyle& style) {
 			// printf("name: %s\n", name.data());
 
 			for (auto i = 0; i != ImGuiStyleVar_COUNT; i++) {
-				if (name == GetStyleVarName(i)) {
 					var_info = *ImGui::GetStyleVarInfo(i);
+			if (name == GetStyleVarName(i)) {
 					pvar = var_info.GetVarPtr((void*)&style);
 					found = 1;
 					break;
@@ -931,7 +1117,7 @@ void drawWindowRects(ImGuiWindow* window) {
 	drawList->AddRect(ContentRegionRect.Min, ContentRegionRect.Max, ImGui::Col32(0, 0, 0, 255));
 }
 
-static void HelpMarker(const char* desc) {
+void HelpMarker(char const* desc) {
     ImGui::TextDisabled("(?)");
     if (ImGui::BeginItemTooltip())
     {
@@ -1077,8 +1263,8 @@ void Context::StyleEditor() {
 						ImGui::LogToTTY();
 					ImGui::LogText("ImVec4* colors = ImGui::GetStyle().Colors;\n");
 					for (int i = 0; i < ImGuiCol_COUNT; i++) {
-						const ImVec4& col = style.Colors[i];
-						const char* name = ImGui::GetStyleColorName(i);
+						ImVec4 const& col = style.Colors[i];
+						char const* name = ImGui::GetStyleColorName(i);
 						if (!output_only_modified || memcmp(&col, &ref.Colors[i], sizeof(ImVec4)) != 0)
 							ImGui::LogText("colors[ImGuiCol_%s]%*s= ImVec4(%.2ff, %.2ff, %.2ff, %.2ff);\n",
 								name, 23 - (int)strlen(name), "", col.x, col.y, col.z, col.w);
@@ -1105,7 +1291,7 @@ void Context::StyleEditor() {
 				ImGui::PushItemWidth(ImGui::GetFontSize() * -12);
 				for (int i = 0; i < ImGuiCol_COUNT; i++)
 				{
-					const char* name = ImGui::GetStyleColorName(i);
+					char const* name = ImGui::GetStyleColorName(i);
 					if (!filter.PassFilter(name))
 						continue;
 					ImGui::PushID(i);
@@ -1129,7 +1315,7 @@ void Context::StyleEditor() {
 					ImGui::PopID();
 				}
 				int iii = 13490135;
-				auto color_select = [&](const char* name, ImVec4& color) -> void {
+				auto color_select = [&](char const* name, ImVec4& color) -> void {
 					ImGui::PushID(iii++);
 					if (ImGui::Button("?")){
 
@@ -1165,8 +1351,8 @@ void Context::StyleEditor() {
 
 				// Post-baking font scaling. Note that this is NOT the nice way of scaling fonts, read below.
 				// (we enforce hard clamping manually as by default DragFloat/SliderFloat allows CTRL+Click text to get out of bounds).
-				const float MIN_SCALE = 0.3f;
-				const float MAX_SCALE = 2.0f;
+				float const MIN_SCALE = 0.3f;
+				float const MAX_SCALE = 2.0f;
 				HelpMarker(
 					"Those are old settings provided for convenience.\n"
 					"However, the _correct_ way of scaling your UI is currently to reload your font at the designed size, "
@@ -1199,7 +1385,7 @@ void Context::StyleEditor() {
 
 				// When editing the "Circle Segment Max Error" value, draw a preview of its effect on auto-tessellated circles.
 				ImGui::DragFloat("Circle Tessellation Max Error", &style.CircleTessellationMaxError , 0.005f, 0.10f, 5.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp);
-				const bool show_samples = ImGui::IsItemActive();
+				bool const show_samples = ImGui::IsItemActive();
 				if (show_samples)
 					ImGui::SetNextWindowPos(ImGui::GetCursorScreenPos());
 				if (show_samples && ImGui::BeginTooltip())
@@ -1207,28 +1393,28 @@ void Context::StyleEditor() {
 					ImGui::TextUnformatted("(R = radius, N = approx number of segments)");
 					ImGui::Spacing();
 					ImDrawList* draw_list = ImGui::GetWindowDrawList();
-					const float min_widget_width = ImGui::CalcTextSize("R: MMM\nN: MMM").x;
+					float const min_widget_width = ImGui::CalcTextSize("R: MMM\nN: MMM").x;
 					for (int n = 0; n < 8; n++)
 					{
-						const float RAD_MIN = 5.0f;
-						const float RAD_MAX = 70.0f;
-						const float rad = RAD_MIN + (RAD_MAX - RAD_MIN) * (float)n / (8.0f - 1.0f);
+						float const RAD_MIN = 5.0f;
+						float const RAD_MAX = 70.0f;
+						float const rad = RAD_MIN + (RAD_MAX - RAD_MIN) * (float)n / (8.0f - 1.0f);
 
 						ImGui::BeginGroup();
 
 						// N is not always exact here due to how PathArcTo() function work internally
 						ImGui::Text("R: %.f\nN: %d", rad, draw_list->_CalcCircleAutoSegmentCount(rad));
 
-						const float canvas_width = min_widget_width > rad * 2.0f ? min_widget_width : rad * 2.0f;
-						const float offset_x     = floorf(canvas_width * 0.5f);
-						const float offset_y     = floorf(RAD_MAX);
+						float const canvas_width = min_widget_width > rad * 2.0f ? min_widget_width : rad * 2.0f;
+						float const offset_x     = floorf(canvas_width * 0.5f);
+						float const offset_y     = floorf(RAD_MAX);
 
-						const ImVec2 p1 = ImGui::GetCursorScreenPos();
+						ImVec2 const p1 = ImGui::GetCursorScreenPos();
 						draw_list->AddCircle(ImVec2(p1.x + offset_x, p1.y + offset_y), rad, ImGui::GetColorU32(ImGuiCol_Text));
 						ImGui::Dummy(ImVec2(canvas_width, RAD_MAX * 2));
 
 						/*
-						const ImVec2 p2 = ImGui::GetCursorScreenPos();
+						ImVec2 const p2 = ImGui::GetCursorScreenPos();
 						draw_list->AddCircleFilled(ImVec2(p2.x + offset_x, p2.y + offset_y), rad, ImGui::GetColorU32(ImGuiCol_Text));
 						ImGui::Dummy(ImVec2(canvas_width, RAD_MAX * 2));
 						*/

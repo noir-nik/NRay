@@ -12,7 +12,7 @@ import stb_image;
 _IMAGEIO_EXPORT
 namespace ImageIO {
 
-inline unsigned char* Load(const char* filename, int* width, int* height, int* channels, int desiredChannels) {
+inline unsigned char* Load(char const* filename, int* width, int* height, int* channels, int desiredChannels) {
 	return stbi_load(filename, width, height, channels, desiredChannels);
 }
 

@@ -3,22 +3,21 @@ export module SceneGraph;
 #define _SCENEGRAPH_EXPORT export
 import Component;
 import Entity;
-import stl;
+import std;
 import Types;
+import Structs;
 #else
 #pragma once
 #define _SCENEGRAPH_EXPORT
 #include "Component.cppm"
 #include "Entity.cppm"
+#include "Structs.cppm"
+#include "Types.cppm"
 #endif
 
 _SCENEGRAPH_EXPORT
-struct SceneGraph {
-	using NodeIndex = uint32_t;
-	SceneGraph(const SceneGraph&) = delete;
-	SceneGraph& operator=(const SceneGraph&) = delete;
-	SceneGraph(SceneGraph&&) = delete;
-	SceneGraph& operator=(SceneGraph&&) = delete;
+struct SceneGraph : Structs::NoCopyNoMove {
+	using NodeIndex = u32;
 
 	struct Node {
 		Node(Entity entity = {nullptr, Entity::Null}) : entity(entity) {};
@@ -28,11 +27,10 @@ struct SceneGraph {
 
 		friend SceneGraph;
 
-		inline const char* name() const { return entity.Get<Component::Name>().name.c_str(); }
+		inline char const* name() const { return entity.Get<Component::Name>().name.c_str(); }
 	};
 
 	Node root; // Has scene indices as children
-	// std::vector<NodeIndex> scenes; // with top level objects as children
 	std::vector<Node> nodes; // only objects
 
 	NodeIndex currentScene = 0;
@@ -57,7 +55,7 @@ struct SceneGraph {
 	}
 
 	inline Node& Get(NodeIndex index) {	return nodes[index]; }
-	inline const Node& Get(NodeIndex index) const { return nodes[index]; }
+	inline Node const& Get(NodeIndex index) const { return nodes[index]; }
 
 	NodeIndex AddNode(const std::string_view& name) {
 		nodes.emplace_back(CreateEntity(name));
@@ -71,6 +69,6 @@ struct SceneGraph {
 
 	void UpdateTransforms(Node& node, const Component::Transform& parentTransform);
 	void DebugPrint();
-	void DebugPrintTree(const Node& node, int indent);
+	void DebugPrintTree(Node const& node, int indent);
 };
 

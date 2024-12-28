@@ -1,7 +1,7 @@
 
 #ifdef USE_MODULES
 module Util;
-import stl;
+import std;
 #else
 #include "Util.cppm"
 #include <atomic>

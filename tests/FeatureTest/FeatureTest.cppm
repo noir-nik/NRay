@@ -2,21 +2,20 @@
 #ifdef USE_MODULES
 export module FeatureTest;
 #define _FEATURETEST_EXPORT export
-import Lmath;
+import lmath;
 #else
 #pragma once
-#include "Lmath_types.h"
+#include "lmath_types.hpp"
 #define _FEATURETEST_EXPORT
 #endif // USE_MODULES
-using namespace Lmath;
-
+using namespace lmath;
 
 _FEATURETEST_EXPORT
 class FeatureTestApplication {
 public:
-	void run(const char* gltfPath);
+	void run(char const* gltfPath);
 private:
-	void Create(const char* gltfPath);
+	void Create(char const* gltfPath);
 	void Setup();
 	void Draw();
 	void Compute();
@@ -26,8 +25,6 @@ private:
 #else
 #define _FEATURETEST_EXPORT
 #endif // ENGINE
-
-
 
 struct FeatureTestConstants {
 	mat4 view;

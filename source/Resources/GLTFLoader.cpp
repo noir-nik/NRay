@@ -2,17 +2,17 @@
 module;
 #endif
 
-#include "Bindless.h"
+#include "GpuTypes.h"
 #include "Macros.h"
 
 #ifdef USE_MODULES
 module GLTFLoader;
 import fastgltf;
-import Lmath;
-import stl;
+import lmath;
+import std;
 import Objects;
 import ImageIO;
-import VulkanBackend;
+import vulkan_backend;
 import SceneGraph;
 import Log;
 import Component;
@@ -21,8 +21,8 @@ import Entity;
 import Materials;
 #else
 #include "GLTFLoader.cppm"
-#include "VulkanBackend.cppm"
-#include "Lmath.cppm"
+#include "vulkan_backend.hpp"
+#include "lmath.hpp"
 #include "ImageIO.cppm"
 #include "Log.cppm"
 
@@ -41,13 +41,13 @@ import Materials;
 // #include "Scene.hpp"
 
 namespace fastgltf {
-template<> struct ElementTraits<Lmath::vec4> : ElementTraitsBase<Lmath::vec4, AccessorType::Vec4, float> {};
-template<> struct ElementTraits<Lmath::vec3> : ElementTraitsBase<Lmath::vec3, AccessorType::Vec3, float> {};
-template<> struct ElementTraits<Lmath::vec2> : ElementTraitsBase<Lmath::vec2, AccessorType::Vec2, float> {};
+template<> struct ElementTraits<lmath::vec4> : ElementTraitsBase<lmath::vec4, AccessorType::Vec4, float> {};
+template<> struct ElementTraits<lmath::vec3> : ElementTraitsBase<lmath::vec3, AccessorType::Vec3, float> {};
+template<> struct ElementTraits<lmath::vec2> : ElementTraitsBase<lmath::vec2, AccessorType::Vec2, float> {};
 }
 
 namespace glTF {
-using namespace Lmath;
+using namespace lmath;
 
 struct ResourceMaps {
 	std::unordered_map<u32, u32> textureMap;
@@ -64,14 +64,17 @@ struct LoaderImpl {
 		int width = 0;
 		int height = 0;
 		int numChannels = 0;
-		size_t imageIndex = 0;
+		std::size_t imageIndex = 0;
 	};
+
 	fastgltf::Asset& asset;
 	ResourceMaps& maps;
 	Materials& materials;
-	vkw::Device& device;
-	vkw::Queue& queue;
+	vb::Device& device;
+	vb::Queue& queue;
 	SceneGraph& sceneGraph;
+	u32 const errorImageID;
+	// LoadInfo const& info
 
 	auto LoadTexture(fastgltf::Texture const& assetTexture) -> TextureInfo;
 	void LoadTextures();
@@ -79,22 +82,22 @@ struct LoaderImpl {
 	void LoadMaterials();
 	void LoadMesh(fastgltf::Mesh const& assetMesh, Component::Mesh& mesh);
 	void LoadMeshes();
-	void LoadNode(const int nodeIndex, size_t offset);
+	void LoadNode(int const nodeIndex, std::size_t offset);
 	void LoadNodes();
 };
 
 fastgltf::visitor sourcesVisitor {
-	[](std::monostate) { return "std::monostate"; },
-	[](fastgltf::sources::BufferView) { return "sources::BufferView"; },
-	[](fastgltf::sources::URI) { return "sources::URI"; },
-	[](fastgltf::sources::Array) { return "sources::Array"; },
-	[](fastgltf::sources::Vector) { return "sources::Vector"; },
+	[](std::monostate)                  { return "std::monostate"; },
+	[](fastgltf::sources::BufferView)   { return "sources::BufferView"; },
+	[](fastgltf::sources::URI)          { return "sources::URI"; },
+	[](fastgltf::sources::Array)        { return "sources::Array"; },
+	[](fastgltf::sources::Vector)       { return "sources::Vector"; },
 	[](fastgltf::sources::CustomBuffer) { return "sources::CustomBuffer"; },
-	[](fastgltf::sources::ByteView) { return "sources::ByteView"; },
-	[](fastgltf::sources::Fallback) { return "sources::Fallback"; },
+	[](fastgltf::sources::ByteView)     { return "sources::ByteView"; },
+	[](fastgltf::sources::Fallback)     { return "sources::Fallback"; },
 };
 
-bool Loader::Load(const std::filesystem::path& filepath, SceneGraph& sceneGraph, Materials& materials, vkw::Device& device, vkw::Queue& queue) {
+bool Loader::Load(LoadInfo const& info) {
 
 	constexpr auto parserOptions {
 		fastgltf::Options::DontRequireValidAssetMember
@@ -102,20 +105,20 @@ bool Loader::Load(const std::filesystem::path& filepath, SceneGraph& sceneGraph,
 		| fastgltf::Options::LoadExternalBuffers
 		| fastgltf::Options::LoadExternalImages
 		| fastgltf::Options::GenerateMeshIndices
+		| fastgltf::Options::DecomposeNodeMatrices
 	};
 
 	fastgltf::Parser parser;
-	// auto gltfFile = fastgltf::MappedGltfFile::FromPath(filepath);
 
 	fastgltf::GltfDataBuffer dataBuffer;
 
-	auto data = fastgltf::GltfDataBuffer::FromPath(filepath);
+	auto data = fastgltf::GltfDataBuffer::FromPath(info.filepath);
 	if (data.error() != fastgltf::Error::None) {
 		LOG_WARN("Failed to load asset file: {}", fastgltf::getErrorName(data.error()));
 		return false;
 	}
 
-	auto expectedAsset = parser.loadGltf(data.get(), filepath.parent_path(), parserOptions);
+	auto expectedAsset = parser.loadGltf(data.get(), info.filepath.parent_path(), parserOptions);
 	if (expectedAsset.error() != fastgltf::Error::None) {
 		LOG_WARN("Failed to load asset file: {}", fastgltf::getErrorName(expectedAsset.error()));
 		return false;
@@ -124,7 +127,7 @@ bool Loader::Load(const std::filesystem::path& filepath, SceneGraph& sceneGraph,
 	auto& asset = expectedAsset.get();
 
 	maps.clear();
-	LoaderImpl loader { asset, maps, materials, device, queue, sceneGraph };
+	LoaderImpl loader { asset, maps, info.materials, info.device, info.queue, info.sceneGraph, info.errorImageID};
 	loader.LoadTextures();
 	loader.LoadMaterials();
 	loader.LoadMeshes();
@@ -202,7 +205,7 @@ void LoaderImpl::LoadTextures() {
 	device.ResetStaging();
 	cmd.Begin();
 	
-	for (size_t textureIndex = 0; auto const& assetTexture : asset.textures) {
+	for (std::size_t textureIndex = 0; auto const& assetTexture : asset.textures) {
 		auto& textureInfo = textureInfos[textureIndex];
 		auto& imageIndex = textureInfo.imageIndex;
 		textureInfo = LoadTexture(assetTexture);
@@ -210,20 +213,20 @@ void LoaderImpl::LoadTextures() {
 		if (textureInfo.imageData != nullptr) {
 
 			// Determine format
-			auto format = vkw::Format::RGBA8_UNORM; // Default
+			auto format = vb::Format::RGBA8Unorm; // Default
 			for (fastgltf::Material& material : asset.materials) {
 				if (material.pbrData.baseColorTexture.has_value()) { // BaseColor
 					uint diffuseTextureIndex = material.pbrData.baseColorTexture.value().textureIndex;
 					auto& diffuseTexture = asset.textures[diffuseTextureIndex];
 					if (imageIndex == diffuseTexture.imageIndex.value()) {
-						format =  vkw::Format::RGBA8_SRGB;
+						format =  vb::Format::RGBA8Srgb;
 					}
 				}
 				if (material.emissiveTexture.has_value()) { // Emissive
 					uint emissiveTextureIndex = material.emissiveTexture.value().textureIndex;
 					auto& emissiveTexture = asset.textures[emissiveTextureIndex];
 					if (imageIndex == emissiveTexture.imageIndex.value()) {
-						format =  vkw::Format::RGBA8_SRGB;
+						format =  vb::Format::RGBA8Srgb;
 					}
 				}
 			}
@@ -235,29 +238,29 @@ void LoaderImpl::LoadTextures() {
 
 			auto magFilter {
 					magFilterGltf == fastgltf::Filter::Linear
-				? vkw::Filter::Linear
-				: vkw::Filter::Nearest
+				? vb::Filter::Linear
+				: vb::Filter::Nearest
 			};
 			auto minFilter {
 					minFilterGltf == fastgltf::Filter::Linear ||
 					minFilterGltf == fastgltf::Filter::LinearMipMapLinear ||
 					minFilterGltf == fastgltf::Filter::LinearMipMapNearest
-				? vkw::Filter::Linear
-				: vkw::Filter::Nearest
+				? vb::Filter::Linear
+				: vb::Filter::Nearest
 			};
 			auto mipmapMode {
 					minFilterGltf == fastgltf::Filter::LinearMipMapLinear ||
 					minFilterGltf == fastgltf::Filter::NearestMipMapLinear
-				? vkw::MipmapMode::Linear
-				: vkw::MipmapMode::Nearest
+				? vb::MipmapMode::Linear
+				: vb::MipmapMode::Nearest
 			};
 			
 			// Create image
 			auto newImageEntity = sceneGraph.CreateEntity(asset.images[imageIndex].name);
-			auto& newImage = newImageEntity.Add<vkw::Image>(device.CreateImage({
-				.extent = { (uint32_t)textureInfo.width, (uint32_t)textureInfo.height, 1 },
+			auto& newImage = newImageEntity.Add<vb::Image>(device.CreateImage({
+				.extent = { (u32)textureInfo.width, (u32)textureInfo.height, 1 },
 				.format = format,
-				.usage = vkw::ImageUsage::Sampled | vkw::ImageUsage::TransferDst,
+				.usage = vb::ImageUsage::Sampled | vb::ImageUsage::TransferDst,
 				.sampler = {
 					.magFilter = magFilter,
 					.minFilter = minFilter,
@@ -271,7 +274,7 @@ void LoaderImpl::LoadTextures() {
 			// Copy image
 			bool result;
 			uint imageSize = textureInfo.width * textureInfo.height * textureInfo.numChannels; // todo: assure numChannels == 4
-			cmd.Barrier(newImage, {vkw::ImageLayout::TransferDst});
+			cmd.Barrier(newImage, {vb::ImageLayout::TransferDst});
 			result = cmd.Copy(newImage, textureInfo.imageData, imageSize);
 			if (!result) {
 				cmd.End();
@@ -283,15 +286,18 @@ void LoaderImpl::LoadTextures() {
 			}
 
 			// Add to map
-			maps.textureMap[textureIndex++] = newImage.RID();
+			maps.textureMap[textureIndex] = newImage.GetResourceID();
+		} else {
+			maps.textureMap[textureIndex] = errorImageID;
 		}
+		++textureIndex;
 	}
 
 	cmd.End();
 	cmd.QueueSubmit();
 
-	for (size_t textureIndex = 0; textureIndex < numTextures; ++textureIndex) {
-		ImageIO::Free(textureInfos[textureIndex].imageData);
+	for (auto& info : textureInfos) {
+		ImageIO::Free(info.imageData);
 	}
 }
 
@@ -299,19 +305,19 @@ void LoaderImpl::LoadMaterial(fastgltf::Material const& assetMaterial, Component
 
 	auto& gpuMaterial = material.gpuMaterial;
 	
-	if (const auto& tex = assetMaterial.pbrData.baseColorTexture) {
+	if (auto const& tex = assetMaterial.pbrData.baseColorTexture) {
 		gpuMaterial.baseColorTexture = maps.textureMap[tex->textureIndex];
 	}
-	if (const auto& tex = assetMaterial.pbrData.metallicRoughnessTexture) {
+	if (auto const& tex = assetMaterial.pbrData.metallicRoughnessTexture) {
 		gpuMaterial.metallicRoughnessTexture = maps.textureMap[tex->textureIndex];
 	}
-	if (const auto& tex = assetMaterial.emissiveTexture) {
+	if (auto const& tex = assetMaterial.emissiveTexture) {
 		gpuMaterial.emissiveTexture = maps.textureMap[tex->textureIndex];
 	}
-	if (const auto& tex = assetMaterial.normalTexture) {
+	if (auto const& tex = assetMaterial.normalTexture) {
 		gpuMaterial.normalTexture = maps.textureMap[tex->textureIndex];
 	}
-	if (const auto& tex = assetMaterial.occlusionTexture) {
+	if (auto const& tex = assetMaterial.occlusionTexture) {
 		gpuMaterial.occlusionTexture = maps.textureMap[tex->textureIndex];
 	}
 
@@ -337,7 +343,7 @@ void LoaderImpl::LoadMaterials() {
 	device.ResetStaging();
 	cmd.Begin();
 	
-	for (size_t materialIndex = 0; auto const& assetMaterial : asset.materials) {
+	for (std::size_t materialIndex = 0; auto const& assetMaterial : asset.materials) {
 		auto mat = sceneGraph.CreateEntity();
 		auto& material = mat.Add<Component::Material>(assetMaterial.name.c_str());
 		auto materialID = materials.CreateSlot();
@@ -352,16 +358,16 @@ void LoaderImpl::LoadMaterials() {
 	cmd.QueueSubmit();
 }
 
-// std::vector<uint32_t> indices;
+// std::vector<u32> indices;
 // std::vector<Vertex> vertices;
 
 void LoaderImpl::LoadMesh(fastgltf::Mesh const& assetMesh, Component::Mesh& mesh) {
 	auto numPrimitives = assetMesh.primitives.size();
 	mesh.primitives.resize(numPrimitives);
 
-	for (size_t primitiveIndex = 0; auto const& p : assetMesh.primitives) {
+	for (std::size_t primitiveIndex = 0; auto const& p : assetMesh.primitives) {
 		auto& primitive = mesh.primitives[primitiveIndex++];
-		size_t initialVertex = mesh.vertices.size();
+		std::size_t initialVertex = mesh.vertices.size();
 
 		if (p.materialIndex.has_value()) {
 			DEBUG_ASSERT(maps.materialMap.find(p.materialIndex.value()) != maps.materialMap.end(), "Material index {} not found", p.materialIndex.value());
@@ -379,8 +385,8 @@ void LoaderImpl::LoadMesh(fastgltf::Mesh const& assetMesh, Component::Mesh& mesh
 			primitive.vertexOffset = initialVertex;
 			primitive.firstInstance = 0;
 
-			fastgltf::iterateAccessor<std::uint32_t>(asset, indexaccessor,
-				[&](std::uint32_t idx) {
+			fastgltf::iterateAccessor<u32>(asset, indexaccessor,
+				[&](u32 idx) {
 					mesh.indices.push_back(idx + initialVertex);
 				});
 		}
@@ -392,7 +398,7 @@ void LoaderImpl::LoadMesh(fastgltf::Mesh const& assetMesh, Component::Mesh& mesh
 			mesh.vertices.resize(mesh.vertices.size() + posAccessor.count);
 
 			fastgltf::iterateAccessorWithIndex<vec3>(asset, posAccessor,
-				[&](vec3 v, size_t index) {
+				[&](vec3 v, std::size_t index) {
 					Objects::Vertex newvtx;
 					newvtx.position = v;
 					newvtx.normal = { 1, 0, 0 };
@@ -407,7 +413,7 @@ void LoaderImpl::LoadMesh(fastgltf::Mesh const& assetMesh, Component::Mesh& mesh
 		auto normals = p.findAttribute("NORMAL");
 		if (normals != p.attributes.end()) {
 			fastgltf::iterateAccessorWithIndex<vec3>(asset, asset.accessors[normals->accessorIndex],
-				[&](vec3 v, size_t index) {
+				[&](vec3 v, std::size_t index) {
 					mesh.vertices[initialVertex + index].normal = v;
 				});
 		}
@@ -416,7 +422,7 @@ void LoaderImpl::LoadMesh(fastgltf::Mesh const& assetMesh, Component::Mesh& mesh
 		auto uv = p.findAttribute("TEXCOORD_0");
 		if (uv != p.attributes.end()) {
 			fastgltf::iterateAccessorWithIndex<vec2>(asset, asset.accessors[uv->accessorIndex],
-				[&](vec2 v, size_t index) {
+				[&](vec2 v, std::size_t index) {
 					mesh.vertices[initialVertex + index].uv.x = v.x;
 					mesh.vertices[initialVertex + index].uv.y = v.y;
 				});
@@ -426,7 +432,7 @@ void LoaderImpl::LoadMesh(fastgltf::Mesh const& assetMesh, Component::Mesh& mesh
 		auto colors = p.findAttribute("COLOR_0");
 		if (colors != p.attributes.end()) {
 			fastgltf::iterateAccessorWithIndex<vec4>(asset, asset.accessors[colors->accessorIndex],
-				[&](vec4 v, size_t index) {
+				[&](vec4 v, std::size_t index) {
 					mesh.vertices[initialVertex + index].color = v;
 				});
 		}
@@ -435,7 +441,7 @@ void LoaderImpl::LoadMesh(fastgltf::Mesh const& assetMesh, Component::Mesh& mesh
 		auto tangent = p.findAttribute("TANGENT");
 		if (tangent != p.attributes.end()) {
 			fastgltf::iterateAccessorWithIndex<vec4>(asset, asset.accessors[tangent->accessorIndex],
-				[&](vec4 v, size_t index) {
+				[&](vec4 v, std::size_t index) {
 					mesh.vertices[initialVertex + index].tangent = v;
 				});
 		}
@@ -453,23 +459,23 @@ void LoaderImpl::LoadMeshes() {
 		LoadMesh(assetMesh, mesh);
 		mesh.vertexBuffer = device.CreateBuffer({
 			.size = mesh.vertices.size() * sizeof(Objects::Vertex),
-			.usage = vkw::BufferUsage::Vertex,
+			.usage = vb::BufferUsage::Vertex,
 			.name = "Vertex buffer " + mesh.name,
 		});
 		mesh.indexBuffer = device.CreateBuffer({
-			.size = mesh.indices.size() * sizeof(uint32_t),
-			.usage = vkw::BufferUsage::Index,
+			.size = mesh.indices.size() * sizeof(u32),
+			.usage = vb::BufferUsage::Index,
 			.name = "Index buffer " + mesh.name,
 		});
 	}
 
-	// auto transferQueue = device.GetQueue(vkw::QueueFlagBits::Transfer);
+	// auto transferQueue = device.GetQueue(vb::QueueFlagBits::Transfer);
 	// auto& cmd = transferQueue.GetCommandBuffer();
 	auto& cmd = queue.GetCommandBuffer();
 	device.ResetStaging();
 	cmd.Begin();
 	bool result;
-	auto copyToBuffer = [&](vkw::Buffer& buffer, const void* data, uint32_t size) {
+	auto copyToBuffer = [&](vb::Buffer& buffer, const void* data, u32 size) {
 		result = cmd.Copy(buffer, data, size);
 		if (!result) [[unlikely]] { 
 			cmd.End();
@@ -482,18 +488,20 @@ void LoaderImpl::LoadMeshes() {
 	};
 	for (auto& [_, mesh] : maps.meshMap) {
 		copyToBuffer(mesh->vertexBuffer, mesh->vertices.data(), mesh->vertices.size() * sizeof(Objects::Vertex));
-		copyToBuffer(mesh->indexBuffer, mesh->indices.data(), mesh->indices.size() * sizeof(uint32_t));
+		copyToBuffer(mesh->indexBuffer, mesh->indices.data(), mesh->indices.size() * sizeof(u32));
 	}
 	cmd.End();
 	cmd.QueueSubmit();
 }
 
-void LoaderImpl::LoadNode(const int nodeIndex, size_t offset) {
+void LoaderImpl::LoadNode(int const nodeIndex, std::size_t offset) {
 	auto& glTFNode = asset.nodes[nodeIndex];
 	auto& newNode = sceneGraph.nodes[offset + nodeIndex];
-	newNode.entity = sceneGraph.CreateEntity(glTFNode.name);
+	newNode.entity = sceneGraph.CreateEntity(glTFNode.name); // todo:: name collision check
 	DEBUG_TRACE("Loading node {}", glTFNode.name.c_str());
-	newNode.entity.Add<Component::Transform>();
+	auto& transform = newNode.entity.Add<Component::Transform>(true);
+
+	// Add mesh
 	if (glTFNode.meshIndex.has_value()) {
 		auto mesh = maps.meshMap[glTFNode.meshIndex.value()];
 		newNode.entity.Add<Component::Mesh*>(mesh);
@@ -501,14 +509,25 @@ void LoaderImpl::LoadNode(const int nodeIndex, size_t offset) {
 		// todo : empty, volume flags
 	}
 
-	auto& local = newNode.entity.Get<Component::Transform>().local;
+	auto convertTransform = [](Component::Transform& transform, fastgltf::TRS const& transformAsset) {
+		auto translation = make_float3(transformAsset.translation.data());
+		auto rotation = make_quat(transformAsset.rotation.data());
+		auto scale = make_float3(transformAsset.scale.data());
+		// LOG_INFO("Translation: {} {} {}", translation.x, translation.y, translation.z);
+		// LOG_INFO("Rotation:    {} {} {} {}", rotation.x, rotation.y, rotation.z, rotation.w);
+		// LOG_INFO("Scale:       {} {} {}", scale.x, scale.y, scale.z);
+		transform.fromTRS(translation, rotation, scale);
+	};
+
 	std::visit(
 		fastgltf::visitor {
 		[&](fastgltf::math::fmat4x4& matrix) {
-			memcpy(&local, matrix.data(), sizeof(matrix));
+			fastgltf::TRS t;
+			decomposeTransformMatrix(matrix, t.scale, t.rotation, t.translation);
+			convertTransform(transform, t);
 		},
-		[&](fastgltf::TRS transform) {
-			memcpy(&local, scale(rotate(translate(fastgltf::math::fmat4x4(), transform.translation), transform.rotation), (transform.scale)).data(), sizeof(fastgltf::math::fmat4x4));
+		[&](fastgltf::TRS& t) {
+			convertTransform(transform, t);
 		},
 		[&](auto&&) {
 			LOG_WARN("Unsupported fastgltf::visitor default (transform) {}", glTFNode.name);
@@ -516,9 +535,9 @@ void LoaderImpl::LoadNode(const int nodeIndex, size_t offset) {
 		},
 		glTFNode.transform);
 
-	size_t childNodeCount = glTFNode.children.size();
+	std::size_t childNodeCount = glTFNode.children.size();
 	newNode.children.resize(childNodeCount);
-	for (size_t i = 0; i < childNodeCount; ++i) {
+	for (std::size_t i = 0; i < childNodeCount; ++i) {
 		auto glfwNodeIndex = glTFNode.children[i];
 		newNode.children[i] = glfwNodeIndex;
 		LoadNode(glfwNodeIndex, offset);
@@ -538,8 +557,8 @@ void LoaderImpl::LoadNodes() {
 	auto numScenes = asset.scenes.size(); //glTF scenes, not ours
 
 	auto currentOffset = 0;
-	std::vector<size_t> childOffsetsForScenes(numScenes);
-	for (size_t sceneIndex = 0; sceneIndex < numScenes; ++sceneIndex) {
+	std::vector<std::size_t> childOffsetsForScenes(numScenes);
+	for (std::size_t sceneIndex = 0; sceneIndex < numScenes; ++sceneIndex) {
 		childOffsetsForScenes[sceneIndex] = currentOffset;
 		currentOffset += asset.scenes[sceneIndex].nodeIndices.size();
 	}
@@ -547,9 +566,9 @@ void LoaderImpl::LoadNodes() {
 	auto numChildren = currentScene.children.size();
 	currentScene.children.resize(numChildren + currentOffset);
 
-	for (size_t sceneIndex = 0; auto const& scene : asset.scenes) {
+	for (std::size_t sceneIndex = 0; auto const& scene : asset.scenes) {
 		auto numChildNodes = scene.nodeIndices.size();
-		for (size_t childNodeIndex = 0; auto const& glfwNodeIndex : scene.nodeIndices) {
+		for (std::size_t childNodeIndex = 0; auto const& glfwNodeIndex : scene.nodeIndices) {
 			LoadNode(glfwNodeIndex, nodeOffset);
 			currentScene.children[numChildren + childOffsetsForScenes[sceneIndex] + childNodeIndex] = nodeOffset + glfwNodeIndex;
 			++childNodeIndex;

@@ -1,33 +1,12 @@
-#ifndef BINDLESS_H
-#define BINDLESS_H
-
-#ifdef ENGINE
-#include "Lmath_types.h"
-using Lmath::vec4;
-using Lmath::vec3;
-using Lmath::vec2;
-using Lmath::uint;
-#endif // ENGINE
+#ifndef _INDEXING_H
+#define _INDEXING_H
 
 #include "GpuTypes.h"
+#include "Bindless.h"
 
-#define BINDING_TEXTURE 0 // Sampled image
-#define BINDING_BUFFER 1
-#define BINDING_TLAS 2
-#define BINDING_STORAGE_IMAGE 3
-
-#define WORKGROUP_SIZE 16
-
-#define MAX_MODELS 256
-
-#ifndef ENGINE
-#define EXISTS(textureIndex) (textureIndex != TEXTURE_UNDEFINED)
-#endif // ENGINE
+#define EXISTS(_textureIndex) (_textureIndex != TEXTURE_UNDEFINED)
 
 #ifdef GLSL
-
-#define float3 vec3
-#define float4x4 mat4
 
 #extension GL_ARB_separate_shader_objects : enable
 #extension GL_EXT_nonuniform_qualifier : enable
@@ -63,4 +42,4 @@ layout(set = 0, binding = BINDING_STORAGE_IMAGE) uniform image2D images[];
 
 #endif // SLANG
 
-#endif // BINDLESS_H
+#endif // _INDEXING_H

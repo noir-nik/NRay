@@ -1,12 +1,10 @@
 #ifndef OPAQUE_H
 #define OPAQUE_H
 
-#include "Bindless.h"
-
 #ifdef ENGINE
-#include "Lmath_types.h"
+#include "lmath_types.hpp"
 namespace Opaque {
-using namespace Lmath;
+using namespace lmath;
 #endif // ENGINE
 
 

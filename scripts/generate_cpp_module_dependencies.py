@@ -66,11 +66,6 @@ def main():
     cppm_dependencies = generate_dependencies(cppm_files, CPP_MODULE_EXTENSION)
     cpp_dependencies = generate_dependencies(cpp_files, CPP_EXTENSION)
 
-    # with open("cpp_module_dependencies.mk", "w") as file:
-    #     file.write("# Auto-generated Makefile dependencies\n")
-    #     for dep in cppm_dependencies + cpp_dependencies:
-    #         file.write(dep + "\n")
-
     print("# Auto-generated Makefile dependencies")
     for dep in cppm_dependencies + cpp_dependencies:
         print(dep)

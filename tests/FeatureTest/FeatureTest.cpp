@@ -4,16 +4,18 @@ module;
 
 #include "Phong.h"
 #include "Opaque.h"
+#include "GpuTypes.h"
 
 #ifdef USE_MODULES
 module FeatureTest;
 import glfw;
 import imgui;
 import Window;
-import Lmath;
-import VulkanBackend;
+import lmath;
+import vulkan_backend;
 import Component;
-import stl;
+import std.compat;
+import std;
 import Log;
 import Editor;
 import Entity;
@@ -23,12 +25,13 @@ import GLTFLoader;
 import entt;
 import UI;
 import Runtime;
+import Camera;
 import Types;
 import Structs;
 import Materials;
 #else
-#include "Lmath.cppm"
-#include "VulkanBackend.cppm"
+#include "lmath.hpp"
+#include "vulkan_backend.hpp"
 #include "Window.cppm"
 #include "Log.cppm"
 #include "Bindless.h"
@@ -48,47 +51,51 @@ import Materials;
 
 #endif
 
+#define GSLS_OPTIONS "-DGLSL -Isource/Shaders/include"
+#define BIN_PATH "bin"
 
-using namespace Lmath;
+using namespace lmath;
+using namespace Engine;
 
-using Pixel = vec4;
 namespace {
-struct DrawViewportInfo;
 
-struct AppContext : DeleteCopyDeleteMove {
+struct AppContext : Structs::NoCopyNoMove {
 
-	vkw::Pipeline pipeline;
-	vkw::Pipeline glTFPipeline;
-	vkw::Pipeline texPipeline;
-	vkw::Pipeline opaquePipeline;
+	vb::Pipeline pipeline;
+	vb::Pipeline glTFPipeline;
+	vb::Pipeline texPipeline;
+	vb::Pipeline opaquePipeline;
 
 	// float4x4 viewMat;
 	// float4x4 worldViewInv;
 	// float4x4 worldViewProjInv;
 
-	vkw::SampleCount sampleCount = vkw::SampleCount::_4;
-	// vkw::SampleCount sampleCount = vkw::SampleCount::_1;
-	// vkw::Format renderFormat = vkw::Format::RGBA16_sfloat;
-	vkw::Format renderFormat = vkw::Format::RGBA8_UNORM;
+	vb::SampleCount sample_count = vb::SampleCount::_4;
+	// vb::SampleCount sampleCount = vb::SampleCount::_1;
+	// vb::Format renderFormat = vb::Format::RGBA16Sfloat;
+	vb::Format renderFormat = vb::Format::RGBA8Unorm;
 	
-	vkw::Format depthFormat = vkw::Format::D32_SFLOAT;
+	vb::Format depthFormat = vb::Format::D32Sfloat;
 
-	// vkw::Buffer outputImage;
-	vkw::Buffer cubeVertexBuffer;
-	vkw::Device device;
+	// vb::Buffer outputImage;
+	vb::Buffer cubeVertexBuffer;
 
-	vkw::Queue queue;
+	vb::Instance instance;
+	vb::Device device;
+
+	vb::Queue queue;
 	
-
 	Entity mainWindow;
 
 	Entity phongMaterial;
 	Entity phongLight;
 
-	vkw::Image errorImage;
-	// vkw::Image blackImage;
-	// vkw::Image grayImage;
-	// vkw::Image whiteImage;
+	vb::Image errorImage;
+	// vb::Image blackImage;
+	// vb::Image grayImage;
+	// vb::Image whiteImage;
+
+	std::unordered_map<Window*, vb::Swapchain> swapchains;
 
 	Component::Material defaultMaterial;
 	Materials materials;
@@ -96,9 +103,8 @@ struct AppContext : DeleteCopyDeleteMove {
 	// Runtime::Context runtimeContext;
 
 	Project project;
-	// Registry registry;]
 
-	const char* gltfPath;
+	char const* gltfPath;
 
 	// std::vector<Entity> meshes;
 	void Setup();
@@ -110,27 +116,22 @@ struct AppContext : DeleteCopyDeleteMove {
 	void viewport();
 	void RenderUI();
 	void DrawImgui(Entity window);
-	void DrawViewport(vkw::Command& cmd, Runtime::Camera const& camera);
+	void DrawViewport(vb::Command& cmd, Camera const& camera);
 	void RecreateFrameResources(Window* window);
 
+	void test();
 };
 static AppContext* ctx;
 
-struct WindowImageResource : DeleteCopyDeleteMove {
-	vkw::Image colorImage;
-	vkw::Image resolveImage;
-	vkw::Image depthImage;
-	vkw::Image uiColorImage;
-	vkw::Image uiResolveImage;
+struct WindowImageResource : Structs::NoCopyNoMove {
+	vb::Image colorImage;
+	vb::Image resolveImage;
+	vb::Image depthImage;
+	vb::Image uiColorImage;
+	vb::Image uiResolveImage;
 
 };
 
-struct DrawViewportInfo {
-	vkw::Command&            cmd;
-	Window&                  windowHandle;
-	WindowImageResource&     resource;
-	vkw::Image &              targetImage;
-};
 
 // static Runtime::Camera camera(vec3(0.0f, 0.0f, 30.0f), vec3(0.0f, 0.0f, 0.0f), vec3(0.0f, 1.0f, 0.0f));
 
@@ -146,7 +147,7 @@ void KeyCallback(Window* window, int key, int scancode, int action, int mods);
 void CursorPosCallback(Window *window, double xpos, double ypos);
 void ScrollCallback(Window *window, double xoffset, double yoffset);
 void IconifyCallback(Window* window, int iconified);
-[[maybe_unused]] void printMatrix(const float4x4& m, const char* name = nullptr);
+[[maybe_unused]] void PrintMatrix(const float4x4& m, char const* name = nullptr);
 // const std::vector<Vertex> vertices = {
 // 	{{0.0f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
 // 	{{-0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}},
@@ -159,7 +160,7 @@ void IconifyCallback(Window* window, int iconified);
 // };
 
 // Cube
-const std::vector<VertexDebug> vertices = {
+std::vector<VertexDebug> const vertices = {
 	{{-0.5f, -0.5f, -0.5f}, { 0.0f, 0.0f, 0.0f}},
 	{{0.5f, -0.5f, -0.5f}, { 1.0f, 0.0f, 0.0f}},
 	{{0.5f,  0.5f, -0.5f}, { 1.0f, 1.0f, 0.0f}},
@@ -200,17 +201,17 @@ const std::vector<VertexDebug> vertices = {
 
 void AppContext::CreateShaders() {
 	auto& resource = mainWindow.Get<WindowImageResource>();
-/* 	
-	pipeline = device.CreatePipeline({
-		.point = vkw::PipelinePoint::Graphics,
-		.stages = {
-			{.stage = vkw::ShaderStage::Vertex, .path = "tests/FeatureTest/FeatureTest.vert"},
-			{.stage = vkw::ShaderStage::Fragment, .path = "tests/FeatureTest/FeatureTest.frag"},
-		},
+	
+/* 	pipeline = device.CreatePipeline({
+		.point = vb::PipelinePoint::Graphics,
+		.stages = {{
+			{.stage = vb::ShaderStage::Vertex, .filename = "tests/FeatureTest/FeatureTest.vert"},
+			{.stage = vb::ShaderStage::Fragment, .filename = "tests/FeatureTest/FeatureTest.frag"},
+		}},
 		.name = "Feature pipeline",
 		// pos2 + color3
-		.vertexAttributes = {vkw::Format::RGB32_SFLOAT, vkw::Format::RGB32_SFLOAT},
-		.colorFormats = {renderFormat},
+		.vertexAttributes = {vb::Format::RGB32Sfloat, vb::Format::RGB32Sfloat},
+		.colorFormats = {{renderFormat}},
 		.useDepth = true,
 		.depthFormat = resource.depthImage.format,
 		.samples = sampleCount,
@@ -218,59 +219,79 @@ void AppContext::CreateShaders() {
 	});
 
 	glTFPipeline = device.CreatePipeline({
-		.point = vkw::PipelinePoint::Graphics,
-		.stages = {
-			{.stage = vkw::ShaderStage::Vertex, .path = "source/Shaders/Phong.vert"},
-			{.stage = vkw::ShaderStage::Fragment, .path = "source/Shaders/Phong.frag"},
-		},
+		.point = vb::PipelinePoint::Graphics,
+		.stages = {{
+			{.stage = vb::ShaderStage::Vertex, .filename = "source/Shaders/Phong.vert"},
+			{.stage = vb::ShaderStage::Fragment, .filename = "source/Shaders/Phong.frag"},
+		}},
 		.name = "Phong pipeline",
 		.vertexAttributes = {
-			vkw::Format::RGB32_SFLOAT,  // vec3 position;
-			vkw::Format::RGB32_SFLOAT,  // vec3 normal;
-			vkw::Format::RG32_SFLOAT,   // vec2 uv;
-			vkw::Format::RGBA32_SFLOAT, // vec4 color;
-			vkw::Format::RGBA32_SFLOAT   // vec4 tangent;
+			vb::Format::RGB32Sfloat,  // vec3 position;
+			vb::Format::RGB32Sfloat,  // vec3 normal;
+			vb::Format::RG32Sfloat,   // vec2 uv;
+			vb::Format::RGBA32Sfloat, // vec4 color;
+			vb::Format::RGBA32Sfloat  // vec4 tangent;
 		},
-		.colorFormats = {renderFormat},
-		.useDepth = true,
-		.depthFormat = resource.depthImage.format,
-		.samples = sampleCount,
-		.lineTopology = false
-	});
-
-	texPipeline = device.CreatePipeline({
-		.point = vkw::PipelinePoint::Graphics,
-		.stages = {
-			{.stage = vkw::ShaderStage::Vertex, .path = "source/Shaders/Quad.vert"},
-			{.stage = vkw::ShaderStage::Fragment, .path = "source/Shaders/TexImage.frag"},
-		},
-		.name = "Tex pipeline",
-		.colorFormats = {renderFormat},
+		.colorFormats = {{renderFormat}},
 		.useDepth = true,
 		.depthFormat = resource.depthImage.format,
 		.samples = sampleCount,
 		.lineTopology = false
 	});
  */
-	opaquePipeline = device.CreatePipeline({
-		.point = vkw::PipelinePoint::Graphics,
+	texPipeline = device.CreatePipeline({
+		.point = vb::PipelinePoint::Graphics,
 		.stages = {{
-			{.stage = vkw::ShaderStage::Vertex, .path = "source/Shaders/Opaque.vert"},
-			{.stage = vkw::ShaderStage::Fragment, .path = "source/Shaders/Opaque.frag"},
+			{
+				.stage = vb::ShaderStage::Vertex, 
+				.source = {"source/Shaders/Quad.vert"},
+				.out_path = BIN_PATH,
+				.compile_options = GSLS_OPTIONS,
+			},
+			{
+				.stage = vb::ShaderStage::Fragment,
+				.source = {"source/Shaders/TexImage.frag"},
+				.out_path = BIN_PATH,
+				.compile_options = GSLS_OPTIONS,
+			}
 		}},
-		.name = "Opaque pipeline",
+		.color_formats = {{renderFormat}},
+		.use_depth = true,
+		.depth_format = resource.depthImage.GetFormat(),
+		.samples = sample_count,
+		.line_topology = false,
+		.name = "Tex pipeline",
+	});
+
+	opaquePipeline = device.CreatePipeline({
+		.point = vb::PipelinePoint::Graphics,
+		.stages = {{
+			{
+				.stage = vb::ShaderStage::Vertex, 
+				.source = {"source/Shaders/Opaque.vert"},
+				.out_path = BIN_PATH,
+				.compile_options = GSLS_OPTIONS,
+			},
+			{
+				.stage = vb::ShaderStage::Fragment,
+				.source = {"source/Shaders/Opaque.frag"},
+				.out_path = BIN_PATH,
+				.compile_options = GSLS_OPTIONS,
+			}
+		}},
 		.vertexAttributes = {{
-			vkw::Format::RGB32_SFLOAT,  // vec3 position;
-			vkw::Format::RGB32_SFLOAT,  // vec3 normal;
-			vkw::Format::RG32_SFLOAT,   // vec2 uv;
-			vkw::Format::RGBA32_SFLOAT, // vec4 color;
-			vkw::Format::RGBA32_SFLOAT   // vec4 tangent;
+			vb::Format::RGB32Sfloat,  // vec3 position;
+			vb::Format::RGB32Sfloat,  // vec3 normal;
+			vb::Format::RG32Sfloat,   // vec2 uv;
+			vb::Format::RGBA32Sfloat, // vec4 color;
+			vb::Format::RGBA32Sfloat  // vec4 tangent;
 		}},
-		.colorFormats = {{renderFormat}},
-		.useDepth = true,
-		.depthFormat = resource.depthImage.format,
-		.samples = sampleCount,
-		.lineTopology = false
+		.color_formats = {{renderFormat}},
+		.use_depth = true,
+		.depth_format = resource.depthImage.GetFormat(),
+		.samples = sample_count,
+		.line_topology = false,
+		.name = "Opaque pipeline",
 	});
 
 }
@@ -282,17 +303,17 @@ void AppContext::CreateDefaultResources() {
 	
 	errorImage = device.CreateImage({
 		.extent = {errorImageSize, errorImageSize},
-		.format = vkw::Format::RGBA8_UNORM,
-		.usage = vkw::ImageUsage::Sampled | vkw::ImageUsage::TransferDst,
-		.sampler = {vkw::Filter::Nearest, vkw::Filter::Nearest, vkw::MipmapMode::Nearest},
+		.format = vb::Format::RGBA8Unorm,
+		.usage = vb::ImageUsage::Sampled | vb::ImageUsage::TransferDst,
+		.sampler = {vb::Filter::Nearest, vb::Filter::Nearest, vb::MipmapMode::Nearest},
 		.name = "Error Texture"
 	});
 
-	LOG_INFO("Created null image {}", errorImage.RID());
-	DEBUG_ASSERT(errorImage.RID() == 0, "Error image must be created with RID 0");
+	LOG_INFO("Created null image {}", errorImage.GetResourceID());
+	DEBUG_ASSERT(errorImage.GetResourceID() == 0, "Error image must be created with RID 0");
 
-	u32 magenta = packRGBA8({1, 0, 1, 1});
-	u32 black = packRGBA8({0, 0, 0, 1});
+	u32 magenta = packRGBA({1, 0, 1, 1});
+	u32 black = packRGBA({0, 0, 0, 1});
 	std::array<u32, errorImageSize * errorImageSize> errorImagePixels;
 	for (int x = 0; x < errorImageSize; ++x) {
 		for (int y = 0; y < errorImageSize; ++y) {
@@ -316,10 +337,10 @@ void AppContext::CreateDefaultResources() {
 
 	DEBUG_ASSERT(defaultMaterial.deviceMaterialID == 0, "Default material ID must be 0");
 
-	auto cmd = device.GetCommandBuffer(queue);
+	auto cmd = queue.GetCommandBuffer();
 	cmd.Begin();
 	// Error Image
-	cmd.Barrier(errorImage, {vkw::ImageLayout::TransferDst});
+	cmd.Barrier(errorImage, {vb::ImageLayout::TransferDst});
 	cmd.Copy(errorImage, &errorImagePixels[0], errorImagePixels.size() * sizeof(errorImagePixels[0]));
 	// Default Material
 	cmd.Copy(materials.GetBuffer(defaultMaterial.deviceMaterialID), &defaultMaterial.gpuMaterial, sizeof(GpuTypes::Material), sizeof(GpuTypes::Material) * defaultMaterial.deviceMaterialID);
@@ -329,9 +350,14 @@ void AppContext::CreateDefaultResources() {
 
 void AppContext::CreateWindowResources(Entity window) {
 	using namespace std::literals;
-	Window &windowHandle = window.Get<Window>();
-	windowHandle.CreateSwapchain(device, queue);
-	windowHandle.CreateUI(sampleCount);
+	Window& windowHandle = window.Get<Window>();
+	uint2 size = uint2(windowHandle.GetSize());
+	swapchains[&windowHandle] = device.CreateSwapchain({
+		.window = windowHandle.GetGLFWwindow(), 
+		.extent = {size.x, size.y},
+		.queue = queue,
+	});
+	swapchains[&windowHandle].CreateImGui(sample_count);
 	windowHandle.AddFramebufferSizeCallback(FramebufferCallback);
 	windowHandle.AddMouseButtonCallback(MouseButtonCallback);
 	windowHandle.AddWindowRefreshCallback(RefreshCallback);
@@ -340,51 +366,52 @@ void AppContext::CreateWindowResources(Entity window) {
 	windowHandle.AddScrollCallback(ScrollCallback);
 	windowHandle.AddWindowIconifyCallback(IconifyCallback);
 
-	uint2 maxSize = uint2(windowHandle.GetSizeLimits().zw());
+	uint2 sizeLimits = uint2(windowHandle.GetSizeLimits().zw());
+	vb::Extent3D maxSize = {sizeLimits.x, sizeLimits.y};
 
 	auto& resource = window.Get<WindowImageResource>();
 
 	resource.depthImage = device.CreateImage({
         .extent = maxSize,
         .format = depthFormat,
-        .usage = vkw::ImageUsage::DepthStencilAttachment | vkw::ImageUsage::TransientAttachment,
-		.samples = sampleCount,
+        .usage = vb::ImageUsage::DepthStencilAttachment | vb::ImageUsage::TransientAttachment,
+		.samples = sample_count,
         .name = "Depth Attachment"
     });
 
 	resource.resolveImage = device.CreateImage({
 		.extent = maxSize,
 		.format = renderFormat,
-		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::TransferSrc,
+		.usage = vb::ImageUsage::ColorAttachment | vb::ImageUsage::TransferSrc,
 		.name = windowHandle.GetName() + "_resolve"s,
 	});
 	
 	resource.colorImage = device.CreateImage({
 		.extent = maxSize,
 		.format = renderFormat,
-		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::TransientAttachment,
-		.samples = sampleCount,
+		.usage = vb::ImageUsage::ColorAttachment | vb::ImageUsage::TransientAttachment,
+		.samples = sample_count,
 		.name = windowHandle.GetName() + "_color"s,
 	});
 	
 	resource.uiResolveImage = device.CreateImage({
 		.extent = maxSize,
 		.format = renderFormat,
-		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::TransferSrc,
+		.usage = vb::ImageUsage::ColorAttachment | vb::ImageUsage::TransferSrc,
 		.name = windowHandle.GetName() + "_ui_resolve"s,
 	});
 	
 	resource.uiColorImage = device.CreateImage({
 		.extent = maxSize,
 		.format = renderFormat,
-		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::TransientAttachment,
-		.samples = sampleCount,
+		.usage = vb::ImageUsage::ColorAttachment | vb::ImageUsage::TransientAttachment,
+		.samples = sample_count,
 		.name = windowHandle.GetName() + "_ui_color"s,
 	});
 }
 
 void AppContext::UploadBuffers() {
-	auto cmd = device.GetCommandBuffer(queue);
+	auto& cmd = queue.GetCommandBuffer();
 	cmd.Begin();
 	cmd.Copy(cubeVertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(VertexDebug));
 	cmd.Barrier();
@@ -392,16 +419,16 @@ void AppContext::UploadBuffers() {
 	cmd.QueueSubmit();
 
 	glTF::Loader loader;
-	auto res = loader.Load(gltfPath, project.GetSceneGraph(), materials, device, queue);
+	auto res = loader.Load({gltfPath, project.GetSceneGraph(), materials, device, queue, errorImage.GetResourceID()});
 	ASSERT(res, "Failed to load gltf file");
 
 	auto& sceneGraph = project.GetSceneGraph();
 	sceneGraph.DebugPrint();
 }
 
-void AppContext::DrawViewport(vkw::Command& cmd, Runtime::Camera const& camera) {
+void AppContext::DrawViewport(vb::Command& cmd, Camera const& camera) {
 
-	// cmd.Barrier(resource.renderImage, {vkw::ImageLayout::TransferDst});
+	// cmd.Barrier(resource.renderImage, {vb::ImageLayout::TransferDst});
 	// cmd.ClearColorImage(resource.renderImage, {0.7f, 0.0f, 0.4f, 1.0f});
 
 /*  // Phong
@@ -438,6 +465,7 @@ void AppContext::DrawViewport(vkw::Command& cmd, Runtime::Camera const& camera) 
 	cmd.Draw(6, 1, 0, 0);
  */
 
+
  	Opaque::OpaqueConstants constants{};
 	constants.viewProj = camera.proj * (camera.view | affineInverse);
 	constants.light = {
@@ -459,20 +487,23 @@ void AppContext::DrawViewport(vkw::Command& cmd, Runtime::Camera const& camera) 
 		for (auto& p : mesh->primitives) {
 			// LOG_INFO("Draw primitive {} {}", p.material->deviceMaterialID, mesh->name);
 			auto materialID = p.material ? p.material->deviceMaterialID : defaultMaterial.deviceMaterialID;
-			constants.materialBufferRID = materials.GetBuffer(materialID).RID();
+			constants.materialBufferRID = materials.GetBuffer(materialID).GetResourceID();
 			constants.materialOffset = materials.GetOffset(materialID) / sizeof(GpuTypes::Material);
 			cmd.PushConstants(opaquePipeline, &constants, sizeof(constants));
 			cmd.DrawIndexed(p.indexCount, p.instanceCount, p.firstIndex, p.vertexOffset, p.firstInstance);
 			// cmd.DrawMesh(mesh.vertexBuffer, mesh.indexBuffer, mesh.indexBuffer.size / sizeof(uint32_t));
 		}
 	}
+	
 }
 
 void AppContext::DrawWindow(Entity window) {
 	auto& windowHandle = window.Get<Window>();
-	auto& windowData   = window.Get<Runtime::WindowData>();
+	auto& windowData   = window.Get<Editor::WindowData>();
 	auto& resource     = window.Get<WindowImageResource>();
-	auto& cmd          = windowHandle.swapChain.GetCommandBuffer();
+	auto& swapchain    = swapchains[&windowHandle];
+	auto& cmd          = swapchain.GetCommandBuffer();
+
 	windowHandle.SetUIContextCurrent();
 
 	Editor::BeginFrame();
@@ -486,11 +517,11 @@ void AppContext::DrawWindow(Entity window) {
 	// }
 
 	cmd.Begin();
-	if (!windowHandle.swapChain.AcquireImage()) {
+	if (!swapchain.AcquireImage()) {
 		LOG_WARN("AcquireImage: Swapchain dirty");
 		return;
 	}
-	auto& targetImage = windowHandle.swapChain.GetCurrentImage();
+	auto& targetImage = swapchain.GetCurrentImage();
 	
 
 /* 	
@@ -513,25 +544,45 @@ void AppContext::DrawWindow(Entity window) {
 		}
 	} */
 
-	ivec4 fullWindowRect(0, 0, windowHandle.GetWidth(), windowHandle.GetHeight());
+	vb::Rect2D fullWindowRect({0, 0}, {static_cast<u32>(windowHandle.GetWidth()), static_cast<u32>(windowHandle.GetHeight())});
 	cmd.SetScissor(fullWindowRect);
 
 	static ivec4 viewport_A;
-
+	cmd.Barrier(resource.colorImage, {vb::ImageLayout::ColorAttachment});
+	cmd.Barrier(resource.resolveImage, {vb::ImageLayout::ColorAttachment});
+	cmd.Barrier(resource.depthImage, {vb::ImageLayout::DepthAttachment});
 	// Viewports
 	if (!windowData.viewportsToRender.empty()) {
-		vec4 clear_color = {0.1f, 0.1f, 0.1f, 1.0f};
-		if (sampleCount == vkw::SampleCount::_1) {
-			cmd.BeginRendering({{{{resource.resolveImage}}}, {resource.depthImage}, fullWindowRect, vkw::LoadOp::Clear, clear_color});
-			// cmd.BeginRendering({{{{resource.resolveImage}}}, {}, fullWindowRect, vkw::LoadOp::Clear, clear_color});
+		vb::ClearColorValue clear_color = {{0.1f, 0.1f, 0.1f, 1.0f}};
+		if (sample_count == vb::SampleCount::_1) {
+			cmd.BeginRendering({
+				.colorAttachs = {{{
+					.colorImage = resource.resolveImage, 
+					.clearValue = clear_color
+				}}},
+				.depth        = {resource.depthImage},
+				.renderArea   = fullWindowRect
+			});
 		} else {
-			cmd.BeginRendering({{{{resource.colorImage, &resource.resolveImage}}}, {resource.depthImage}, fullWindowRect, vkw::LoadOp::Clear, clear_color});
-			// cmd.BeginRendering({{{{resource.colorImage, resource.resolveImage}}}, {}, fullWindowRect, vkw::LoadOp::Clear, clear_color});
+			cmd.BeginRendering({
+				.colorAttachs = {{{
+					.colorImage   = resource.colorImage, 
+					.resolveImage = resource.resolveImage, 
+					.clearValue   = clear_color
+				}}}, 
+				.depth        = {resource.depthImage},
+				.renderArea   = fullWindowRect
+			});
 		};
+
 		for (auto v : windowData.viewportsToRender) {
+		// for (auto p : windowData.panels) {
+		// 	if (!std::holds_alternative<Editor::Viewport>(p)) continue;
+		// 	auto v = &std::get<Editor::Viewport>(p);
+			// LOG_INFO("Viewport: {}, {}, {}, {}", v->rect.x, v->rect.y, v->rect.z, v->rect.w);
 			ivec4 viewport(v->rect.x, v->rect.y, v->rect.z - v->rect.x, v->rect.w - v->rect.y);
 			viewport_A = viewport;
-			ivec4 flipped (viewport.x, viewport.y + viewport.w, viewport.z, -viewport.w);
+			vb::Viewport flipped (viewport.x, viewport.y + viewport.w, viewport.z, -viewport.w);
 			cmd.SetViewport(flipped);
 			DrawViewport(cmd, v->camera);
 		}
@@ -539,24 +590,35 @@ void AppContext::DrawWindow(Entity window) {
 	}
 
 	// Blit viewport to swapchain image
-	cmd.Barrier(resource.resolveImage, {vkw::ImageLayout::TransferSrc});
-	cmd.Barrier(targetImage, {vkw::ImageLayout::TransferDst});
-	ivec4 blitRect = {viewport_A.x, viewport_A.y, viewport_A.z + viewport_A.x, viewport_A.w + viewport_A.y};
+	cmd.Barrier(resource.resolveImage, {vb::ImageLayout::TransferSrc});
+	cmd.Barrier(targetImage,           {vb::ImageLayout::TransferDst});
+
+	vb::ImageBlit::Region blitRect = {
+		{viewport_A.x, viewport_A.y, 0}, 
+		{viewport_A.z + viewport_A.x, viewport_A.w + viewport_A.y, 1}
+	};
 	cmd.Blit({
 		.dst = targetImage,
 		.src = resource.resolveImage,
-		.regions = {{{blitRect, blitRect}}},
+		.regions = {{{blitRect, blitRect}}}
 	});
-	
+
+	cmd.Barrier(targetImage, {vb::ImageLayout::ColorAttachment});
 	// Render ui to swapchain image
-	cmd.BeginRendering({{{{targetImage}}}, {}, fullWindowRect, vkw::LoadOp::Load});
+	cmd.BeginRendering({
+		.colorAttachs   = {{{
+			.colorImage = targetImage,
+			.loadOp     = vb::LoadOp::Load
+		}}},
+		.renderArea     = fullWindowRect,
+	});
 	cmd.DrawImGui(uiDrawData);
 	cmd.EndRendering();
 	
-	cmd.Barrier(targetImage, {vkw::ImageLayout::Present});
+	cmd.Barrier(targetImage, {vb::ImageLayout::Present});
 
-	windowHandle.swapChain.SubmitAndPresent();
-	if (windowHandle.swapChain.GetDirty()) {
+	swapchain.SubmitAndPresent();
+	if (swapchain.GetDirty()) {
 		LOG_WARN("SubmitAndPresent: Swapchain dirty");
 		return;
 	}
@@ -622,15 +684,15 @@ void KeyCallback(Window* window, int key, int scancode, int action, int mods) {
 		// 	ImGuiIO& io = ImGui::GetIO();
 		// 	const float fontSize = 17.0f;
 		// 	// Editor::BeginFrame();
-		// 	vkw::BeginImGui();
+		// 	vb::BeginImGui();
 		// 	for (const auto& entry : std::filesystem::directory_iterator("bin")) {
-		// 		if (entry.path().extension() == ".ttf" || entry.path().extension() == ".otf") {
-		// 			auto font = io.Fonts->AddFontFromFileTTF(entry.path().string().c_str(), fontSize);
-		// 			if (font && entry.path().filename() == "segoeui.ttf") {
+		// 		if (entry.filename().extension() == ".ttf" || entry.filename().extension() == ".otf") {
+		// 			auto font = io.Fonts->AddFontFromFileTTF(entry.filename().string().c_str(), fontSize);
+		// 			if (font && entry.filename().filename() == "segoeui.ttf") {
 		// 				io.FontDefault = font;
 		// 			}
-		// 			// if (entry.path().filename() == "segoeui.ttf") {
-		// 			// 	auto font = io.Fonts->AddFontFromFileTTF(entry.path().string().c_str(), fontSize);
+		// 			// if (entry.filename().filename() == "segoeui.ttf") {
+		// 			// 	auto font = io.Fonts->AddFontFromFileTTF(entry.filename().string().c_str(), fontSize);
 		// 			// 	io.FontDefault = font;
 		// 			// }
 		// 		}
@@ -664,7 +726,7 @@ enum Hit {
 [[maybe_unused]] Hit MouseHitTest (Window *window, double xpos, double ypos) {
 	// auto& border_thickness = window->GetBorderThickness();
 	// l t r b
-	Lmath::ivec4 border_thickness = { 50, 30, 50, 50 };
+	lmath::ivec4 border_thickness = { 50, 30, 50, 50 };
 	auto size = window->GetSize();
 	enum { left = 1, top = 2, right = 4, bottom = 8 };
 	int hit = 0;
@@ -772,9 +834,9 @@ void FramebufferCallback(Window* window, int width, int height) {
 
 void RefreshCallback(Window* window) {
 	auto size = window->GetSize();
-	if (size.x == 0 || size.y == 0) {return;}
+	if (size.x == 0 || size.y == 0 || !window->GetAlive()) [[unlikely]] return;
 	window->AddFramesToDraw(1);
-	ctx->DrawWindow(Entity(&ctx->project.registry, static_cast<entt::entity>(window->GetEntityHandle())));
+	ctx->DrawWindow(Entity(&ctx->project.GetRegistry(), static_cast<entt::entity>(window->GetEntityHandle())));
 }
 
 void IconifyCallback(Window* window, int iconified) {
@@ -788,40 +850,64 @@ void AppContext::RecreateFrameResources(Window* window) {
 	if (window->GetIconified()) {/* LOG_TRACE("RecreateFrameResources: size = 0"); */ return;};
 
 	device.WaitIdle();
-	bool swapChainDirty = window->GetSwapchainDirty();
+	auto swapchain = swapchains[window];
+	bool swapChainDirty = swapchain.GetDirty();
 	bool framebufferResized = window->GetFramebufferResized();
-	// LOG_INFO("RecreateFrameResources {} {} {} {}", window->GetName(), (void*)window->GetGLFWwindow(), swapChainDirty, framebufferResized);
+	LOG_INFO("RecreateFrameResources {} {} {} {}", window->GetName(), (void*)window->GetGLFWwindow(), swapChainDirty, framebufferResized);
 	if (swapChainDirty || framebufferResized) {
-		// LOG_INFO("DIRTY FRAME RESOURCES");
+		LOG_INFO("DIRTY FRAME RESOURCES");
 		window->UpdateFramebufferSize();
-		window->RecreateSwapchain();
+		// window->RecreateSwapchain();
+		uint2 size = uint2(window->GetSize());
+		swapchain.Recreate(size.x, size.y);
 		window->SetFramebufferResized(false);
 		window->AddFramesToDraw(1);
 	}
 }
 
 void AppContext::Setup() {
+	UI::Init();
 	Editor::Setup(&project.GetSceneGraph());
 	mainWindow = project.CreateEntity("Main Window");
 	auto style = Editor::GetStyle();
 	mainWindow.Add<Window>(WindowCreateInfo{.name = "NRay", .imGuiStyle = style});
-	[[maybe_unused]] auto& windowData = mainWindow.Add<Runtime::WindowData>(true);
+	[[maybe_unused]] auto& windowData = mainWindow.Add<Editor::WindowData>(true);
 
 	mainWindow.Add<WindowImageResource>();
 	Window& windowHandle = mainWindow.Get<Window>();
 	windowHandle.SetEntityHandle(static_cast<EntityType>(mainWindow.entity));
 	
-	queue = {vkw::QueueFlagBits::Graphics | vkw::QueueFlagBits::Compute | vkw::QueueFlagBits::Transfer, windowHandle.GetGLFWwindow()};
-	vkw::Queue* queues[] = {&queue};
-	device = vkw::CreateDevice(queues);
+	instance = vb::CreateInstance({
+		.validation_layers = true,
+		.glfw_extensions = true
+	});
+
+	device = instance.CreateDevice({
+		.queues = {{{
+			.flags = vb::QueueFlagBits::Graphics,
+			.present_window = windowHandle.GetGLFWwindow(),
+		}}}
+	});
+
+	queue = device.GetQueue();
+
+	vb::Descriptor descriptor = device.CreateDescriptor({{
+		{vb::DescriptorType::CombinedImageSampler, 0},
+		{vb::DescriptorType::StorageBuffer, 1},
+	}});
+
+	device.UseDescriptor(descriptor);
+	// queue.flags = ;
+	// queue.supportedWindowToPresent = windowHandle.GetGLFWwindow();
+
 	materials.Init(device, queue);
 	CreateDefaultResources();
 	CreateWindowResources(mainWindow);
 
 	cubeVertexBuffer = device.CreateBuffer({
 		vertices.size() * sizeof(VertexDebug),
-		vkw::BufferUsage::Vertex,
-		vkw::Memory::GPU,
+		vb::BufferUsage::Vertex,
+		vb::Memory::GPU,
 		"Cube Vertex Buffer"
 	});
 	
@@ -833,7 +919,7 @@ void AppContext::Setup() {
 
 
 // namespace {
-// using mat4 = Lmath::float4x4;
+// using mat4 = lmath::float4x4;
 // enum class MaterialPass :uint8_t {
 //     MainColor,
 //     Transparent,
@@ -841,13 +927,13 @@ void AppContext::Setup() {
 // };
 
 // struct MaterialInstance {
-//     vkw::Pipeline pipeline;
+//     vb::Pipeline pipeline;
 //     MaterialPass passType;
 // };
 // struct RenderObject {
 //     uint32_t indexCount;
 //     uint32_t firstIndex;
-//     vkw::Buffer indexBuffer;
+//     vb::Buffer indexBuffer;
     
 //     MaterialInstance* material;
 
@@ -856,8 +942,8 @@ void AppContext::Setup() {
 // };
 
 // struct GLTFMetallic_Roughness {
-// 	vkw::Pipeline opaquePipeline;
-// 	vkw::Pipeline transparentPipeline;
+// 	vb::Pipeline opaquePipeline;
+// 	vb::Pipeline transparentPipeline;
 
 // 	// VkDescriptorSetLayout materialLayout;
 
@@ -869,11 +955,11 @@ void AppContext::Setup() {
 // 	};
 
 // 	struct MaterialResources {
-// 		vkw::Image colorImage;
+// 		vb::Image colorImage;
 // 		// VkSampler colorSampler;
-// 		vkw::Image metalRoughImage;
+// 		vb::Image metalRoughImage;
 // 		// VkSampler metalRoughSampler;
-// 		vkw::Buffer dataBuffer;
+// 		vb::Buffer dataBuffer;
 // 		uint32_t dataBufferOffset;
 // 	};
 
@@ -883,12 +969,62 @@ void AppContext::Setup() {
 
 // } // namespace
 
-void FeatureTestApplication::run(const char* gltfPath) {
+void AppContext::test() {
+
+	UI::Init();
+	Editor::Setup(&project.GetSceneGraph());
+	mainWindow = project.CreateEntity("Main Window");
+	auto style = Editor::GetStyle();
+	mainWindow.Add<Window>(WindowCreateInfo{.name = "NRay", .imGuiStyle = style});
+	[[maybe_unused]] auto& windowData = mainWindow.Add<Editor::WindowData>(true);
+
+	mainWindow.Add<WindowImageResource>();
+	Window& windowHandle = mainWindow.Get<Window>();
+	windowHandle.SetEntityHandle(static_cast<EntityType>(mainWindow.entity));
+	
+	instance = vb::CreateInstance({
+		.validation_layers = true,
+		.glfw_extensions = true,
+	});
+	device = instance.CreateDevice({
+		.queues = {{
+			{
+				.flags = vb::QueueFlagBits::Graphics,
+				.present_window = windowHandle.GetGLFWwindow(),
+			}
+		}}
+	});
+
+	queue = device.GetQueue();
+	materials.Init(device, queue);
+	CreateDefaultResources();
+	CreateWindowResources(mainWindow);
+
+	// cubeVertexBuffer = device.CreateBuffer({
+	// 	vertices.size() * sizeof(VertexDebug),
+	// 	vb::BufferUsage::Vertex,
+	// 	vb::Memory::GPU,
+	// 	"Cube Vertex Buffer"
+	// });
+	
+	// UploadBuffers();
+	// CreateShaders();
+	
+	device.WaitQueue(queue);
+	ctx->project.Destroy();
+	UI::Destroy();
+}
+
+void FeatureTestApplication::run(char const* gltfPath) {
 	Create(gltfPath);
 	Setup();
 	MainLoop();
 	// Draw();
 	Finish();
+	// ctx = new AppContext();
+	// ctx->test();
+	// delete ctx;
+	// WindowManager::Finish();
 }
 
 std::chrono::high_resolution_clock::time_point lastFrameTime = {};
@@ -905,7 +1041,7 @@ void BatterySaver() {
 	lastFrameTime = std::chrono::high_resolution_clock::now();
 }
 
-void FeatureTestApplication::Create(const char* gltfPath) {
+void FeatureTestApplication::Create(char const* gltfPath) {
 	ctx = new AppContext();
 	ctx->gltfPath = gltfPath;
 
@@ -917,51 +1053,52 @@ void FeatureTestApplication::Create(const char* gltfPath) {
 		.specular = vec3(0.8, 0.8, 0.8),
 		.shininess = 64.0
 	};
-	ctx->project.registry.emplace<Phong::PhongMaterial>(ctx->phongMaterial.entity, phongMat);
+	ctx->project.GetRegistry().emplace<Phong::PhongMaterial>(ctx->phongMaterial.entity, phongMat);
 
 	Phong::PhongLight light = {
 		.position = vec3(10.0, 10.0, 0.0),
 		.color = vec3(0.8, 0.8, 0.8)
 	};
 	ctx->phongLight = ctx->project.CreateEntity("PhongLight");
-	ctx->project.registry.emplace<Phong::PhongLight>(ctx->phongLight.entity, light);
+	ctx->project.GetRegistry().emplace<Phong::PhongLight>(ctx->phongLight.entity, light);
 }
 
 void FeatureTestApplication::Setup() {
-	vkw::Init();
-	UI::Init();
 	ctx->Setup();
 }
 
 void DrawOrRemoveWindows() {
-	auto registry = &ctx->project.registry;
+	auto registry = &ctx->project.GetRegistry();
 	auto view = registry->view<Window>();
 	for (auto w: view) {
 		auto& windowHandle = registry->get<Window>(w);
-		windowHandle.ApplyChanges();
-		if (windowHandle.GetAlive()) {
+		if (windowHandle.GetShouldClose()) {
+			ctx->device.WaitIdle();
+			windowHandle.Destroy();
+			registry->destroy(w);
+			if (w == ctx->mainWindow.entity) {
+				ctx->mainWindow.entity = Entity::Null;
+			}
+		} else {
+			windowHandle.ApplyChanges();
 			// LOG_INFO("Iconified {}", windowHandle.GetIconified());
 			if (!windowHandle.GetIconified()) {
 				// Recreate swapchain if needed
-				if (windowHandle.GetSwapchainDirty() || windowHandle.GetFramebufferResized()) {
+				if (ctx->swapchains[&windowHandle].GetDirty() || windowHandle.GetFramebufferResized()) {
 					LOG_INFO("DIRTY FRAME RESOURCES");
 					windowHandle.UpdateFramebufferSize();
 					ctx->device.WaitIdle();
-					windowHandle.RecreateSwapchain();
+					uint2 size = uint2(windowHandle.GetSize());
+					ctx->swapchains[&windowHandle].Recreate(size.x, size.y);
+
 					windowHandle.SetFramebufferResized(false);
 					windowHandle.AddFramesToDraw(1);
 				}
 				// Draw if needed
 				if (windowHandle.GetDrawNeeded()){
-					ctx->DrawWindow({&ctx->project.registry, static_cast<entt::entity>(windowHandle.GetEntityHandle())});
+					ctx->DrawWindow({&ctx->project.GetRegistry(), static_cast<entt::entity>(windowHandle.GetEntityHandle())});
 				}
 			}
-		} else {
-			registry->destroy(w);
-			if (w == ctx->mainWindow.entity) {
-				ctx->mainWindow.entity = Entity::Null;
-			}
-			// window->Destroy();
 		}
 	}
 }
@@ -970,12 +1107,10 @@ void FeatureTestApplication::MainLoop() {
 	[[maybe_unused]] auto c = ctx;
 	lastFrameTime = std::chrono::high_resolution_clock::now();
 	while (ctx->mainWindow.entity != Entity::Null) {
-		// std::any_of( ctx->windows.begin(), ctx->windows.end(), [](const auto &window) {
-		// ctx->project.registry.any_of( ctx->windows.begin(), ctx->windows.end(), [](const auto &window) {
 		auto& sceneGraph = ctx->project.GetSceneGraph();
 		sceneGraph.UpdateTransforms(sceneGraph.root, sceneGraph.root.entity.Get<Component::Transform>());
 
-		auto registry = &ctx->project.registry;
+		auto registry = &ctx->project.GetRegistry();
 		auto view = registry->view<Window>();//view->remove(ctx->mainWindow.entity);
 		std::any_of( view.begin(), view.end(), [registry](const auto &window) {
 			Window& windowHandle = registry->get<Window>(window);
@@ -991,16 +1126,28 @@ void FeatureTestApplication::MainLoop() {
 void FeatureTestApplication::Finish() {
 	ctx->project.Destroy();
 	UI::Destroy();
-	for (auto& window : ctx->project.registry.view<Window>()) {
-		ctx->project.registry.destroy(window);
+	for (auto& window : ctx->project.GetRegistry().view<Window>()) {
+		ctx->project.GetRegistry().destroy(window);
 	}
-	
+	// ctx->errorImage = {};
+
+	// ctx->pipeline = {};
+	// ctx->glTFPipeline = {};
+	// ctx->texPipeline = {};
+	// ctx->opaquePipeline = {};
+	// ctx->cubeVertexBuffer = {};
+
+	// ctx->materials = {};
+
+
+	// ctx->device = {};
+	// ctx->instance = {};
 	delete ctx;
-	vkw::Destroy();
+	// vb::Destroy();
 	WindowManager::Finish();
 }
 
-void printMatrix(const float4x4& m, const char* name) {
+void printMatrix(const float4x4& m, char const* name) {
 	if (name) {
 		printf("  %s: \n", name);
 	}

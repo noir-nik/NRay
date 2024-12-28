@@ -1,32 +1,31 @@
 #ifdef USE_MODULES
-module;
+export module Structs;
 #define _STRUCTS_EXPORT export
 #else
 #pragma once
 #define _STRUCTS_EXPORT
 #endif
 
-
-#ifdef USE_MODULES
-export module Structs;
-#endif
-
 _STRUCTS_EXPORT
-struct DeleteCopy {
-	DeleteCopy() = default;
-	DeleteCopy(const DeleteCopy&) = delete;
-	DeleteCopy& operator=(const DeleteCopy&) = delete;
-	DeleteCopy(DeleteCopy&&) = default;
-	DeleteCopy& operator=(DeleteCopy&&) = default;
-	~DeleteCopy() = default;
+namespace Structs {
+struct NoCopy {
+	NoCopy() = default;
+	NoCopy(const NoCopy&) = delete;
+	NoCopy& operator=(const NoCopy&) = delete;
+	NoCopy(NoCopy&&) = default;
+	NoCopy& operator=(NoCopy&&) = default;
+	~NoCopy() = default;
 };
 
-_STRUCTS_EXPORT
-struct DeleteCopyDeleteMove {
-	DeleteCopyDeleteMove() = default;
-	DeleteCopyDeleteMove(const DeleteCopyDeleteMove&) = delete;
-	DeleteCopyDeleteMove& operator=(const DeleteCopyDeleteMove&) = delete;
-	DeleteCopyDeleteMove(DeleteCopyDeleteMove&&) = delete;
-	DeleteCopyDeleteMove& operator=(DeleteCopyDeleteMove&&) = delete;
-	inline ~DeleteCopyDeleteMove() = default;
+struct NoCopyNoMove {
+	NoCopyNoMove() = default;
+	NoCopyNoMove(const NoCopyNoMove&) = delete;
+	NoCopyNoMove& operator=(const NoCopyNoMove&) = delete;
+	NoCopyNoMove(NoCopyNoMove&&) = delete;
+	NoCopyNoMove& operator=(NoCopyNoMove&&) = delete;
+	~NoCopyNoMove() = default;
 };
+
+}; // namespace Structs
+
+#undef _STRUCTS_EXPORT

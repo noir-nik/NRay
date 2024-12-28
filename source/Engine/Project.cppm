@@ -1,29 +1,27 @@
 #ifdef USE_MODULES
 export module Project;
 #define _PROJECT_EXPORT export
-import Lmath;
+import lmath;
 import SceneGraph;
 import Entity;
 import Component;
-import stl;
+import Structs;
+import std;
 #else
 #pragma once
 #define _PROJECT_EXPORT
 #include "SceneGraph.cppm"
 #include "Entity.cppm"
 #include "Component.cppm"
+#include "Structs.cppm"
+
 #include <string_view>
 #endif
 
 _PROJECT_EXPORT
-class Project {
+class Project : Structs::NoCopyNoMove {
 public:
 	Project() : registry(), sceneGraph(&registry) {}
-
-	Project(const Project&) = delete;
-	Project(Project&&) = delete;
-	Project& operator=(const Project&) = delete;
-	Project& operator=(Project&&) = delete;
 
 	inline Entity CreateEntity(const std::string_view& name = "") {
 		auto entity = Entity(&registry, registry.create());
@@ -33,15 +31,17 @@ public:
 		return entity;
 	}
 
-	inline SceneGraph& GetSceneGraph() { return sceneGraph; }
+	[[nodiscard]] inline auto GetSceneGraph() -> SceneGraph& { return sceneGraph; }
+
+	[[nodiscard]] inline auto GetRegistry() -> Registry& { return registry; }
 
 	inline void Destroy() {
 		registry.clear();
 	}
 
-	Registry registry;
 private:
 	std::string name;
 	std::string filepath;
+	Registry registry;
 	SceneGraph sceneGraph;
 };

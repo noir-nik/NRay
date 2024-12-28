@@ -1,15 +1,16 @@
 #ifdef USE_MODULES
 export module GLTFLoader;
 #define _GLTFLOADER_EXPORT export
-import VulkanBackend;
+import vulkan_backend;
 import Component;
 import SceneGraph;
 import Materials;
-import stl;
+import Types;
+import std;
 #else
 #pragma once
 #define _GLTFLOADER_EXPORT
-// #include "VulkanBackend.cppm"
+// #include "vulkan_backend.hpp"
 #include "Component.cppm"
 #include "SceneGraph.cppm"
 #include "Materials.cppm"
@@ -55,7 +56,7 @@ struct Sampler {
 
 struct Texture {
 	std::string name = "";
-	const unsigned char* data;
+	unsigned char const* data;
 	int width, height, numChannels;
 	Sampler sampler;
 };
@@ -86,9 +87,20 @@ struct glTFMetalicRoughness {
 
  */
 
+// inline constexpr u32 NotSpecified = ~0u;
+
+struct LoadInfo {
+	std::filesystem::path const& filepath;
+	SceneGraph& sceneGraph;
+	Materials& materials;
+	vb::Device& device;
+	vb::Queue& queue;
+	u32 const& errorImageID;
+};
+
 class Loader {
 public:
-	bool Load(const std::filesystem::path& filepath, SceneGraph& sceneGraph, Materials& materials, vkw::Device& device, vkw::Queue& queue);
+	bool Load(LoadInfo const& info);
 };
 
 } // namespace glTF

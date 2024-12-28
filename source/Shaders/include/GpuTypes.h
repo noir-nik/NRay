@@ -2,9 +2,9 @@
 #define _GPU_TYPES_H
 
 #ifdef ENGINE
-#include "Lmath_types.h"
+#include "lmath_types.hpp"
 namespace GpuTypes {
-using namespace Lmath;
+using namespace lmath;
 #endif // ENGINE
 
 #define TEXTURE_UNDEFINED ~0u

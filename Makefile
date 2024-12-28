@@ -1,43 +1,99 @@
 # CC := g++
 CC := clang++
 # CC := cl
+
 TARGET := NRay
 
 STATIC_LINK := 0
 COMPILE_IMGUI := 1
 
 USE_MODULES := 1
-USE_HEADER_UNITS := 1
+USE_HEADER_UNITS := 0
 USE_EXCEPTIONS := 0
 USE_VLA := 1
 
 SPDLOG_COMPILED_LIB := 0
 
-ifeq ($(USE_MODULES), 0)
-	SPDLOG_COMPILED_LIB := 1
-endif
+STD_MODULE_AVAILABLE := 1
 
-mkfile_path := $(abspath $(lastword $(MAKEFILE_LIST)))
+CPP_STD := -std=c++23
+
+AR := ar
+ARFLAGS = rcs
+
+BUILD_DIR := build
+BIN_DIR := bin
 DEPS_PATH := deps
-# fastgltf
-
-# SUBMODULE_LIBS_LIST := fastgltf spdlog glfw3
-# SUBMODULE_LIBS_LIST := fastgltf
 
 OPT_DEBUG := -O0
 OPT_RELEASE := -O2
 
+-O := -o
+-OUT := -o
+OBJ_EXT := o
+LIB_EXT := a
+-C := -c
+
+ifeq ($(OS),Windows_NT)
+	LDFLAGS += -fuse-ld=lld
+	PYTHON := python
+	LIBS := $(LIBS) Gdi32 vulkan-1
+	PLATFORM_BUILD_DIR := $(BUILD_DIR)/win
+	CMAKE_BUILD_DIR := build
+	TARGET_DIR := .
+	CMD := cmd /c
+	
+	RM := $(CMD) del /Q
+else
+	CC := g++
+	PYTHON := python3
+	LDFLAGS += -lpthread
+	LIBS := $(LIBS) vulkan GL m
+	PLATFORM_BUILD_DIR := $(BUILD_DIR)/linux
+	CMAKE_BUILD_DIR := build-linux
+	TARGET_DIR := $(PLATFORM_BUILD_DIR)
+	RM := rm -rf
+endif
+
+ifeq ($(findstring clang,$(CC)),clang)
+	ifeq ($(OS),Windows_NT)
+		TARGET_TRIPLE := -target x86_64-w64-mingw32
+	else
+		LDFLAGS += -stdlib=libc++
+	endif
+	CXXFLAGS += -fretain-comments-from-system-headers
+	LDFLAGS += -pthread
+endif
+
+ifneq ($(findstring clang,$(CC)),clang)
+USE_MODULES := 0
+STD_MODULE_AVAILABLE := 0
+endif
+
+CXXFLAGS += $(TARGET_TRIPLE)
+LDFLAGS += $(TARGET_TRIPLE)
+
+# ifeq ($(USE_MODULES),1)
+# CXXFLAGS += -DVB_VMA_IMPLEMENTATION=1
+CXXFLAGS += -D_VB_EXT_MODULES
+# endif
+
+ifeq ($(USE_MODULES), 0)
+	SPDLOG_COMPILED_LIB := 1
+endif
+
 INCLUDES := \
 	-Isource/Core \
 	-Isource/Base \
-	-Isource/Shaders \
+	-Isource/Shaders/include \
 	-Isource/Engine \
 	-Isource/Resources \
 	-Ideps \
+	-Ideps/vulkan_backend/include \
+	-Ideps/vulkan_backend/deps/VulkanMemoryAllocator/include \
 	-Ideps/fastgltf/include \
 	-Ideps/spdlog/include \
 	-Ideps/glfw/include \
-	-Ideps/vma/include \
 	-Ideps/fmt/include \
 	-Ideps/imgui \
 	-Ideps/imgui/backends \
@@ -47,23 +103,44 @@ INCLUDES := \
 	-Ideps/modules/imgui \
 	-Ideps/modules/stb \
 
--O := -o
--OUT := -o
-OBJ_EXT := o
-LIB_EXT := a
--C := -c
-
-DEFINES := -DENGINE
-WARNINGS = -Wall -Wextra
-
 WARNINGS_DISABLE := \
-	-Wno-missing-designated-field-initializers \
 	-Wno-missing-field-initializers \
 	-Wno-unused-variable \
 	-Wno-unused-parameter \
 	-Wno-unused-function \
+	\
+	-Wno-unknown-pragmas \
 
-CXXFLAGS := -MMD -MP $(INCLUDES) $(DEFINES) -std=c++20 $(WARNINGS) $(WARNINGS_DISABLE) -Wsequence-point
+ifeq ($(findstring clang,$(CC)),clang)
+WARNINGS_DISABLE += \
+	-Wno-missing-designated-field-initializers \
+	-Wno-unused-command-line-argument \
+	-Wno-nullability-completeness
+
+endif
+
+WARNINGS_ENABLE := \
+	-Wsequence-point
+
+VB_DEFINES := \
+	-DVB_USE_STD_MODULE=1 \
+	-DVB_USE_VLA \
+	-D VB_IMGUI \
+	-DVB_GLFW \
+
+DEFINES := -DENGINE
+WARNINGS = -Wall -Wextra
+
+CXXFLAGS += \
+	-MMD -MP \
+	$(INCLUDES) \
+	$(DEFINES) \
+	$(CPP_STD) \
+	$(WARNINGS) \
+	$(WARNINGS_DISABLE) \
+	$(WARNINGS_ENABLE) \
+	$(VB_DEFINES) \
+	-g -ggdb
 
 
 ifeq ($(USE_EXCEPTIONS), 0)
@@ -85,42 +162,6 @@ ifeq ($(STATIC_LINK), 1)
 endif
 
 
-# endif
-# $(info $(INCLUDES))
-
-AR := ar
-ARFLAGS = rcs
-
-BUILD_DIR := build
-BIN_DIR := bin
-
-ifeq ($(OS),Windows_NT)
-	LDFLAGS += -fuse-ld=lld
-	PYTHON := python
-# -Lbin/lib
-	LIBS := $(LIBS) Gdi32 vulkan-1
-	PLATFORM_BUILD_DIR := $(BUILD_DIR)/win
-	CMAKE_BUILD_DIR := build
-	TARGET_DIR := .
-	CMD := cmd /c
-	
-	RM := $(CMD) del /Q
-else
-	CC := g++
-	PYTHON := python3
-	LDFLAGS += -lpthread -Lbin/lib-linux
-	LIBS := $(LIBS) vulkan GL m
-	PLATFORM_BUILD_DIR := $(BUILD_DIR)/linux
-	CMAKE_BUILD_DIR := build-linux
-	TARGET_DIR := $(PLATFORM_BUILD_DIR)
-	RM := rm -rf
-# USE_MODULES = 0
-endif
-
-ifeq ($(CC),g++)
-USE_MODULES := 0
-endif
-
 LDFLAGS += $(foreach lib,$(LIBS),-l$(lib))
 LIB_PATH := $(PLATFORM_BUILD_DIR)/lib
 SUBMODULE_LIBS := $(foreach lib,$(SUBMODULE_LIBS_LIST),$(LIB_PATH)/lib$(lib).a)
@@ -129,6 +170,8 @@ MODULES_BUILD_DIR := $(PLATFORM_BUILD_DIR)/modules
 MODULES_BUILD_DIR_CLANGD := $(PLATFORM_BUILD_DIR)/modules-clangd
 MODULES_OBJS_DIR := $(PLATFORM_BUILD_DIR)/modules-objs
 HEADERS_BUILD_DIR := $(PLATFORM_BUILD_DIR)/headers
+
+DIRS_CREATED_FILE := $(OBJS_BUILD_DIR)/dirs_created
 
 ifeq ($(USE_MODULES), 1)
 CXXFLAGS += -fprebuilt-module-path=$(MODULES_BUILD_DIR) -D USE_MODULES  -fmodule-file-deps
@@ -142,7 +185,6 @@ CXXFLAGS += -D USE_HEADER_UNITS
 endif
 
 # $(info $(CPP_MODULE_TARGETS))
-# $(info $(MODULE_NAMES_MAP))
 
 ifeq ($(CC),cl)
     INCLUDES := $(patsubst -I%,/I%,$(INCLUDES))
@@ -151,7 +193,7 @@ ifeq ($(CC),cl)
     OBJ_EXT := obj
 	LIB_EXT := lib
     -C := /c
-    CXXFLAGS := /std:c++20 -DENGINE $(INCLUDES) /utf-8
+    CXXFLAGS := /std:c++23 -DENGINE $(INCLUDES) /utf-8
 # LDFLAGS := /L"bin/lib/"
 	LDFLAGS := 
     OPT_DEBUG := /O0
@@ -162,11 +204,12 @@ endif
 
 # Folders
 SRC_MAIN := .
-SRC_CORE := source/Core
-SRC_BASE := source/Base
-SRC_ENGINE := source/Engine
-SRC_RESOURCES := source/Resources
-SRC_SHADERS := source/Shaders
+SRC_DIR := source
+SRC_CORE      := $(SRC_DIR)/Core
+SRC_BASE      := $(SRC_DIR)/Base
+SRC_ENGINE    := $(SRC_DIR)/Engine
+SRC_RESOURCES := $(SRC_DIR)/Resources
+SRC_SHADERS   := $(SRC_DIR)/Shaders
 SRC_TEST := tests
 
 
@@ -186,19 +229,8 @@ files := $(foreach dir,$(tst_dirs),$(wildcard $(dir)/*.cpp))
 SRC_CPP := $(filter %.cpp, $(files) $(tst_dirs))
 SRC_CPP_RAW := $(notdir $(SRC_CPP))
 # SRC_CPP_RAW := $(notdir $(files))
-# $(info $(files))
-# $(info $(SRC_CPP))
-ifeq ($(findstring clang,$(CC)),clang)
-	ifeq ($(OS),Windows_NT)
-	CXXFLAGS += -target x86_64-w64-mingw32
-	LDFLAGS += -target x86_64-w64-mingw32
-	else
-	LDFLAGS += -stdlib=libc++
-	endif
-# for clangd
-	CXXFLAGS += -fretain-comments-from-system-headers
-	LDFLAGS += -pthread
-endif
+
+
 
 SRCS := \
 	$(wildcard $(SRC_MAIN)/*.cpp) \
@@ -256,14 +288,19 @@ OBJS_SPDLOG := $(patsubst $(SRC_SPDLOG)/%.cpp, $(PLATFORM_BUILD_DIR)/spdlog/%.$(
 SRC_FMT := $(DEPS_PATH)/fmt/src
 OBJS_FMT := $(patsubst $(SRC_FMT)/%.cc, $(PLATFORM_BUILD_DIR)/fmt/%.$(OBJ_EXT), $(wildcard $(SRC_FMT)/*.cc))
 
-# $(info $(OBJS))
+# vulkan_backend
+SRC_VULKAN_BACKEND := $(DEPS_PATH)/vulkan_backend/src
+OBJS_VULKAN_BACKEND := $(patsubst $(SRC_VULKAN_BACKEND)/%.cpp, $(PLATFORM_BUILD_DIR)/%.$(OBJ_EXT), $(wildcard $(SRC_VULKAN_BACKEND)/*.cpp))
+
+# $(info $(SRC_VULKAN_BACKEND))
+# $(info $(OBJS_VULKAN_BACKEND))
 # $(patsubst %.cpp, $(PLATFORM_BUILD_DIR)/%.o, $(SRC_CPP_RAW)) \
 
 
 all: debug
 
 .PHONY: debug
-debug: create_dirs
+debug: $(DIRS_CREATED_FILE)
 ifeq ($(CC),cl)
 debug: CXXFLAGS += /Zi /Od /DNRAY_DEBUG /EHsc /Fd$(PLATFORM_BUILD_DIR)/$(TARGET).pdb /FS
 debug: LDFLAGS  += vulkan-1.lib
@@ -276,12 +313,12 @@ endif
 debug: build_target
 
 .PHONY: release
-release: create_dirs
+release: $(DIRS_CREATED_FILE)
 release: CXXFLAGS += $(OPT_RELEASE)
 release: LDFLAGS  += $(OPT_RELEASE)
 release: build_target
 
-# build_target: create_dirs .WAIT
+# build_target: dirs .WAIT
 # ifeq ($(USE_HEADER_UNITS), 1)
 # build_target: build_headers .WAIT
 # endif
@@ -290,7 +327,7 @@ release: build_target
 # endif
 # build_target: $(TARGET)
 
-build_target: create_dirs
+build_target: $(DIRS_CREATED_FILE)
 
 ifeq ($(USE_MODULES), 1)
 build_target: get_cpp_module_dependencies
@@ -310,7 +347,9 @@ _WMBDIR := $(subst /,\,$(MODULES_BUILD_DIR))
 _WMODIR := $(subst /,\,$(MODULES_OBJS_DIR))
 _WMBDIRC := $(subst /,\,$(MODULES_BUILD_DIR_CLANGD))
 _WHBDIR := $(subst /,\,$(HEADERS_BUILD_DIR))
-create_dirs:
+
+
+$(DIRS_CREATED_FILE):
 ifeq ($(OS),Windows_NT)
 	@cmd /c if not exist $(TARGET_DIR) mkdir $(TARGET_DIR)
 	@cmd /c if not exist $(BIN_DIR) mkdir $(BIN_DIR)
@@ -321,6 +360,7 @@ ifeq ($(OS),Windows_NT)
 	@cmd /c if not exist $(_WMODIR) mkdir $(_WMODIR)
 	@cmd /c if not exist $(_WMBDIRC) mkdir $(_WMBDIRC)
 	@cmd /c if not exist $(_WHBDIR) mkdir $(_WHBDIR)
+	@cmd /c if not exist $(_WINBDIR)\vulkan_backend mkdir $(_WINBDIR)\vulkan_backend
 	@cmd /c if not exist $(_WINBDIR)\imgui mkdir $(_WINBDIR)\imgui
 # @cmd /c if not exist $(_WINBDIR)\stb mkdir $(_WINBDIR)\stb
 	@cmd /c if not exist $(_WINBDIR)\glfw mkdir $(_WINBDIR)\glfw
@@ -329,6 +369,11 @@ ifeq ($(OS),Windows_NT)
 	@cmd /c if not exist $(_WINBDIR)\simdjson mkdir $(_WINBDIR)\simdjson
 	@cmd /c if not exist $(_WINBDIR)\spdlog mkdir $(_WINBDIR)\spdlog
 	@cmd /c if not exist $(_WINBDIR)\fmt mkdir $(_WINBDIR)\fmt
+
+	@cmd /c if not exist $(_WOBDIR)\source mkdir $(_WOBDIR)\source
+	@xcopy /t /e source $(_WOBDIR)\source
+
+	@echo 0 > $(DIRS_CREATED_FILE)
 else
 	@mkdir -p \
 	$(TARGET_DIR) $(BIN_DIR) \
@@ -339,6 +384,7 @@ else
 	$(MODULES_OBJS_DIR) \
 	$(MODULES_BUILD_DIR_CLANGD) \
 	$(HEADERS_BUILD_DIR) \
+	$(PLATFORM_BUILD_DIR)/vulkan_backend \
 	$(PLATFORM_BUILD_DIR)/imgui \
 	$(PLATFORM_BUILD_DIR)/glfw \
 	$(PLATFORM_BUILD_DIR)/fastgltf \
@@ -346,6 +392,10 @@ else
 	$(PLATFORM_BUILD_DIR)/simdjson \
 	$(PLATFORM_BUILD_DIR)/spdlog \
 	$(PLATFORM_BUILD_DIR)/fmt \
+
+	@find $(SRC_DIR) -type d -exec mkdir -p -- $(OBJS_BUILD_DIR)/{} \;
+
+	@echo 0 > $(DIRS_CREATED_FILE)
 
 # $(PLATFORM_BUILD_DIR)/stb \
 
@@ -419,41 +469,36 @@ EXTERNAL_MODULES := \
 	$(patsubst %.cppm,%,$(notdir $(wildcard $(EXTERNAL_MODULES_DIR)/*.cppm))) \
 	$(patsubst %.cppm,%,$(notdir $(wildcard $(EXTERNAL_MODULES_DIR)/imgui/*.cppm))) \
 	$(patsubst %.cppm,%,$(notdir $(wildcard $(EXTERNAL_MODULES_DIR)/stb/*.cppm))) \
-	fastgltf 
+	vulkan_backend \
+	fastgltf \
 
+# $(info $(EXTERNAL_MODULES))
 EXTERNAL_MODULE_TARGETS := $(foreach module,$(EXTERNAL_MODULES),$(MODULES_BUILD_DIR)/$(module).pcm) 
-
+# $(info $(EXTERNAL_MODULE_TARGETS))
 MAIN_MODULE_TARGET := NRay
 CPP_MODULE_TARGETS := $(foreach module,$(CPP_MODULES),$(MODULES_BUILD_DIR)/$(module).pcm)
 
 CPP_MODULE_OBJS := $(patsubst %.pcm, $(MODULES_OBJS_DIR)/%.o, $(notdir $(CPP_MODULE_TARGETS) $(EXTERNAL_MODULE_TARGETS)))
+# $(info $(CPP_MODULE_OBJS))
 
 # $(CPP_MODULE_TARGETS) : get_cpp_module_dependencies
 # .PHONY: get_cpp_module_dependencies
 get_cpp_module_dependencies: $(CPP_MODULE_DEPENDENCIES_FILE)
 
-# $(info $(CPP_MODULE_TARGETS))
-
-# $(info $(EXTERNAL_MODULE_TARGETS))
-STL_MODULE_TARGET := $(MODULES_BUILD_DIR)/stl.pcm
-
 $(TARGET): $(SUBMODULE_LIBS)
-# $(TARGET): $(wildcard $(LIB_PATH)/*.lib)
-# $(CPP_MODULE_TARGETS): $(EXTERNAL_MODULE_TARGETS)
 
-ifeq ($(USE_HEADER_UNITS), 1)
-$(STL_MODULE_TARGET) : $(CPP_SYSTEM_HEADER_TARGETS)
-endif
-
-# $(OBJS): $(CPP_MODULE_TARGETS)
 _MBD := $(MODULES_BUILD_DIR)
 _OBD := $(OBJS_BUILD_DIR)
 ifeq ($(USE_MODULES), 1)
 -include $(CPP_MODULE_DEPENDENCIES_FILE)
 endif
 # $(TARGET): $(OBJS) $(OBJS_IMGUI) $(OBJS_STB)
+
+# $(info $(LDFLAGS))
+
 $(TARGET): \
 	$(OBJS) \
+	$(OBJS_VULKAN_BACKEND) \
 	$(OBJS_IMGUI) \
 	$(OBJS_GLFW) \
 	$(OBJS_FASTGLTF) \
@@ -485,7 +530,7 @@ $(OBJS_BUILD_DIR)/%.$(OBJ_EXT): $(SRC_MAIN)/%.cpp # ./
 	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
 $(OBJS_BUILD_DIR)/%.$(OBJ_EXT): $(SRC_CORE)/%.cpp # core/
 	@echo "Compiling $(notdir $<)"
-	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $< -Wno-nullability-completeness
+	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
 $(OBJS_BUILD_DIR)/%.$(OBJ_EXT): $(SRC_BASE)/%.cpp # base/
 	@echo "Compiling $(notdir $<)"
 	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
@@ -534,45 +579,78 @@ $(HEADERS_BUILD_DIR)/%.pcm:
 	@echo "Compiling <$(patsubst %.pcm,%,$(notdir $@))>"
 	@$(CC) $(HEADER_FLAGS) --precompile -xc++-system-header $(patsubst %.pcm,%,$(notdir $@)) -o $@
 
-# $(HEADERS_BUILD_DIR)/entt-entity-registry.pcm: deps/entt/src/entt/entity/registry.hpp
-# 	@echo "Compiling <$(patsubst %.pcm,%,$(notdir $@))>"
-# 	@$(CC) $(HEADER_FLAGS) --precompile -xc++-user-header $< -o $@
 
+# ============================================ std module ===================================================
 
-# stl module
-_STL_MODULE_FLAGS := \
-	$(filter-out -fmodule-file-deps,$(CXXFLAGS)) \
+STD_MODULE_TARGET := $(MODULES_BUILD_DIR)/std.pcm
+STD_COMPAT_TARGET := $(MODULES_BUILD_DIR)/std.compat.pcm
+
+$(STD_COMPAT_TARGET): $(STD_MODULE_TARGET)
+
+ifeq ($(STD_MODULE_AVAILABLE), 1)
+
+STD_MODULE_PATH_FILE := $(BUILD_DIR)/std_module_path.mk
+
+# get std.cppm module path
+$(STD_MODULE_PATH_FILE): scripts/get_std_module_path.py
+	@echo "Generating $(STD_MODULE_PATH_FILE)"
+	@PYTHON $< > $@
+	
+-include $(STD_MODULE_PATH_FILE)
+
+# compile std and std.compat
+# $(info $(STD_MODULE_SRC))
+$(MODULES_BUILD_DIR)/%.pcm: $(STD_MODULE_SRC)/%.cppm
+	@echo "Compiling module $(notdir $<)"
+	@$(CC) $(CXXFLAGS) --precompile -c -x c++-module "$<" -o $@ \
+	-Wno-reserved-module-identifier \
+	-Wno-unused-command-line-argument
+
+else
+
+_STD_MODULE_FLAGS := $(filter-out -fmodule-file-deps,$(CXXFLAGS))
+
+ifeq (USE_HEADER_UNITS, 1)
+
+$(STD_MODULE_TARGET): $(CPP_SYSTEM_HEADER_TARGETS)
+
+_STD_MODULE_FLAGS += \
 	$(foreach header,$(CPP_SYSTEM_HEADERS),-fmodule-file=$(HEADERS_BUILD_DIR)/$(header).pcm) \
 	-Wno-experimental-header-units
+	
+endif # USE_HEADER_UNITS
 
-# $(STL_MODULE_TARGET) : $(CPP_SYSTEM_HEADER_TARGETS)
+$(MODULES_BUILD_DIR)/%.pcm: $(SRC_DIR)/Base/%.cppm
+	@echo "Compiling module std"
+	@$(CC) $(_STD_MODULE_FLAGS) --precompile -c -x c++-module $< -o $@
 
-$(MODULES_BUILD_DIR)/stl.pcm: source/Base/stl.cppm
-# @rm -f $@
-	@echo "Compiling module stl"
-	@$(CC) $(_STL_MODULE_FLAGS) --precompile -c -x c++-module $< -o $@
+endif # STD_MODULE_AVAILABLE
 
-# $(MODULES_BUILD_DIR)/entt.pcm: $(CPP_HEADER_TARGETS)
-
-# deps/modules/entt.cppm: entt-entity-registry.pcm 
-
-# $(MODULES_BUILD_DIR)/entt.pcm: $(HEADERS_BUILD_DIR)/entt-entity-registry.pcm 
-# @rm -f $@
-# 	@echo "Compiling module entt"
-# 	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) -fmodule-file=$< --precompile -c -x c++-module $< -o $@
 
 
 
 # ============================================ Modules ===================================================
+
+ifeq ($(findstring modules,$(MAKECMDGOALS)),modules)
+-include $(CPP_MODULE_DEPENDENCIES_FILE)
+-include $(STD_MODULE_PATH_FILE)
+endif
+
 modules: CXXFLAGS += -fprebuilt-module-path=$(MODULES_BUILD_DIR) -D USE_MODULES -fmodule-file-deps
 modules: $(CPP_MODULE_DEPENDENCIES_FILE) $(EXTERNAL_MODULE_TARGETS) $(CPP_MODULE_TARGETS) 
 
-CLANGD_MODULE_TARGETS := $(subst $(MODULES_BUILD_DIR),$(MODULES_BUILD_DIR_CLANGD),$(CPP_MODULE_TARGETS) $(EXTERNAL_MODULE_TARGETS) $(STL_MODULE_TARGET))
+# CLANGD_MODULE_TARGETS := $(subst $(MODULES_BUILD_DIR),$(MODULES_BUILD_DIR_CLANGD),$(CPP_MODULE_TARGETS) $(EXTERNAL_MODULE_TARGETS) $(STD_MODULE_TARGET))
+CLANGD_MODULE_TARGETS := $(subst $(MODULES_BUILD_DIR),$(MODULES_BUILD_DIR_CLANGD),$(CPP_MODULE_TARGETS) $(EXTERNAL_MODULE_TARGETS))
 
-# $(info $(CPP_MODULE_TARGETS) $(EXTERNAL_MODULE_TARGETS) $(STL_MODULE_TARGET))
+ifneq ($(STD_MODULE_SRC), )
+CLANGD_MODULE_TARGETS += $(subst $(MODULES_BUILD_DIR),$(MODULES_BUILD_DIR_CLANGD),$(MODULES_BUILD_DIR)/std.pcm $(MODULES_BUILD_DIR)/std.compat.pcm)
+endif
+
+# $(info $(CPP_MODULE_TARGETS) $(EXTERNAL_MODULE_TARGETS) $(STD_MODULE_TARGET))
 # $(info $(CLANGD_MODULE_TARGETS))
 
-modules_clangd: modules
+modules_clangd: $(DIRS_CREATED_FILE)
+# modules_clangd: modules
 modules_clangd: $(CLANGD_MODULE_TARGETS)
 
 $(MODULES_BUILD_DIR_CLANGD)/%.pcm: $(MODULES_BUILD_DIR)/%.pcm
@@ -581,51 +659,27 @@ $(MODULES_BUILD_DIR_CLANGD)/%.pcm: $(MODULES_BUILD_DIR)/%.pcm
 # ln -sf $< $@
 # @echo "mklink $(subst /,\,$@) ..\modules\$(notdir $<)"
 
-# ifeq (modules,$(MAKECMDGOALS))
-ifeq ($(findstring modules,$(MAKECMDGOALS)),modules)
--include $(CPP_MODULE_DEPENDENCIES_FILE)
-endif
-
-
-# $(_MBD)/*.pcm: 
-
-# build_modules: build_internal_modules
-
-# .NOTPARALLEL: build_internal_modules
-# build_internal_modules: $(CPP_MODULE_TARGETS)
-
-# MODULE_FLAGS := $(filter-out -fmodule-file-deps,$(CXXFLAGS))
-# $(info $(CXXFLAGS))
-# $(info $(filter-out -fmodule-file-deps,$(CXXFLAGS)))
-
-# $(patsubst $(MODULES_BUILD_DIR)/%.pcm,$(MODULES_BUILD_DIR)/$(MAIN_MODULE_TARGET)-%.pcm, $@)
-# $(MODULES_BUILD_DIR)/%.pcm: source/Core/%.cppm
-
-# _MBD := $(MODULES_BUILD_DIR)
-# _OBD := $(OBJS_BUILD_DIR)
-
-
-$(_MBD)/%.pcm: source/Core/%.cppm
+$(_MBD)/%.pcm: $(SRC_DIR)/Core/%.cppm
 # @rm -f $@
 	@echo "Compiling module $(notdir $<)"
 	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
-$(_MBD)/%.pcm: source/Base/%.cppm
+$(_MBD)/%.pcm: $(SRC_DIR)/Base/%.cppm
 # @rm -f $@
 	@echo "Compiling module $(notdir $<)"
 	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
-$(_MBD)/%.pcm: source/Engine/%.cppm
+$(_MBD)/%.pcm: $(SRC_DIR)/Engine/%.cppm
 # @rm -f $@
 	@echo "Compiling module $(notdir $<)"
 	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
-$(_MBD)/%.pcm: source/Resources/%.cppm
+$(_MBD)/%.pcm: $(SRC_DIR)/Resources/%.cppm
 # @rm -f $@
 	@echo "Compiling module $(notdir $<)"
 	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
-$(_MBD)/%.pcm: source/Shaders/%.cppm
+$(_MBD)/%.pcm: $(SRC_DIR)/Shaders/%.cppm
 # @rm -f $@
 	@echo "Compiling module $(notdir $<)"
 	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
@@ -641,7 +695,7 @@ $(_MBD)/%.pcm: $(SRC_FEATURE)/%.cppm
 $(_MBD)/%.pcm: $(EXTERNAL_MODULES_DIR)/%.cppm
 # @rm -f $@
 	@echo "Compiling module $(notdir $<)"
-	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@ -Wno-nullability-completeness
+	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
 $(_MBD)/%.pcm: $(EXTERNAL_MODULES_DIR)/imgui/%.cppm
 # @rm -f $@
@@ -665,6 +719,12 @@ $(_MBD)/%.pcm: deps/fastgltf/src/%.ixx
 	@echo "Compiling module $(notdir $<)"
 	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
+# vulkan_backend
+$(_MBD)/%.pcm: deps/vulkan_backend/src/%.cppm
+# @rm -f $@
+	@echo "Compiling module $(notdir $<)"
+	$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
+
 
 # ========================== Module Objs =============================
 
@@ -687,7 +747,7 @@ $(PLATFORM_BUILD_DIR)/imgui/%.$(OBJ_EXT): $(IMGUI_BACKENDS_DIR)/%.cpp # imgui/ba
 #Stb
 $(PLATFORM_BUILD_DIR)/stb/%.$(OBJ_EXT): $(SRC_STB)/%.c # stb/
 	@echo "Compiling $(notdir $<)"
-	@$(CC) -x c $(filter-out -std=c++20,$(CXXFLAGS)) $(-O)$@ $(-C) $<
+	@$(CC) -x c $(filter-out $(CPP_STD),$(CXXFLAGS)) $(-O)$@ $(-C) $<
 
 # GLFW
 ifeq ($(OS),Windows_NT)
@@ -702,7 +762,7 @@ endif
 
 $(PLATFORM_BUILD_DIR)/glfw/%.$(OBJ_EXT): $(SRC_GLFW)/%.c # glfw/
 	@echo "Compiling $(notdir $<)"
-	@$(CC) -x c $(filter-out -std=c++20,$(CXXFLAGS)) -c $< $(-O)$@ -D$(GLFW_PLATFORM) -Wno-unused-command-line-argument
+	@$(CC) -x c $(filter-out $(CPP_STD),$(CXXFLAGS)) -c $< $(-O)$@ -D$(GLFW_PLATFORM)
 
 ifeq ($(findstring clang,$(CC)),clang)
 _CLANG_FASTGLTF := -femulated-tls
@@ -712,7 +772,8 @@ endif
 # Fastgltf
 $(PLATFORM_BUILD_DIR)/fastgltf/%.$(OBJ_EXT): $(SRC_FASTGLTF)/%.cpp $(SRC_SIMDJSON)/simdjson.h
 	@echo "Compiling $(notdir $<)"
-	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $< -I$(DEPS_PATH)/fastgltf/include/ -I$(DEPS_PATH)/fastgltf/deps/simdjson $(_CLANG_FASTGLTF)
+	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $< -I$(DEPS_PATH)/fastgltf/include/ -I$(DEPS_PATH)/fastgltf/deps/simdjson $(_CLANG_FASTGLTF) 
+# -DFASTGLTF_USE_STD_MODULE=1
 
 # Simdjson
 SIMDJSON_TARGET_VERSION := 3.9.4
@@ -740,13 +801,17 @@ $(PLATFORM_BUILD_DIR)/fmt/%.$(OBJ_EXT): $(SRC_FMT)/%.cc # fmt/
 	@echo "Compiling $(notdir $<)"
 	@$(CC) -MMD -MP $(-O)$@ $(-C) $< -I$(DEPS_PATH)/fmt/include -fmodules-ts $(_CLANG_LIBFLAGS)
 
-
+# vulkan_backend
+$(PLATFORM_BUILD_DIR)/%.$(OBJ_EXT): $(SRC_VULKAN_BACKEND)/%.cpp # vulkan_backend/
+	@echo "Compiling $(notdir $<)"
+	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
 
 
 DEPFILES =  $(OBJS:.$(OBJ_EXT)=.d) \
 			$(OBJS_IMGUI:.$(OBJ_EXT)=.d) \
 			$(OBJS_GLFW:.$(OBJ_EXT)=.d) \
 			$(CPP_MODULE_TARGETS:.pcm=.d) \
+			$(EXTERNAL_MODULE_TARGETS:.pcm=.d) \
 
 # $(OBJS_STB:.$(OBJ_EXT)=.d) \
 # $(OBJS_FASTGLTF:.$(OBJ_EXT)=.d) \

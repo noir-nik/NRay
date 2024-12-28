@@ -273,8 +273,6 @@ namespace ImGui
     export using ImGui::BeginCombo;
     export using ImGui::EndCombo;
     export using ImGui::Combo;
-    export using ImGui::Combo;
-    export using ImGui::Combo;
     export using ImGui::DragFloat;
     export using ImGui::DragFloat2;
     export using ImGui::DragFloat3;

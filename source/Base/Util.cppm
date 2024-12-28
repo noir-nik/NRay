@@ -1,13 +1,13 @@
 #ifdef USE_MODULES
 export module Util;
-import stl;
+import std;
+import std.compat;
 #define _UTIL_EXPORT export
 #else
 #pragma once
 #define _UTIL_EXPORT
 #include <cstdint>
-#include <vector>
-
+#include <span>
 #ifdef __unix__ 
 #include <cstddef>
 #endif

@@ -1,11 +1,11 @@
 #ifdef USE_MODULES
 module Window;
-import Lmath;
+import lmath;
 import glfw;
 import Log;
 #else
 #include "Window.cppm"
-#include "Lmath.cppm"
+#include "lmath.hpp"
 #include "glfw.cppm"
 #include "Log.cppm"
 #endif
@@ -151,8 +151,8 @@ void CursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
 	LOG_INPUT("Window {} cursor pos: {}, {}", pWindow->GetName(), xpos, ypos);
 
-	mouse.deltaPos = mouse.pos - Lmath::vec2(xpos, ypos);
-	mouse.pos = Lmath::vec2(xpos, ypos);
+	mouse.deltaPos = mouse.pos - lmath::vec2(xpos, ypos);
+	mouse.pos = lmath::vec2(xpos, ypos);
 	// LOG_INPUT("Window {} delta mouse pos: {}, {}", pWindow->GetName(), pWindow->deltaMousePos.x, pWindow->deltaMousePos.y);
 
 	// Drag window
@@ -236,7 +236,7 @@ void CharModsCallback(GLFWwindow* window, unsigned int codepoint, int mods) {
 }
 
 
-void DropCallback (GLFWwindow *window, int path_count, const char *paths[]) {
+void DropCallback (GLFWwindow *window, int path_count, char const *paths[]) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
 	LOG_INPUT("Window {} drop: {}", pWindow->GetName(), path_count);
 	
@@ -244,7 +244,7 @@ void DropCallback (GLFWwindow *window, int path_count, const char *paths[]) {
 		ctx.pathsDrop.push_back(paths[i]);
 	}
 	for (int i = 0; i < path_count; i++) {
-		printf("%s\n", paths[i]);
+		LOG_TRACE("Window {} drop: {}", pWindow->GetName(), paths[i]);
 	}
 
 	if (pWindow->dropCallback)
@@ -253,7 +253,7 @@ void DropCallback (GLFWwindow *window, int path_count, const char *paths[]) {
 }
 
 
-static void errorCallback(int error, const char* description)
+static void errorCallback(int error, char const* description)
 {
 	LOG_ERROR("[GLFW ERROR] ({}) {}", error, description);
 }
@@ -330,7 +330,9 @@ Window::Window(WindowCreateInfo const& info): name(info.name), size( info.size )
 }
 
 void Window::Destroy() {
-	swapChain.Destroy();
+	if (swapChainAlive) {
+		// swapChain.Destroy();
+	}
 	glfwGetWindowPos(window, &pos.x, &pos.y);
 	UIContext.Destroy();
 	glfwDestroyWindow(window);
@@ -339,12 +341,6 @@ void Window::Destroy() {
 
 void Window::ApplyChanges() {
 	WINDOW_ALIVE_GUARD
-	// Destroy if should close
-	if (GetShouldClose()) {
-		Destroy();
-		return;
-	}
-	
 	// Change mode
 	if (newMode != mode) {
 		mode = newMode;
@@ -406,8 +402,8 @@ void Window::Update() {
 	lastTime = newTime;
 	// double x, y;
 	// glfwGetCursorPos(window, &x, &y);
-	// deltaMousePos = mousePos - Lmath::vec2(x, y);
-	// mousePos = Lmath::vec2(x, y);
+	// deltaMousePos = mousePos - lmath::vec2(x, y);
+	// mousePos = lmath::vec2(x, y);
 }
 
 std::string VideoModeText(GLFWvidmode mode) {

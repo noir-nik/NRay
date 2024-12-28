@@ -2,9 +2,9 @@
 #define PHONG_H
 
 #ifdef ENGINE
-#include "Lmath_types.h"
+#include "lmath_types.hpp"
 namespace Phong {
-using namespace Lmath;
+using namespace lmath;
 #endif // ENGINE
 
 struct PhongLight {

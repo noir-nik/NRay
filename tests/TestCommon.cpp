@@ -1,15 +1,15 @@
 #ifdef USE_MODULES
-import Lmath;
-import VulkanBackend;
+import lmath;
+import vulkan_backend;
 #else
-#include "VulkanBackend.cppm"
+#include "vulkan_backend.hpp"
 #include "TestCommon.hpp"
 #include "FileManager.cppm"
 #endif
 
-using Pixel = Lmath::float4;
+using Pixel = lmath::float4;
 
-void fillUV(Lmath::float4* image, int width, int height){
+void fillUV(lmath::float4* image, int width, int height){
 	for (auto i = 0; i < height; i++) {
 		for (auto j = 0; j < width; j++) {
 			int idx = i * width + j;

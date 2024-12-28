@@ -10,7 +10,7 @@ module;
 
 #ifdef USE_MODULES
 export module FileManager;
-import stl;
+import std;
 #else
 #pragma once
 #include <string>
@@ -19,8 +19,8 @@ import stl;
 
 class FileManager {
 public:
-    static std::vector<char> ReadRawBytes(const std::string& filename);
-    static void ReadFloats(const std::string& filename, std::vector<float> &buffer);
-    static int GetFileVersion(const std::string& filename);
-	static void SaveBMP(const char* fname, const unsigned int* pixels, int w, int h);
+    static std::vector<char> ReadRawBytes(std::string const& filename);
+    static void ReadFloats(std::string const& filename, std::vector<float> &buffer);
+    static int GetFileVersion(std::string const& filename);
+	static void SaveBMP(char const* fname, unsigned const int* pixels, int w, int h);
 };

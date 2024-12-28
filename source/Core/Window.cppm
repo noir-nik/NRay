@@ -1,17 +1,15 @@
 #ifdef USE_MODULES
 export module Window;
 #define _WINDOW_EXPORT export
-import VulkanBackend;
-import Lmath;
+import lmath;
 import Types;
 import glfw;
 import UI;
-import stl;
+import std;
 #else
 #pragma once
 #define _WINDOW_EXPORT
-#include "VulkanBackend.cppm"
-#include "Lmath_types.h"
+#include "lmath_types.hpp"
 // #include "Runtime.cppm"
 #include "Types.cppm"
 #include "glfw.cppm"
@@ -53,23 +51,23 @@ void ScrollCallback      (GLFWwindow *window, double xoffset, double yoffset);
 void KeyCallback         (GLFWwindow *window, int key, int scancode, int action, int mods);
 void CharCallback        (GLFWwindow *window, unsigned int codepoint);
 void CharModsCallback    (GLFWwindow *window, unsigned int codepoint, int mods);
-void DropCallback        (GLFWwindow *window, int path_count, const char *paths[]);
+void DropCallback        (GLFWwindow *window, int path_count, char const *paths[]);
 }
 
 _WINDOW_EXPORT
 struct Mouse {
 	float       scroll      = .0f;
 	float       deltaScroll = .0f;
-	Lmath::vec2 pos         = Lmath::vec2(.0f, .0f);
-	Lmath::vec2 deltaPos    = Lmath::vec2(.0f, .0f);
+	lmath::vec2 pos         = lmath::vec2(.0f, .0f);
+	lmath::vec2 deltaPos    = lmath::vec2(.0f, .0f);
 
 	u8          buttons[8]  = { GLFW::Release, GLFW::Release, GLFW::Release, GLFW::Release, GLFW::Release, GLFW::Release, GLFW::Release, GLFW::Release };
 	GLFW::Mod   mods        = static_cast<GLFW::Mod>(0);
 
 	inline float GetScroll() const { return scroll; }
 	inline float GetDeltaScroll() const { return deltaScroll; }
-	inline Lmath::vec2 GetPos() const { return pos; }
-	inline Lmath::vec2 GetDeltaPos() const { return deltaPos; }
+	inline lmath::vec2 GetPos() const { return pos; }
+	inline lmath::vec2 GetDeltaPos() const { return deltaPos; }
 
 	inline void ResetDeltaScroll() { deltaScroll = .0f; }
 
@@ -83,16 +81,16 @@ private:
 	friend void _InputCallbacks::KeyCallback         (GLFWwindow *window, int key, int scancode, int action, int mods);
 	friend void _InputCallbacks::CharCallback        (GLFWwindow *window, unsigned int codepoint);
 	friend void _InputCallbacks::CharModsCallback    (GLFWwindow *window, unsigned int codepoint, int mods);
-	friend void _InputCallbacks::DropCallback        (GLFWwindow *window, int path_count, const char *paths[]);
+	friend void _InputCallbacks::DropCallback        (GLFWwindow *window, int path_count, char const *paths[]);
 };
 _WINDOW_EXPORT
 extern Mouse mouse;
 
 _WINDOW_EXPORT
 struct WindowCreateInfo {
-	Lmath::ivec2 size = { 1280, 960 };
-	Lmath::ivec2 pos = { 30, 30 };
-	const char* name = "Window";
+	lmath::ivec2 size = { 1280, 960 };
+	lmath::ivec2 pos = { 30, 30 };
+	char const* name = "Window";
 	void* imGuiStyle = nullptr;
 };
 
@@ -101,13 +99,13 @@ class Window {
 	friend class WindowManager;
 	GLFWwindow*   window             = nullptr;
 	std::string   name               = "Window";
-	Lmath::int2   pos                = { 0, 30 };
-	Lmath::int2   size               = { 640, 480 };
+	lmath::int2   pos                = { 0, 30 };
+	lmath::int2   size               = { 640, 480 };
 	int           monitorIndex       = 0;
 	int           videoModeIndex     = 0;
-	Lmath::vec2   scale              = { 1.0f, 1.0f };
-	Lmath::ivec4  windowedSize       = { 30, 30, 640, 480 };
-	Lmath::ivec4  sizeLimits         = { 30, 30, 1920, 1080 };
+	lmath::vec2   scale              = { 1.0f, 1.0f };
+	lmath::ivec4  windowedSize       = { 30, 30, 640, 480 };
+	lmath::ivec4  sizeLimits         = { 30, 30, 1920, 1080 };
 	static inline bool          framebufferResized = false;
 	int frameCount = 0;
 
@@ -158,7 +156,7 @@ class Window {
 	void (*keyCallback)                (Window *window, int key, int scancode, int action, int mods) = nullptr;
 	void (*charCallback)               (Window *window, unsigned int codepoint)                      = nullptr;
 	void (*charModsCallback)           (Window *window, unsigned int codepoint, int mods)            = nullptr;
-	void (*dropCallback)               (Window *window, int path_count, const char *paths[])         = nullptr;
+	void (*dropCallback)               (Window *window, int path_count, char const *paths[])         = nullptr;
 		
 	Window& operator=(const Window&) = delete;
 	Window& operator=(Window&&) = delete;
@@ -166,7 +164,6 @@ class Window {
 	Window(Window&&) = delete;
 
 public:
-	vkw::SwapChain swapChain;
 	// void* uiDrawData = nullptr;
 
 	Window(WindowCreateInfo const& info);
@@ -174,7 +171,7 @@ public:
 	void ApplyChanges();
 	void UpdateFramebufferSize();
 	void Update();
-	bool IsKeyPressed(uint16_t keyCode);
+	bool IsKeyPressed(u16 keyCode);
 	void Destroy();
 
 	inline GLFWwindow* GetGLFWwindow()                     { return window; }
@@ -200,17 +197,17 @@ public:
 	// inline float&      GetScroll()                         { return scroll;                                 }
 	// inline float&      GetDeltaScroll()                    { return deltaScroll;                            }
 
-	// inline Lmath::vec2 GetDeltaMouse()                     { return deltaMousePos;                          }
+	// inline lmath::vec2 GetDeltaMouse()                     { return deltaMousePos;                          }
 
-	inline bool        IsKeyDown(uint16_t keyCode)         { return glfwGetKey(window, keyCode);            }
-	inline bool        IsMouseDown(uint16_t buttonCode)    { return glfwGetMouseButton(window, buttonCode); }
+	inline bool        IsKeyDown(u16 keyCode)              { return glfwGetKey(window, keyCode);            }
+	inline bool        IsMouseDown(u16 buttonCode)         { return glfwGetMouseButton(window, buttonCode); }
 
 
 	inline void        CmdResizeTo(int width, int height)  { glfwSetWindowSize(window, width, height); framesToDraw += 1; }
-	inline void        SetSize(Lmath::int2 value)          { size = value; }
+	inline void        SetSize(lmath::int2 value)          { size = value; }
 	inline void        SetSize(int width, int height)      { size = {width, height}; }
 	
-	inline auto        GetPos()                            { glfwGetWindowPos(window, &pos.x, &pos.y); return Lmath::int2(pos.x, pos.y); }
+	inline auto        GetPos()                            { glfwGetWindowPos(window, &pos.x, &pos.y); return lmath::int2(pos.x, pos.y); }
 	inline void        SetPos(int x, int y)                { pos.x = x; pos.y = y; }
 
 	inline auto        GetMode()                           { return mode; }
@@ -219,8 +216,8 @@ public:
 	inline bool        GetFramebufferResized()             { return framebufferResized; }
 	inline void        SetFramebufferResized(bool value)   { framebufferResized = value; }
 
-	inline const char* GetName()                           { return name.c_str(); }
-	inline void        SetName(const char* name)           { glfwSetWindowTitle(window, name);}
+	inline char const* GetName()                           { return name.c_str(); }
+	inline void        SetName(char const* name)           { glfwSetWindowTitle(window, name);}
 
 	inline bool        GetMaximized()                      { return maximized; }
 	inline void        SetMaximized(bool value)            { maximized = value;}
@@ -231,12 +228,8 @@ public:
 	inline void        AddFramesToDraw(int value)           { framesToDraw += value; }
 	inline void        SetFramesToDraw(int value)           { framesToDraw = value; }
 
-	inline void        CreateSwapchain(vkw::Device& device, vkw::Queue& queue){ if (!swapChainAlive) swapChain.Create(device, queue, window, Lmath::uint2(size)); swapChainAlive = true; }
-	inline void        CreateUI(vkw::SampleCount sampleCount) {swapChain.CreateUI(sampleCount); }
 	inline void        SetUIContextCurrent()               { UIContext.SetCurrent(); }
-	inline void        RecreateSwapchain()                 { if(!swapChainAlive)return; swapChain.Recreate(Lmath::uint2(size)); } 
-	inline bool        GetSwapchainDirty()                 { return swapChain.GetDirty(); }
-	inline auto&       GetSwapchain()                      { return swapChain; }
+	// inline auto&       GetSwapchain()                      { return swapChain; }
 
 	// inline void        SetCreateSwapchainFn (void(*fn)(GLFWwindow*)) { createSwapchainFn  = fn; }
 	// inline void        SetDestroySwapchainFn(void(*fn)(GLFWwindow*)) { destroySwapchainFn = fn; }
@@ -268,7 +261,7 @@ public:
 	inline void        CmdRestore()                        { glfwRestoreWindow(window); }
 	inline void        CmdMaximize()                       { glfwMaximizeWindow(window); }
 	inline void        CmdSetPos(int x, int y)             { glfwSetWindowPos(window, x, y); }
-	inline void        CmdSetPos(Lmath::int2 pos)          { glfwSetWindowPos(window, pos.x, pos.y); }
+	inline void        CmdSetPos(lmath::int2 pos)          { glfwSetWindowPos(window, pos.x, pos.y); }
 
 
 
@@ -291,7 +284,7 @@ public:
 	inline void AddKeyCallback                 (void(*callback)(Window *window, int key, int scancode, int action, int mods)) { keyCallback = callback;                }
 	inline void AddCharCallback                (void(*callback)(Window *window, unsigned int codepoint))                      { charCallback = callback;               }
 	inline void AddCharModsCallback            (void(*callback)(Window *window, unsigned int codepoint, int mods))            { charModsCallback = callback;           }
-	inline void AddDropCallback                (void(*callback)(Window *window, int path_count, const char *paths[]))         { dropCallback = callback;               }
+	inline void AddDropCallback                (void(*callback)(Window *window, int path_count, char const *paths[]))         { dropCallback = callback;               }
 
 private:
 	friend void _WindowCallbacks::WindowPosCallback          (GLFWwindow *window, int xpos, int ypos);
@@ -311,7 +304,7 @@ private:
 	friend void _InputCallbacks::KeyCallback                 (GLFWwindow *window, int key, int scancode, int action, int mods);
 	friend void _InputCallbacks::CharCallback                (GLFWwindow *window, unsigned int codepoint);
 	friend void _InputCallbacks::CharModsCallback            (GLFWwindow *window, unsigned int codepoint, int mods);
-	friend void _InputCallbacks::DropCallback                (GLFWwindow *window, int path_count, const char *paths[]);
+	friend void _InputCallbacks::DropCallback                (GLFWwindow *window, int path_count, char const *paths[]);
 
 	inline std::vector<std::string> GetAndClearPaths()     { auto paths = pathsDrop; pathsDrop.clear(); return paths; }
 };
