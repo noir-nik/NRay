@@ -233,13 +233,12 @@ inline void transpose4(const float4 in_rows[4], float4 out_rows[4])
 	out_rows[3] = float4{rows[3], rows[7], rows[11], rows[15]};
 }
 
+float3x3 inverse3x3(const float3x3& m);
+
 inline float4x4 inverse(const float4x4& m1);
 inline float4x4 transpose(const float4x4& m1);
 inline float4x4 affineInverse(const float4x4& m);
 inline void decompose(float4x4 const& m, float3& translation, float3& rotation, float3& scale);
-
-
-float3x3 inverse3x3(const float3x3& m);
 
 
 
@@ -286,26 +285,6 @@ inline float3 mul(const float3x3& m, const float3& v)
 
 inline float3 operator*(const float3x3& m, const float3& v) { return mul(m, v); }
 
-
-inline float4x4 operator|(const float4x4& m, float4x4(*func)(const float4x4&)) {
-	return func(m);
-}
-
-#if __cplusplus >= 201703L
-inline float4x4 operator|(const float4x4& matrix, std::tuple<float3&, float3&, float3&> params) {
-	auto& [translation, rotation, scale] = params;
-	decompose(matrix, translation, rotation, scale);
-	return matrix;
-}
-#else
-inline float4x4 operator|(const float4x4& matrix, std::tuple<float3&, float3&, float3&> params) {
-	float3& translation = std::get<0>(params);
-	float3& rotation = std::get<1>(params);
-	float3& scale = std::get<2>(params);
-	decompose(matrix, translation, rotation, scale);
-	return matrix;
-}
-#endif
 inline float4 mul(const float4x4& m, const float4& v)
 {
 	float4 res;
@@ -427,7 +406,6 @@ inline float4x4 transpose(const float4x4& m1)
 	res.set_row(3, float4{m1(0, 3), m1(1, 3), m1(2, 3), m1(3, 3)});
 	return res;
 }
-
 
 inline float4x4 inverse(const float4x4& m1)
 {
@@ -677,5 +655,151 @@ inline void decompose(float4x4 const& m, float3& translation, float3& rotation, 
         rotation.z = 0;
     }
 }
+
+
+inline float4x4 operator|(const float4x4& m, float4x4(*func)(const float4x4&)) {
+	return func(m);
+}
+
+struct translate_op {
+	float3 translation;
+	inline translate_op(float x, float y, float z) : translation(x, y, z) {}
+	inline translate_op(float3 t) : translation(t) {}
+};
+
+inline translate_op translate(float x, float y, float z) {
+	return translate_op(x, y, z);
+}
+
+inline translate_op translate(float3 t) {
+	return translate_op(t);
+}
+
+inline float4x4 operator|(float4x4 m, const translate_op& op) {
+	m.col(3) += float4{op.translation.x, op.translation.y, op.translation.z, 0.0f};
+	return m;
+}
+
+inline float4x4& operator|=(float4x4& m, const translate_op& op) {
+	m.col(3) += float4{op.translation.x, op.translation.y, op.translation.z, 0.0f};
+	return m;
+}
+
+struct rotateX_op {
+	float rotation;
+	inline rotateX_op(float x) : rotation(x) {}
+};
+
+inline rotateX_op rotateX(float x) {
+	return rotateX_op(x);
+}
+
+inline float4x4 operator|(float4x4 m, const rotateX_op& op) {
+	return rotate4x4X(op.rotation) * m;
+}
+
+inline float4x4& operator|=(float4x4& m, const rotateX_op& op) {
+	m = rotate4x4X(op.rotation) * m;
+	return m;
+}
+
+struct rotateY_op {
+	float rotation;
+	inline rotateY_op(float x) : rotation(x) {}
+};
+
+inline rotateY_op rotateY(float x) {
+	return rotateY_op(x);
+}
+
+inline float4x4 operator|(float4x4 m, const rotateY_op& op) {
+	return rotate4x4Y(op.rotation) * m;
+}
+
+inline float4x4& operator|=(float4x4& m, const rotateY_op& op) {
+	m = rotate4x4Y(op.rotation) * m;
+	return m;
+}
+
+struct rotateZ_op {
+	float rotation;
+	inline rotateZ_op(float x) : rotation(x) {}
+};
+
+inline rotateZ_op rotateZ(float x) {
+	return rotateZ_op(x);
+}
+
+inline float4x4 operator|(float4x4 m, const rotateZ_op& op) {
+	return rotate4x4Z(op.rotation) * m;
+}
+
+inline float4x4& operator|=(float4x4& m, const rotateZ_op& op) {
+	m = rotate4x4Z(op.rotation) * m;
+	return m;
+}
+
+struct rotate_op {
+	float3 axis;
+	float rotation;
+	inline rotate_op(float x, float y, float z, float r) : axis(x, y, z), rotation(r) {}
+	inline rotate_op(float3 a, float r) : axis(a), rotation(r) {}
+};
+
+inline rotate_op rotate(float x, float y, float z, float r) {
+	return rotate_op(x, y, z, r);
+}
+
+inline rotate_op rotate(float3 a, float r) {
+	return rotate_op(a, r);
+}
+
+inline float4x4 operator|(float4x4 m, const rotate_op& op) {
+	return rotate4x4(op.axis, op.rotation) * m;
+}
+
+inline float4x4& operator|=(float4x4& m, const rotate_op& op) {
+	m = rotate4x4(op.axis, op.rotation) * m;
+	return m;
+}
+
+struct scale_op {
+	float3 scale;
+	inline scale_op(float x, float y, float z) : scale(x, y, z) {}
+	inline scale_op(float3 s) : scale(s) {}
+};
+
+inline scale_op scale(float x, float y, float z) {
+	return scale_op(x, y, z);
+}
+
+inline scale_op scale(float3 s) {
+	return scale_op(s);
+}
+
+inline float4x4 operator|(float4x4 m, const scale_op& op) {
+	return scale4x4(op.scale) * m;
+}
+
+inline float4x4& operator|=(float4x4& m, const scale_op& op) {
+	m = scale4x4(op.scale) * m;
+	return m;
+}
+
+#if __cplusplus >= 201703L
+inline float4x4 operator|(const float4x4& matrix, std::tuple<float3&, float3&, float3&> params) {
+	auto& [translation, rotation, scale] = params;
+	decompose(matrix, translation, rotation, scale);
+	return matrix;
+}
+#else
+inline float4x4 operator|(const float4x4& matrix, std::tuple<float3&, float3&, float3&> params) {
+	float3& translation = std::get<0>(params);
+	float3& rotation = std::get<1>(params);
+	float3& scale = std::get<2>(params);
+	decompose(matrix, translation, rotation, scale);
+	return matrix;
+}
+#endif
 
 }

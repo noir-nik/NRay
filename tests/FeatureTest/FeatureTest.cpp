@@ -435,15 +435,6 @@ void AppContext::DrawWindow(Entity window) {
 	cmd.DrawImGui(uiDrawData);
 	cmd.EndRendering();
 	
-	// cmd.Barrier(resource.uiResolveImage, {vkw::ImageLayout::TransferSrc});
-	// ivec4 blitRegion = fullWindowRect;
-	// LOG_INFO("Viewport_A: {}, {}, {}, {}", viewport_A.x, viewport_A.y, viewport_A.z, viewport_A.w);
-	// cmd.Blit({
-	// 	.dst = targetImage,
-	// 	.src = resource.uiResolveImage,
-	// 	.regions = {{{blitRegion, blitRegion}}},
-	// });
-	
 	cmd.Barrier(targetImage, {vkw::ImageLayout::Present});
 
 	windowHandle.swapChain.SubmitAndPresent();

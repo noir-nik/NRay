@@ -396,15 +396,14 @@ bool ProcessViewportInput(Runtime::Viewport& ctx, ImGuiKeyChord mods, float rota
 	if (io.MouseDown[ImGuiMouseButton_Right]) {
 		auto res = mods & ImGuiMod_Alt;
 		if(mods & ImGuiMod_Alt) {
-			printf("Alt pressed\n");
 			auto zoom_factor = camera.zoom_factor * length(camera_pos - camera.focus);
 			auto movement = (zoom_factor * deltaPos.x) * camera_forward;
-			camera.view = translate4x4(movement) * camera.view;
+			camera.view |= translate(movement);
 			// camera.focus += movement;
 		} else {
 			camera_pos -= camera.focus;
 			// camera.view = rotate4x4(camera_up, deltaPos.x * camera.rotation_factor) * rotate4x4(camera_right, deltaPos.y * camera.rotation_factor)  * camera.view; // trackball
-			camera.view = rotate4x4Y(rotation_sign * deltaPos.x * camera.rotation_factor) * rotate4x4(camera_right, deltaPos.y * camera.rotation_factor)  * camera.view;
+			(camera.view |= rotate(camera_right, deltaPos.y * camera.rotation_factor)) |= rotateY(rotation_sign * deltaPos.x * camera.rotation_factor);
 			camera_pos += camera.focus;
 		}
 		// window->AddFramesToDraw(1);
@@ -415,7 +414,7 @@ bool ProcessViewportInput(Runtime::Viewport& ctx, ImGuiKeyChord mods, float rota
 		auto movement = move_factor * (camera_up * -deltaPos.y + camera_right * deltaPos.x); 
 		// printf("%f %f %f\n", movement.x, movement.y, movement.z);
 		// camera.focus += movement;
-		camera.view = translate4x4(movement) * camera.view;
+		camera.view |= translate(movement);
 		// window->AddFramesToDraw(1);
 		return 1;
 	}
@@ -457,49 +456,37 @@ bool Context::Viewport(Runtime::Viewport& ctx) {
 			ctx.camera.updateProj(ctx.viewport.z, ctx.viewport.w);
 		}
 		auto& io = ImGui::GetIO();
-		auto hoveringRect = ImGui::IsMouseHoveringRect(r.Min, r.Max);
-		auto contentHoverable = ImGui::IsWindowContentHoverable(w);
-		auto windowHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
-		auto dragging_l = ImGui::IsMouseDragging(ImGuiMouseButton_Left, 0.0f);
-		auto dragging_r = ImGui::IsMouseDragging(ImGuiMouseButton_Right, 0.0f);
-		auto dragging_m = ImGui::IsMouseDragging(ImGuiMouseButton_Middle, 0.0f);
-		auto drag_delta_l = ImGui::GetMouseDragDelta(ImGuiMouseButton_Left, 0.0f);
-		auto drag_delta_r = ImGui::GetMouseDragDelta(ImGuiMouseButton_Right, 0.0f);
-		auto drag_delta_m = ImGui::GetMouseDragDelta(ImGuiMouseButton_Middle, 0.0f);
-		auto drag_delta = ImVec2(drag_delta_l.x + drag_delta_r.x + drag_delta_m.x, drag_delta_l.y + drag_delta_r.y + drag_delta_m.y);
-		ImGui::Text("Hovering: %s", hoveringRect ? "true" : "false");
-		ImGui::Text("Content Hoverable: %s", contentHoverable ? "true" : "false");
-		ImGui::Text("Hovered: %s", windowHovered ? "true" : "false");
-		// ImGui::Text("Dragging: %s", dragging ? "true" : "false");
-		ImGui::Text("Drag Delta: (%f, %f)", drag_delta.x, drag_delta.y);
-		ImGui::Text("Mouse delta: (%f, %f)", io.MouseDelta.x, io.MouseDelta.y);
-		ImGui::TextColored(io.WantCaptureMouse ? ImVec4(0,1,0,1) : ImVec4(1,0,0,1), "WantCaptureMouse: %s", io.WantCaptureMouse ? "true" : "false");
-		ImGui::TextColored(io.WantCaptureKeyboard ? ImVec4(0,1,0,1) : ImVec4(1,0,0,1), "WantCaptureKeyboard: %s", io.WantCaptureKeyboard ? "true" : "false");
+		bool hoveringRect = ImGui::IsMouseHoveringRect(r.Min, r.Max);
+		bool contentHoverable = ImGui::IsWindowContentHoverable(w);
+		bool windowHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows);
+		bool dragging_l = ImGui::IsMouseDragging(ImGuiMouseButton_Left, 0.0f);
+		bool dragging_r = ImGui::IsMouseDragging(ImGuiMouseButton_Right, 0.0f);
+		bool dragging_m = ImGui::IsMouseDragging(ImGuiMouseButton_Middle, 0.0f);
 		// ImGui::ResetMouseDragDelta()
 		// ImGui::ResetMouseDragDelta()
 		// auto& p = io.MouseClickedPos[1];
+		auto dragging = /* dragging_l ||  */dragging_r || dragging_m;
 		static int prev_dragging = 0;
 		static bool proc = 0;
-		auto dragging = dragging_l || dragging_r || dragging_m;
 		static float rotation_sign;
 		static ImGuiKeyChord mods;
 		if (dragging != prev_dragging) {
-			if (!prev_dragging) {
-				proc = hoveringRect && contentHoverable && windowHovered;
+			if (dragging && hoveringRect && contentHoverable && windowHovered) {
+				proc = 1;
 				rotation_sign = ctx.camera.getUp().y > 0 ? 1.0f : -1.0f;
 				mods = io.KeyMods;
-				printf ("Start dragging\n");
 			} else {
-				printf ("Stop dragging\n");
 				proc = 0;
 			}
 			prev_dragging = !prev_dragging;
 		}
-		drawWindowRects(w);
+
+		// drawWindowRects(w);
 
 		if (proc) {
 			viewport_changed |= ProcessViewportInput(ctx, mods, rotation_sign);
 		}
+		ImGui::Text("Viewport changed: %s", viewport_changed ? "true" : "false");
 	}
 	// ImGui::PopStyleVar();
 	// ImGui::PopStyleColor();
