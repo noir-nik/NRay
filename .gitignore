@@ -7,12 +7,10 @@
 .vscode/
 .vscode/*
 
-
 my*
 *.bmp
 bin/
 build/
-build-linux/
 logs/*
 
 *.spv

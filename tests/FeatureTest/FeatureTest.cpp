@@ -31,7 +31,7 @@ import Structs;
 import Materials;
 #else
 #include "lmath.hpp"
-#include "vulkan_backend.hpp"
+#include <vulkan_backend/core.hpp>
 #include "Window.cppm"
 #include "Log.cppm"
 #include "Bindless.h"

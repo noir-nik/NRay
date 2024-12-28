@@ -8,7 +8,8 @@ module;
 module Materials;
 import vulkan_backend;
 #else
-#include "vulkan_backend.hpp"
+#include <string>
+#include <vulkan_backend/core.hpp>
 #include "Materials.cppm"
 #endif
 

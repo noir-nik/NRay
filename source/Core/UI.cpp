@@ -6,7 +6,7 @@ import std;
 import imgui;
 #else
 #include "UI.cppm"
-#include "vulkan_backend.hpp"
+#include <vulkan_backend/core.hpp>
 #include "imgui.cppm"
 #include "Log.cppm"
 

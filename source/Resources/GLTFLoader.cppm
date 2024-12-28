@@ -10,7 +10,7 @@ import std;
 #else
 #pragma once
 #define _GLTFLOADER_EXPORT
-// #include "vulkan_backend.hpp"
+// #include <vulkan_backend/core.hpp>
 #include "Component.cppm"
 #include "SceneGraph.cppm"
 #include "Materials.cppm"

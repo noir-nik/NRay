@@ -10,7 +10,7 @@ import std;
 #include <vector>
 
 #include "Types.cppm"
-#include "vulkan_backend.hpp"
+#include <vulkan_backend/core.hpp>
 #endif
 
 static constexpr uint defaultCapacity = 256;

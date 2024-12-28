@@ -8,7 +8,7 @@ import std;
 #pragma once
 #define _OBJECTS_EXPORT
 #include "lmath_types.hpp"
-#include "vulkan_backend.hpp"
+#include <vulkan_backend/core.hpp>
 #include <cstdint>
 #include <vector>
 #endif

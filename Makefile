@@ -723,7 +723,7 @@ $(_MBD)/%.pcm: deps/fastgltf/src/%.ixx
 $(_MBD)/%.pcm: deps/vulkan_backend/src/%.cppm
 # @rm -f $@
 	@echo "Compiling module $(notdir $<)"
-	$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
+	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
 
 # ========================== Module Objs =============================
@@ -813,31 +813,14 @@ DEPFILES =  $(OBJS:.$(OBJ_EXT)=.d) \
 			$(CPP_MODULE_TARGETS:.pcm=.d) \
 			$(EXTERNAL_MODULE_TARGETS:.pcm=.d) \
 
-# $(OBJS_STB:.$(OBJ_EXT)=.d) \
-# $(OBJS_FASTGLTF:.$(OBJ_EXT)=.d) \
-# $(OBJS_SPDLOG:.$(OBJ_EXT)=.d) \
-# $(OBJS_IMGUI:.$(OBJ_EXT)=.d) \
-# $(OBJS_GLFW:.$(OBJ_EXT)=.d) \
-
-# $(OBJS_FMT:.$(OBJ_EXT)=.d)
-
 -include $(wildcard $(DEPFILES))
 
 # Run
 run:
 	@./$(TARGET_DIR)/$(TARGET)
 
-
-# VLGRND_OUTPUT := --log-file="bin/mem"
-# VLGRND_FULL := --leak-check=full 
-# VLGRND_FULL += --show-leak-kinds=all
-
 runv:
 	@valgrind $(VLGRND_FULL) $(VLGRND_OUTPUT) ./$(TARGET_DIR)/$(TARGET) 
-# @valgrind ./$(TARGET_DIR)/$(TARGET)
-
-# $(info $(DEPFILES))
-# .PHONY: clean cleanall cleanheaders cleanmodules cleanlib cleanimgui cleanstb cleanglfw cleanfastgltf cleanspdlog cleanfmt .WAIT
 
 clean:
 	@rm -f $(OBJS) $(DEPFILES) $(PLATFORM_BUILD_DIR)/$(TARGET).pdb $(wildcard $(OBJS_BUILD_DIR)/*.o) $(wildcard $(OBJS_BUILD_DIR)/*.obj)
@@ -869,109 +852,5 @@ cleanimgui:
 	@rm -f $(OBJS_IMGUI) $(OBJS_IMGUI:.o=.d)
 	@echo "=== Cleaned ==="
 
-# cleanstb:
-# 	@rm -f $(OBJS_STB) $(OBJS_STB:.o=.d)
-# 	@echo "=== Cleaned ==="
-
-cleanglfw:
-	@rm -f $(OBJS_GLFW) $(OBJS_GLFW:.o=.d) $(wildcard ./*.obj)
-	@echo "=== Cleaned ==="
-
 rm:
 	$(RM) $(wildcard *.bmp)
-
-
-# ===== Libraries ======
-
-
-
-CMAKE_FLAGS :=  -DCMAKE_LIBRARY_OUTPUT_DIRECTORY=$(abspath $(LIB_PATH)) \
-				-DCMAKE_ARCHIVE_OUTPUT_DIRECTORY=$(abspath $(LIB_PATH)) \
-				-DCMAKE_LIBRARY_OUTPUT_DIRECTORY_DEBUG=$(abspath $(LIB_PATH)) \
-				-DCMAKE_ARCHIVE_OUTPUT_DIRECTORY_DEBUG=$(abspath $(LIB_PATH)) \
-				-DCMAKE_LIBRARY_OUTPUT_DIRECTORY_RELEASE=$(abspath $(LIB_PATH)) \
-				-DCMAKE_ARCHIVE_OUTPUT_DIRECTORY_RELEASE=$(abspath $(LIB_PATH)) \
-
-# -DMSVC_RUNTIME_LIBRARY="MultiThreaded$<$<CONFIG:Debug>:Debug>"
-
-ifeq ($(CC),cl)
-
-
-CMAKE_CXX_FLAGS :=
-CMAKE_FLAGS += 
-
-$(LIB_PATH)/fastgltf.$(LIB_EXT):
-	@cmake --fresh $(DEPS_PATH)/fastgltf -B$(DEPS_PATH)/fastgltf/$(CMAKE_BUILD_DIR) ${CMAKE_FLAGS}
-	@cmake --build $(DEPS_PATH)/fastgltf/$(CMAKE_BUILD_DIR)
-
-$(LIB_PATH)/fmt.$(LIB_EXT):
-	@cmake --fresh $(DEPS_PATH)/fmt -B$(DEPS_PATH)/fmt/$(CMAKE_BUILD_DIR) ${CMAKE_FLAGS} -DCMAKE_CXX_FLAGS="$(CMAKE_CXX_FLAGS)" -DFMT_TEST=OFF
-	@cmake --build $(DEPS_PATH)/fmt/$(CMAKE_BUILD_DIR)
-
-$(LIB_PATH)/spdlog.$(LIB_EXT):
-	@cmake --fresh $(DEPS_PATH)/spdlog -B$(DEPS_PATH)/spdlog/$(CMAKE_BUILD_DIR) ${CMAKE_FLAGS} -DCMAKE_CXX_FLAGS="$(CMAKE_CXX_FLAGS)" -DSPDLOG_BUILD_TESTS=OFF 
-# -DSPDLOG_FMT_EXTERNAL=ON -Dfmt_DIR="$(DEPS_PATH)/fmt/$(CMAKE_BUILD_DIR)"
-	@cmake --build $(DEPS_PATH)/spdlog/$(CMAKE_BUILD_DIR)
-
-
-else
-
-ifeq ($(OS),Windows_NT)
-# CMAKE_CXX_FLAGS := -target x86_64-w64-mingw32
-# CMAKE_FLAGS +=  -G "MinGW Makefiles" \
-# 				-DCMAKE_EXE_LINKER_FLAGS_INIT="-fuse-ld=lld" \
-# 				-DCMAKE_MODULE_LINKER_FLAGS_INIT="-fuse-ld=lld" \
-# 				-DCMAKE_SHARED_LINKER_FLAGS_INIT="-fuse-ld=lld" \
-# 				-DCMAKE_LINKER_FLAGS_INIT="-fuse-ld=lld" \
-# 				-DCMAKE_C_COMPILER_TARGET="x86_64-windows-gnu"
-
-
-else
-
-endif
-
-ifeq ($(OS),Windows_NT)
-$(LIB_PATH)/libfastgltf.$(LIB_EXT):
-# cmake $(DEPS_PATH)/fastgltf -B$(DEPS_PATH)/fastgltf/build -G "MinGW Makefiles" ${CMAKE_FLAGS} -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ 
-# @cmake --fresh $(DEPS_PATH)/fastgltf -B$(DEPS_PATH)/fastgltf/$(CMAKE_BUILD_DIR) ${CMAKE_FLAGS} -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++  -DFASTGLTF_COMPILE_AS_CPP20=YES -DFASTGLTF_ENABLE_EXAMPLES=NO -DFASTGLTF_ENABLE_CPP_MODULES=YES
-	@cmake --fresh $(DEPS_PATH)/fastgltf -B$(DEPS_PATH)/fastgltf/$(CMAKE_BUILD_DIR) ${CMAKE_FLAGS} -DCMAKE_CXX_FLAGS="-target x86_64-w64-mingw32 -femulated-tls" -DFASTGLTF_COMPILE_AS_CPP20=YES -DFASTGLTF_ENABLE_EXAMPLES=NO -DFASTGLTF_ENABLE_CPP_MODULES=YES
-	@cmake --build $(DEPS_PATH)/fastgltf/$(CMAKE_BUILD_DIR)
-else
-$(LIB_PATH)/libfastgltf.$(LIB_EXT):
-	@cmake --fresh $(DEPS_PATH)/fastgltf -B$(DEPS_PATH)/fastgltf/$(CMAKE_BUILD_DIR) ${CMAKE_FLAGS} -DFASTGLTF_COMPILE_AS_CPP20=ON
-	@cmake --build $(DEPS_PATH)/fastgltf/$(CMAKE_BUILD_DIR)
-endif
-
-$(LIB_PATH)/libfmt.$(LIB_EXT):
-	@cmake --fresh $(DEPS_PATH)/fmt -B$(DEPS_PATH)/fmt/$(CMAKE_BUILD_DIR) ${CMAKE_FLAGS} -DCMAKE_CXX_FLAGS="$(CMAKE_CXX_FLAGS)" -DFMT_TEST=OFF
-	@cmake --build $(DEPS_PATH)/fmt/$(CMAKE_BUILD_DIR)
-
-$(LIB_PATH)/libspdlog.$(LIB_EXT):
-	@cmake --fresh $(DEPS_PATH)/spdlog -B$(DEPS_PATH)/spdlog/$(CMAKE_BUILD_DIR) ${CMAKE_FLAGS} -DCMAKE_CXX_FLAGS="$(CMAKE_CXX_FLAGS)" -DSPDLOG_BUILD_TESTS=OFF 
-# -DSPDLOG_FMT_EXTERNAL=ON -Dfmt_DIR="$(DEPS_PATH)/fmt/$(CMAKE_BUILD_DIR)"
-	@cmake --build $(DEPS_PATH)/spdlog/$(CMAKE_BUILD_DIR)
-
-
-
-# apt install pkg-config
-# apt install libxkbcommon-dev
-# apt install libxinerama-dev
-# apt install libxcursor-dev
-# apt install libxi-dev
-
-endif
-
-$(LIB_PATH)/glfw3.$(LIB_EXT):
-	@cmake --fresh $(DEPS_PATH)/glfw -B$(DEPS_PATH)/glfw/$(CMAKE_BUILD_DIR) ${CMAKE_FLAGS} -DGLFW_BUILD_TESTS=0
-	@cmake --build $(DEPS_PATH)/glfw/$(CMAKE_BUILD_DIR)
-
-
-# $(LIB_PATH)/libimgui.a: $(OBJS_IMGUI)
-# 	$(AR) $(ARFLAGS) $@ $^
-
-# $(LIB_PATH)/libstb.a: $(OBJS_STB)
-# 	$(AR) $(ARFLAGS) $@ $^
-
-# $(LIB_PATH)/libglfw3.a: $(GLFW_OBJS)
-#	@$(AR) $(ARFLAGS) $@ $^
- 

@@ -1,5 +1,5 @@
-#ifndef LMATH_HPP
-#define LMATH_HPP
+#ifndef LMATH_HPP_
+#define LMATH_HPP_
 
 #include <cmath>
 #include <cstring>
@@ -876,7 +876,7 @@ inline float4x4 operator|(float4x4 const& matrix, std::tuple<float3&, float3&, f
 
 inline float4x4 operator|(float4x4 const& matrix, std::tuple<float3&, quat&, float3&> params) {
 	float3& translation = std::get<0>(params);
-	float3& rotation = std::get<1>(params);
+	quat& rotation = std::get<1>(params);
 	float3& scale = std::get<2>(params);
 	decompose(matrix, translation, rotation, scale);
 	return matrix;
@@ -885,4 +885,4 @@ inline float4x4 operator|(float4x4 const& matrix, std::tuple<float3&, quat&, flo
 
 }
 
-#endif // LMATH_HPP
+#endif // LMATH_HPP_

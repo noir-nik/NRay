@@ -16,7 +16,8 @@ import entt;
 
 #else
 #include "lmath.hpp"
-#include "vulkan_backend.hpp"
+#include <vulkan_backend/core.hpp>
+
 #include "imgui.cppm"
 #include "Editor.cppm"
 #include "Camera.cppm"

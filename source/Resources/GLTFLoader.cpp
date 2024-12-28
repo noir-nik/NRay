@@ -21,7 +21,7 @@ import Entity;
 import Materials;
 #else
 #include "GLTFLoader.cppm"
-#include "vulkan_backend.hpp"
+#include <vulkan_backend/core.hpp>
 #include "lmath.hpp"
 #include "ImageIO.cppm"
 #include "Log.cppm"
