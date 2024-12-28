@@ -23,7 +23,7 @@ void main() {
 	// float xScale = 1.;
 	// float yScale = (ctx.width / ctx.height);
 	// vec2 pos = vec2(position.x * xScale, position.y * yScale);
-	vec4 pos = ctx.proj * ctx.view * vec4(position, 1.0);
+	vec4 pos = ctx.proj * ctx.view * ctx.model * vec4(position, 1.0);
     gl_Position = pos;
     // fragColor = color;
     fragColor = vec3(0.5);

@@ -15,13 +15,23 @@ struct SceneGraph {
 		Entity entity;
 		std::vector<uint32_t> children;
 
-		void UpdateTransform(const Lmath::mat4& parentTransform);
 		friend SceneGraph;
 	};
-	Node scenes; // Has scenes as children
-	std::vector<Node> nodes; // with indexes
+
+	Node root; // Has scene indices as children
+	std::vector<size_t> scenes; // with top level objects as children
+	std::vector<Node> nodes; // only objects
+
+	size_t currentScene = 0;
 	Registry* registry;
-	SceneGraph(Registry* registry) : registry(registry) {}
+	SceneGraph(Registry* registry) : registry(registry) {
+		root.entity = CreateEntity("Root");
+		root.entity.AddComponent<Component::Transform>(false);
+
+		// Add Default scene
+		AddScene("Scene");
+		root.children.push_back(0);
+	}
 
 	inline Entity CreateEntity(const std::string_view& name) {
 		Entity entity = {registry, registry->create()};
@@ -29,10 +39,21 @@ struct SceneGraph {
 		return entity;
 	}
 
+	Node& GetCurrentScene() {
+		return nodes[currentScene];
+	}
+
+	void AddScene(const std::string_view& name) {
+		nodes.emplace_back(CreateEntity(name));
+		nodes.back().entity.AddComponent<Component::Transform>(false);
+	}
+
 	inline void resize(std::size_t size) {
 		nodes.resize(size, {registry});
 	}
 
 	void UpdateTransforms(Node &node, const Component::Transform& parentTransform);
+	void DebugPrint();
+	void DebugPrintTree(Node& node, int indent);
 };
 

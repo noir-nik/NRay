@@ -16,8 +16,8 @@ struct Name {
 };
 
 struct Transform {
-	mat4 local;
-	mat4 global;
+	mat4 local = {};
+	mat4 global = {};
 
 	bool dirty;
 

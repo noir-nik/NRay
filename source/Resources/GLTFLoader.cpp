@@ -1,8 +1,10 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <fastgltf/core.hpp>
 #include <unordered_map>
+#include <vector>
 
 #include "GLTFLoader.hpp"
 #include "Base.hpp"
@@ -325,6 +327,7 @@ void LoadMesh(fastgltf::Asset& asset, size_t meshIndex, Objects::Mesh& mesh, vkw
 
 void LoadMeshes(fastgltf::Asset& asset, std::unordered_map<size_t, Component::Mesh>& meshMap, vkw::Device& device) {
 	auto numMeshes = asset.meshes.size();
+	LOG_INFO("Loading {} meshes", numMeshes);
 	for (size_t meshIndex = 0; meshIndex < numMeshes; ++meshIndex) {
 		auto mesh = std::make_shared<Objects::Mesh>(asset.meshes[meshIndex].name);
 		auto it = meshMap.emplace(meshIndex, mesh);
@@ -373,10 +376,11 @@ void LoadMeshes(fastgltf::Asset& asset, std::unordered_map<size_t, Component::Me
 	cmd.QueueSubmit({});
 }
 
-void LoadNode(fastgltf::Asset& asset, const int gltfNodeIndex, std::unordered_map<size_t, Mesh>& meshMap, SceneGraph& sceneGraph) {
+void LoadNode(fastgltf::Asset& asset, const int gltfNodeIndex, std::unordered_map<size_t, Mesh>& meshMap, SceneGraph& sceneGraph, size_t offset) {
 	auto& glTFNode = asset.nodes[gltfNodeIndex];
-	auto& newNode = sceneGraph.nodes[gltfNodeIndex];
+	auto& newNode = sceneGraph.nodes[offset + gltfNodeIndex];
 	newNode.entity = sceneGraph.CreateEntity(glTFNode.name);
+	DEBUG_TRACE("Loading node {}", glTFNode.name);
 	newNode.entity.AddComponent<Component::Transform>();
 	if (glTFNode.meshIndex.has_value()) {
 		Mesh mesh = meshMap[glTFNode.meshIndex.value()];
@@ -406,25 +410,46 @@ void LoadNode(fastgltf::Asset& asset, const int gltfNodeIndex, std::unordered_ma
 	for (size_t i = 0; i < childNodeCount; ++i) {
 		auto glfwNodeIndex = glTFNode.children[i];
 		newNode.children[i] = glfwNodeIndex;
-		LoadNode(asset, glfwNodeIndex, meshMap, sceneGraph);
+		LoadNode(asset, glfwNodeIndex, meshMap, sceneGraph, offset);
 	}
 }
 
 void LoadScenes(fastgltf::Asset& asset, std::unordered_map<size_t, Mesh>& meshMap, SceneGraph& sceneGraph) {
-	auto numScenes = asset.scenes.size();
+	
 	auto numNodes = asset.nodes.size();
-	sceneGraph.scenes.children.resize(numScenes); // All Scenes
-	sceneGraph.nodes.resize(numNodes); // All Nodes
+
+	auto nodeOffset = sceneGraph.nodes.size();
+	// auto sceneOffset = sceneGraph.root.children.size();
+
+	// sceneGraph.root.children.resize(sceneOffset + numScenes); // All Scenes
+	sceneGraph.nodes.resize(nodeOffset + numNodes); // All Nodes
+	
+	// auto currentOffset = nodeOffset + numScenes;
+	// std::vector<size_t> nodeOffsetsForScenes(numScenes);
+	// for (size_t sceneIndex = 0; sceneIndex < numScenes; ++sceneIndex) {
+	// 	nodeOffsetsForScenes[sceneIndex] = currentOffset;
+	// 	currentOffset += asset.scenes[sceneIndex].nodeIndices.size();
+	// }
+
+	auto& currentScene = sceneGraph.GetCurrentScene();
+	auto numScenes = asset.scenes.size(); //glTF scenes, not ours
+
+	auto currentOffset = 0;
+	std::vector<size_t> childOffsetsForScenes(numScenes);
 	for (size_t sceneIndex = 0; sceneIndex < numScenes; ++sceneIndex) {
-		auto& scene = sceneGraph.nodes[sceneGraph.scenes.children[sceneIndex]];
-		scene.entity.AddComponent<Component::Transform>(false);
-		scene.entity = sceneGraph.CreateEntity(asset.scenes[sceneIndex].name);
+		childOffsetsForScenes[sceneIndex] = currentOffset;
+		currentOffset += asset.scenes[sceneIndex].nodeIndices.size();
+	}
+
+	auto numChildren = currentScene.children.size();
+	currentScene.children.resize(numChildren + currentOffset);
+
+	for (size_t sceneIndex = 0; sceneIndex < numScenes; ++sceneIndex) {
 		auto numChildNodes = asset.scenes[sceneIndex].nodeIndices.size();
-		scene.children.resize(numChildNodes); // Refs to top nodes in scene
 		for (auto childNodeIndex = 0; childNodeIndex < numChildNodes; ++childNodeIndex) {
 			auto glfwNodeIndex = asset.scenes[sceneIndex].nodeIndices[childNodeIndex];
-			LoadNode(asset, glfwNodeIndex, meshMap, sceneGraph);
-			scene.children[childNodeIndex] = glfwNodeIndex;
+			LoadNode(asset, glfwNodeIndex, meshMap, sceneGraph, nodeOffset);
+			currentScene.children[numChildren + childOffsetsForScenes[sceneIndex] + childNodeIndex] = nodeOffset + glfwNodeIndex;
 		}
 	}
 }

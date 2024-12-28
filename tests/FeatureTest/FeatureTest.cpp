@@ -257,7 +257,7 @@ void AppContext::UploadBuffers() {
 	cmd.QueueSubmit({});
 
 	glTF::Loader loader;
-	const char* filepath = "bin/5_cubes.gltf";
+	const char* filepath = "bin/cubes.gltf";
 	auto res = loader.Load(filepath, project.GetSceneGraph(), device);
 	ASSERT(res, "Failed to load gltf file");
 
@@ -266,6 +266,7 @@ void AppContext::UploadBuffers() {
 	for (auto entity : sceneGraph.registry->view<Component::Mesh>()) {
 		meshes.push_back(Entity(sceneGraph.registry, entity));
 	}
+	sceneGraph.DebugPrint();
 }
 
 void AppContext::RecordCommands(Window* window) {
@@ -297,7 +298,16 @@ void AppContext::RecordCommands(Window* window) {
 	cmd.BindPipeline(glLTPipeline);
 
 	for (auto& meshNode : meshes) {
-		constants.model = meshNode.GetComponent<Component::Transform>().local;
+		constants.model = meshNode.GetComponent<Component::Transform>().global;
+		// print name
+		// printf("%s\n", meshNode.GetComponent<Component::Name>().name.c_str());
+		// // print model
+		// for (int i = 0; i < 4; i++) {
+		// 	for (int j = 0; j < 4; j++) {
+		// 		printf("%f ", constants.model[i][j]);
+		// 	}
+		// 	printf("\n");
+		// }
 		cmd.PushConstants(&constants, sizeof(constants));
 		auto& mesh = meshNode.GetComponent<Component::Mesh>();
 		cmd.DrawMesh(mesh->vertexBuffer, mesh->indexBuffer, mesh->indexBuffer.size / sizeof(uint));
@@ -686,7 +696,7 @@ void FeatureTestApplication::MainLoop() {
 		}) ? WindowManager::PollEvents() : WindowManager::WaitEvents();
 
 		auto& sceneGraph = ctx->project.GetSceneGraph();
-		sceneGraph.UpdateTransforms(sceneGraph.scenes, sceneGraph.scenes.entity.GetComponent<Component::Transform>());
+		sceneGraph.UpdateTransforms(sceneGraph.root, sceneGraph.root.entity.GetComponent<Component::Transform>());
 
 		for (auto it = ctx->windows.begin(); it != ctx->windows.end();) {
 			auto window = *it;
