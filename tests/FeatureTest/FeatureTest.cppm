@@ -14,9 +14,9 @@ using namespace Lmath;
 _FEATURETEST_EXPORT
 class FeatureTestApplication {
 public:
-	void run();
+	void run(const char* gltfPath);
 private:
-	void Create();
+	void Create(const char* gltfPath);
 	void Setup();
 	void Draw();
 	void Compute();

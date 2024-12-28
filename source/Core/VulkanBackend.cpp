@@ -126,7 +126,7 @@ inline constexpr VkSamplerAddressMode VkSamplerAddressMode(enum WrapMode value) 
 } // namespace Cast
 
 
-struct Context {	
+struct Context {
 	// void EndCommandBuffer(VkSubmitInfo submitInfo);
 	// Command::void EndCommandBuffer(VkSubmitInfo submitInfo);
 	VkAllocationCallbacks* allocator = VK_NULL_HANDLE;
@@ -135,7 +135,7 @@ struct Context {
 	// void LoadShaders(Pipeline& pipeline);
 	// std::vector<char> CompileShader(const std::filesystem::path& path, const char* entryPoint);
 
-	void CreatePipelineLibrary(const PipelineDesc& desc, Pipeline& pipeline);
+	void CreatePipelineLibrary(PipelineDesc const& desc, Pipeline& pipeline);
 
 	bool presentRequested = false;
 
@@ -145,7 +145,7 @@ struct Context {
 	static constexpr bool enableValidationLayers = false;
 #endif
 	static constexpr bool enableDebugReport = false;
-	
+
 	static constexpr bool usePipelineLibrary = false;
 	static constexpr bool linkTimeOptimization = true; // Pipeline library link
 
@@ -168,7 +168,7 @@ struct Context {
 	const u32 timeStampPerPool = 64;
 
 	// bool requestSeparate[QueueFlagBits::Count] = {false};
-	
+
 	// const u32 initialScratchBufferSize = 64*1024*1024;
 	// Buffer asScratchBuffer;
 	// VkDeviceAddress asScratchAddress;
@@ -220,7 +220,7 @@ struct PhysicalDevice: DeleteCopyDeleteMove {
 	VkSampleCountFlags sampleCounts;
 
 	bool descriptorIndexingAvailable = false;
-	
+
 	VkPhysicalDeviceDynamicRenderingUnusedAttachmentsFeaturesEXT unusedAttachmentFeatures{};
 	VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT graphicsPipelineLibraryFeatures{};
 	VkPhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddressFeatures{};
@@ -236,10 +236,10 @@ struct PhysicalDevice: DeleteCopyDeleteMove {
 	// VkImageFormatProperties2 imageFormatProperties2{};
 
 	VkPhysicalDeviceMemoryProperties memoryProperties;
-	
+
 	std::vector<VkExtensionProperties> availableExtensions; // Physical DeviceResource Extensions
 	std::vector<VkQueueFamilyProperties> availableFamilies;
-	
+
 	PhysicalDevice(UID uid, VkPhysicalDevice device): uid(uid), handle(device) {}
 	void GetDetails();
 	// @param desiredFlags: required queue flags (strict)
@@ -268,8 +268,7 @@ struct DeviceResource: DeleteCopyDeleteMove {
 		pipelineLibrary.device = this;
 	}
 
-	Pipeline CreatePipeline(const PipelineDesc& desc);
-	void CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipeline);
+	Pipeline CreatePipeline(PipelineDesc const& desc);
 
 	VkDevice handle = VK_NULL_HANDLE;
 	VmaAllocator vmaAllocator;
@@ -323,15 +322,15 @@ struct DeviceResource: DeleteCopyDeleteMove {
 			return memcmp(&lhs, &rhs, sizeof(SamplerDesc)) == 0;
 		}
 	};
-	
+
 	VkSampler genericSampler;
 	std::unordered_map<SamplerDesc, VkSampler, SamplerDescHash, SamplerDescHash> samplers;
 
 	VkPipelineCache pipelineCache = VK_NULL_HANDLE;
-	
+
 	struct PipelineLibrary {
 		struct VertexInputInfo {
-			std::vector<Format> vertexAttributes;
+			std::span<const Format> vertexAttributes;
 			bool lineTopology = false;
 		};
 
@@ -339,44 +338,45 @@ struct DeviceResource: DeleteCopyDeleteMove {
 			VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
 			bool lineTopology = false;
 			CullModeFlags cullMode = CullMode::None;
-			std::vector<Pipeline::Stage> stages;
+			std::span<Pipeline::Stage const> stages;
 		};
 
 		struct FragmentShaderInfo {
 			VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
 			SampleCount samples;
-			std::vector<Pipeline::Stage> stages;
+			std::span<Pipeline::Stage const> stages;
 		};
 
 		struct FragmentOutputInfo {
 			VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
-			std::vector<Format> colorFormats;
+			std::span<const Format> colorFormats;
 			bool useDepth;
 			Format depthFormat;
 			SampleCount samples;
 		};
-		
+
 		struct VertexInputHash {
 			size_t operator()(const VertexInputInfo& info) const {
-				return HashCombine(VectorHash(info.vertexAttributes), info.lineTopology);
+				return HashCombine(SpanHash(info.vertexAttributes), info.lineTopology);
 			}
 
 			bool operator()(const VertexInputInfo& a, const VertexInputInfo& b) const {
-				return a.vertexAttributes == b.vertexAttributes && a.lineTopology == b.lineTopology;
+				auto spanCompare = [](const auto& a, const auto& b) -> bool { return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin()); };
+				return spanCompare(a.vertexAttributes, b.vertexAttributes) && a.lineTopology == b.lineTopology;
 			}
 		};
 
 		struct PreRasterizationHash {
 			size_t operator()(const PreRasterizationInfo& info) const {
 				size_t seed = 0;
-				for (const Pipeline::Stage &stage: info.stages) {
+				for (Pipeline::Stage const& stage: info.stages) {
 					seed = HashCombine(seed, stage.Hash());
 				}
 				seed = HashCombine(seed, info.lineTopology);
 				seed = HashCombine(seed, info.cullMode);
 				return seed;
 			}
-			
+
 			bool operator()(const PreRasterizationInfo& a, const PreRasterizationInfo& b) const {
 				return a.stages.size() == b.stages.size()
 					&& std::equal(a.stages.begin(), a.stages.end(), b.stages.begin(), [](const auto& a, const auto& b) {
@@ -388,7 +388,7 @@ struct DeviceResource: DeleteCopyDeleteMove {
 
 		struct FragmentOutputHash {
 			size_t operator()(const FragmentOutputInfo& info) const {
-				size_t hash = HashCombine(VectorHash(info.colorFormats), reinterpret_cast<size_t>(info.pipelineLayout));
+				size_t hash = HashCombine(SpanHash(info.colorFormats), reinterpret_cast<size_t>(info.pipelineLayout));
 				hash = HashCombine(hash, info.useDepth);
 				hash = HashCombine(hash, static_cast<size_t>(info.depthFormat));
 				hash = HashCombine(hash, static_cast<size_t>(info.samples));
@@ -430,21 +430,23 @@ struct DeviceResource: DeleteCopyDeleteMove {
 		std::unordered_map<FragmentOutputInfo, VkPipeline, FragmentOutputHash, FragmentOutputHash> fragmentOutputInterfaces;
 		std::unordered_map<FragmentShaderInfo, VkPipeline, FragmentShaderHash, FragmentShaderHash> fragmentShaders;
 
-		void CreateVertexInputInterface(VertexInputInfo info);
-		void CreatePreRasterizationShaders(PreRasterizationInfo info);
-		void CreateFragmentShader(FragmentShaderInfo info);
-		void CreateFragmentOutputInterface(FragmentOutputInfo info);
-		VkPipeline LinkPipeline(const std::array<VkPipeline, 4> pipelines, VkPipelineLayout layout);
+		Pipeline CreatePipeline(PipelineDesc const& desc);
+	private:
+		void CreateVertexInputInterface(VertexInputInfo const& info);
+		void CreatePreRasterizationShaders(PreRasterizationInfo const& info);
+		void CreateFragmentShader(FragmentShaderInfo const& info);
+		void CreateFragmentOutputInterface(FragmentOutputInfo const& info);
+		VkPipeline LinkPipeline(std::array<VkPipeline, 4> const& pipelines, VkPipelineLayout layout);
 
 	} pipelineLibrary;
-	
-	const u32 stagingBufferSize = 32 * 1024 * 1024;
+
+	const u32 stagingBufferSize = 64 * 1024 * 1024;
 	u8* stagingCpu = nullptr;
 	u32 stagingOffset = 0;
 	Buffer staging;
-	
+
 	std::vector<const char*> requiredExtensions = { // Physical DeviceResource Extensions
-		// VK_KHR_SWAPCHAIN_EXTENSION_NAME, 
+		// VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 		// VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
 		// VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
 		// VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
@@ -454,7 +456,7 @@ struct DeviceResource: DeleteCopyDeleteMove {
 
 	void Create(std::span<Queue*> queues);
 	void Destroy();
-		
+
 	void createDescriptorSetLayout();
 	void createDescriptorPool();
 	void createDescriptorSet();
@@ -468,7 +470,7 @@ struct DeviceResource: DeleteCopyDeleteMove {
 	VkSampler GetSampler(SamplerDesc const& desc = {});
 
 	void SetDebugUtilsObjectName(const VkDebugUtilsObjectNameInfoEXT& pNameInfo);
-	
+
 	PFN_vkSetDebugUtilsObjectNameEXT vkSetDebugUtilsObjectNameEXT = nullptr;
 	// PFN_vkGetAccelerationStructureBuildSizesKHR vkGetAccelerationStructureBuildSizesKHR;
 	// PFN_vkCreateAccelerationStructureKHR vkCreateAccelerationStructureKHR;
@@ -483,7 +485,7 @@ struct DeviceResource: DeleteCopyDeleteMove {
 		if (imguiDescriptorPool != VK_NULL_HANDLE) {
 			vkDestroyDescriptorPool(handle, imguiDescriptorPool, _ctx.allocator);
 		}
-		
+
 		for (auto& [_, pipeline]: pipelineLibrary.vertexInputInterfaces) {
 			vkDestroyPipeline(handle, pipeline, _ctx.allocator);
 		}
@@ -544,7 +546,7 @@ struct CommandResource {
 struct SwapChainResource: DeleteCopyDeleteMove {
 	DeviceResource* device = nullptr;
 	// VkDevice device = VK_NULL_HANDLE;
-	VkSurfaceKHR surface = VK_NULL_HANDLE;	
+	VkSurfaceKHR surface = VK_NULL_HANDLE;
 	VkSwapchainKHR swapChain = VK_NULL_HANDLE;
 	std::vector<VkImage> imageResources;
 	std::vector<VkImageView> imageViews;
@@ -680,7 +682,7 @@ u32 Image::RID() {
 void Init(bool requestPresent) {
 	_ctx.presentRequested = requestPresent;
 	_ctx.instance = std::make_shared<Instance>();
-	_ctx.instance->Create();	
+	_ctx.instance->Create();
 	_ctx.GetPhysicalDevices();
 }
 
@@ -741,7 +743,7 @@ u32 Device::GetStagingSize() {
 }
 
 Command& Queue::GetCommandBuffer() {
-	return resource->command; 
+	return resource->command;
 }
 
 Queue::Queue(const std::shared_ptr<QueueResource>& resource):
@@ -794,7 +796,7 @@ Buffer Device::CreateBuffer(const BufferDesc& desc) {
 	};
 
 	constexpr VmaAllocationCreateFlags cpuFlags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-	
+
 	VmaAllocationCreateInfo allocInfo = {
 		.flags = desc.memory & Memory::CPU? cpuFlags: 0,
 		.usage = VMA_MEMORY_USAGE_AUTO,
@@ -846,7 +848,7 @@ Image Device::CreateImage(const ImageDesc& desc) {
 		.flags         = (VkImageCreateFlags)(desc.layers == 6? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT: 0),
 		.imageType     = VK_IMAGE_TYPE_2D,
 		.format        = Cast::VkFormat(desc.format),
-		.extent = {	
+		.extent = {
 			.width     = desc.extent.width,
 			.height    = desc.extent.height,
 			.depth     = desc.extent.depth,
@@ -874,11 +876,11 @@ Image Device::CreateImage(const ImageDesc& desc) {
 		case D24_UNORM_S8_UINT:
 			aspect = Aspect::Stencil; // Invalid, cannot be both stencil and depth, todo: create separate imageview
 		[[fallthrough]];
-		case D32_SFLOAT: 
+		case D32_SFLOAT:
 		case D16_UNORM:
 			aspect |= Aspect::Depth;
 			break;
-		
+
 		default:
 			aspect = Aspect::Color;
 			break;
@@ -906,7 +908,7 @@ Image Device::CreateImage(const ImageDesc& desc) {
 	if (desc.layers > 1) {
 		viewInfo.subresourceRange.layerCount = 1;
 		res->layersView.resize(desc.layers);
-		for (int i = 0; i < desc.layers; i++) {
+		for (u32 i = 0; i < desc.layers; i++) {
 			viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
 			viewInfo.subresourceRange.baseArrayLayer = i;
 			result = vkCreateImageView(resource->handle, &viewInfo, _ctx.allocator, &res->layersView[i]);
@@ -979,7 +981,7 @@ Image Device::CreateImage(const ImageDesc& desc) {
 			.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
 			.pImageInfo      = &descriptorInfo,
 		};
-		
+
 		vkUpdateDescriptorSets(resource->handle, 1, &write, 0, nullptr);
 	}
 
@@ -1053,7 +1055,7 @@ std::vector<char> LoadShader(Pipeline::Stage stage) {
 		}
 	} else {
 		compilationRequired = true;
-	}	
+	}
 	if (compilationRequired) {
 		return CompileShader(stage.path, stage.entryPoint.c_str());
 	} else {
@@ -1061,7 +1063,7 @@ std::vector<char> LoadShader(Pipeline::Stage stage) {
 	}
 }
 
-void PipelineResource::CreatePipelineLayout(const std::span<const VkDescriptorSetLayout>& descriptorLayouts) {
+void PipelineResource::CreatePipelineLayout(std::span<const VkDescriptorSetLayout> const& descriptorLayouts) {
 
     VkPushConstantRange pushConstant{
 		.stageFlags = VK_SHADER_STAGE_ALL,
@@ -1081,26 +1083,34 @@ void PipelineResource::CreatePipelineLayout(const std::span<const VkDescriptorSe
     ASSERT(vkRes == VK_SUCCESS, "Failed to create pipeline layout!");
 }
 
-Pipeline Device::CreatePipeline(const PipelineDesc& desc){
+Pipeline Device::CreatePipeline(PipelineDesc const& desc){
+	if (_ctx.usePipelineLibrary && desc.point == PipelinePoint::Graphics && resource->physicalDevice->graphicsPipelineLibraryFeatures.graphicsPipelineLibrary) {
+		return resource->pipelineLibrary.CreatePipeline(desc);
+	}
 	return resource->CreatePipeline(desc);
 }
 
-Pipeline DeviceResource::CreatePipeline(const PipelineDesc& desc) { // External handle
+Pipeline DeviceResource::PipelineLibrary::CreatePipeline(PipelineDesc const& desc) { // External handle
 	Pipeline pipeline;
 	pipeline.point = desc.point;
-	pipeline.resource = std::make_shared<PipelineResource>(this, desc.name);
-	pipeline.resource->CreatePipelineLayout({{bindlessDescriptorLayout}});
+	pipeline.resource = std::make_shared<PipelineResource>(device, desc.name);
+	pipeline.resource->CreatePipelineLayout({{device->bindlessDescriptorLayout}});
 
-	if (_ctx.usePipelineLibrary && desc.point == PipelinePoint::Graphics && physicalDevice->graphicsPipelineLibraryFeatures.graphicsPipelineLibrary) {
+	if (_ctx.usePipelineLibrary && desc.point == PipelinePoint::Graphics && device->physicalDevice->graphicsPipelineLibraryFeatures.graphicsPipelineLibrary) {
 	// if (0) {
 		// VertexInputInterface
 		DeviceResource::PipelineLibrary::VertexInputInfo vertexInputInfo { desc.vertexAttributes, desc.lineTopology };
-		if (!pipelineLibrary.vertexInputInterfaces.count(vertexInputInfo)) {
-			pipelineLibrary.CreateVertexInputInterface(vertexInputInfo);
+		if (!vertexInputInterfaces.count(vertexInputInfo)) {
+			CreateVertexInputInterface(vertexInputInfo);
 		}
 
 		PipelineLibrary::PreRasterizationInfo preRasterizationInfo { pipeline.resource->layout, desc.lineTopology, desc.cullMode };
 		PipelineLibrary::FragmentShaderInfo   fragmentShaderInfo   { pipeline.resource->layout, desc.samples};
+
+		VLA(Pipeline::Stage, preRasterizationStages, desc.stages.size()); // todo : change this
+		VLA(Pipeline::Stage, fragmentShaderStages, desc.stages.size());
+		u32 preRasterizationStagesCount = 0;
+		u32 fragmentShaderStagesCount = 0;
 		for (auto& stage: desc.stages) {
 			switch(stage.stage) {
 				case ShaderStage::Vertex:
@@ -1109,43 +1119,47 @@ Pipeline DeviceResource::CreatePipeline(const PipelineDesc& desc) { // External 
 				case ShaderStage::Geometry:
 				case ShaderStage::Task:
 				case ShaderStage::Mesh:
-				preRasterizationInfo.stages.push_back(stage);
-				break;
+					preRasterizationStages[preRasterizationStagesCount++] = stage;
+					break;
 				case ShaderStage::Fragment:
-				fragmentShaderInfo.stages.push_back(stage); break;
+					fragmentShaderStages[fragmentShaderStagesCount++] = stage;
+					break;
 				default:
 				break;
 			}
 		}
+		preRasterizationInfo.stages = {preRasterizationStages.data(), preRasterizationStagesCount};
+		fragmentShaderInfo.stages = {fragmentShaderStages.data(), fragmentShaderStagesCount};
 
-		if (!pipelineLibrary.preRasterizationShaders.count(preRasterizationInfo)) {
-			pipelineLibrary.CreatePreRasterizationShaders(preRasterizationInfo);
+		if (!preRasterizationShaders.contains(preRasterizationInfo)) {
+			CreatePreRasterizationShaders(preRasterizationInfo);
 		}
-		if (!pipelineLibrary.fragmentShaders.count(fragmentShaderInfo)) {
-			pipelineLibrary.CreateFragmentShader(fragmentShaderInfo);
+		if (!fragmentShaders.contains(fragmentShaderInfo)) {
+			CreateFragmentShader(fragmentShaderInfo);
 		}
 
 		PipelineLibrary::FragmentOutputInfo fragmentOutputInfo { pipeline.resource->layout, desc.colorFormats, desc.useDepth, desc.depthFormat, desc.samples};
-		if (!pipelineLibrary.fragmentOutputInterfaces.count(fragmentOutputInfo)) {
-			pipelineLibrary.CreateFragmentOutputInterface(fragmentOutputInfo);
+		if (!fragmentOutputInterfaces.contains(fragmentOutputInfo)) {
+			CreateFragmentOutputInterface(fragmentOutputInfo);
 		}
 
-		pipeline.resource->pipeline = pipelineLibrary.LinkPipeline({
-			pipelineLibrary.vertexInputInterfaces[vertexInputInfo],
-			pipelineLibrary.preRasterizationShaders[preRasterizationInfo],
-			pipelineLibrary.fragmentShaders[fragmentShaderInfo],
-			pipelineLibrary.fragmentOutputInterfaces[fragmentOutputInfo]
+		pipeline.resource->pipeline = LinkPipeline({
+			vertexInputInterfaces[vertexInputInfo],
+			preRasterizationShaders[preRasterizationInfo],
+			fragmentShaders[fragmentShaderInfo],
+			fragmentOutputInterfaces[fragmentOutputInfo]
 		},
 		pipeline.resource->layout);
 
-	} else {
-		CreatePipelineImpl(desc, pipeline);
 	}
 	return pipeline;
 }
 
-void DeviceResource::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipeline) {
-	pipeline.point = desc.point; // Graphics or Compute
+Pipeline DeviceResource::CreatePipeline(PipelineDesc const& desc) {
+	Pipeline pipeline;
+	pipeline.point = desc.point;
+	pipeline.resource = std::make_shared<PipelineResource>(this, desc.name);
+	pipeline.resource->CreatePipelineLayout({{this->bindlessDescriptorLayout}});
 
 	VLA(VkPipelineShaderStageCreateInfo, shaderStages, desc.stages.size());
 	VLA(VkShaderModule, shaderModules, desc.stages.size());
@@ -1165,7 +1179,7 @@ void DeviceResource::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipe
 			.pName = stage.entryPoint.c_str(),
 			.pSpecializationInfo = nullptr,
 		};
-		i++;
+		++i;
 	}
 
 	if (desc.point == PipelinePoint::Compute) {
@@ -1199,7 +1213,7 @@ void DeviceResource::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipe
 			.depthBiasSlopeFactor    = 0.0f,
 			.lineWidth               = 1.0f, // line thickness in terms of number of fragments
 		};
-		
+
 		VkPipelineMultisampleStateCreateInfo multisampleState = {
 			.sType                 = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
 			.rasterizationSamples  = (VkSampleCountFlagBits)std::min(desc.samples, physicalDevice->maxSamples),
@@ -1255,7 +1269,7 @@ void DeviceResource::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipe
 			.vertexAttributeDescriptionCount = static_cast<u32>(attributeDescs.size()),
 			.pVertexAttributeDescriptions = attributeDescs.data(),
 		};
-		
+
 		// define the type of input of our pipeline
 		VkPipelineInputAssemblyStateCreateInfo inputAssembly{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
@@ -1263,7 +1277,7 @@ void DeviceResource::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipe
 			// with this parameter true we can break up lines and triangles in _STRIP topology modes
 			.primitiveRestartEnable = VK_FALSE,
 		};
-		
+
 		VkPipelineDynamicStateCreateInfo dynamicInfo{
 			.sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
 			.dynamicStateCount = static_cast<u32>(desc.dynamicStates.size()),
@@ -1328,12 +1342,13 @@ void DeviceResource::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipe
 		DEBUG_VK(vkRes, "Failed to create graphics pipeline!");
 	}
 
-	for (int i = 0; i < shaderModules.size(); i++) {
-		vkDestroyShaderModule(handle, shaderModules[i], _ctx.allocator);
+	for (auto& shaderModule: shaderModules) {
+		vkDestroyShaderModule(handle, shaderModule, _ctx.allocator);
 	}
+	return pipeline;
 }
 
-void DeviceResource::PipelineLibrary::CreateVertexInputInterface(VertexInputInfo info) {
+void DeviceResource::PipelineLibrary::CreateVertexInputInterface(VertexInputInfo const& info) {
 	VkGraphicsPipelineLibraryCreateInfoEXT libraryInfo{
 		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT,
 		.flags = VK_GRAPHICS_PIPELINE_LIBRARY_VERTEX_INPUT_INTERFACE_BIT_EXT,
@@ -1386,14 +1401,14 @@ void DeviceResource::PipelineLibrary::CreateVertexInputInterface(VertexInputInfo
 		.pInputAssemblyState = &inputAssembly,
 		.pDynamicState       = nullptr
 	};
-	
+
 	VkPipeline pipeline;
 	auto res = vkCreateGraphicsPipelines(device->handle, device->pipelineCache, 1, &pipelineLibraryInfo, _ctx.allocator, &pipeline);
 	DEBUG_VK(res, "Failed to create vertex input interface!");
 	vertexInputInterfaces.emplace(info, pipeline);
 }
 
-void DeviceResource::PipelineLibrary::CreatePreRasterizationShaders(PreRasterizationInfo info) {
+void DeviceResource::PipelineLibrary::CreatePreRasterizationShaders(PreRasterizationInfo const& info) {
 	VkGraphicsPipelineLibraryCreateInfoEXT libraryInfo{
 		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT,
 		.flags = VK_GRAPHICS_PIPELINE_LIBRARY_PRE_RASTERIZATION_SHADERS_BIT_EXT,
@@ -1501,7 +1516,7 @@ void DeviceResource::PipelineLibrary::CreatePreRasterizationShaders(PreRasteriza
 	preRasterizationShaders.emplace(info, pipeline);
 }
 
-void DeviceResource::PipelineLibrary::CreateFragmentShader(FragmentShaderInfo info) {
+void DeviceResource::PipelineLibrary::CreateFragmentShader(FragmentShaderInfo const& info) {
 	VkGraphicsPipelineLibraryCreateInfoEXT libraryInfo{
 		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT,
 		.flags = VK_GRAPHICS_PIPELINE_LIBRARY_FRAGMENT_SHADER_BIT_EXT,
@@ -1529,7 +1544,7 @@ void DeviceResource::PipelineLibrary::CreateFragmentShader(FragmentShaderInfo in
 		.alphaToCoverageEnable = VK_FALSE,
 		.alphaToOneEnable = VK_FALSE,
 	};
-	
+
 
 	std::vector<VkShaderModuleCreateInfo> shaderModuleInfos(info.stages.size());
 	std::vector<VkPipelineShaderStageCreateInfo> shaderStages(info.stages.size());
@@ -1571,7 +1586,7 @@ void DeviceResource::PipelineLibrary::CreateFragmentShader(FragmentShaderInfo in
 	fragmentShaders.emplace(info, pipeline);
 }
 
-void DeviceResource::PipelineLibrary::CreateFragmentOutputInterface(FragmentOutputInfo info) {
+void DeviceResource::PipelineLibrary::CreateFragmentOutputInterface(FragmentOutputInfo const& info) {
 	VkGraphicsPipelineLibraryCreateInfoEXT libraryInfo {
 		.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT,
 		.flags = VK_GRAPHICS_PIPELINE_LIBRARY_FRAGMENT_OUTPUT_INTERFACE_BIT_EXT,
@@ -1627,7 +1642,7 @@ void DeviceResource::PipelineLibrary::CreateFragmentOutputInterface(FragmentOutp
 	fragmentOutputInterfaces.emplace(info, pipeline);
 }
 
-VkPipeline DeviceResource::PipelineLibrary::LinkPipeline(const std::array<VkPipeline, 4> pipelines, VkPipelineLayout layout) {
+VkPipeline DeviceResource::PipelineLibrary::LinkPipeline(std::array<VkPipeline, 4> const& pipelines, VkPipelineLayout layout) {
 
 	// Link the library parts into a graphics pipeline
 	VkPipelineLibraryCreateInfoKHR linkingInfo {
@@ -1680,18 +1695,18 @@ void Command::BeginRendering(const RenderingInfo& info) {
 
 	ivec2 offset(renderArea.x, renderArea.y);
 	uvec2 extent(renderArea.z, renderArea.w);
-	
+
 	VLA(VkRenderingAttachmentInfoKHR, colorAttachInfos, info.colorAttachs.size());
 	for (auto i = 0; auto& colorAttach: info.colorAttachs) {
 		// DEBUG_ASSERT(colorAttach.size() > 0 && colorAttach.size() < 3, "Invalid color attachment count.");
-		colorAttachInfos[i++] = {
+		colorAttachInfos[i] = {
 			.sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR,
 			.imageView   = colorAttach.colorAttachment.resource->view,
 			.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 			.loadOp      = static_cast<VkAttachmentLoadOp>(info.loadOpColor),
 			.storeOp     = VK_ATTACHMENT_STORE_OP_STORE,
 			.clearValue  = {
-				.color   = { 
+				.color   = {
 					.float32 = { clearColor.x , clearColor.y, clearColor.z, clearColor.w }
 				}
 			}
@@ -1704,6 +1719,7 @@ void Command::BeginRendering(const RenderingInfo& info) {
 			colorAttachInfos.back().resolveImageView = colorAttach.resolveImage->resource->view;
 			colorAttachInfos.back().resolveImageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 		}
+		i++;
 	}
 
 	VkRenderingInfoKHR renderingInfo{
@@ -1859,7 +1875,7 @@ void Command::BindPipeline(Pipeline& pipeline) {
 	// resource->currentPipeline = pipeline.resource.get();
 }
 
-void Command::PushConstants(const Pipeline& pipeline, const void* data, u32 size) {
+void Command::PushConstants(Pipeline const& pipeline, const void* data, u32 size) {
 	vkCmdPushConstants(resource->buffer, pipeline.resource->layout, VK_SHADER_STAGE_ALL, 0, size, data);
 }
 
@@ -1895,7 +1911,7 @@ void Command::Begin() {
 }
 
 void Command::End() {
-	vkEndCommandBuffer(resource->buffer); 
+	vkEndCommandBuffer(resource->buffer);
 	// resource->currentPipeline = {};
 }
 
@@ -1967,7 +1983,7 @@ VkResult CreateDebugUtilsMessengerEXT (
 	VkDebugUtilsMessengerEXT*                 pDebugMessenger) {
 	// search for the requested function and return null if cannot find
 	auto func = (PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr (
-		instance, 
+		instance,
 		"vkCreateDebugUtilsMessengerEXT"
 	);
 	if (func != nullptr) {
@@ -2005,7 +2021,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL DebugUtilsCallback (
 	if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) { LOG_WARN ("[Validation Layer] {} ", pCallbackData->pMessage); }
 	if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)   { LOG_ERROR("[Validation Layer] {} ", pCallbackData->pMessage); }
 
-	return VK_FALSE;	
+	return VK_FALSE;
 }
 
 void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo) {
@@ -2030,7 +2046,7 @@ VkResult CreateDebugReportCallbackEXT (
 	VkDebugReportCallbackEXT*                 pDebugReport) {
 	// search for the requested function and return null if cannot find
 	auto func = (PFN_vkCreateDebugReportCallbackEXT) vkGetInstanceProcAddr (
-		instance, 
+		instance,
 		"vkCreateDebugReportCallbackEXT"
 	);
 	if (func != nullptr) {
@@ -2058,11 +2074,11 @@ void DestroyDebugReportCallbackEXT (
 static VKAPI_ATTR VkBool32 VKAPI_CALL DebugReportCallback(
 	VkDebugReportFlagsEXT flags,
 	VkDebugReportObjectTypeEXT objectType,
-	uint64_t object, 
-	size_t location, 
+	uint64_t object,
+	size_t location,
 	int32_t messageCode,
 	const char* pLayerPrefix,
-	const char* pMessage, 
+	const char* pMessage,
 	void* pUserData)
 {
 	if (flags & VK_DEBUG_REPORT_INFORMATION_BIT_EXT)         { LOG_INFO ("[Debug Report] {0}", pMessage); };
@@ -2099,7 +2115,7 @@ void Instance::Create(){
 		.engineVersion = VK_MAKE_API_VERSION(0, 1, 0, 0),
 		.apiVersion = VK_API_VERSION_1_3,
 	};
-	
+
 	// get api version
 	vkEnumerateInstanceVersion(&apiVersion);
 
@@ -2125,13 +2141,13 @@ void Instance::Create(){
 		}
 		if (!khronosAvailable) {LOG_ERROR("Default validation layer not available!");}
 
-		for (size_t i = 0; i < layerCount; i++) { 
+		for (size_t i = 0; i < layerCount; i++) {
 			if (activeLayers[i]) {
 				activeLayersNames.push_back(layers[i].layerName);
 			}
 		}
 	}
-	
+
 	u32 glfwExtensionCount = 0;
 	if (_ctx.presentRequested) {
 		// get all extensions required by glfw
@@ -2229,7 +2245,7 @@ void Instance::Create(){
 	auto res = vkCreateInstance(&createInfo, _ctx.allocator, &handle);
 	DEBUG_VK(res, "Failed to create Vulkan instance!");
 	DEBUG_TRACE("Created instance.");
-	
+
 	// Debug Utils
 	if (_ctx.enableValidationLayers) {
 		VkDebugUtilsMessengerCreateInfoEXT messengerInfo;
@@ -2300,7 +2316,7 @@ void PhysicalDevice::GetDetails() {
 	vkGetPhysicalDeviceQueueFamilyProperties(handle, &familyCount, nullptr);
 	availableFamilies.resize(familyCount);
 	vkGetPhysicalDeviceQueueFamilyProperties(handle, &familyCount, availableFamilies.data());
-	
+
 	unusedAttachmentFeatures        = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_UNUSED_ATTACHMENTS_FEATURES_EXT, nullptr };
 	graphicsPipelineLibraryFeatures = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_FEATURES_EXT, &unusedAttachmentFeatures };
 	indexingFeatures                = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES_EXT,       &graphicsPipelineLibraryFeatures };
@@ -2310,7 +2326,7 @@ void PhysicalDevice::GetDetails() {
 	physicalFeatures2               = { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,                             &dynamicRenderingFeatures };
 	vkGetPhysicalDeviceFeatures2(handle, &physicalFeatures2);
 
-	
+
 	graphicsPipelineLibraryProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_PROPERTIES_EXT;
 	graphicsPipelineLibraryProperties.pNext = nullptr;
 	physicalProperties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
@@ -2322,7 +2338,7 @@ void PhysicalDevice::GetDetails() {
 	// vkGetPhysicalDeviceImageFormatProperties2(physicalDevice, &imageFormatInfo2, &imageFormatProperties2);
 
 	VkSampleCountFlags counts = physicalProperties2.properties.limits.framebufferColorSampleCounts;
-	
+
     // Get max number of samples
     for (VkSampleCountFlagBits sampleCount = VK_SAMPLE_COUNT_64_BIT; sampleCount >= VK_SAMPLE_COUNT_1_BIT; sampleCount = (VkSampleCountFlagBits)(sampleCount >> 1)) {
         if (counts & sampleCount) {
@@ -2356,7 +2372,7 @@ constexpr u32 ALL_SUITABLE_QUEUES_TAKEN = ~0u - 1;
 u32 PhysicalDevice::GetQueueFamilyIndex(VkQueueFlags desiredFlags, VkQueueFlags undesiredFlags, const std::span<const std::pair<VkQueueFlags, float>>& avoidIfPossible, VkSurfaceKHR surfaceToSupport, const std::span<const u32>& filledUpFamilies) {
 	std::vector<std::pair<u32, float>> candidates;
 	auto& families = availableFamilies;
-	for (auto i = 0; i < families.size(); i++) {
+	for (size_t i = 0; i < families.size(); i++) {
 		// Check if queue family is suitable
 		bool suitable = ((families[i].queueFlags & desiredFlags) == desiredFlags && ((families[i].queueFlags & undesiredFlags) == 0));
 		if (surfaceToSupport != VK_NULL_HANDLE) {
@@ -2365,7 +2381,7 @@ u32 PhysicalDevice::GetQueueFamilyIndex(VkQueueFlags desiredFlags, VkQueueFlags 
 			if (res != VK_SUCCESS) {LOG_ERROR("vkGetPhysicalDeviceSurfaceSupportKHR failed with error code: {}", (u32)res); continue;}
 			suitable = suitable && presentSupport;
 		}
-		if (!suitable) continue; 
+		if (!suitable) continue;
 		if (avoidIfPossible.empty()) return i;
 		// candidate (familyIndex, weight)
 		std::pair<u32, float> candidate(i, 0.0f);
@@ -2552,7 +2568,7 @@ void DeviceResource::Create(std::span<Queue*> queues) {
 	// // rayQueryFeatures.pNext = &accelerationStructureFeatures;
 	// rayQueryFeatures.pNext = &addresFeatures;
 
-	
+
 
 	VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeatures{
 		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR,
@@ -2589,7 +2605,7 @@ void DeviceResource::Create(std::span<Queue*> queues) {
 		.ppEnabledExtensionNames = requiredExtensions.data(),
 	};
 
-	// specify the required layers to the device 
+	// specify the required layers to the device
 	if (_ctx.enableValidationLayers) {
 		auto& layers = _ctx.instance->activeLayersNames;
 		createInfo.enabledLayerCount = layers.size();
@@ -2629,7 +2645,7 @@ void DeviceResource::Create(std::span<Queue*> queues) {
 	}
 
 	genericSampler = GetSampler();
-	
+
 	if (_ctx.enableValidationLayers) {
 		vkSetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetDeviceProcAddr(handle, "vkSetDebugUtilsObjectNameEXT");
 	}
@@ -2698,7 +2714,7 @@ void SwapChainResource::Create(std::vector<Image>& swapChainImages, uvec2 const&
 
 		// acquire additional images to prevent waiting for driver's internal operations
 		u32 imageCount = framesInFlight + additionalImages;
-		
+
 		if (imageCount < capabilities.minImageCount) {
 			LOG_WARN("Querying less images {} than the necessary: {}", imageCount, capabilities.minImageCount);
 			imageCount = capabilities.minImageCount;
@@ -2733,7 +2749,7 @@ void SwapChainResource::Create(std::vector<Image>& swapChainImages, uvec2 const&
 
 		auto res = vkCreateSwapchainKHR(device->handle, &createInfo, _ctx.allocator, &swapChain);
 		DEBUG_VK(res, "Failed to create swap chain!");
-		
+
 		// DEBUG_TRACE("Creating swapchain with {} images.", imageCount);
 		vkGetSwapchainImagesKHR(device->handle, swapChain, &imageCount, nullptr);
 		imageResources.resize(imageCount);
@@ -2770,7 +2786,7 @@ void SwapChainResource::Create(std::vector<Image>& swapChainImages, uvec2 const&
 			.layout = ImageLayout::Undefined,
 			.aspect = Aspect::Color,
 		});
-		
+
 	}
 
     if (_ctx.enableValidationLayers) {
@@ -2812,10 +2828,10 @@ void SwapChainResource::Create(std::vector<Image>& swapChainImages, uvec2 const&
 }
 
 void SwapChainResource::Destroy(bool is_recreation) {
-	for (size_t i = 0; i < imageViews.size(); i++) {
-		vkDestroyImageView(device->handle, imageViews[i], _ctx.allocator);
+	for (auto imageView : imageViews) {
+		vkDestroyImageView(device->handle, imageView, _ctx.allocator);
 	}
-	
+
 	if (!is_recreation) {
 		for (size_t i = 0; i < framesInFlight; i++) {
 			vkDestroySemaphore(device->handle, imageAvailableSemaphores[i], _ctx.allocator);
@@ -2837,7 +2853,7 @@ void SwapChainResource::Destroy(bool is_recreation) {
 	swapChain = VK_NULL_HANDLE;
 }
 
-void SwapChain::Create(Device& device, vkw::Queue& queue, void* glfwWindow, uvec2 size){ 
+void SwapChain::Create(Device& device, vkw::Queue& queue, void* glfwWindow, uvec2 size){
 	this->glfwWindow = glfwWindow;
 
 	resource = std::make_shared<SwapChainResource>();
@@ -2857,7 +2873,7 @@ void SwapChain::Create(Device& device, vkw::Queue& queue, void* glfwWindow, uvec
 	// LOG_INFO("Created Swapchain {}", _ctx.swapChains.size());
 
 	// after commands
-	
+
 	currentFrame = 0;
 	currentImageIndex = 0;
 	dirty = false;
@@ -2884,7 +2900,7 @@ bool SwapChain::AcquireImage() {
 
 	switch (res) {
 	[[likely]]
-	case VK_SUCCESS: 
+	case VK_SUCCESS:
 		return true;
 	case VK_ERROR_OUT_OF_DATE_KHR:
 		LOG_WARN("AcquireImage: Out of date");
@@ -2912,7 +2928,7 @@ void SwapChain::SubmitAndPresent() {
 	SubmitInfo submitInfo{};
 	submitInfo.waitSemaphore   = (Semaphore*)resource->GetImageAvailableSemaphore(currentFrame);
 	submitInfo.signalSemaphore = (Semaphore*)resource->GetRenderFinishedSemaphore(currentFrame);
-	
+
 	auto cmd = GetCommandBuffer();
 	cmd.End();
 	cmd.QueueSubmit(submitInfo);
@@ -2951,7 +2967,7 @@ const u32 MAX_STORAGE_IMAGES = 8192;
 
 void DeviceResource::createDescriptorPool(){
 	// type                                     descriptorCount
-	std::vector<VkDescriptorPoolSize> poolSizes = { 
+	std::vector<VkDescriptorPoolSize> poolSizes = {
 		{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,        MAX_SAMPLEDIMAGES},
 		{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,                MAX_STORAGE},
 		// {VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, MAX_ACCELERATIONSTRUCTURE},
@@ -3001,7 +3017,7 @@ void DeviceResource::createDescriptorSetLayout(){
 
 	VkDescriptorSetLayoutCreateInfo descriptorSetLayoutCreateInfo = {};
 	descriptorSetLayoutCreateInfo.sType	= VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	descriptorSetLayoutCreateInfo.bindingCount = bindingCount; 
+	descriptorSetLayoutCreateInfo.bindingCount = bindingCount;
 	descriptorSetLayoutCreateInfo.pBindings	= &bindings[0];
 	// descriptorSetLayoutCreateInfo.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
 	// descriptorSetLayoutCreateInfo.pNext = &setLayoutBindingFlags;
@@ -3051,7 +3067,7 @@ void DeviceResource::CreateBindlessDescriptorResources(){
 		const u32 MAX_STORAGE_IMAGES = 8192;
 
 		// create descriptor set pool for bindless resources
-		std::vector<VkDescriptorPoolSize> bindlessPoolSizes = { 
+		std::vector<VkDescriptorPoolSize> bindlessPoolSizes = {
 			{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, MAX_SAMPLEDIMAGES},
 			{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, MAX_STORAGE},
 			// {VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, MAX_ACCELERATIONSTRUCTURE},
@@ -3067,7 +3083,7 @@ void DeviceResource::CreateBindlessDescriptorResources(){
 		// std::iota(availableTLASRID.begin(), availableTLASRID.end(), 0);
 		availableStorageImageRID.resize(MAX_STORAGE_IMAGES);
 		std::iota(availableStorageImageRID.rbegin(), availableStorageImageRID.rend(), 0);
-		
+
 
 		VkDescriptorPoolCreateInfo bindlessPoolInfo{
 			.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
@@ -3088,7 +3104,7 @@ void DeviceResource::CreateBindlessDescriptorResources(){
 				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 				.descriptorCount = MAX_SAMPLEDIMAGES,
 				.stageFlags = VK_SHADER_STAGE_ALL,
-			}, 
+			},
 			{
 				.binding = BINDING_BUFFER,
 				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -3108,7 +3124,7 @@ void DeviceResource::CreateBindlessDescriptorResources(){
 				.stageFlags = VK_SHADER_STAGE_ALL,
 			},
 		};
-		
+
 		std::vector<VkDescriptorBindingFlags> bindingFlags {
 			VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT ,
 			VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT ,
@@ -3133,7 +3149,7 @@ void DeviceResource::CreateBindlessDescriptorResources(){
 
 		result = vkCreateDescriptorSetLayout(handle, &descriptorLayoutInfo, _ctx.allocator, &bindlessDescriptorLayout);
 		DEBUG_VK(result, "Failed to create bindless descriptor set layout!");
-		
+
 		// create Descriptor Set for bindless resources
 		VkDescriptorSetAllocateInfo allocInfo{
 			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
@@ -3179,7 +3195,7 @@ void CommandResource::Create(DeviceResource* device, QueueResource* queue) {
 		.flags = 0, // do not use VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT
 		.queueFamilyIndex = this->queue->familyIndex
 	};
-	
+
 	VkCommandBufferAllocateInfo allocInfo{
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
 		.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
@@ -3271,6 +3287,7 @@ void SwapChainResource::ChooseExtent(u32 width, u32 height) {
 
 bool Command::Copy(Buffer& dst, const void* data, u32 size, u32 dstOfsset) {
 	auto device = resource->device;
+	DEBUG_TRACE("CmdCopy, size: {}, offset: {}", size, device->stagingOffset);
 	if (device->stagingBufferSize - device->stagingOffset < size) [[unlikely]] {
 		LOG_WARN("Not enough size in staging buffer to copy");
 		return false;
@@ -3278,7 +3295,6 @@ bool Command::Copy(Buffer& dst, const void* data, u32 size, u32 dstOfsset) {
 	// memcpy(resource->stagingCpu + resource->stagingOffset, data, size);
 	vmaCopyMemoryToAllocation(device->vmaAllocator, data, device->staging.resource->allocation, device->stagingOffset, size);
 	Copy(dst, device->staging, size, dstOfsset, device->stagingOffset);
-	DEBUG_TRACE("CmdCopy, size: {}, offset: {}", size, device->stagingOffset);
 	device->stagingOffset += size;
 	return true;
 }
@@ -3305,6 +3321,7 @@ void Command::Copy(Buffer& dst, Buffer& src, u32 size, u32 dstOffset, u32 srcOff
 
 bool Command::Copy(Image& dst, const void* data, u32 size) {
 	auto device = resource->device;
+	DEBUG_TRACE("CmdCopy, size: {}, offset: {}", size, device->stagingOffset);
 	if (device->stagingBufferSize - device->stagingOffset < size) [[unlikely]] {
 		LOG_WARN("Not enough size in staging buffer to copy");
 		return false;
@@ -3469,7 +3486,7 @@ void Command::ClearColorImage(Image& img, const float4& color) {
 	vkCmdClearColorImage(resource->buffer, img.resource->image, (VkImageLayout)img.layout, &clearColor, 1, &range);
 }
 
-void Command::Blit(BlitInfo const& info) {	
+void Command::Blit(BlitInfo const& info) {
 	auto dst = info.dst;
 	auto src = info.src;
 	auto regions = info.regions;
@@ -3483,9 +3500,9 @@ void Command::Blit(BlitInfo const& info) {
 		regions = fullRegions;
 	}
 
-	VLA(VkImageBlit2, blitRegions, regions.size());	
+	VLA(VkImageBlit2, blitRegions, regions.size());
 	for (auto i = 0; auto& region: regions) {
-		blitRegions[i++] = {
+		blitRegions[i] = {
 			.sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2,
 			.pNext = nullptr,
 			.srcSubresource{
@@ -3503,6 +3520,7 @@ void Command::Blit(BlitInfo const& info) {
 			},
 			.dstOffsets = {{region.dst.x, region.dst.y, 0}, {region.dst.z, region.dst.w, 1}},
 		};
+		++i;
 	}
 
 	VkBlitImageInfo2 blitInfo {
@@ -3532,7 +3550,7 @@ VkSampler DeviceResource::CreateSampler(SamplerDesc const& desc) {
 		.addressModeV = Cast::VkSamplerAddressMode(desc.wrapV),
 		.addressModeW = Cast::VkSamplerAddressMode(desc.wrapW),
 		.mipLodBias = 0.0f,
-		
+
 		.anisotropyEnable = desc.anisotropyEnable == false ? VK_FALSE : physicalDevice->physicalFeatures2.features.samplerAnisotropy,
 		.maxAnisotropy = desc.maxAnisotropy,
 		.compareEnable = desc.compareEnable == false ? VK_FALSE : VK_TRUE,
@@ -3553,7 +3571,7 @@ VkSampler DeviceResource::CreateSampler(SamplerDesc const& desc) {
 	return sampler;
 }
 
-VkSampler DeviceResource::GetSampler(SamplerDesc const& desc) { 
+VkSampler DeviceResource::GetSampler(SamplerDesc const& desc) {
 	auto sampler = samplers.find(desc);
 	if (sampler == samplers.end()) {
 		VkSampler sampler = CreateSampler(desc);

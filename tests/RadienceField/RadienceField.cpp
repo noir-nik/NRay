@@ -113,7 +113,7 @@ void RadienceFieldApplication::Compute() {
 	cmd.BeginCommandBuffer();
 	// Prepare BufferGT and BufferOpt
 	cmd.Copy(ctx.BufferGrid, ctx.grid.data(), ctx.numCells * sizeof(Cell));
-	cmd.Barrier({});
+	cmd.Barrier();
 
 	cmd.BindPipeline(ctx.pipeline);
 	cmd.PushConstants(&constants, sizeof(constants));

@@ -109,7 +109,7 @@ void UploadBuffers() {
 	auto cmd = vkw::GetCommandBuffer(vkw::Queue::Transfer);
 	cmd.BeginCommandBuffer();
 	cmd.Copy(ctx.vertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex));
-	cmd.Barrier({});
+	cmd.Barrier();
 	cmd.EndCommandBuffer();
 	cmd.QueueSubmit();
 }

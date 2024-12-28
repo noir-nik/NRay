@@ -15,6 +15,8 @@ struct float2;
 struct float3;
 struct float4;
 
+struct uchar4;
+
 struct float3x3;
 struct float4x4;
 
@@ -281,8 +283,8 @@ typedef struct float4x4
 
 	inline explicit float4x4(const float A[16])
 	{
-		m_col[0] = float4{ A[0], A[4], A[8],	A[12] };
-		m_col[1] = float4{ A[1], A[5], A[9],	A[13] };
+		m_col[0] = float4{ A[0], A[4], A[8],  A[12] };
+		m_col[1] = float4{ A[1], A[5], A[9],  A[13] };
 		m_col[2] = float4{ A[2], A[6], A[10], A[14] };
 		m_col[3] = float4{ A[3], A[7], A[11], A[15] };
 	}

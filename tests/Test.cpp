@@ -55,7 +55,7 @@ static void ImageOptimizationTest() {
  */
 static void FeatureTest() {
 	FeatureTestApplication app;
-	app.run();
+	app.run("assets/models/test_scene.gltf");
 }
 /* 
 static void RadienceFieldTest() {

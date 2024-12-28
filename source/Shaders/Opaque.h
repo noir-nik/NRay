@@ -15,6 +15,8 @@ struct OpaqueLight {
 	float range;
 	vec3 color;
 	float intensity;
+	vec3 ambientColor;
+	float ambientIntensity;
 };
 
 struct OpaqueConstants {

@@ -22,7 +22,7 @@ struct Vertex {
 	vec3  normal;
 	vec2  uv;
 	vec4  color;
-	vec3  tangent;
+	vec4  tangent;
 };
 
 

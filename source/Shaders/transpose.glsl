@@ -1,4 +1,4 @@
-float transpose(float m) {
+float transpose1(float m) {
   return m;
 }
 

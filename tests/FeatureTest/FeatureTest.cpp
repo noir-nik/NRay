@@ -96,7 +96,9 @@ struct AppContext : DeleteCopyDeleteMove {
 	// Runtime::Context runtimeContext;
 
 	Project project;
-	// Registry registry;
+	// Registry registry;]
+
+	const char* gltfPath;
 
 	// std::vector<Entity> meshes;
 	void Setup();
@@ -227,7 +229,7 @@ void AppContext::CreateShaders() {
 			vkw::Format::RGB32_SFLOAT,  // vec3 normal;
 			vkw::Format::RG32_SFLOAT,   // vec2 uv;
 			vkw::Format::RGBA32_SFLOAT, // vec4 color;
-			vkw::Format::RGB32_SFLOAT   // vec3 tangent;
+			vkw::Format::RGBA32_SFLOAT   // vec4 tangent;
 		},
 		.colorFormats = {renderFormat},
 		.useDepth = true,
@@ -252,19 +254,19 @@ void AppContext::CreateShaders() {
  */
 	opaquePipeline = device.CreatePipeline({
 		.point = vkw::PipelinePoint::Graphics,
-		.stages = {
+		.stages = {{
 			{.stage = vkw::ShaderStage::Vertex, .path = "source/Shaders/Opaque.vert"},
 			{.stage = vkw::ShaderStage::Fragment, .path = "source/Shaders/Opaque.frag"},
-		},
+		}},
 		.name = "Opaque pipeline",
-		.vertexAttributes = {
+		.vertexAttributes = {{
 			vkw::Format::RGB32_SFLOAT,  // vec3 position;
 			vkw::Format::RGB32_SFLOAT,  // vec3 normal;
 			vkw::Format::RG32_SFLOAT,   // vec2 uv;
 			vkw::Format::RGBA32_SFLOAT, // vec4 color;
-			vkw::Format::RGB32_SFLOAT   // vec3 tangent;
-		},
-		.colorFormats = {renderFormat},
+			vkw::Format::RGBA32_SFLOAT   // vec4 tangent;
+		}},
+		.colorFormats = {{renderFormat}},
 		.useDepth = true,
 		.depthFormat = resource.depthImage.format,
 		.samples = sampleCount,
@@ -385,13 +387,12 @@ void AppContext::UploadBuffers() {
 	auto cmd = device.GetCommandBuffer(queue);
 	cmd.Begin();
 	cmd.Copy(cubeVertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(VertexDebug));
-	cmd.Barrier({});
+	cmd.Barrier();
 	cmd.End();
 	cmd.QueueSubmit();
 
 	glTF::Loader loader;
-	const char* filepath = "assets/models/test_scene.gltf";
-	auto res = loader.Load(filepath, project.GetSceneGraph(), materials, device, queue);
+	auto res = loader.Load(gltfPath, project.GetSceneGraph(), materials, device, queue);
 	ASSERT(res, "Failed to load gltf file");
 
 	auto& sceneGraph = project.GetSceneGraph();
@@ -440,8 +441,11 @@ void AppContext::DrawViewport(vkw::Command& cmd, Runtime::Camera const& camera) 
  	Opaque::OpaqueConstants constants{};
 	constants.viewProj = camera.proj * (camera.view | affineInverse);
 	constants.light = {
-		.position = vec3(10.0, 10.0, 0.0),
-		.color = vec3(0.8, 0.8, 0.8)
+		.position = vec3(2.0, 2.0, 2.0),
+		.color = vec3(0.8, 0.8, 0.8),
+		.intensity = 8.0,
+		.ambientColor = vec3(0.9, 0.9, 0.9),
+		.ambientIntensity = 0.03
 	};
 	constants.cameraPosition = camera.getPosition();
 
@@ -879,8 +883,8 @@ void AppContext::Setup() {
 
 // } // namespace
 
-void FeatureTestApplication::run() {
-	Create();
+void FeatureTestApplication::run(const char* gltfPath) {
+	Create(gltfPath);
 	Setup();
 	MainLoop();
 	// Draw();
@@ -901,8 +905,9 @@ void BatterySaver() {
 	lastFrameTime = std::chrono::high_resolution_clock::now();
 }
 
-void FeatureTestApplication::Create() {
+void FeatureTestApplication::Create(const char* gltfPath) {
 	ctx = new AppContext();
+	ctx->gltfPath = gltfPath;
 
 	ctx->phongMaterial = ctx->project.CreateEntity("PhongMaterial");
 	// phongMaterial.Add<PhongMaterial>();

@@ -366,8 +366,6 @@ struct Pipeline {
 	};
 	PipelinePoint point;
 	std::shared_ptr<PipelineResource> resource;
-	// std::vector<Stage> stages;
-	// std::vector<std::vector<char>> stageBytes;
 };
 
 namespace CullMode {
@@ -415,11 +413,11 @@ enum class DynamicState {
 
 struct PipelineDesc {
 	PipelinePoint point;
-	std::vector<Pipeline::Stage> stages;
+	std::span<const Pipeline::Stage> stages;
 	std::string name = "";
-	std::vector<Format> vertexAttributes;
+	std::span<const Format> vertexAttributes;
 	VertexAttributeLayout vertexAttributeLayout = VertexAttributeLayout::InterLeaved;
-	std::vector<Format> colorFormats;
+	std::span<const Format> colorFormats;
 	bool useDepth = false;
 	Format depthFormat;
 	SampleCount samples = vkw::SampleCount::_1;
@@ -571,7 +569,7 @@ struct Command {
 	void Copy(Buffer& dst, Image& src, uint32_t dstOffset, ivec2 imageOffset, ivec2 imageExtent);// size is a No OP
 	void Barrier(Image& img, const ImageBarrier& barrier);
 	void Barrier(Buffer& buf, const BufferBarrier& barrier);
-	void Barrier(const MemoryBarrier& barrier);
+	void Barrier(const MemoryBarrier& barrier = {});
 	void Blit(BlitInfo const& info);
 	void ClearColorImage(Image& image, const float4& color);
 

@@ -140,6 +140,8 @@ auto LoaderImpl::LoadTexture(fastgltf::Texture const& assetTexture) -> TextureIn
 	auto& height = textureInfo.height;
 	auto& numChannels = textureInfo.numChannels;
 	auto& imageIndex = textureInfo.imageIndex;
+
+	constexpr auto desiredChannels = 4;
 	
 	if      (assetTexture.imageIndex.has_value())       { imageIndex = assetTexture.imageIndex.value(); }
 	else if (assetTexture.basisuImageIndex.has_value()) { imageIndex = assetTexture.basisuImageIndex.value(); }
@@ -153,11 +155,11 @@ auto LoaderImpl::LoadTexture(fastgltf::Texture const& assetTexture) -> TextureIn
 			[&](fastgltf::sources::URI& filePath) {
 				ASSERT(filePath.fileByteOffset == 0, "No support for offsets with stbi: {} ", image.name);
 				ASSERT(filePath.uri.isLocalPath(), "No support for external files with stbi: {} ", image.name);
-				data = ImageIO::Load(std::string(filePath.uri.path()).c_str(), &width, &height, &numChannels, 4);
+				data = ImageIO::Load(std::string(filePath.uri.path()).c_str(), &width, &height, &numChannels, desiredChannels);
 			},
 			[&](fastgltf::sources::Vector& vector) {
 				data = ImageIO::LoadFromMemory(reinterpret_cast<const uchar*>(vector.bytes.data()),
-				static_cast<int>(vector.bytes.size()), &width, &height, &numChannels, 4);
+				static_cast<int>(vector.bytes.size()), &width, &height, &numChannels, desiredChannels);
 			},
 			[&](fastgltf::sources::BufferView& view) {
 				auto& bufferView = asset.bufferViews[view.bufferViewIndex];
@@ -166,7 +168,7 @@ auto LoaderImpl::LoadTexture(fastgltf::Texture const& assetTexture) -> TextureIn
 				std::visit(fastgltf::visitor {
 					[&](fastgltf::sources::Vector& vector) {
 						data = ImageIO::LoadFromMemory(reinterpret_cast<const uchar*>(vector.bytes.data() + bufferView.byteOffset),
-						static_cast<int>(bufferView.byteLength), &width, &height, &numChannels, 4);
+						static_cast<int>(bufferView.byteLength), &width, &height, &numChannels, desiredChannels);
 					},
 					[&](auto& arg) {
 						LOG_WARN("Unsupported fastgltf::visitor default (BufferView) {}", image.name);
@@ -176,7 +178,7 @@ auto LoaderImpl::LoadTexture(fastgltf::Texture const& assetTexture) -> TextureIn
 			},
 			[&](fastgltf::sources::Array& array) {
 				data = ImageIO::LoadFromMemory(reinterpret_cast<const uchar*>(array.bytes.data()),
-				static_cast<int>(array.bytes.size()), &width, &height, &numChannels, 4);
+				static_cast<int>(array.bytes.size()), &width, &height, &numChannels, desiredChannels);
 			},
 			[&](auto& arg) {
 				LOG_WARN("Unsupported fastgltf::visitor default (Image) {} with variant type: {}", image.name, std::visit(sourcesVisitor, image.data));
@@ -186,6 +188,8 @@ auto LoaderImpl::LoadTexture(fastgltf::Texture const& assetTexture) -> TextureIn
 	if (data) {
 		LOG_INFO ("Loaded texture: {} {} {} {}", image.name, width, height, numChannels);
 	}
+
+	numChannels = desiredChannels; // Todo: process 3, 2 and 1 channel images
 	return textureInfo;
 };
 
@@ -230,22 +234,22 @@ void LoaderImpl::LoadTextures() {
 			auto minFilterGltf = glTFsampler.minFilter.value_or(fastgltf::Filter::Linear);
 
 			auto magFilter {
-					magFilterGltf == fastgltf::Filter::Nearest
-				? vkw::Filter::Nearest
-				: vkw::Filter::Linear
+					magFilterGltf == fastgltf::Filter::Linear
+				? vkw::Filter::Linear
+				: vkw::Filter::Nearest
 			};
 			auto minFilter {
-					minFilterGltf == fastgltf::Filter::Nearest ||
-					minFilterGltf == fastgltf::Filter::NearestMipMapNearest ||
-					minFilterGltf == fastgltf::Filter::NearestMipMapLinear
-				? vkw::Filter::Nearest
-				: vkw::Filter::Linear
+					minFilterGltf == fastgltf::Filter::Linear ||
+					minFilterGltf == fastgltf::Filter::LinearMipMapLinear ||
+					minFilterGltf == fastgltf::Filter::LinearMipMapNearest
+				? vkw::Filter::Linear
+				: vkw::Filter::Nearest
 			};
 			auto mipmapMode {
-					minFilterGltf == fastgltf::Filter::NearestMipMapNearest ||
-					minFilterGltf == fastgltf::Filter::LinearMipMapNearest
-				? vkw::MipmapMode::Nearest
-				: vkw::MipmapMode::Linear
+					minFilterGltf == fastgltf::Filter::LinearMipMapLinear ||
+					minFilterGltf == fastgltf::Filter::NearestMipMapLinear
+				? vkw::MipmapMode::Linear
+				: vkw::MipmapMode::Nearest
 			};
 			
 			// Create image
@@ -254,7 +258,13 @@ void LoaderImpl::LoadTextures() {
 				.extent = { (uint32_t)textureInfo.width, (uint32_t)textureInfo.height, 1 },
 				.format = format,
 				.usage = vkw::ImageUsage::Sampled | vkw::ImageUsage::TransferDst,
-				.sampler = {magFilter, minFilter, mipmapMode},
+				.sampler = {
+					.magFilter = magFilter,
+					.minFilter = minFilter,
+					.mipmapMode = mipmapMode,
+					.anisotropyEnable = true,
+					.maxAnisotropy = 16.0f
+				},
 				.name = assetTexture.name.data(),
 			}));
 
@@ -349,9 +359,8 @@ void LoaderImpl::LoadMesh(fastgltf::Mesh const& assetMesh, Component::Mesh& mesh
 	auto numPrimitives = assetMesh.primitives.size();
 	mesh.primitives.resize(numPrimitives);
 
-	for (size_t primitiveIndex = 0; primitiveIndex < numPrimitives; ++primitiveIndex) {
-		auto& p = assetMesh.primitives[primitiveIndex];
-		auto& primitive = mesh.primitives[primitiveIndex];
+	for (size_t primitiveIndex = 0; auto const& p : assetMesh.primitives) {
+		auto& primitive = mesh.primitives[primitiveIndex++];
 		size_t initialVertex = mesh.vertices.size();
 
 		if (p.materialIndex.has_value()) {
@@ -425,8 +434,8 @@ void LoaderImpl::LoadMesh(fastgltf::Mesh const& assetMesh, Component::Mesh& mesh
 		// Tangent
 		auto tangent = p.findAttribute("TANGENT");
 		if (tangent != p.attributes.end()) {
-			fastgltf::iterateAccessorWithIndex<vec3>(asset, asset.accessors[tangent->accessorIndex],
-				[&](vec3 v, size_t index) {
+			fastgltf::iterateAccessorWithIndex<vec4>(asset, asset.accessors[tangent->accessorIndex],
+				[&](vec4 v, size_t index) {
 					mesh.vertices[initialVertex + index].tangent = v;
 				});
 		}
@@ -538,13 +547,14 @@ void LoaderImpl::LoadNodes() {
 	auto numChildren = currentScene.children.size();
 	currentScene.children.resize(numChildren + currentOffset);
 
-	for (size_t sceneIndex = 0; sceneIndex < numScenes; ++sceneIndex) {
-		auto numChildNodes = asset.scenes[sceneIndex].nodeIndices.size();
-		for (auto childNodeIndex = 0; childNodeIndex < numChildNodes; ++childNodeIndex) {
-			auto glfwNodeIndex = asset.scenes[sceneIndex].nodeIndices[childNodeIndex];
+	for (size_t sceneIndex = 0; auto const& scene : asset.scenes) {
+		auto numChildNodes = scene.nodeIndices.size();
+		for (size_t childNodeIndex = 0; auto const& glfwNodeIndex : scene.nodeIndices) {
 			LoadNode(glfwNodeIndex, nodeOffset);
 			currentScene.children[numChildren + childOffsetsForScenes[sceneIndex] + childNodeIndex] = nodeOffset + glfwNodeIndex;
+			++childNodeIndex;
 		}
+		++sceneIndex;
 	}
 }
 

@@ -1,4 +1,4 @@
-float inverse(float m) {
+float inverse1(float m) {
   return 1.0 / m;
 }
 

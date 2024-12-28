@@ -220,7 +220,7 @@ void Context::RenderUI() {
 	ImGui::Separator();
 
 	static const char* sceneObjects[] = { "Camera", "Light", "Cube", "Sphere", "Plane" };
-	for (int i = 0; i < ARRAY_SIZE(sceneObjects); i++) {
+	for (size_t i = 0; i < ARRAY_SIZE(sceneObjects); i++) {
 		ImGui::Selectable(sceneObjects[i]);
 	}
 	ImGui::End();
@@ -276,7 +276,7 @@ void Context::DebugWindow(Runtime::Camera& camera) {
 
 		// static float position[3] = { 0.0f, 2.0f, -30.0f };
 		// static float rotation[3] = { 0.0f, 0.0f, 0.0f };
-		static float cameraUp[3] = { 0.0f, 1.0f, 0.0f };
+		// static float cameraUp[3] = { 0.0f, 1.0f, 0.0f };
 
 		
 		float3 position, rotation, scale;
@@ -318,17 +318,18 @@ void Context::DebugWindow(Runtime::Camera& camera) {
 	ImGui::End();
 }
 
+static constexpr uint32_t selectedNodeNotFound = ~0u;
 uint32_t Context::FindSelected(NodeIndex nodeIndex) {
 	auto it = std::find_if(selectedNodes.begin(), selectedNodes.end(), [&](const NodeIndex other) {
 		return nodeIndex == other;
 	});
-	return it == selectedNodes.end() ? -1 : it - selectedNodes.begin();
+	return it == selectedNodes.end() ? selectedNodeNotFound : it - selectedNodes.begin();
 }
 
 void Context::Select(NodeIndex nodeIndex) {
 	bool holdingCtrl = ImGui::IsKeyDown(ImGuiKey_LeftCtrl);
-	int index = FindSelected(nodeIndex);
-	if (index != -1 && holdingCtrl) {
+	auto index = FindSelected(nodeIndex);
+	if (index != selectedNodeNotFound && holdingCtrl) {
 		selectedNodes.erase(selectedNodes.begin() + index);
 	}
 	if (!holdingCtrl) {
@@ -351,7 +352,7 @@ void Context::displayNode(const SceneGraph& sceneGraph, const NodeIndex nodeInde
 		child_flags |= ImGuiTreeNodeFlags_Leaf;
 	}
 	bool is_active = nodeIndex == activeNode;
-	bool is_selected = FindSelected(nodeIndex) != -1;
+	bool is_selected = FindSelected(nodeIndex) != selectedNodeNotFound;
 	// bool is_hovered = ImGui::IsItemHovered();
 
 	ImGui::PushID(nodeIndex);
@@ -400,8 +401,7 @@ bool ProcessViewportInput(Runtime::Viewport& ctx, ImGuiKeyChord mods, float rota
 		} else {
 			camera_pos -= camera.focus;
 			// camera.view = rotate4x4(camera_up, deltaPos.x * camera.rotation_factor) * rotate4x4(camera_right, deltaPos.y * camera.rotation_factor)  * camera.view; // trackball
-			camera.view |= rotate(camera_right, deltaPos.y * camera.rotation_factor);
-			camera.view |= rotateY(rotation_sign * deltaPos.x * camera.rotation_factor);
+			camera.view = camera.view | rotate(camera_right, deltaPos.y * camera.rotation_factor) | rotateY(rotation_sign * deltaPos.x * camera.rotation_factor);
 			camera_pos += camera.focus;
 		}
 		// window->AddFramesToDraw(1);
@@ -887,12 +887,12 @@ bool Context::LoadStyle(const char* filename, ImGuiStyle& style) {
 				case ImGuiDataType_Float: {
 					float x, y, z, w;
 					auto p = (float*)pvar;
-					auto num_scanned = sscanf(line.c_str(), "%f %f %f %f", &x, &y, &z, &w);
+					ImU32 num_scanned = sscanf(line.c_str(), "%f %f %f %f", &x, &y, &z, &w);
 					if (num_scanned == var_info.Count) {
 						switch (var_info.Count) {
-							case 4: p[3] = w; 
-							case 3: p[2] = z; 
-							case 2: p[1] = y; 
+							case 4: p[3] = w; [[fallthrough]];
+							case 3: p[2] = z; [[fallthrough]];
+							case 2: p[1] = y; [[fallthrough]];
 							case 1: p[0] = x; 
 							var_info.Type = ImGuiDataType_COUNT;
 							continue;

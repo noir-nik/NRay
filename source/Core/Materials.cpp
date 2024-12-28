@@ -25,7 +25,7 @@ auto Materials::Expand() -> void {
 	auto size = availableSlots.size();
 	availableSlots.resize(size + bufferCapacity);
 	uint idx = bufferCapacity * buffers.size();
-	for (int i = 0; i < bufferCapacity; ++i) {
+	for (uint i = 0; i < bufferCapacity; ++i) {
 		availableSlots[size + i] = --idx;
 	}
 }

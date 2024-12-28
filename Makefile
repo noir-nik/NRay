@@ -54,8 +54,17 @@ LIB_EXT := a
 -C := -c
 
 DEFINES := -DENGINE
+WARNINGS = -Wall -Wextra
 
-CXXFLAGS := -MMD -MP $(INCLUDES) $(DEFINES) -std=c++20
+WARNINGS_DISABLE := \
+	-Wno-missing-designated-field-initializers \
+	-Wno-missing-field-initializers \
+	-Wno-unused-variable \
+	-Wno-unused-parameter \
+	-Wno-unused-function \
+
+CXXFLAGS := -MMD -MP $(INCLUDES) $(DEFINES) -std=c++20 $(WARNINGS) $(WARNINGS_DISABLE) -Wsequence-point
+
 
 ifeq ($(USE_EXCEPTIONS), 0)
 	CXXFLAGS += -fno-exceptions -DSPDLOG_NO_EXCEPTIONS
@@ -251,10 +260,10 @@ OBJS_FMT := $(patsubst $(SRC_FMT)/%.cc, $(PLATFORM_BUILD_DIR)/fmt/%.$(OBJ_EXT), 
 # $(patsubst %.cpp, $(PLATFORM_BUILD_DIR)/%.o, $(SRC_CPP_RAW)) \
 
 
-all: create_dirs release
-debug: create_dirs
+all: debug
 
 .PHONY: debug
+debug: create_dirs
 ifeq ($(CC),cl)
 debug: CXXFLAGS += /Zi /Od /DNRAY_DEBUG /EHsc /Fd$(PLATFORM_BUILD_DIR)/$(TARGET).pdb /FS
 debug: LDFLAGS  += vulkan-1.lib
@@ -267,6 +276,7 @@ endif
 debug: build_target
 
 .PHONY: release
+release: create_dirs
 release: CXXFLAGS += $(OPT_RELEASE)
 release: LDFLAGS  += $(OPT_RELEASE)
 release: build_target

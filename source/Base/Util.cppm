@@ -29,7 +29,7 @@ inline size_t HashCombine(size_t hash, size_t x) {
 
 _UTIL_EXPORT
 template <typename T>
-inline size_t VectorHash(const std::vector<T>& v) {
+inline size_t SpanHash(std::span<const T> v) {
 	size_t hash = 0;
 	for (T num : v) {
 		hash = HashCombine(hash, num);
