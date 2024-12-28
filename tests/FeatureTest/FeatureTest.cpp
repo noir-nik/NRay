@@ -57,6 +57,7 @@ struct AppContext : DeleteCopyDeleteMove {
 	vkw::Pipeline pipeline;
 
 	vkw::Pipeline glTFPipeline;
+	vkw::Pipeline texPipeline;
 	// vkw::Pipeline computePipeline;
 
 	uint32_t width, height;
@@ -70,6 +71,9 @@ struct AppContext : DeleteCopyDeleteMove {
 	// vkw::Format renderFormat = vkw::Format::RGBA16_sfloat;
 	vkw::Format renderFormat = vkw::Format::RGBA8_UNORM;
 	
+	vkw::Format depthFormat = vkw::Format::D32_sfloat;
+
+	vkw::Image nullImage;
 
 	// vkw::Buffer outputImage;
 	vkw::Buffer cubeVertexBuffer;
@@ -98,6 +102,7 @@ struct AppContext : DeleteCopyDeleteMove {
 	// std::vector<Entity> meshes;
 
 	void CreateShaders();
+	void CreateImages();
 	void CreateWindowResources(Entity window);
 	void UploadBuffers();
 	void DrawWindow(Entity window);
@@ -128,7 +133,7 @@ struct DrawViewportInfo {
 
 // static Runtime::Camera camera(vec3(0.0f, 0.0f, 30.0f), vec3(0.0f, 0.0f, 0.0f), vec3(0.0f, 1.0f, 0.0f));
 
-struct Vertex {
+struct VertexDebug {
 	vec3 pos;
 	vec3 color;
 };
@@ -153,7 +158,7 @@ void IconifyCallback(Window* window, int iconified);
 // };
 
 // Cube
-const std::vector<Vertex> vertices = {
+const std::vector<VertexDebug> vertices = {
 	{{-0.5f, -0.5f, -0.5f}, { 0.0f, 0.0f, 0.0f}},
 	{{0.5f, -0.5f, -0.5f}, { 1.0f, 0.0f, 0.0f}},
 	{{0.5f,  0.5f, -0.5f}, { 1.0f, 1.0f, 0.0f}},
@@ -232,11 +237,46 @@ void AppContext::CreateShaders() {
 		.lineTopology = false
 	});
 
+	texPipeline = device.CreatePipeline({
+		.point = vkw::PipelinePoint::Graphics,
+		.stages = {
+			{.stage = vkw::ShaderStage::Vertex, .path = "source/Shaders/Quad.vert"},
+			{.stage = vkw::ShaderStage::Fragment, .path = "source/Shaders/TexImage.frag"},
+		},
+		.name = "Feature pipeline",
+		// pos2 + color3
+		// .vertexAttributes = {
+		// 	vkw::Format::RGB32_sfloat,  // vec3  position;
+		// 	vkw::Format::RGB32_sfloat,  // vec3  normal;
+		// 	vkw::Format::RG32_sfloat,   // vec2  uv;
+		// 	vkw::Format::RGBA32_sfloat, // vec4  color;
+		// 	vkw::Format::RGB32_sfloat   // vec3  tangent;
+		// },
+		.colorFormats = {renderFormat},
+		.useDepth = true,
+		.depthFormat = resource.depthImage.format,
+		.samples = sampleCount,
+		.lineTopology = false
+	});
+
 }
 
-// void AppContext::CreateImages(uint32_t width, uint32_t height) {
+void AppContext::CreateImages() {
+	ctx->nullImage = device.CreateImage({
+		.extent = {1, 1},
+		.format = vkw::Format::RGBA8_UNORM,
+		.usage = vkw::ImageUsage::Sampled,
+		.name = "Null Texture"
+	});
 
-// }
+	vec4 nullPixel = {1.0f, 0.0f, 1.0f, 1.0f};
+
+	auto cmd = device.GetCommandBuffer(queue);
+	cmd.Begin();
+	cmd.Copy(ctx->nullImage, &nullPixel, sizeof(nullPixel));
+	cmd.End();
+	cmd.QueueSubmit({});
+}
 
 void AppContext::CreateWindowResources(Entity window) {
 	using namespace std::literals;
@@ -256,25 +296,22 @@ void AppContext::CreateWindowResources(Entity window) {
 	auto& resource = window.Get<WindowImageResource>();
 
 	resource.depthImage = device.CreateImage({
-        .width = maxSize.x,
-        .height = maxSize.y,
-        .format = vkw::Format::D32_sfloat,
+        .extent = maxSize,
+        .format = depthFormat,
         .usage = vkw::ImageUsage::DepthStencilAttachment | vkw::ImageUsage::TransientAttachment,
 		.samples = sampleCount,
         .name = "Depth Attachment"
     });
 
 	resource.resolveImage = device.CreateImage({
-		.width = maxSize.x,
-		.height = maxSize.y,
+		.extent = maxSize,
 		.format = renderFormat,
 		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::TransferSrc,
 		.name = windowHandle.GetName() + "_resolve"s,
 	});
 	
 	resource.colorImage = device.CreateImage({
-		.width = maxSize.x,
-		.height = maxSize.y,
+		.extent = maxSize,
 		.format = renderFormat,
 		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::TransientAttachment,
 		.samples = sampleCount,
@@ -282,16 +319,14 @@ void AppContext::CreateWindowResources(Entity window) {
 	});
 	
 	resource.uiResolveImage = device.CreateImage({
-		.width = maxSize.x,
-		.height = maxSize.y,
+		.extent = maxSize,
 		.format = renderFormat,
 		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::TransferSrc,
 		.name = windowHandle.GetName() + "_ui_resolve"s,
 	});
 	
 	resource.uiColorImage = device.CreateImage({
-		.width = maxSize.x,
-		.height = maxSize.y,
+		.extent = maxSize,
 		.format = renderFormat,
 		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::TransientAttachment,
 		.samples = sampleCount,
@@ -301,10 +336,10 @@ void AppContext::CreateWindowResources(Entity window) {
 
 void AppContext::UploadBuffers() {
 	auto cmd = device.GetCommandBuffer(queue);
-	cmd.BeginCommandBuffer();
-	cmd.Copy(cubeVertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex));
+	cmd.Begin();
+	cmd.Copy(cubeVertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(VertexDebug));
 	cmd.Barrier({});
-	cmd.EndCommandBuffer();
+	cmd.End();
 	cmd.QueueSubmit({});
 
 	glTF::Loader loader;
@@ -327,6 +362,7 @@ void AppContext::DrawViewport(vkw::Command& cmd, Runtime::Camera const& camera) 
 	// cmd.Barrier(resource.renderImage, {vkw::ImageLayout::TransferDst});
 	// cmd.ClearColorImage(resource.renderImage, {0.7f, 0.0f, 0.4f, 1.0f});
 
+/* 
 	cmd.BindPipeline(glTFPipeline);
 	auto registry = project.GetSceneGraph().registry;
 	for (auto& meshNode : registry->view<Component::Mesh>()) {
@@ -335,6 +371,8 @@ void AppContext::DrawViewport(vkw::Command& cmd, Runtime::Camera const& camera) 
 		Component::Mesh& mesh = registry->get<Component::Mesh>(meshNode);
 		cmd.DrawMesh(mesh->vertexBuffer, mesh->indexBuffer, mesh->indexBuffer.size / sizeof(uint32_t));
 	}
+ */
+
 /* 
 	FeatureTestConstants debugConstants{
 		.view = camera.view | affineInverse,
@@ -346,6 +384,11 @@ void AppContext::DrawViewport(vkw::Command& cmd, Runtime::Camera const& camera) 
 	cmd.BindVertexBuffer(cubeVertexBuffer);
 	cmd.Draw(vertices.size(), 1, 0, 0);
  */
+
+	cmd.BindVertexBuffer(cubeVertexBuffer);
+	cmd.BindPipeline(texPipeline);
+	cmd.Draw(6, 1, 0, 0);
+
 
 }
 
@@ -366,7 +409,7 @@ void AppContext::DrawWindow(Entity window) {
 	// 	ImGui::RenderPlatformWindowsDefault();
 	// }
 
-	cmd.BeginCommandBuffer();
+	cmd.Begin();
 	if (!windowHandle.swapChain.AcquireImage()) {
 		LOG_WARN("AcquireImage: Swapchain dirty");
 		return;
@@ -816,7 +859,7 @@ void FeatureTestApplication::Setup() {
 	ctx->CreateWindowResources(mainWindow);
 
 	ctx->cubeVertexBuffer = ctx->device.CreateBuffer({
-		vertices.size() * sizeof(Vertex),
+		vertices.size() * sizeof(VertexDebug),
 		vkw::BufferUsage::Vertex,
 		vkw::Memory::GPU,
 		"Cube Vertex Buffer"
@@ -824,6 +867,7 @@ void FeatureTestApplication::Setup() {
 	
 	ctx->UploadBuffers();
 	ctx->CreateShaders();
+	// ctx->CreateImages();
 }
 
 void DrawOrRemoveWindows() {

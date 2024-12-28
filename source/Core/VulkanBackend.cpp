@@ -539,7 +539,7 @@ struct SwapChainResource: DeleteCopyDeleteMove {
 
 	void CreateSurfaceFormats();
 
-	void Create(std::vector<Image>& swapChainImages, uint32_t width, uint32_t height, bool is_recreation = false);
+	void Create(std::vector<Image>& swapChainImages, uvec2 const& size, bool is_recreation = false);
 	void Destroy(bool is_recreation = false);
 
 	void CreateImGui(GLFWwindow* window, SampleCount sampleCount);
@@ -804,9 +804,9 @@ Image Device::CreateImage(const ImageDesc& desc) {
 		.imageType     = VK_IMAGE_TYPE_2D,
 		.format        = Cast::VkFormat(desc.format),
 		.extent = {	
-			.width     = desc.width,
-			.height    = desc.height,
-			.depth     = 1,
+			.width     = desc.extent.width,
+			.height    = desc.extent.height,
+			.depth     = desc.extent.depth,
 		},
 		.mipLevels     = 1,
 		.arrayLayers   = desc.layers,
@@ -874,8 +874,7 @@ Image Device::CreateImage(const ImageDesc& desc) {
 
 	Image image = {
 		.resource = res,
-		.width = desc.width,
-		.height = desc.height,
+		.extent = desc.extent,
 		.usage = desc.usage,
 		.format = desc.format,
 		.layout = ImageLayout::Undefined,
@@ -1650,11 +1649,11 @@ void Command::BeginRendering(const RenderingInfo& info) {
 	ivec4 renderArea = info.renderArea;
 	if (renderArea == ivec4(0.0f)) {
 		if (info.colorAttachs.size() > 0) {
-			renderArea.z = info.colorAttachs[0].colorAttachment.width;
-			renderArea.w = info.colorAttachs[0].colorAttachment.height;
+			renderArea.z = info.colorAttachs[0].colorAttachment.extent.width;
+			renderArea.w = info.colorAttachs[0].colorAttachment.extent.height;
 		} else if (info.depthAttach.resource) {
-			renderArea.z = info.depthAttach.width;
-			renderArea.w = info.depthAttach.height;
+			renderArea.z = info.depthAttach.extent.width;
+			renderArea.w = info.depthAttach.extent.height;
 		}
 	}
 
@@ -1768,23 +1767,29 @@ void Command::Draw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstV
 	vkCmdDraw(resource->buffer, vertexCount, instanceCount, firstVertex, firstInstance);
 }
 
-void Command::DrawMesh(Buffer& vertexBuffer, Buffer& indexBuffer, uint32_t indexCount) {
+void Command::DrawMesh(Buffer const& vertexBuffer, Buffer const& indexBuffer, uint32_t indexCount) {
 	VkDeviceSize offsets[] = { 0 };
 	vkCmdBindVertexBuffers(resource->buffer, 0, 1, &vertexBuffer.resource->buffer, offsets);
 	vkCmdBindIndexBuffer(resource->buffer, indexBuffer.resource->buffer, 0, VK_INDEX_TYPE_UINT32);
 	vkCmdDrawIndexed(resource->buffer, indexCount, 1, 0, 0, 0);
 }
 
-void Command::BindVertexBuffer(Buffer& vertexBuffer) {
+void Command::BindVertexBuffer(Buffer const& vertexBuffer) {
 	VkDeviceSize offsets[] = { 0 };
-	vkCmdBindVertexBuffers(resource->buffer, 0, 1, &vertexBuffer.resource->buffer, offsets);
+	VkBuffer buffer;
+	if (vertexBuffer.resource) {
+		buffer = vertexBuffer.resource->buffer;
+	} else {
+		buffer = VK_NULL_HANDLE;
+	}
+	vkCmdBindVertexBuffers(resource->buffer, 0, 1, &buffer, offsets);
 }
 
-void Command::BindIndexBuffer(Buffer& indexBuffer) {
+void Command::BindIndexBuffer(Buffer const& indexBuffer) {
 	vkCmdBindIndexBuffer(resource->buffer, indexBuffer.resource->buffer, 0, VK_INDEX_TYPE_UINT32);
 }
 
-void Command::DrawLineStrip(const Buffer& pointsBuffer, uint32_t firstPoint, uint32_t pointCount, float thickness) {
+void Command::DrawLineStrip(Buffer const& pointsBuffer, uint32_t firstPoint, uint32_t pointCount, float thickness) {
 	VkDeviceSize offsets[] = { 0 };
 	vkCmdSetLineWidth(resource->buffer, thickness);
 	vkCmdBindVertexBuffers(resource->buffer, 0, 1, &pointsBuffer.resource->buffer, offsets);
@@ -1834,7 +1839,7 @@ void Command::PushConstants(const Pipeline& pipeline, void* data, uint32_t size)
 
 // vkWaitForFences + vkResetFences +
 // vkResetCommandPool + vkBeginCommandBuffer
-void Command::BeginCommandBuffer() {
+void Command::Begin() {
 	vkWaitForFences(resource->device->handle, 1, &resource->fence, VK_TRUE, UINT64_MAX);
 	vkResetFences(resource->device->handle, 1, &resource->fence);
 
@@ -1863,7 +1868,7 @@ void Command::BeginCommandBuffer() {
 	// }
 }
 
-void Command::EndCommandBuffer() {
+void Command::End() {
 	vkEndCommandBuffer(resource->buffer); 
 	// resource->currentPipeline = {};
 }
@@ -2653,7 +2658,7 @@ void SwapChainResource::CreateSurfaceFormats() {
 	}
 }
 
-void SwapChainResource::Create(std::vector<Image>& swapChainImages, uint32_t width, uint32_t height, bool is_recreation) {
+void SwapChainResource::Create(std::vector<Image>& swapChainImages, uvec2 const& size, bool is_recreation) {
 	// this->device = handle; // TODO: make this a parameter
 	CreateSurfaceFormats();
 
@@ -2662,7 +2667,7 @@ void SwapChainResource::Create(std::vector<Image>& swapChainImages, uint32_t wid
 		const auto& capabilities = surfaceCapabilities;
 		ChooseSurfaceFormat();
 		ChoosePresentMode();
-		ChooseExtent(width, height);
+		ChooseExtent(size.x, size.y);
 
 		// acquire additional images to prevent waiting for driver's internal operations
 		uint32_t imageCount = framesInFlight + additionalImages;
@@ -2734,8 +2739,7 @@ void SwapChainResource::Create(std::vector<Image>& swapChainImages, uint32_t wid
 
 		swapChainImages.emplace_back(Image{
 			.resource = std::make_shared<ImageResource>(device, imageResource, imageView, true, "SwapChain Image " + std::to_string(swapChainImages.size())),
-			.width = width,
-			.height = height,
+			.extent = {size.x, size.y, 1},
 			.layout = ImageLayout::Undefined,
 			.aspect = Aspect::Color,
 		});
@@ -2806,7 +2810,7 @@ void SwapChainResource::Destroy(bool is_recreation) {
 	swapChain = VK_NULL_HANDLE;
 }
 
-void SwapChain::Create(Device& device, vkw::Queue& queue, void* glfwWindow, uint32_t width, uint32_t height) {
+void SwapChain::Create(Device& device, vkw::Queue& queue, void* glfwWindow, uvec2 size){ 
 	this->glfwWindow = glfwWindow;
 
 	resource = std::make_shared<SwapChainResource>();
@@ -2816,7 +2820,7 @@ void SwapChain::Create(Device& device, vkw::Queue& queue, void* glfwWindow, uint
 	DEBUG_VK(res, "Failed to create window surface!");
 	DEBUG_TRACE("Created surface.");
 
-	resource->Create(swapChainImages, width, height, false);
+	resource->Create(swapChainImages, size, false);
 
 	// command buffers
 	resource->commands.resize(framesInFlight);
@@ -2842,10 +2846,10 @@ void SwapChain::Destroy(){
 }
 
 
-void SwapChain::Recreate(uint32_t width, uint32_t height) {
-	DEBUG_ASSERT(!(width == 0 || height == 0), "Window size is 0, swapchain NOT recreated");
+void SwapChain::Recreate(uvec2 const size) {
+	DEBUG_ASSERT(!(size.x == 0 || size.y == 0), "Window size is 0, swapchain NOT recreated");
 	resource->Destroy(true);
-	resource->Create(swapChainImages, width, height, true);
+	resource->Create(swapChainImages, size, true);
 }
 
 bool SwapChain::AcquireImage() {
@@ -2883,7 +2887,7 @@ void SwapChain::SubmitAndPresent() {
 	submitInfo.signalSemaphore = (Semaphore*)resource->GetRenderFinishedSemaphore(currentFrame);
 	
 	auto cmd = GetCommandBuffer();
-	cmd.EndCommandBuffer();
+	cmd.End();
 	cmd.QueueSubmit(submitInfo);
 
 	VkPresentInfoKHR presentInfo{
@@ -3299,7 +3303,7 @@ void Command::Copy(Image& dst, Buffer& src, uint32_t srcOffset) {
 			.layerCount = 1,
 		},
 		.imageOffset = { 0, 0, 0 },
-		.imageExtent = { dst.width, dst.height, 1 },
+		.imageExtent = { dst.extent.width, dst.extent.height, 1 },
 	};
 
 	VkCopyBufferToImageInfo2 copyBufferToImageInfo{
@@ -3444,8 +3448,8 @@ void Command::Blit(BlitInfo const& info) {
 	auto regions = info.regions;
 
 	std::span<const RegionPair> fullRegions = {{{
-		{0, 0, (int)dst.width, (int)dst.height},
-		{0, 0, (int)src.width, (int)src.height}
+		{0, 0, (int)dst.extent.width, (int)dst.extent.height},
+		{0, 0, (int)src.extent.width, (int)src.extent.height}
 	}}};
 
 	if (regions.empty()) {

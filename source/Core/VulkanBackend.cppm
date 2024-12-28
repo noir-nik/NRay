@@ -178,10 +178,19 @@ struct BufferDesc {
 	std::string name = "";
 };
 
+struct Extent3D {
+	Extent3D () : width(0), height(0), depth(1) {}
+	Extent3D (uint32_t width, uint32_t height, uint32_t depth = 1) : width(width), height(height), depth(depth) {}
+	Extent3D (uvec2 const size) : width(size.x), height(size.y) {}
+	Extent3D (uvec3 const size) : width(size.x), height(size.y), depth(size.z) {}
+	uint32_t width;
+	uint32_t height;
+	uint32_t depth = 1;
+};
+
 struct Image {
 	std::shared_ptr<ImageResource> resource;
-	uint32_t width = 0;
-	uint32_t height = 0;
+	Extent3D extent{};
 	ImageUsageFlags usage;
 	Format format;
 	ImageLayout layout;
@@ -223,9 +232,10 @@ struct SamplerDesc {
 	float maxLod = 1.0f;
 };
 
+
+
 struct ImageDesc {
-	uint32_t width;
-	uint32_t height;
+	Extent3D extent;
 	Format format;
 	ImageUsageFlags usage;
 	SampleCount samples = SampleCount::_1;
@@ -520,18 +530,18 @@ struct Command {
 	// void BuildTLAS(TLAS& tlas, const std::vector<BLASInstance>& instances);
 
 	void Draw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance);
-	void BindVertexBuffer(Buffer& vertexBuffer);
-	void BindIndexBuffer(Buffer& indexBuffer);
-	void DrawMesh(Buffer& vertexBuffer, Buffer& indexBuffer, uint32_t indexCount);
-	void DrawLineStrip(const Buffer& pointsBuffer, uint32_t firstPoint, uint32_t pointCount, float thickness = 1.0f);
+	void BindVertexBuffer(Buffer const& vertexBuffer);
+	void BindIndexBuffer(Buffer const& indexBuffer);
+	void DrawMesh(Buffer const& vertexBuffer, Buffer const& indexBuffer, uint32_t indexCount);
+	void DrawLineStrip(Buffer const& pointsBuffer, uint32_t firstPoint, uint32_t pointCount, float thickness = 1.0f);
 	void DrawPassThrough();
 	void DrawImGui(void* imDrawData);
 	void Dispatch(const uvec3& groups);
 
 	int BeginTimeStamp(const std::string& name);
 	void EndTimeStamp(int timeStampIndex);
-	void BeginCommandBuffer();
-	void EndCommandBuffer();
+	void Begin();
+	void End();
 	void WaitQueue ();
 	void QueueSubmit (const SubmitInfo& submitInfo);
 };
@@ -575,10 +585,10 @@ public:
 	inline Image&      GetCurrentImage()   { return swapChainImages[currentImageIndex]; }
 	Command&    GetCommandBuffer();
 
-	void Create(Device& device, vkw::Queue& queue, void* glfwWindow, uint32_t width, uint32_t height);
+	void Create(Device& device, vkw::Queue& queue, void* glfwWindow, uvec2 const size);
 	void CreateUI(SampleCount sampleCount);
 	void Destroy();
-	void Recreate(uint32_t width, uint32_t height);
+	void Recreate(uvec2 const size);
 	bool AcquireImage();
 	bool GetDirty();
 	void SubmitAndPresent();

@@ -379,11 +379,11 @@ inline int4::int4(uint4 a) : x(int(a.x)), y(int(a.y)), z(int(a.z)), w(int(a.w)) 
 inline uint2::uint2(float2 a) : x(uint(a.x)), y(uint(a.y)) {}
 inline uint2::uint2(int2 a) : x(uint(a.x)), y(uint(a.y)) {}
 
-inline uint3::uint3(float3 a) : x(uint(a[0])), y(uint(a[1])), z(uint(a[2])) {}
-inline uint3::uint3(int3 a) : x(uint(a[0])), y(uint(a[1])), z(uint(a[2])) {}
+inline uint3::uint3(float3 a) : x(uint(a.x)), y(uint(a.y)), z(uint(a.z)) {}
+inline uint3::uint3(int3 a) : x(uint(a.x)), y(uint(a.y)), z(uint(a.z)) {}
 
-inline uint4::uint4(float4 a) : x(uint(a[0])), y(uint(a[1])), z(uint(a[2])), w(uint(a[3])) {}
-inline uint4::uint4(int4 a) : x(uint(a[0])), y(uint(a[1])), z(uint(a[2])), w(uint(a[3])) {}
+inline uint4::uint4(float4 a) : x(uint(a.x)), y(uint(a.y)), z(uint(a.z)), w(uint(a.w)) {}
+inline uint4::uint4(int4 a) : x(uint(a.x)), y(uint(a.y)), z(uint(a.z)), w(uint(a.w)) {}
 
 inline float4::float4(uint4 a) : x(float(a.x)), y(float(a.y)), z(float(a.z)), w(float(a.w)) {}
 inline float4::float4(int4 a) : x(float(a.x)), y(float(a.y)), z(float(a.z)), w(float(a.w)) {}

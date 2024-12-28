@@ -223,10 +223,10 @@ public:
 	inline void        AddFramesToDraw(int value)           { framesToDraw += value; }
 	inline void        SetFramesToDraw(int value)           { framesToDraw = value; }
 
-	inline void        CreateSwapchain(vkw::Device& device, vkw::Queue& queue){ if (!swapChainAlive) swapChain.Create(device, queue, window, size.x, size.y); swapChainAlive = true; }
+	inline void        CreateSwapchain(vkw::Device& device, vkw::Queue& queue){ if (!swapChainAlive) swapChain.Create(device, queue, window, Lmath::uint2(size)); swapChainAlive = true; }
 	inline void        CreateUI(vkw::SampleCount sampleCount) {swapChain.CreateUI(sampleCount); }
 	inline void        SetUIContextCurrent()               { UIContext.SetCurrent(); }
-	inline void        RecreateSwapchain()                 { if(!swapChainAlive)return; swapChain.Recreate(size.x, size.y);} 
+	inline void        RecreateSwapchain()                 { if(!swapChainAlive)return; swapChain.Recreate(Lmath::uint2(size)); } 
 	inline bool        GetSwapchainDirty()                 { return swapChain.GetDirty(); }
 	inline auto&       GetSwapchain()                      { return swapChain; }
 

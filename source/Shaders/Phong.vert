@@ -13,6 +13,7 @@ layout(location = 4) in vec3  inTangent;
 
 layout(location = 0) out vec3 fragPosition;
 layout(location = 1) out vec3 fragNormal;
+layout(location = 2) out vec2 fragUV;
 
 
 // layout(location = 4) out vec3 fragTangent;
@@ -29,4 +30,5 @@ void main() {
 	mat3 normalMatrix = transpose3(inverse3(mat3(ctx.model)));
 	fragNormal = normalMatrix * inNormal;
     gl_Position = ctx.viewProj * worldPosition;
+	fragUV = inUV;
 }

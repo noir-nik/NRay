@@ -15,7 +15,7 @@
 #extension GL_EXT_nonuniform_qualifier : enable
 #extension GL_EXT_shader_image_load_formatted : require
 
-// layout(set = 0, binding = BINDING_TEXTURE) uniform sampler2D textures[];
+layout(set = 0, binding = BINDING_TEXTURE) uniform sampler2D textures[];
 // layout(set = 0, binding = BINDING_TEXTURE) uniform samplerCube cubeTextures[];
 
 layout(set = 0, binding = BINDING_BUFFER) buffer floatBuffer {

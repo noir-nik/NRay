@@ -2,8 +2,9 @@
 #extension GL_GOOGLE_include_directive : enable
 #include "Phong.cppm"
 
-layout(location = 0) in vec3 fragPosition;
-layout(location = 1) in vec3 fragNormal;
+layout(location = 0) in vec3 inPosition;
+layout(location = 1) in vec3 inNormal;
+layout(location = 2) in vec2 inUV;
 
 layout(location = 0) out vec4 outColor;
 
@@ -51,14 +52,14 @@ return albedo * max(0.0, NdotL) * (A + B * s / t) / PI;
 void main() {
 	
 	// Normalize the normal vector
-	vec3 normal = normalize(fragNormal);
+	vec3 normal = normalize(inNormal);
 
 	// Light direction
-	vec3 lightDir = normalize(ctx.light.position - fragPosition);
+	vec3 lightDir = normalize(ctx.light.position - inPosition);
 
 	// View direction
 	vec3 cameraPosition = ctx.cameraPosition;
-	vec3 viewDir = normalize(cameraPosition - fragPosition);
+	vec3 viewDir = normalize(cameraPosition - inPosition);
 
 	// Reflection vector
 	vec3 reflectDir = reflect(-lightDir, normal);
@@ -82,6 +83,7 @@ void main() {
 	fresnel = 1.;
 	// Combine
 	vec3 phong = (ambient + diffuse + specular) * fresnel;
+	phong = vec3(inUV, 0.0);
 
 	// Gamma correction
 	phong = pow(phong, vec3(0.454545));

@@ -84,9 +84,9 @@ bool Loader::Load(const std::filesystem::path& filepath, SceneGraph& sceneGraph,
 	return true;
 }
 
-
 /* 
-auto LoadTexture(fastgltf::Asset& asset, size_t textureIndex) -> Texture {
+
+auto LoadTexture(fastgltf::Asset& asset, size_t textureIndex) -> fastgltf::Texture {
 	fastgltf::Texture& texture = asset.textures[textureIndex];
 
 	std::size_t imageIndex;
@@ -234,14 +234,13 @@ auto LoadTexture(fastgltf::Asset& asset, size_t textureIndex) -> Texture {
 	};
 };
 
-void LoadTextures(fastgltf::Asset& asset, Data& loadedData) {
+void LoadTextures(fastgltf::Asset& asset) {
 	auto numImages = asset.images.size();
 	for (size_t imageIndex = 0; imageIndex < numImages; ++imageIndex) {
 		loadedData.textures.push_back(LoadTexture(asset, imageIndex));
 	}
 }
  
-
 
 bool LoadMaterial(fastgltf::Asset& asset, size_t materialIndex) {
 	auto& materialData = asset.materials[materialIndex];
@@ -264,8 +263,8 @@ void LoadMaterials(fastgltf::Asset& asset) {
 		LoadMaterial(asset, materialIndex);
 	}
 }
- */
 
+ */
  
 
 // std::vector<uint32_t> indices;
@@ -327,7 +326,7 @@ void LoadMesh(fastgltf::Asset& asset, size_t meshIndex, Component::Mesh& mesh, v
 			fastgltf::iterateAccessorWithIndex<vec2>(asset, asset.accessors[uv->accessorIndex],
 				[&](vec2 v, size_t index) {
 					mesh->vertices[initialVertex + index].uv.x = v.x;
-					mesh->vertices[initialVertex + index].uv.y = v.y;
+					mesh->vertices[initialVertex + index].uv.y = 1.0f - v.y;
 				});
 		}
 
@@ -369,27 +368,27 @@ void LoadMeshes(fastgltf::Asset& asset, std::unordered_map<size_t, Component::Me
 	auto transferQueue = device.GetQueue(vkw::QueueFlagBits::Transfer);
 	auto& cmd = transferQueue.GetCommandBuffer();
 	device.ResetStaging();
-	cmd.BeginCommandBuffer();
+	cmd.Begin();
 	bool result;
 	for (auto& [_, mesh] : meshMap) {
 		result = cmd.Copy(mesh->vertexBuffer, mesh->vertices.data(), mesh->vertices.size() * sizeof(Objects::Vertex));
 		if (!result) {
-			cmd.EndCommandBuffer();
+			cmd.End();
 			cmd.QueueSubmit({});
-			cmd.BeginCommandBuffer();
+			cmd.Begin();
 			result = cmd.Copy(mesh->vertexBuffer, mesh->vertices.data(), mesh->vertices.size() * sizeof(Objects::Vertex));
 			ASSERT(result, "Failed to copy vertex buffer: not enough staging capacity");
 		}
 		result = cmd.Copy(mesh->indexBuffer, mesh->indices.data(), mesh->indices.size() * sizeof(uint32_t));
 		if (!result) {
-			cmd.EndCommandBuffer();
+			cmd.End();
 			cmd.QueueSubmit({});
-			cmd.BeginCommandBuffer();
+			cmd.Begin();
 			result = cmd.Copy(mesh->indexBuffer, mesh->indices.data(), mesh->indices.size() * sizeof(uint32_t));
 			ASSERT(result, "Failed to copy index buffer: not enough staging capacity");
 		}
 	}
-	cmd.EndCommandBuffer();
+	cmd.End();
 	cmd.QueueSubmit({});
 }
 
@@ -437,16 +436,8 @@ void LoadScenes(fastgltf::Asset& asset, std::unordered_map<size_t, Component::Me
 	auto nodeOffset = sceneGraph.nodes.size();
 	// auto sceneOffset = sceneGraph.root.children.size();
 
-	// sceneGraph.root.children.resize(sceneOffset + numScenes); // All Scenes
 	sceneGraph.nodes.resize(nodeOffset + numNodes); // All Nodes
 	
-	// auto currentOffset = nodeOffset + numScenes;
-	// std::vector<size_t> nodeOffsetsForScenes(numScenes);
-	// for (size_t sceneIndex = 0; sceneIndex < numScenes; ++sceneIndex) {
-	// 	nodeOffsetsForScenes[sceneIndex] = currentOffset;
-	// 	currentOffset += asset.scenes[sceneIndex].nodeIndices.size();
-	// }
-
 	auto& currentScene = sceneGraph.GetCurrentScene();
 	auto numScenes = asset.scenes.size(); //glTF scenes, not ours
 
