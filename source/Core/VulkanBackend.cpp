@@ -1649,22 +1649,26 @@ Command::Command() {
 	resource = std::make_shared<CommandResource>();
 }
 
-void Command::BeginRendering(const std::vector<std::span<const Image>>& colorAttachs, Image depthAttach, uint32_t layerCount, vec4 viewport, ivec4 scissor) {
+void Command::BeginRendering(const RenderingInfo& info) {
 
-	ivec2 offset(0, 0);
-	uvec2 extent(0, 0);
-
-	if (colorAttachs.size() > 0) {
-		extent.x = colorAttachs[0][0].width;
-		extent.y = colorAttachs[0][0].height;
-	} else if (depthAttach.resource) {
-		extent.x = depthAttach.width;
-		extent.y = depthAttach.height;
+	vec4 viewport = info.viewport;
+	if (info.viewport == vec4(0.0f)) {
+		if (info.colorAttachs.size() > 0) {
+			viewport.z = info.colorAttachs[0][0].width;
+			viewport.w = info.colorAttachs[0][0].height;
+		} else if (info.depthAttach.resource) {
+			viewport.z = info.depthAttach.width;
+			viewport.w = info.depthAttach.height;
+		}
 	}
 
+	ivec2 offset(viewport.x, viewport.y);
+	uvec2 extent(viewport.z, viewport.w);
+	
+
 	std::vector<VkRenderingAttachmentInfoKHR> colorAttachInfos;
-	colorAttachInfos.reserve(colorAttachs.size());
-	for (auto& colorAttach: colorAttachs) {
+	colorAttachInfos.reserve(info.colorAttachs.size());
+	for (auto& colorAttach: info.colorAttachs) {
 		DEBUG_ASSERT(colorAttach.size() > 0 && colorAttach.size() < 3, "Invalid color attachment count.");
 		colorAttachInfos.emplace_back(VkRenderingAttachmentInfoKHR{
 			.sType       = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR,
@@ -1692,9 +1696,9 @@ void Command::BeginRendering(const std::vector<std::span<const Image>>& colorAtt
 		.flags = 0,
 		.renderArea = {
 			.offset = { offset.x, offset.y },
-			.extent = { uint32_t(viewport.z), uint32_t(viewport.w) },
+			.extent = { extent.x, extent.y },
 		},
-		.layerCount = layerCount,
+		.layerCount = info.layerCount,
 		.viewMask = 0,
 		.colorAttachmentCount = static_cast<uint32_t>(colorAttachInfos.size()),
 		.pColorAttachments = colorAttachInfos.data(),
@@ -1704,14 +1708,14 @@ void Command::BeginRendering(const std::vector<std::span<const Image>>& colorAtt
 
 
 	VkRenderingAttachmentInfoKHR depthAttachInfo;
-	if (depthAttach.resource) {
+	if (info.depthAttach.resource) {
 			depthAttachInfo = {
 			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR,
-			.imageView = depthAttach.resource->view,
+			.imageView = info.depthAttach.resource->view,
 			.imageLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
 			.resolveMode = VK_RESOLVE_MODE_NONE,
 			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-			.storeOp = depthAttach.usage & ImageUsage::TransientAttachment ? VK_ATTACHMENT_STORE_OP_DONT_CARE: VK_ATTACHMENT_STORE_OP_STORE,
+			.storeOp = info.depthAttach.usage & ImageUsage::TransientAttachment ? VK_ATTACHMENT_STORE_OP_DONT_CARE: VK_ATTACHMENT_STORE_OP_STORE,
 			.clearValue {
 				.depthStencil = {
 					.depth = 1.0f,
@@ -1722,33 +1726,44 @@ void Command::BeginRendering(const std::vector<std::span<const Image>>& colorAtt
 		renderingInfo.pDepthAttachment = &depthAttachInfo;
 	}
 	
-	if (viewport == vec4(0.0f)) {
-		viewport = { 0.0f, 0.0f, static_cast<float>(extent.x), static_cast<float>(extent.y) };
-	}
-
-	if (scissor == ivec4(0)) {
-		scissor = { offset.x, offset.y, static_cast<int>(extent.x), static_cast<int>(extent.y) };
-	}
-
-	VkViewport _viewport = {
-		.x = viewport.x,
-		// .y = viewport.y,
-		.y = viewport.w,
-		.width = viewport.z,
-		.height = -viewport.w,
+	VkViewport vk_viewport {
 		.minDepth = 0.0f,
 		.maxDepth = 1.0f,
 	};
+	
+	constexpr bool flip_y = true;
 
-	VkRect2D _scissor = {
-		.offset = { scissor.x, scissor.y },
-		.extent = {
-			.width  = static_cast<uint32_t>(scissor.z),
-			.height = static_cast<uint32_t>(scissor.w)
-		}
+	if (flip_y){
+		vk_viewport = {
+			.x      =  viewport.x,
+			.y      =  viewport.w,
+			.width  =  viewport.z,
+			.height = -viewport.w,
+		};
+	} else {
+		vk_viewport = {
+			.x      =  viewport.x,
+			.y      =  viewport.y,
+			.width  =  viewport.z,
+			.height =  viewport.w
+		};
 	};
-	vkCmdSetViewport(resource->buffer, 0, 1, &_viewport);
-	vkCmdSetScissor(resource->buffer, 0, 1, &_scissor);
+
+	VkRect2D vk_scissor;
+	if (info.scissor == ivec4(0)){
+		vk_scissor = { offset.x, offset.y, extent.x, extent.y };
+	} else {
+		vk_scissor = {
+			.offset = { info.scissor.x, info.scissor.y },
+			.extent = {
+				.width  = static_cast<uint32_t>(info.scissor.z),
+				.height = static_cast<uint32_t>(info.scissor.w)
+			}
+		};
+	}
+
+	vkCmdSetViewport(resource->buffer, 0, 1, &vk_viewport);
+	vkCmdSetScissor(resource->buffer, 0, 1, &vk_scissor);
 
 	vkCmdBeginRendering(resource->buffer, &renderingInfo);
 }
@@ -3443,9 +3458,14 @@ void Command::ClearColorImage(Image& img, const float4& color) {
 	vkCmdClearColorImage(resource->buffer, img.resource->image, (VkImageLayout)img.layout, &clearColor, 1, &range);
 }
 
-void Command::Blit(Image& dst, Image& src, ivec4 dstRegion, ivec4 srcRegion, Filter filter) {	
-	if (srcRegion == ivec4{}) {srcRegion = {0, 0, (int)src.width, (int)src.height};}
-	if (dstRegion == ivec4{}) {dstRegion = {0, 0, (int)dst.width, (int)dst.height};}
+void Command::Blit(BlitInfo const& info) {	
+	auto dst = info.dst;
+	auto src = info.src;
+	ivec4 dstRegion = info.dstRegion;
+	ivec4 srcRegion = info.srcRegion;
+
+	if (info.srcRegion == ivec4{}) {srcRegion = {0, 0, (int)src.width, (int)src.height};}
+	if (info.dstRegion == ivec4{}) {dstRegion = {0, 0, (int)dst.width, (int)dst.height};}
 	
 	VkImageBlit2 blitRegion = {
 		.sType = VK_STRUCTURE_TYPE_IMAGE_BLIT_2,
@@ -3475,7 +3495,7 @@ void Command::Blit(Image& dst, Image& src, ivec4 dstRegion, ivec4 srcRegion, Fil
 		.dstImageLayout = (VkImageLayout)dst.layout,
 		.regionCount    = 1,
 		.pRegions       = &blitRegion,
-		.filter         = Cast::VkFilter(filter),
+		.filter         = Cast::VkFilter(info.filter),
 	};
 
 	vkCmdBlitImage2(resource->buffer, &blitInfo);

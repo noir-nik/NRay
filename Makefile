@@ -5,8 +5,8 @@ CC := clang++
 # CC := cl
 TARGET := nRay
 
-COMPILE_IMGUI := 1
 STATIC_LINK := 0
+COMPILE_IMGUI := 1
 
 USE_MODULES := 0
 USE_HEADER_UNITS := 1
@@ -255,11 +255,18 @@ release: build_target
 # endif
 # build_target: $(TARGET)
 
-build_target: create_dirs $(TARGET)
+build_target: create_dirs
 
 ifeq ($(USE_MODULES), 1)
 build_target: get_cpp_module_dependencies
+else
+build_target: clean_cpp_module_dependencies
 endif
+build_target: $(TARGET)
+
+clean_cpp_module_dependencies:
+	@echo "Cleaning cpp module dependencies"
+	@echo "" > $(CPP_MODULE_DEPENDENCIES_FILE)
 
 
 _WINBDIR := $(subst /,\,$(PLATFORM_BUILD_DIR))
@@ -387,8 +394,9 @@ endif
 # $(OBJS): $(CPP_MODULE_TARGETS)
 _MBD := $(MODULES_BUILD_DIR)
 _OBD := $(OBJS_BUILD_DIR)
+# ifeq ($(USE_MODULES), 1)
+# endif
 include $(CPP_MODULE_DEPENDENCIES_FILE)
-
 # $(TARGET): $(OBJS) $(OBJS_IMGUI) $(OBJS_STB)
 $(TARGET): \
 	$(OBJS) \
@@ -493,7 +501,7 @@ $(MODULES_BUILD_DIR)/stl.pcm: source/Base/stl.cppm
 # ============================================ Modules ===================================================
 
 modules: CXXFLAGS += -fprebuilt-module-path=$(MODULES_BUILD_DIR) -D USE_MODULES -fmodule-file-deps
-modules: $(CPP_MODULE_TARGETS) 
+modules: get_cpp_module_dependencies $(EXTERNAL_MODULE_TARGETS) $(CPP_MODULE_TARGETS) 
 
 # $(_MBD)/*.pcm: 
 
@@ -677,7 +685,7 @@ cleanheaders:
 	@echo "=== Cleaned ==="
 
 cleanmodules:
-	@rm -f $(MODULES_BUILD_DIR)/*pcm
+	@rm -f $(MODULES_BUILD_DIR)/*
 	@echo "=== Cleaned ==="
 
 cleanlib:

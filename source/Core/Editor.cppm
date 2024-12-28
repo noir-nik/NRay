@@ -2,12 +2,12 @@
 export module Editor;
 #define _EDITOR_EXPORT export
 import Objects;
-import RuntimeContext;
+import Runtime;
 #else
 #pragma once
 #define _EDITOR_EXPORT
 #include "Objects.cppm"
-#include "RuntimeContext.cppm"
+#include "Runtime.cppm"
 #endif
 
 _EDITOR_EXPORT
@@ -17,7 +17,7 @@ struct Editor {
 	void Setup();
 	void Finish();
     void BeginFrame();
-	void Draw(RuntimeContext& rtc);
+	void Draw(Runtime::Context& rtc);
     UiDrawData* EndFrame();
 	
 	UiStyle* GetStyle();

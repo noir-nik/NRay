@@ -5,7 +5,7 @@ MODULES_BUILD_DIR = "$(_MBD)"
 OBJS_BUILD_DIR = "$(_OBD)"
 CPP_MODULE_EXTENSION = ".cppm"
 CPP_EXTENSION = ".cpp"
-LINES_TO_SCAN = 30
+LINES_TO_SCAN = 50
 
 def extract_imports(file_path):
     """Extract module imports from the first 30 lines of a file."""

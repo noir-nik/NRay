@@ -18,7 +18,7 @@ import GLTFLoader;
 import entt;
 import UI;
 import Types;
-import RuntimeContext;
+import Runtime;
 #else
 #include "Lmath.cppm"
 #include "VulkanBackend.cppm"
@@ -43,7 +43,7 @@ import RuntimeContext;
 
 #include "Types.cppm"
 
-#include "RuntimeContext.cppm"
+#include "Runtime.cppm"
 #endif
 
 
@@ -87,7 +87,7 @@ struct AppContext {
 
 	Editor editor;
 
-	RuntimeContext runtimeContext;
+	Runtime::Context runtimeContext;
 
 	Project project;
 	inline Entity CreateEntity(const std::string_view& name = "") {
@@ -109,11 +109,11 @@ struct AppContext {
 	void CreateShaders();
 	void CreateWindowResources(Entity window);
 	void UploadBuffers();
-	void DrawViewport(Entity window);
+	void DrawWindow(Entity window);
 	void viewport();
 	void RenderUI();
 	void DrawImgui(Entity window);
-	void DrawWindow(Entity window);
+	void DrawViewport(Entity window, int4 size);
 	void RecreateFrameResources(Window* window);
 
 };
@@ -126,7 +126,7 @@ struct WindowImageResource {
 
 static AppContext* ctx;
 
-static Objects::Camera camera(vec3(0.0f, 0.0f, 30.0f), vec3(0.0f, 0.0f, 0.0f), vec3(0.0f, 1.0f, 0.0f));
+static Runtime::Camera camera(vec3(0.0f, 0.0f, 30.0f), vec3(0.0f, 0.0f, 0.0f), vec3(0.0f, 1.0f, 0.0f));
 
 struct Vertex {
 	vec3 pos;
@@ -299,12 +299,10 @@ void AppContext::UploadBuffers() {
 }
 
 
-void AppContext::DrawViewport(Entity window, int2 size) {
+void AppContext::DrawViewport(Entity window, int4 viewport) {
 	auto& windowHandle = window.Get<Window>();
 	auto& resource = window.Get<WindowImageResource>();
-	auto size = windowHandle.GetSize();
 	auto glfwWindow = windowHandle.GetGLFWwindow();
-	vec4 viewport = {0, 0, (float)size.x, (float)size.y};
 	PhongConstants constants{};
 	constants.viewProj = camera.proj * camera.view.affineInverse();
 	constants.light = phongLight.Get<PhongLight>();
@@ -321,11 +319,11 @@ void AppContext::DrawViewport(Entity window, int2 size) {
 	// cmd.Barrier(resource.renderImage, {vkw::ImageLayout::TransferDst});
 	// cmd.ClearColorImage(resource.renderImage, {0.7f, 0.0f, 0.4f, 1.0f});
 	if (sampleCount == vkw::SampleCount::_1) {
-		cmd.BeginRendering({{{resource.resolveImage}}}, {resource.depthImage}, 1, viewport);
-		// cmd.BeginRendering({{{resource.resolveImage}}}, {}, 1, viewport);
+		cmd.BeginRendering({{{{resource.resolveImage}}}, {resource.depthImage}, vec4(viewport)});
+		// cmd.BeginRendering({{{{resource.resolveImage}}}, {}, vec4(viewport)});
 	} else {
-		cmd.BeginRendering({{{resource.colorImage, resource.resolveImage}}}, {resource.depthImage}, 1, viewport);
-		// cmd.BeginRendering({{{resource.colorImage, resource.resolveImage}}}, {}, 1, viewport);
+		cmd.BeginRendering({{{{resource.colorImage, resource.resolveImage}}}, {resource.depthImage}, vec4(viewport)});
+		// cmd.BeginRendering({{{{resource.colorImage, resource.resolveImage}}}, {}, vec4(viewport)});
 	}
 	;
 	
@@ -359,7 +357,12 @@ void AppContext::DrawViewport(Entity window, int2 size) {
 	
 	cmd.Barrier(resource.resolveImage, {vkw::ImageLayout::TransferSrc});
 	cmd.Barrier(img, {vkw::ImageLayout::TransferDst});
-	cmd.Blit(img, resource.resolveImage, {0, 0, size.x, size.y}, {0, 0, size.x, size.y});
+	cmd.Blit({
+		.dst = img,
+		.src = resource.resolveImage,
+		.dstRegion = viewport,
+		.srcRegion = viewport,
+	});
 	cmd.Barrier(img, {vkw::ImageLayout::Present});
 
 }
@@ -372,7 +375,7 @@ void AppContext::DrawWindow(Entity window) {
 	imguiDrawData = static_cast<ImDrawData*>(editor.EndFrame());
 
 	
-	DrawViewport(window);
+	DrawViewport(window, int4(0, 0, windowHandle.GetSize().x, windowHandle.GetSize().y));
 	if (windowHandle.swapChain.GetDirty()) {
 		LOG_WARN("RecordCommands: Swapchain dirty");
 		return;

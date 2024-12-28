@@ -302,6 +302,9 @@ typedef struct float4
 	inline explicit float4(float2 a, float2 b) : x(a.x), y(a.y), z(b.x), w(b.y) {}
 	inline explicit float4(float3 a, float w = 0.0f) : x(a.x), y(a.y), z(a.z), w(w) {}
 
+	inline explicit float4(uint4 a); 
+	inline explicit float4(int4 a);
+
 	inline float& operator[](int i)			 { return M[i]; }
 	inline float	operator[](int i) const { return M[i]; }
 
@@ -339,6 +342,9 @@ inline uint3::uint3(int3 a) : x(uint(a[0])), y(uint(a[1])), z(uint(a[2])) {}
 
 inline uint4::uint4(float4 a) : x(uint(a[0])), y(uint(a[1])), z(uint(a[2])), w(uint(a[3])) {}
 inline uint4::uint4(int4 a) : x(uint(a[0])), y(uint(a[1])), z(uint(a[2])), w(uint(a[3])) {}
+
+inline float4::float4(uint4 a) : x(float(a.x)), y(float(a.y)), z(float(a.z)), w(float(a.w)) {}
+inline float4::float4(int4 a) : x(float(a.x)), y(float(a.y)), z(float(a.z)), w(float(a.w)) {}
 
 inline float4 operator+(const float4 a, const float4 b) { return float4{a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w}; }
 inline float4 operator-(const float4 a, const float4 b) { return float4{a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w}; }
@@ -829,10 +835,10 @@ inline float4x4 affineInverse4x4(const float4x4& m) {
 	auto inv = inverse3x3(m);
 	auto l = -(inv * m.m_col[3].xyz());
 	float4x4 res;
-	res.set_col(0, float4{ inv.m_col[0].x, inv.m_col[0].y, inv.m_col[0].z, 0.0f });
-	res.set_col(1, float4{ inv.m_col[1].x, inv.m_col[1].y, inv.m_col[1].z, 0.0f });
-	res.set_col(2, float4{ inv.m_col[2].x, inv.m_col[2].y, inv.m_col[2].z, 0.0f });
-	res.m_col[3] = float4{ l.x, l.y, l.z, 1.0f };
+	res.m_col[0] = float4(inv.m_col[0],  0.0f);
+	res.m_col[1] = float4(inv.m_col[1],  0.0f);
+	res.m_col[2] = float4(inv.m_col[2],  0.0f);
+	res.m_col[3] = float4(l.x, l.y, l.z, 1.0f);
 	return res;
 }
 

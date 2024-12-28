@@ -5,7 +5,7 @@ import VulkanBackend;
 import imgui;
 import Log;
 import stl;
-import RuntimeContext;
+import Runtime;
 #else
 #include "Lmath.cppm"
 #include "VulkanBackend.cppm"
@@ -30,13 +30,13 @@ struct EditorContext;
 
 struct Panel {
 	const char* name;
-	void (EditorContext::*draw)(RuntimeContext& ctx) = nullptr;
+	void (EditorContext::*draw)(Runtime::Context& ctx) = nullptr;
 };
 
 struct Tab {
 	std::string name;
 	std::vector<Panel> panels;
-	void Draw(RuntimeContext& ctx);
+	void Draw(Runtime::Context& ctx);
 };
 
 struct EditorContext {
@@ -68,16 +68,16 @@ struct EditorContext {
 		}},
 	};
 
-	void MainMenu(RuntimeContext& ctx);
+	void MainMenu(Runtime::Context& ctx);
 	void RenderUI();
 	void StyleWindow(); 
 	void StyleEditor();
 
-	void Draw(RuntimeContext& ctx);
+	void Draw(Runtime::Context& ctx);
 
-	void DebugWindow(Objects::Camera& camera);
-	void OutlinerWindow(RuntimeContext& ctx);
-	void PropertiesWindow(RuntimeContext& ctx);
+	void DebugWindow(Runtime::Camera& camera);
+	void OutlinerWindow(Runtime::Context& ctx);
+	void PropertiesWindow(Runtime::Context& ctx);
 	
 	bool SaveStyle(const char* filename,const ImGuiStyle& style);
 	bool LoadStyle(const char* filename,ImGuiStyle& style);
@@ -89,13 +89,13 @@ struct EditorContext {
 	inline static const char* GetStyleVarName(ImGuiStyleVar idx);
 } editorContext;
 
-void Tab::Draw(RuntimeContext& ctx) {
+void Tab::Draw(Runtime::Context& ctx) {
 	for (auto& panel : panels) {
 		(editorContext.*panel.draw)(ctx);
 	}
 }
 
-void EditorContext::MainMenu(RuntimeContext& ctx) {
+void EditorContext::MainMenu(Runtime::Context& ctx) {
 	if (!ImGui::BeginMainMenuBar()) return;
 	ImGuiIO& io = ImGui::GetIO();
 	io.WantCaptureMouse |= io.WantCaptureKeyboard;
@@ -228,7 +228,7 @@ void EditorContext::StyleWindow() {
 	ImGui::End();
 }
 
-void EditorContext::DebugWindow(Objects::Camera& camera) {
+void EditorContext::DebugWindow(Runtime::Camera& camera) {
 
 	if (ImGui::Begin("Debug Window", nullptr)) {
 		ImGui::Text("Camera Focus: (%.2f, %.2f, %.2f)", camera.focus.x, camera.focus.y, camera.focus.z);
@@ -344,7 +344,7 @@ void EditorContext::displayNode(const SceneGraph& sceneGraph, const NodeIndex no
 	ImGui::PopID();
 }
 
-void EditorContext::OutlinerWindow(RuntimeContext& ctx) {
+void EditorContext::OutlinerWindow(Runtime::Context& ctx) {
 	const ImGuiTreeNodeFlags parent_flags {
 		ImGuiTreeNodeFlags_OpenOnArrow       |
 		ImGuiTreeNodeFlags_OpenOnDoubleClick |
@@ -378,7 +378,7 @@ void EditorContext::OutlinerWindow(RuntimeContext& ctx) {
 	ImGui::End();
 }
 
-void EditorContext::PropertiesWindow(RuntimeContext& ctx) {
+void EditorContext::PropertiesWindow(Runtime::Context& ctx) {
 	// if (ImGui::Begin("Properties", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove)) {
 	// }
 	// ImGui::End();
@@ -427,7 +427,7 @@ void Hover_Example() {
 }
  */
 
-void EditorContext::Draw(RuntimeContext& ctx) {
+void EditorContext::Draw(Runtime::Context& ctx) {
 	editorContext.MainMenu(ctx);
 	
 	if (showDemoWindow) ImGui::ShowDemoWindow();
@@ -436,7 +436,7 @@ void EditorContext::Draw(RuntimeContext& ctx) {
 	// ctx.RenderUI();
 }
 
-void Editor::Draw(RuntimeContext& ctx) {
+void Editor::Draw(Runtime::Context& ctx) {
 	editorContext.Draw(ctx);
 }
 

@@ -462,9 +462,17 @@ struct SubmitInfo {
 struct RenderingInfo {
 	const std::vector<std::span<const Image>>& colorAttachs;
 	Image depthAttach = {};
+	vec4 viewport = vec4(0.0f);
+	ivec4 scissor = ivec4(0);
 	uint32_t layerCount = 1;
-	vec4 viewport = {};
-	ivec4 scissor = {};
+};
+
+struct BlitInfo {
+	Image dst;
+	Image src;
+	ivec4 dstRegion = {};
+	ivec4 srcRegion = {};
+	Filter filter = Filter::Linear;
 };
 
 struct Command {
@@ -479,7 +487,7 @@ struct Command {
 	void Barrier(Image& img, const ImageBarrier& barrier);
 	void Barrier(Buffer& buf, const BufferBarrier& barrier);
 	void Barrier(const MemoryBarrier& barrier);
-	void Blit(Image& dst, Image& src, ivec4 dstRegion = {}, ivec4 srcRegion = {}, Filter filter = Filter::Linear);
+	void Blit(BlitInfo const& info);
 	void ClearColorImage(Image& image, const float4& color);
 
 
