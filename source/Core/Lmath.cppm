@@ -19,11 +19,18 @@ export import Lmath.types;
 #if defined(_MSC_VER)
 #define CVEX_ALIGNED(x) __declspec(align(x))
 #else
-//#if defined(__GNUC__)
+#if defined(__GNUC__)
 #define CVEX_ALIGNED(x) __attribute__ ((aligned(x)))
-//#endif
+#endif
 #endif
 
+#ifdef near
+#undef near
+#endif
+
+#ifdef far
+#undef far
+#endif
 
 LMATH_EXPORT
 namespace Lmath {
@@ -190,28 +197,7 @@ inline float2 operator+(const float2 a, const float2 b) { return float2{a.x + b.
 inline float2 operator-(const float2 a, const float2 b) { return float2{a.x - b.x, a.y - b.y}; }
 
 
-
-inline void mat4_rowmajor_mul_mat4(float* __restrict M, const float* __restrict A, const float* __restrict B) // modern gcc compiler succesfuly vectorize such implementation!
-{
-	M[ 0] = A[ 0] * B[ 0] + A[ 1] * B[ 4] + A[ 2] * B[ 8] + A[ 3] * B[12];
-	M[ 1] = A[ 0] * B[ 1] + A[ 1] * B[ 5] + A[ 2] * B[ 9] + A[ 3] * B[13];
-	M[ 2] = A[ 0] * B[ 2] + A[ 1] * B[ 6] + A[ 2] * B[10] + A[ 3] * B[14];
-	M[ 3] = A[ 0] * B[ 3] + A[ 1] * B[ 7] + A[ 2] * B[11] + A[ 3] * B[15];
-	M[ 4] = A[ 4] * B[ 0] + A[ 5] * B[ 4] + A[ 6] * B[ 8] + A[ 7] * B[12];
-	M[ 5] = A[ 4] * B[ 1] + A[ 5] * B[ 5] + A[ 6] * B[ 9] + A[ 7] * B[13];
-	M[ 6] = A[ 4] * B[ 2] + A[ 5] * B[ 6] + A[ 6] * B[10] + A[ 7] * B[14];
-	M[ 7] = A[ 4] * B[ 3] + A[ 5] * B[ 7] + A[ 6] * B[11] + A[ 7] * B[15];
-	M[ 8] = A[ 8] * B[ 0] + A[ 9] * B[ 4] + A[10] * B[ 8] + A[11] * B[12];
-	M[ 9] = A[ 8] * B[ 1] + A[ 9] * B[ 5] + A[10] * B[ 9] + A[11] * B[13];
-	M[10] = A[ 8] * B[ 2] + A[ 9] * B[ 6] + A[10] * B[10] + A[11] * B[14];
-	M[11] = A[ 8] * B[ 3] + A[ 9] * B[ 7] + A[10] * B[11] + A[11] * B[15];
-	M[12] = A[12] * B[ 0] + A[13] * B[ 4] + A[14] * B[ 8] + A[15] * B[12];
-	M[13] = A[12] * B[ 1] + A[13] * B[ 5] + A[14] * B[ 9] + A[15] * B[13];
-	M[14] = A[12] * B[ 2] + A[13] * B[ 6] + A[14] * B[10] + A[15] * B[14];
-	M[15] = A[12] * B[ 3] + A[13] * B[ 7] + A[14] * B[11] + A[15] * B[15];
-}
-
-inline void mat4_colmajor_mul_vec4(float* __restrict RES, const float* __restrict B, const float* __restrict V) // modern gcc compiler succesfuly vectorize such implementation!
+inline void mat4_colmajor_mul_vec4(float* __restrict RES, const float* __restrict B, const float* __restrict V)
 {
 	RES[0] = V[0] * B[0] + V[1] * B[4] + V[2] * B[ 8] + V[3] * B[12];
 	RES[1] = V[0] * B[1] + V[1] * B[5] + V[2] * B[ 9] + V[3] * B[13];
@@ -219,7 +205,7 @@ inline void mat4_colmajor_mul_vec4(float* __restrict RES, const float* __restric
 	RES[3] = V[0] * B[3] + V[1] * B[7] + V[2] * B[11] + V[3] * B[15];
 }
 
-inline void transpose4(const float4 in_rows[4], float4 out_rows[4])
+inline void transpose4(const float4 in_rows[4], float4 out_rows[4]) // SIMD 
 {
 	CVEX_ALIGNED(16) float rows[16];
 	store(rows+0,  in_rows[0]);
@@ -269,7 +255,7 @@ inline float3x3 inverse3x3(const float3x3& m)
 	return res;
 }
 
-inline void mat3_colmajor_mul_vec3(float* __restrict RES, const float* __restrict B, const float* __restrict V) // modern gcc compiler succesfuly vectorize such implementation!
+inline void mat3_colmajor_mul_vec3(float* __restrict RES, const float* __restrict B, const float* __restrict V)
 {
 	RES[0] = V[0] * B[0] + V[1] * B[3] + V[2] * B[ 6];
 	RES[1] = V[0] * B[1] + V[1] * B[4] + V[2] * B[ 7];
@@ -397,6 +383,14 @@ inline float4x4 operator*(float4x4 m1, float4x4 m2)
 	return res;
 }
 
+/* 
+inline float4x4 transpose(const float4x4& rhs)
+{
+	float4x4 res;
+	transpose4(rhs.m_col, res.m_col);
+	return res;
+}
+ */
 inline float4x4 transpose(const float4x4& m1)
 {
 	float4x4 res;

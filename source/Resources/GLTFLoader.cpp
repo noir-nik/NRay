@@ -242,7 +242,7 @@ void LoadTextures(fastgltf::Asset& asset, Data& loadedData) {
 }
  
 
-/* 
+
 bool LoadMaterial(fastgltf::Asset& asset, size_t materialIndex) {
 	auto& materialData = asset.materials[materialIndex];
 	glTFMetalicRoughness material;

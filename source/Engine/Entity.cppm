@@ -16,7 +16,7 @@ using Registry = entt::registry;
 
 _ENTITY_EXPORT
 struct Entity {
-	Entity(Registry* registry = nullptr, entt::entity entity = entt::null) : entity(entity), registry(registry) {}
+	Entity(Registry* registry = nullptr, entt::entity entity = entt::null) : registry(registry), entity(entity) {}
 	// Entity(Registry* registry = nullptr, EntityType entity = entt::null) : entity(entity), registry(registry) {}
 	Registry* registry;
 	entt::entity entity;

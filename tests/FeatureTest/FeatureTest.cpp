@@ -41,6 +41,7 @@ import Structs;
 #include <vector>
 
 #include "Types.cppm"
+#include "Structs.cppm"
 
 #include "Runtime.cppm"
 #endif
@@ -125,10 +126,6 @@ struct DrawViewportInfo {
 	vkw::Image &              targetImage;
 };
 
-constexpr auto fov = 60.0f;
-constexpr auto zNear = 0.01f;
-constexpr auto zFar = 1000.0f;
-
 // static Runtime::Camera camera(vec3(0.0f, 0.0f, 30.0f), vec3(0.0f, 0.0f, 0.0f), vec3(0.0f, 1.0f, 0.0f));
 
 struct Vertex {
@@ -143,7 +140,7 @@ void KeyCallback(Window* window, int key, int scancode, int action, int mods);
 void CursorPosCallback(Window *window, double xpos, double ypos);
 void ScrollCallback(Window *window, double xoffset, double yoffset);
 void IconifyCallback(Window* window, int iconified);
-void printMatrix(const float4x4& m, const char* name = nullptr);
+[[maybe_unused]] void printMatrix(const float4x4& m, const char* name = nullptr);
 // const std::vector<Vertex> vertices = {
 // 	{{0.0f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
 // 	{{-0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}},
@@ -544,7 +541,7 @@ enum Hit {
 	TopLeft = 5, TopRight = 6, BottomLeft = 9, BottomRight = 10,
 };
 
-Hit MouseHitTest (Window *window, double xpos, double ypos) {
+[[maybe_unused]] Hit MouseHitTest (Window *window, double xpos, double ypos) {
 	// auto& border_thickness = window->GetBorderThickness();
 	// l t r b
 	Lmath::ivec4 border_thickness = { 50, 30, 50, 50 };
@@ -805,7 +802,7 @@ void FeatureTestApplication::Setup() {
 	auto mainWindow = ctx->CreateEntity("Main Window");
 	auto style = Editor::GetStyle();
 	mainWindow.Add<Window>(ctx->width, ctx->height, "NRay", style);
-	auto& windowData = mainWindow.Add<Runtime::WindowData>(true);
+	[[maybe_unused]] auto& windowData = mainWindow.Add<Runtime::WindowData>(true);
 	// Editor::SetupWindow(windowData);
 	mainWindow.Add<WindowImageResource>();
 	Window& windowHandle = mainWindow.Get<Window>();
@@ -833,7 +830,6 @@ void DrawOrRemoveWindows() {
 	auto view = registry->view<Window>();
 	for (auto w: view) {
 		auto& windowHandle = registry->get<Window>(w);
-		auto& resource = registry->get<WindowImageResource>(w);
 		windowHandle.ApplyChanges();
 		if (windowHandle.GetAlive()) {
 			// LOG_INFO("Iconified {}", windowHandle.GetIconified());
@@ -862,9 +858,8 @@ void DrawOrRemoveWindows() {
 	}
 }
 
-static int loopCount = 0;
 void FeatureTestApplication::MainLoop() {
-	auto c = ctx;
+	[[maybe_unused]] auto c = ctx;
 	lastFrameTime = std::chrono::high_resolution_clock::now();
 	while (ctx->mainWindow.entity != Entity::Null) {
 		// std::any_of( ctx->windows.begin(), ctx->windows.end(), [](const auto &window) {

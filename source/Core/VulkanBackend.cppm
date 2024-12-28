@@ -250,6 +250,9 @@ namespace QueueFlagBits {
 using QueueFlags = Flags;
 
 struct Queue {
+private:
+	std::shared_ptr<QueueResource> resource;
+public:
 	QueueFlags flags = 0;
 	void* supportedWindowToPresent = {};
 	bool preferSeparateFamily = false;
@@ -269,10 +272,9 @@ private:
 	friend Device CreateDevice(const std::span<Queue*> queues);
 	friend Device;
 	friend class SwapChain;
-	friend class DeviceResource;
-	friend class CommandResource;
-	friend class SwapChainResource;
-	std::shared_ptr<QueueResource> resource;
+	friend DeviceResource;
+	friend CommandResource;
+	friend SwapChainResource;
 	Queue(const std::shared_ptr<QueueResource>& resource);
 };
 
@@ -318,7 +320,7 @@ struct Pipeline {
 		std::filesystem::path path;
 		std::string entryPoint = "main";
 	private:
-	friend class DeviceResource;
+		friend DeviceResource;
 		size_t Hash() const;
 	};
 	PipelinePoint point;

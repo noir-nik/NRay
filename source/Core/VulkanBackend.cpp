@@ -68,7 +68,7 @@ namespace vkw {
 struct Instance;
 struct PhysicalDevice;
 struct DeviceResource;
-struct SwapChain;
+class SwapChain;
 
 namespace Cast {
 
@@ -658,7 +658,7 @@ Device CreateDevice(const std::span<Queue*> queues) {
 	auto uid = UIDGenerator::Next();
 	Device device;
 	device.resource = std::make_shared<DeviceResource>(uid);
-	auto res = _ctx.devices.try_emplace(uid, device.resource);
+	[[maybe_unused]]auto res = _ctx.devices.try_emplace(uid, device.resource);
 	auto& resource = *device.resource;
 	resource.Create(queues);
 	for (auto& [key, q]: resource.uniqueQueues) {
@@ -830,7 +830,8 @@ Image Device::CreateImage(const ImageDesc& desc) {
 	switch (desc.format) {
 		case D24_unorm_S8_uint:
 			aspect = Aspect::Stencil; // Invalid, cannot be both stencil and depth, todo: create separate imageview
-		case D32_sfloat:
+		[[fallthrough]];
+		case D32_sfloat: 
 		case D16_unorm:
 			aspect |= Aspect::Depth;
 			break;
@@ -1009,9 +1010,9 @@ std::vector<char> LoadShader(Pipeline::Stage stage) {
 		compilationRequired = true;
 	}	
 	if (compilationRequired) {
-		return std::move(CompileShader(stage.path, stage.entryPoint.c_str()));
+		return CompileShader(stage.path, stage.entryPoint.c_str());
 	} else {
-		return std::move(ReadBinaryFile(binPath.string()));
+		return ReadBinaryFile(binPath.string());
 	}
 }
 
@@ -1446,7 +1447,7 @@ void DeviceResource::PipelineLibrary::CreatePreRasterizationShaders(PreRasteriza
 	for (size_t i = 0; i < info.stages.size(); ++i) {
 		auto& stage = info.stages[i];
 
-		bytes[i] = std::move(LoadShader(stage));
+		bytes[i] = LoadShader(stage);
 
 		shaderModuleInfos[i] = VkShaderModuleCreateInfo{
 			.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
@@ -1516,7 +1517,7 @@ void DeviceResource::PipelineLibrary::CreateFragmentShader(FragmentShaderInfo in
 	for (size_t i = 0; i < info.stages.size(); ++i) {
 		auto& stage = info.stages[i];
 
-		bytes[i] = std::move(LoadShader(stage));
+		bytes[i] = LoadShader(stage);
 
 		shaderModuleInfos[i] = VkShaderModuleCreateInfo{
 			.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
@@ -2356,8 +2357,8 @@ uint32_t PhysicalDevice::GetQueueFamilyIndex(VkQueueFlags desiredFlags, VkQueueF
 	}
 	if (candidates.empty()) { return ALL_SUITABLE_QUEUES_TAKEN; }
 	// debug print candidates
-	for (auto& c: candidates) {
-		// DEBUG_TRACE("Candidate: {} ({})", c.first, c.second);
+	for ([[maybe_unused]] auto& candidate: candidates) {
+		// DEBUG_TRACE("Family {} with weight {}", candidate.first, candidate.second);
 	}
 	// Choose candidate with lowest weight
 	auto bestFamily = std::min_element(candidates.begin(), candidates.end(), [](auto& l, auto& r) {return l.second < r.second;})->first;
@@ -2850,16 +2851,18 @@ void SwapChain::Recreate(uint32_t width, uint32_t height) {
 bool SwapChain::AcquireImage() {
 	auto res = vkAcquireNextImageKHR(resource->device->handle, resource->swapChain, UINT64_MAX, resource->GetImageAvailableSemaphore(currentFrame), VK_NULL_HANDLE, &currentImageIndex);
 
-	if (res == VK_ERROR_OUT_OF_DATE_KHR) {
+	switch (res) {
+	[[likely]]
+	case VK_SUCCESS: 
+		return true;
+	case VK_ERROR_OUT_OF_DATE_KHR:
 		LOG_WARN("AcquireImage: Out of date");
 		dirty = true;
-	} else if (res != VK_SUCCESS && res != VK_SUBOPTIMAL_KHR) {
+		return false;
+	case VK_SUBOPTIMAL_KHR:
+		return false;
+	default:
 		DEBUG_VK(res, "Failed to acquire swap chain image!");
-	}
-
-	if (res == VK_SUCCESS) {
-		return true;
-	} else {
 		return false;
 	}
 }
@@ -2941,7 +2944,6 @@ void DeviceResource::createDescriptorSetLayout(){
 	std::vector<VkDescriptorSetLayoutBinding> bindings(bindingCount);
 	std::vector<VkDescriptorBindingFlags> bindingFlags(bindingCount);
 
-	VkDescriptorSetLayoutBinding texture{};
 	bindings[0].binding = BINDING_TEXTURE;
 	bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 	bindings[0].descriptorCount = MAX_SAMPLEDIMAGES;
@@ -3205,7 +3207,7 @@ void SwapChainResource::ChooseSurfaceFormat() {
 
 void SwapChainResource::ChoosePresentMode() {
 	for (const auto& mode : this->availablePresentModes) {
-		if (mode == presentMode) {
+		if (mode == presentMode) [[likely]] {
 			this->presentMode =  mode;
 			return;
 		}
@@ -3238,7 +3240,7 @@ void SwapChainResource::ChooseExtent(uint32_t width, uint32_t height) {
 
 bool Command::Copy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset) {
 	auto device = resource->device;
-	if (device->stagingBufferSize - device->stagingOffset < size) {
+	if (device->stagingBufferSize - device->stagingOffset < size) [[unlikely]] {
 		LOG_WARN("not enough size in staging buffer to copy");
 		return false;
 	}
@@ -3272,7 +3274,7 @@ void Command::Copy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset, 
 
 bool Command::Copy(Image& dst, void* data, uint32_t size) {
 	auto device = resource->device;
-	if (device->stagingBufferSize - device->stagingOffset < size) {
+	if (device->stagingBufferSize - device->stagingOffset < size) [[unlikely]] {
 		LOG_WARN("not enough size in staging buffer to copy");
 		return false;
 	}

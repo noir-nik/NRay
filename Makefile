@@ -53,7 +53,7 @@ LIB_EXT := a
 DEFINES := -DENGINE
 # -DUSE_VLA
 
-CXXFLAGS := -MMD -MP $(INCLUDES) $(DEFINES) -std=c++20 -Wno-vla
+CXXFLAGS := -MMD -MP $(INCLUDES) $(DEFINES) -std=c++20 -Wall -Wno-vla
 
 ifeq ($(STATIC_LINK), 1)
 	LDFLAGS += -static -static-libgcc -static-libstdc++

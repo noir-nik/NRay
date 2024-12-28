@@ -196,9 +196,9 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 		// 	pWindow->SetShouldClose(true);
 		// 	break;
 		case GLFW::Key::F11: {
-			auto moden = pWindow->GetMode();
+			auto mode = pWindow->GetMode();
 			// LOG_INFO("Window {} mode: {}", pWindow->GetName(), (int)mode);
-			if (pWindow->GetMode() == WindowMode::WindowedFullScreen) {
+			if (mode == WindowMode::WindowedFullScreen) {
 				pWindow->SetMode(WindowMode::Windowed);
 			} else {
 				pWindow->StoreWindowSize();
@@ -288,7 +288,7 @@ void WindowManager::Finish() {
 }
 
 // Window factory
-Window::Window(int width, int height, const char* name, void* imguiStyle): size( width, height ), name(name) {
+Window::Window(int width, int height, const char* name, void* imguiStyle): name(name), size( width, height ) {
 
 	if (!WindowManager::is_initialized) {
 		WindowManager::Init();
