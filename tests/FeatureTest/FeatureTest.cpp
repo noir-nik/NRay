@@ -195,7 +195,7 @@ void AppContext::CreateWindowResources(Window* window) {
 		.width = maxSize.x,
 		.height = maxSize.y,
 		.format = ctx.renderFormat,
-		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::TransferSrc ,
+		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::TransferSrc,
 		.name = window->GetName(),
 	}));
 	
@@ -290,11 +290,11 @@ void KeyCallback(Window* window, int key, int scancode, int action, int mods) {
 	case GLFW_PRESS:
 		switch (key) {
 		case GLFW_KEY_N: {
-			static int windowCount = 1;
-			std::string name = "w" + std::to_string(windowCount++);
-			auto window = new Window(ctx.width, ctx.height, name.c_str());
-			ctx.CreateWindowResources(window);
-			break;
+			// static int windowCount = 1;
+			// std::string name = "w" + std::to_string(windowCount++);
+			// auto window = new Window(ctx.width, ctx.height, name.c_str());
+			// ctx.CreateWindowResources(window);
+			// break;
 		}
 		case GLFW_KEY_W:
 			camera.view = translate4x4({0, 0, -0.02f}) * camera.view;
@@ -402,50 +402,6 @@ void CursorPosCallback (Window *window, double xpos, double ypos) {
 	vec3 camera_up = camera.view.get_col(1).xyz();
 	vec3 camera_forward = camera.view.get_col(2).xyz();
 
-	// enum CursorType {
-	// 	Arrow = 0,
-	// 	IBeam = 1,
-	// 	Crosshair = 2,
-	// 	Hand = 3,
-	// 	HResize = 4,
-	// 	VResize = 5,
-	// 	ResizeAll = 6,
-	// 	ResizeNS = 7,
-	// 	ResizeEW = 8,
-	// 	ResizeNESW = 9,
-	// 	ResizeNWSE = 10,
-	// };
-
-	// static GLFWcursor* cursors[11] = {};
-	// if (!cursors[CursorType::Arrow]) {
-	// 	cursors[CursorType::Arrow] = glfwCreateStandardCursor(GLFW_ARROW_CURSOR);
-	// 	cursors[CursorType::IBeam] = glfwCreateStandardCursor(GLFW_IBEAM_CURSOR);
-	// 	cursors[CursorType::Crosshair] = glfwCreateStandardCursor(GLFW_CROSSHAIR_CURSOR);
-	// 	cursors[CursorType::Hand] = glfwCreateStandardCursor(GLFW_HAND_CURSOR);
-	// 	cursors[CursorType::HResize] = glfwCreateStandardCursor(GLFW_HRESIZE_CURSOR);
-	// 	cursors[CursorType::VResize] = glfwCreateStandardCursor(GLFW_VRESIZE_CURSOR);
-	// 	cursors[CursorType::ResizeAll] = glfwCreateStandardCursor(GLFW_RESIZE_ALL_CURSOR);
-	// 	cursors[CursorType::ResizeNS] = glfwCreateStandardCursor(GLFW_RESIZE_NS_CURSOR);
-	// 	cursors[CursorType::ResizeEW] = glfwCreateStandardCursor(GLFW_RESIZE_EW_CURSOR);
-	// 	cursors[CursorType::ResizeNESW] = glfwCreateStandardCursor(GLFW_RESIZE_NESW_CURSOR);
-	// 	cursors[CursorType::ResizeNWSE] = glfwCreateStandardCursor(GLFW_RESIZE_NWSE_CURSOR);
-	// }
-
-	// window->AddFramesToDraw(1);
-	// Hit hit = MouseHitTest(window, xpos, ypos);
-	// auto glfwWindow = window->GetGLFWwindow();
-	// switch (hit) {
-	// case Hit::Left:        glfwSetCursor(glfwWindow, cursors[CursorType::ResizeEW]); break;
-	// case Hit::Top:         glfwSetCursor(glfwWindow, cursors[CursorType::ResizeNS]); break;
-	// case Hit::Right:       glfwSetCursor(glfwWindow, cursors[CursorType::ResizeEW]); break;
-	// case Hit::Bottom:      glfwSetCursor(glfwWindow, cursors[CursorType::ResizeNS]); break;
-	// case Hit::TopLeft:     glfwSetCursor(glfwWindow, cursors[CursorType::ResizeNWSE]); break;
-	// case Hit::TopRight:    glfwSetCursor(glfwWindow, cursors[CursorType::ResizeNESW]); break;
-	// case Hit::BottomLeft:  glfwSetCursor(glfwWindow, cursors[CursorType::ResizeNWSE]); break;
-	// case Hit::BottomRight: glfwSetCursor(glfwWindow, cursors[CursorType::ResizeNESW]); break;
-	// default: glfwSetCursor(glfwWindow, cursors[CursorType::Arrow]); break;
-	// }
-	
 	window->AddFramesToDraw(1);
 
 

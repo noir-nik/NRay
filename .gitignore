@@ -17,6 +17,8 @@ logs/*
 
 deps/*
 
+
+
 *.spv
 *.so
 *.so.*
@@ -48,3 +50,5 @@ deps/*
 
 *.ini
 *.log
+
+!assets/*
