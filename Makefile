@@ -1,6 +1,4 @@
-# CC := g++
-CC := clang++
-# CC := cl
+CXX := clang++
 
 TARGET := NRay
 
@@ -45,7 +43,7 @@ ifeq ($(OS),Windows_NT)
 	
 	RM := $(CMD) del /Q
 else
-	CC := g++
+	CXX := g++
 	PYTHON := python3
 	LDFLAGS += -lpthread
 	LIBS := $(LIBS) vulkan GL m
@@ -55,7 +53,7 @@ else
 	RM := rm -rf
 endif
 
-ifeq ($(findstring clang,$(CC)),clang)
+ifeq ($(findstring clang,$(CXX)),clang)
 	ifeq ($(OS),Windows_NT)
 		TARGET_TRIPLE := -target x86_64-w64-mingw32
 	else
@@ -65,7 +63,7 @@ ifeq ($(findstring clang,$(CC)),clang)
 	LDFLAGS += -pthread
 endif
 
-ifneq ($(findstring clang,$(CC)),clang)
+ifneq ($(findstring clang,$(CXX)),clang)
 USE_MODULES := 0
 STD_MODULE_AVAILABLE := 0
 endif
@@ -111,7 +109,7 @@ WARNINGS_DISABLE := \
 	\
 	-Wno-unknown-pragmas \
 
-ifeq ($(findstring clang,$(CC)),clang)
+ifeq ($(findstring clang,$(CXX)),clang)
 WARNINGS_DISABLE += \
 	-Wno-missing-designated-field-initializers \
 	-Wno-unused-command-line-argument \
@@ -186,7 +184,7 @@ endif
 
 # $(info $(CPP_MODULE_TARGETS))
 
-ifeq ($(CC),cl)
+ifeq ($(CXX),cl)
     INCLUDES := $(patsubst -I%,/I%,$(INCLUDES))
     -O := /Fo
     -OUT := /OUT:
@@ -301,7 +299,7 @@ all: debug
 
 .PHONY: debug
 debug: $(DIRS_CREATED_FILE)
-ifeq ($(CC),cl)
+ifeq ($(CXX),cl)
 debug: CXXFLAGS += /Zi /Od /DNRAY_DEBUG /EHsc /Fd$(PLATFORM_BUILD_DIR)/$(TARGET).pdb /FS
 debug: LDFLAGS  += vulkan-1.lib
 	
@@ -311,7 +309,7 @@ debug: CXXFLAGS += -g -ggdb $(OPT_DEBUG) -DNRAY_DEBUG
 debug: LDFLAGS  += -g -ggdb $(OPT_DEBUG)
 endif
 debug: build_target
-
+debug: modules_clangd
 .PHONY: release
 release: $(DIRS_CREATED_FILE)
 release: CXXFLAGS += $(OPT_RELEASE)
@@ -517,55 +515,55 @@ endif
 # $(OBJS_FMT)
 # @echo "Linking $(notdir $^)"
 	@echo "Linking"
-ifeq ($(CC),cl)
+ifeq ($(CXX),cl)
 	@link $(-OUT)$(TARGET_DIR)/$@ $^ $(LDFLAGS) 
 else
-	@$(CC) $(-OUT)$(TARGET_DIR)/$@ $^ $(LDFLAGS)
+	@$(CXX) $(-OUT)$(TARGET_DIR)/$@ $^ $(LDFLAGS)
 endif
 	@echo "=== Done ==="
 
 #compile
 $(OBJS_BUILD_DIR)/%.$(OBJ_EXT): $(SRC_MAIN)/%.cpp # ./
 	@echo "Compiling $(notdir $<)"
-	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
+	@$(CXX) $(CXXFLAGS) $(-O)$@ $(-C) $<
 $(OBJS_BUILD_DIR)/%.$(OBJ_EXT): $(SRC_CORE)/%.cpp # core/
 	@echo "Compiling $(notdir $<)"
-	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
+	@$(CXX) $(CXXFLAGS) $(-O)$@ $(-C) $<
 $(OBJS_BUILD_DIR)/%.$(OBJ_EXT): $(SRC_BASE)/%.cpp # base/
 	@echo "Compiling $(notdir $<)"
-	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
+	@$(CXX) $(CXXFLAGS) $(-O)$@ $(-C) $<
 $(OBJS_BUILD_DIR)/%.$(OBJ_EXT): $(SRC_TEST)/%.cpp # test/
 	@echo "Compiling $(notdir $<)"
-	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
+	@$(CXX) $(CXXFLAGS) $(-O)$@ $(-C) $<
 $(OBJS_BUILD_DIR)/%.$(OBJ_EXT): $(SRC_ENGINE)/%.cpp # engine/
 	@echo "Compiling $(notdir $<)"
-	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
+	@$(CXX) $(CXXFLAGS) $(-O)$@ $(-C) $<
 $(OBJS_BUILD_DIR)/%.$(OBJ_EXT): $(SRC_RESOURCES)/%.cpp # resources/
 	@echo "Compiling $(notdir $<)"
-	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $< 
+	@$(CXX) $(CXXFLAGS) $(-O)$@ $(-C) $< 
 
 # Tests
 $(OBJS_BUILD_DIR)/%.$(OBJ_EXT): $(SRC_NEURALSFD)/%.cpp # tests/NeuralSdf
 	@echo "Compiling $(notdir $<)"
-	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
+	@$(CXX) $(CXXFLAGS) $(-O)$@ $(-C) $<
 $(OBJS_BUILD_DIR)/%.$(OBJ_EXT): $(SRC_IMAGEOPT)/%.cpp # tests/ImageOptimization
 	@echo "Compiling $(notdir $<)"
-	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
+	@$(CXX) $(CXXFLAGS) $(-O)$@ $(-C) $<
 $(OBJS_BUILD_DIR)/%.$(OBJ_EXT): $(SRC_SLANG)/%.cpp # tests/SlangTest
 	@echo "Compiling $(notdir $<)"
-	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
+	@$(CXX) $(CXXFLAGS) $(-O)$@ $(-C) $<
 $(OBJS_BUILD_DIR)/%.$(OBJ_EXT): $(SRC_FEATURE)/%.cpp # tests/FeatureTest
 	@echo "Compiling $(notdir $<)"
-	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
+	@$(CXX) $(CXXFLAGS) $(-O)$@ $(-C) $<
 $(OBJS_BUILD_DIR)/%.$(OBJ_EXT): $(SRC_RADIENCE)/%.cpp # tests/RadienceField
 	@echo "Compiling $(notdir $<)"
-	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
+	@$(CXX) $(CXXFLAGS) $(-O)$@ $(-C) $<
 $(OBJS_BUILD_DIR)/%.$(OBJ_EXT): $(SRC_HELLOTRIANGLE)/%.cpp # tests/HelloTriangle
 	@echo "Compiling $(notdir $<)"
-	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
+	@$(CXX) $(CXXFLAGS) $(-O)$@ $(-C) $<
 $(OBJS_BUILD_DIR)/%.$(OBJ_EXT): $(SRC_WINDOW)/%.cpp # tests/Window
 	@echo "Compiling $(notdir $<)"
-	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
+	@$(CXX) $(CXXFLAGS) $(-O)$@ $(-C) $<
 
 # ============================================ Headers ===================================================
 
@@ -577,7 +575,7 @@ HEADER_FLAGS := $(filter-out -fmodule-file-deps,$(CXXFLAGS)) \
 
 $(HEADERS_BUILD_DIR)/%.pcm:
 	@echo "Compiling <$(patsubst %.pcm,%,$(notdir $@))>"
-	@$(CC) $(HEADER_FLAGS) --precompile -xc++-system-header $(patsubst %.pcm,%,$(notdir $@)) -o $@
+	@$(CXX) $(HEADER_FLAGS) --precompile -xc++-system-header $(patsubst %.pcm,%,$(notdir $@)) -o $@
 
 
 # ============================================ std module ===================================================
@@ -602,7 +600,7 @@ $(STD_MODULE_PATH_FILE): scripts/get_std_module_path.py
 # $(info $(STD_MODULE_SRC))
 $(MODULES_BUILD_DIR)/%.pcm: $(STD_MODULE_SRC)/%.cppm
 	@echo "Compiling module $(notdir $<)"
-	@$(CC) $(CXXFLAGS) --precompile -c -x c++-module "$<" -o $@ \
+	@$(CXX) $(CXXFLAGS) --precompile -c -x c++-module "$<" -o $@ \
 	-Wno-reserved-module-identifier \
 	-Wno-unused-command-line-argument
 
@@ -622,7 +620,7 @@ endif # USE_HEADER_UNITS
 
 $(MODULES_BUILD_DIR)/%.pcm: $(SRC_DIR)/Base/%.cppm
 	@echo "Compiling module std"
-	@$(CC) $(_STD_MODULE_FLAGS) --precompile -c -x c++-module $< -o $@
+	@$(CXX) $(_STD_MODULE_FLAGS) --precompile -c -x c++-module $< -o $@
 
 endif # STD_MODULE_AVAILABLE
 
@@ -662,32 +660,32 @@ $(MODULES_BUILD_DIR_CLANGD)/%.pcm: $(MODULES_BUILD_DIR)/%.pcm
 $(_MBD)/%.pcm: $(SRC_DIR)/Core/%.cppm
 # @rm -f $@
 	@echo "Compiling module $(notdir $<)"
-	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
+	@$(CXX) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
 $(_MBD)/%.pcm: $(SRC_DIR)/Base/%.cppm
 # @rm -f $@
 	@echo "Compiling module $(notdir $<)"
-	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
+	@$(CXX) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
 $(_MBD)/%.pcm: $(SRC_DIR)/Engine/%.cppm
 # @rm -f $@
 	@echo "Compiling module $(notdir $<)"
-	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
+	@$(CXX) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
 $(_MBD)/%.pcm: $(SRC_DIR)/Resources/%.cppm
 # @rm -f $@
 	@echo "Compiling module $(notdir $<)"
-	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
+	@$(CXX) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
 $(_MBD)/%.pcm: $(SRC_DIR)/Shaders/%.cppm
 # @rm -f $@
 	@echo "Compiling module $(notdir $<)"
-	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
+	@$(CXX) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
 $(_MBD)/%.pcm: $(SRC_FEATURE)/%.cppm
 # @rm -f $@
 	@echo "Compiling module $(notdir $<)"
-	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
+	@$(CXX) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
 
 # build_external_modules: $(EXTERNAL_MODULE_TARGETS)
@@ -695,42 +693,42 @@ $(_MBD)/%.pcm: $(SRC_FEATURE)/%.cppm
 $(_MBD)/%.pcm: $(EXTERNAL_MODULES_DIR)/%.cppm
 # @rm -f $@
 	@echo "Compiling module $(notdir $<)"
-	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
+	@$(CXX) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
 $(_MBD)/%.pcm: $(EXTERNAL_MODULES_DIR)/imgui/%.cppm
 # @rm -f $@
 	@echo "Compiling module $(notdir $<)"
-	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
+	@$(CXX) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
 $(_MBD)/%.pcm: $(EXTERNAL_MODULES_DIR)/stb/%.cppm
 # @rm -f $@
 	@echo "Compiling module $(notdir $<)"
-	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
+	@$(CXX) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
 # #entt
 # $(_MBD)/%.pcm: deps\entt\src\entt\entity\registry.hpp
 # @rm -f $@
 # 	@echo "Compiling module $(notdir $<)"
-# 	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
+# 	@$(CXX) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
 # fastgltf
 $(_MBD)/%.pcm: deps/fastgltf/src/%.ixx
 # @rm -f $@
 	@echo "Compiling module $(notdir $<)"
-	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
+	@$(CXX) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
 # vulkan_backend
 $(_MBD)/%.pcm: deps/vulkan_backend/src/%.cppm
 # @rm -f $@
 	@echo "Compiling module $(notdir $<)"
-	@$(CC) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
+	@$(CXX) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
 
 
 # ========================== Module Objs =============================
 
 $(MODULES_OBJS_DIR)/%.o: $(MODULES_BUILD_DIR)/%.pcm
 	@echo "Compiling $(notdir $<)"
-	@$(CC) $(CXXFLAGS) -c $< -o $@ -Wno-unused-command-line-argument
+	@$(CXX) $(CXXFLAGS) -c $< -o $@ -Wno-unused-command-line-argument
 
 # ====================================================================
 
@@ -739,15 +737,15 @@ $(MODULES_OBJS_DIR)/%.o: $(MODULES_BUILD_DIR)/%.pcm
 #ImGui
 $(PLATFORM_BUILD_DIR)/imgui/%.$(OBJ_EXT): $(SRC_IMGUI)/%.cpp # imgui/
 	@echo "Compiling $(notdir $<)"
-	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
+	@$(CXX) $(CXXFLAGS) $(-O)$@ $(-C) $<
 $(PLATFORM_BUILD_DIR)/imgui/%.$(OBJ_EXT): $(IMGUI_BACKENDS_DIR)/%.cpp # imgui/backends/
 	@echo "Compiling $(notdir $<)"
-	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
+	@$(CXX) $(CXXFLAGS) $(-O)$@ $(-C) $<
 
 #Stb
 $(PLATFORM_BUILD_DIR)/stb/%.$(OBJ_EXT): $(SRC_STB)/%.c # stb/
 	@echo "Compiling $(notdir $<)"
-	@$(CC) -x c $(filter-out $(CPP_STD),$(CXXFLAGS)) $(-O)$@ $(-C) $<
+	@$(CXX) -x c $(filter-out $(CPP_STD),$(CXXFLAGS)) $(-O)$@ $(-C) $<
 
 # GLFW
 ifeq ($(OS),Windows_NT)
@@ -756,15 +754,15 @@ else
 GLFW_PLATFORM := _GLFW_X11
 endif
 
-ifeq ($(findstring clang,$(CC)),clang)
+ifeq ($(findstring clang,$(CXX)),clang)
 _CLANG_LIBFLAGS := -target x86_64-w64-mingw32
 endif
 
 $(PLATFORM_BUILD_DIR)/glfw/%.$(OBJ_EXT): $(SRC_GLFW)/%.c # glfw/
 	@echo "Compiling $(notdir $<)"
-	@$(CC) -x c $(filter-out $(CPP_STD),$(CXXFLAGS)) -c $< $(-O)$@ -D$(GLFW_PLATFORM)
+	@$(CXX) -x c $(filter-out $(CPP_STD),$(CXXFLAGS)) -c $< $(-O)$@ -D$(GLFW_PLATFORM)
 
-ifeq ($(findstring clang,$(CC)),clang)
+ifeq ($(findstring clang,$(CXX)),clang)
 _CLANG_FASTGLTF := -femulated-tls
 endif
 
@@ -772,8 +770,8 @@ endif
 # Fastgltf
 $(PLATFORM_BUILD_DIR)/fastgltf/%.$(OBJ_EXT): $(SRC_FASTGLTF)/%.cpp $(SRC_SIMDJSON)/simdjson.h
 	@echo "Compiling $(notdir $<)"
-	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $< -I$(DEPS_PATH)/fastgltf/include/ -I$(DEPS_PATH)/fastgltf/deps/simdjson $(_CLANG_FASTGLTF) 
-# -DFASTGLTF_USE_STD_MODULE=1
+	@$(CXX) $(CXXFLAGS) $(-O)$@ $(-C) $< -I$(DEPS_PATH)/fastgltf/include/ -I$(DEPS_PATH)/fastgltf/deps/simdjson $(_CLANG_FASTGLTF)
+#  -DFASTGLTF_USE_STD_MODULE=1
 
 # Simdjson
 SIMDJSON_TARGET_VERSION := 3.9.4
@@ -787,24 +785,24 @@ $(SRC_SIMDJSON)/simdjson.h:
 # curl -L -o
 $(PLATFORM_BUILD_DIR)/simdjson/%.$(OBJ_EXT): $(SRC_SIMDJSON)/%.cpp $(SRC_SIMDJSON)/%.h # simdjson/
 	@echo "Compiling $(notdir $<)"
-	@$(CC) -MMD -MP $(-O)$@ $(-C) $< -I$(DEPS_PATH)/fastgltf/deps/simdjson -O3 $(_CLANG_LIBFLAGS)
+	@$(CXX) -MMD -MP $(-O)$@ $(-C) $< -I$(DEPS_PATH)/fastgltf/deps/simdjson -O3 $(_CLANG_LIBFLAGS)
 
 
 # spdlog
 $(PLATFORM_BUILD_DIR)/spdlog/%.$(OBJ_EXT): $(SRC_SPDLOG)/%.cpp # spdlog/
 	@echo "Compiling $(notdir $<)"
-	@$(CC) -MMD -MP $(-O)$@ $(-C) $< -O3 -DSPDLOG_COMPILED_LIB -DSPDLOG_NO_EXCEPTIONS -I$(DEPS_PATH)/spdlog/include $(_CLANG_LIBFLAGS)
+	@$(CXX) -MMD -MP $(-O)$@ $(-C) $< -O3 -DSPDLOG_COMPILED_LIB -DSPDLOG_NO_EXCEPTIONS -I$(DEPS_PATH)/spdlog/include $(_CLANG_LIBFLAGS)
 # -I$(DEPS_PATH)/fmt/include -DSPDLOG_FMT_EXTERNAL -DSPDLOG_FMT_EXTERNAL_HO
 
 #fmt
 $(PLATFORM_BUILD_DIR)/fmt/%.$(OBJ_EXT): $(SRC_FMT)/%.cc # fmt/
 	@echo "Compiling $(notdir $<)"
-	@$(CC) -MMD -MP $(-O)$@ $(-C) $< -I$(DEPS_PATH)/fmt/include -fmodules-ts $(_CLANG_LIBFLAGS)
+	@$(CXX) -MMD -MP $(-O)$@ $(-C) $< -I$(DEPS_PATH)/fmt/include -fmodules-ts $(_CLANG_LIBFLAGS)
 
 # vulkan_backend
 $(PLATFORM_BUILD_DIR)/%.$(OBJ_EXT): $(SRC_VULKAN_BACKEND)/%.cpp # vulkan_backend/
 	@echo "Compiling $(notdir $<)"
-	@$(CC) $(CXXFLAGS) $(-O)$@ $(-C) $<
+	@$(CXX) $(CXXFLAGS) $(-O)$@ $(-C) $<
 
 
 DEPFILES =  $(OBJS:.$(OBJ_EXT)=.d) \

@@ -2,7 +2,11 @@
 #define _GPU_TYPES_H
 
 #ifdef ENGINE
+#ifdef USE_MODULES
+import lmath;
+#else
 #include "lmath_types.hpp"
+#endif
 namespace GpuTypes {
 using namespace lmath;
 #endif // ENGINE

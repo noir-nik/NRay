@@ -2,7 +2,11 @@
 #define OPAQUE_H
 
 #ifdef ENGINE
+#ifdef USE_MODULES
+import lmath;
+#else
 #include "lmath_types.hpp"
+#endif
 namespace Opaque {
 using namespace lmath;
 #endif // ENGINE

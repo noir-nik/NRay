@@ -2,9 +2,11 @@
 module SceneGraph;
 import lmath;
 import std.compat;
+import Log;
 #else
 #include "lmath.hpp"
 #include "SceneGraph.cppm"
+#include "Log.cppm"
 #endif
 
 using namespace lmath;
@@ -27,7 +29,24 @@ void SceneGraph::UpdateTransforms(Node &node, Component::Transform const& parent
 
 
 void SceneGraph::DebugPrint() {
-	DebugPrintTree(root, 0);
+	LOG_INFO("SceneGraph");
+	LOG_INFO("Root: {}", root.entity.Get<Component::Name>().name.c_str());
+	LOG_INFO("Children:");
+	for (auto& childIndex : root.children) {
+		LOG_INFO("{}: {}", childIndex, nodes[childIndex].entity.Get<Component::Name>().name.c_str());
+	}
+	LOG_INFO("Nodes:");
+	for (u32 i = 0; auto& node : nodes) {
+		LOG_INFO("===== [{}] {} =====", i, node.entity.Get<Component::Name>().name.c_str());
+		if (node.children.size() > 0) {
+			LOG_INFO("Children:");
+			for (auto& childIndex : node.children) {
+				LOG_INFO("{}: {}", childIndex, nodes[childIndex].entity.Get<Component::Name>().name.c_str());
+			}
+		}
+		++i;
+	}
+	// DebugPrintTree(root, 0);
 }
 
 void SceneGraph::DebugPrintTree(Node const& node, int indent) {

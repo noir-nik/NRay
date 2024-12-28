@@ -20,6 +20,7 @@ import Types;
 import Entity;
 import Materials;
 #else
+#include "GpuTypes.h"
 #include "GLTFLoader.cppm"
 #include <vulkan_backend/core.hpp>
 #include "lmath.hpp"
@@ -36,9 +37,6 @@ import Materials;
 #include <fastgltf/tools.hpp>
 
 #endif
-
-// #include "Entity.hpp"
-// #include "Scene.hpp"
 
 namespace fastgltf {
 template<> struct ElementTraits<lmath::vec4> : ElementTraitsBase<lmath::vec4, AccessorType::Vec4, float> {};
@@ -173,8 +171,14 @@ auto LoaderImpl::LoadTexture(fastgltf::Texture const& assetTexture) -> TextureIn
 						data = ImageIO::LoadFromMemory(reinterpret_cast<const uchar*>(vector.bytes.data() + bufferView.byteOffset),
 						static_cast<int>(bufferView.byteLength), &width, &height, &numChannels, desiredChannels);
 					},
+					[&](fastgltf::sources::Array& array) {
+						data = ImageIO::LoadFromMemory(reinterpret_cast<const uchar*>(array.bytes.data() + bufferView.byteOffset),
+						static_cast<int>(bufferView.byteLength), &width, &height, &numChannels, desiredChannels);
+					},
 					[&](auto& arg) {
-						LOG_WARN("Unsupported fastgltf::visitor default (BufferView) {}", image.name);
+						// LOG_WARN("Unsupported fastgltf::visitor default (BufferView) {}", image.name);
+						LOG_WARN("Unsupported fastgltf::visitor default (BufferView) {} with variant type: {}",
+							image.name, std::visit(sourcesVisitor, image.data));
 					}
 				},
 					buffer.data);
@@ -184,7 +188,8 @@ auto LoaderImpl::LoadTexture(fastgltf::Texture const& assetTexture) -> TextureIn
 				static_cast<int>(array.bytes.size()), &width, &height, &numChannels, desiredChannels);
 			},
 			[&](auto& arg) {
-				LOG_WARN("Unsupported fastgltf::visitor default (Image) {} with variant type: {}", image.name, std::visit(sourcesVisitor, image.data));
+				LOG_WARN("Unsupported fastgltf::visitor default (Image) {} with variant type: {}",
+					image.name, std::visit(sourcesVisitor, image.data));
 			}
 		},
 		image.data);
@@ -268,7 +273,7 @@ void LoaderImpl::LoadTextures() {
 					.anisotropyEnable = true,
 					.maxAnisotropy = 16.0f
 				},
-				.name = assetTexture.name.data(),
+				.name = asset.images[imageIndex].name.data(),
 			}));
 
 			// Copy image
@@ -539,7 +544,7 @@ void LoaderImpl::LoadNode(int const nodeIndex, std::size_t offset) {
 	newNode.children.resize(childNodeCount);
 	for (std::size_t i = 0; i < childNodeCount; ++i) {
 		auto glfwNodeIndex = glTFNode.children[i];
-		newNode.children[i] = glfwNodeIndex;
+		newNode.children[i] = glfwNodeIndex + offset;
 		LoadNode(glfwNodeIndex, offset);
 	}
 }

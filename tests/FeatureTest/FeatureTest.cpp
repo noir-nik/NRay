@@ -201,7 +201,15 @@ std::vector<VertexDebug> const vertices = {
 
 void AppContext::CreateShaders() {
 	auto& resource = mainWindow.Get<WindowImageResource>();
-	
+	bool constexpr skip_recompilation = false; 
+
+	char compile_options[128];
+	std::snprintf(compile_options, sizeof(compile_options), 
+		"-DBINDING_TEXTURE=%u -DBINDING_BUFFER=%u %s", 
+		device.GetBinding(vb::DescriptorType::CombinedImageSampler),
+		device.GetBinding(vb::DescriptorType::StorageBuffer),
+		GSLS_OPTIONS);
+
 /* 	pipeline = device.CreatePipeline({
 		.point = vb::PipelinePoint::Graphics,
 		.stages = {{
@@ -246,13 +254,15 @@ void AppContext::CreateShaders() {
 				.stage = vb::ShaderStage::Vertex, 
 				.source = {"source/Shaders/Quad.vert"},
 				.out_path = BIN_PATH,
-				.compile_options = GSLS_OPTIONS,
+				.compile_options = compile_options,
+				.allow_skip_compilation = skip_recompilation,
 			},
 			{
 				.stage = vb::ShaderStage::Fragment,
 				.source = {"source/Shaders/TexImage.frag"},
 				.out_path = BIN_PATH,
-				.compile_options = GSLS_OPTIONS,
+				.compile_options = compile_options,
+				.allow_skip_compilation = skip_recompilation,
 			}
 		}},
 		.color_formats = {{renderFormat}},
@@ -270,13 +280,15 @@ void AppContext::CreateShaders() {
 				.stage = vb::ShaderStage::Vertex, 
 				.source = {"source/Shaders/Opaque.vert"},
 				.out_path = BIN_PATH,
-				.compile_options = GSLS_OPTIONS,
+				.compile_options = compile_options,
+				.allow_skip_compilation = skip_recompilation,
 			},
 			{
 				.stage = vb::ShaderStage::Fragment,
 				.source = {"source/Shaders/Opaque.frag"},
 				.out_path = BIN_PATH,
-				.compile_options = GSLS_OPTIONS,
+				.compile_options = compile_options,
+				.allow_skip_compilation = skip_recompilation,
 			}
 		}},
 		.vertexAttributes = {{
@@ -853,9 +865,9 @@ void AppContext::RecreateFrameResources(Window* window) {
 	auto swapchain = swapchains[window];
 	bool swapChainDirty = swapchain.GetDirty();
 	bool framebufferResized = window->GetFramebufferResized();
-	LOG_INFO("RecreateFrameResources {} {} {} {}", window->GetName(), (void*)window->GetGLFWwindow(), swapChainDirty, framebufferResized);
+	// LOG_INFO("RecreateFrameResources {} {} {} {}", window->GetName(), (void*)window->GetGLFWwindow(), swapChainDirty, framebufferResized);
 	if (swapChainDirty || framebufferResized) {
-		LOG_INFO("DIRTY FRAME RESOURCES");
+		// LOG_INFO("DIRTY FRAME RESOURCES");
 		window->UpdateFramebufferSize();
 		// window->RecreateSwapchain();
 		uint2 size = uint2(window->GetSize());
@@ -892,8 +904,8 @@ void AppContext::Setup() {
 	queue = device.GetQueue();
 
 	vb::Descriptor descriptor = device.CreateDescriptor({{
-		{vb::DescriptorType::CombinedImageSampler, 0},
-		{vb::DescriptorType::StorageBuffer, 1},
+		{vb::DescriptorType::CombinedImageSampler},
+		{vb::DescriptorType::StorageBuffer},
 	}});
 
 	device.UseDescriptor(descriptor);
@@ -1145,16 +1157,4 @@ void FeatureTestApplication::Finish() {
 	delete ctx;
 	// vb::Destroy();
 	WindowManager::Finish();
-}
-
-void printMatrix(const float4x4& m, char const* name) {
-	if (name) {
-		printf("  %s: \n", name);
-	}
-	for (int i = 0; i < 4; ++i) {
-		for (int j = 0; j < 4; ++j) {
-			printf("    % .6f ", m[i][j]);
-		}
-		printf("\n");
-	}
 }

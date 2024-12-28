@@ -2,7 +2,11 @@
 #define PHONG_H
 
 #ifdef ENGINE
+#ifdef USE_MODULES
+import lmath;
+#else
 #include "lmath_types.hpp"
+#endif
 namespace Phong {
 using namespace lmath;
 #endif // ENGINE
