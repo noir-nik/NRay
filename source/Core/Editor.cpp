@@ -84,85 +84,79 @@ bool EditorContext::SaveStyle(const char* filename, const ImGuiStyle& style) {
 	
 	return true;
 }
+
 bool EditorContext::LoadStyle(const char* filename, ImGuiStyle& style) {
     std::ifstream file(filename);
     if (!file.is_open()) {
         return false;
     }
-
-	enum ImGuiDataType_
-	{
-		ImGuiDataType_S8,       // signed char / char (with sensible compilers)
-		ImGuiDataType_U8,       // unsigned char
-		ImGuiDataType_S16,      // short
-		ImGuiDataType_U16,      // unsigned short
-		ImGuiDataType_S32,      // int
-		ImGuiDataType_U32,      // unsigned int
-		ImGuiDataType_S64,      // long long / __int64
-		ImGuiDataType_U64,      // unsigned long long / unsigned __int64
-		ImGuiDataType_Float,    // float
-		ImGuiDataType_Double,   // double
-		ImGuiDataType_Bool,     // bool (provided for user convenience, not supported by scalar widgets)
-		ImGuiDataType_COUNT
-	};
+	
+	style = defaultStyle;
 
     std::string line;
-	std::string_view name = "";
+	std::string name = "";
+	name.reserve(64);
 	void* pvar = nullptr;
 	// int* pInt = nullptr;
 	// float* pFloat = nullptr;
 	ImGuiDataVarInfo var_info{ImGuiDataType_COUNT};
-	if (!std::getline(file, line)) return false;
-    do {
+	
+	// if (!std::getline(file, line)) return false;
+	int line_number = 0;
+	while (std::getline(file, line)) {
+		++line_number;
+		printf("line: %s\n", line.data());
 		if (var_info.Type == ImGuiDataType_COUNT) {
+			bool found = 0;
 			size_t name_start = line.find_first_of("[");
 			if (name_start == std::string::npos) continue;
 			size_t name_end = line.find_first_of("]", name_start + 1);
 			if (name_end == std::string::npos) continue;
 			name = std::string_view(line.begin() + name_start + 1, line.begin() + name_end);
 			if (name.empty()) continue;
+			printf("name: %s\n", name.data());
 
 			for (auto i = 0; i != ImGuiStyleVar_COUNT; i++) {
 				if (name == GetStyleVarName(i)) {
 					var_info = *ImGui::GetStyleVarInfo(i);
 					pvar = var_info.GetVarPtr((void*)&style);
-					std::getline(file, line);
-					continue;
+					found = 1;
+					break;
 				}
 			}
-			bool is_extra = false;
-			if (name == "WindowMenuButtonPosition")   {var_info = {ImGuiDataType_Float, 1}; pvar = &style.WindowMenuButtonPosition;   is_extra = true;}
-			if (name == "TouchExtraPadding")          {var_info = {ImGuiDataType_Float, 2}; pvar = &style.TouchExtraPadding;          is_extra = true;}
-			if (name == "ColumnsMinSpacing")          {var_info = {ImGuiDataType_Float, 1}; pvar = &style.ColumnsMinSpacing;          is_extra = true;}
-			if (name == "LogSliderDeadzone")          {var_info = {ImGuiDataType_Float, 1}; pvar = &style.LogSliderDeadzone;          is_extra = true;}
-			if (name == "TabMinWidthForCloseButton")  {var_info = {ImGuiDataType_Float, 1}; pvar = &style.TabMinWidthForCloseButton;  is_extra = true;}
-			if (name == "ColorButtonPosition")        {var_info = {ImGuiDataType_S32,   1}; pvar = &style.ColorButtonPosition;        is_extra = true;}
-			if (name == "DisplayWindowPadding")       {var_info = {ImGuiDataType_Float, 2}; pvar = &style.DisplayWindowPadding;       is_extra = true;}
-			if (name == "DisplaySafeAreaPadding")     {var_info = {ImGuiDataType_Float, 2}; pvar = &style.DisplaySafeAreaPadding;     is_extra = true;}
-			if (name == "MouseCursorScale")           {var_info = {ImGuiDataType_Float, 1}; pvar = &style.MouseCursorScale;           is_extra = true;}
-			if (name == "AntiAliasedLines")           {var_info = {ImGuiDataType_Bool,  1}; pvar = &style.AntiAliasedLines;           is_extra = true;}
-			if (name == "AntiAliasedLinesUseTex")     {var_info = {ImGuiDataType_Bool,  1}; pvar = &style.AntiAliasedLinesUseTex;     is_extra = true;}
-			if (name == "AntiAliasedFill")            {var_info = {ImGuiDataType_Bool,  1}; pvar = &style.AntiAliasedFill;            is_extra = true;}
-			if (name == "CurveTessellationTol")       {var_info = {ImGuiDataType_Float, 1}; pvar = &style.CurveTessellationTol;       is_extra = true;}
-			if (name == "CircleTessellationMaxError") {var_info = {ImGuiDataType_Float, 1}; pvar = &style.CircleTessellationMaxError; is_extra = true;}
-			if (name == "HoverStationaryDelay")       {var_info = {ImGuiDataType_Float, 1}; pvar = &style.HoverStationaryDelay;       is_extra = true;}
-			if (name == "HoverDelayShort")            {var_info = {ImGuiDataType_Float, 1}; pvar = &style.HoverDelayShort;            is_extra = true;}
-			if (name == "HoverDelayNormal")           {var_info = {ImGuiDataType_Float, 1}; pvar = &style.HoverDelayNormal;           is_extra = true;}
-			if (name == "HoverFlagsForTooltipMouse")  {var_info = {ImGuiDataType_S32,   1}; pvar = &style.HoverFlagsForTooltipMouse;  is_extra = true;}
-			if (name == "HoverFlagsForTooltipNav")    {var_info = {ImGuiDataType_S32,   1}; pvar = &style.HoverFlagsForTooltipNav;    is_extra = true;}
-			if (is_extra) {
-				std::getline(file, line);
-				continue; 
-			}
+			if (found) continue;
+			if (name == "WindowMenuButtonPosition")   {var_info = {ImGuiDataType_Float, 1}; pvar = &style.WindowMenuButtonPosition;   found = true;}
+			if (name == "TouchExtraPadding")          {var_info = {ImGuiDataType_Float, 2}; pvar = &style.TouchExtraPadding;          found = true;}
+			if (name == "ColumnsMinSpacing")          {var_info = {ImGuiDataType_Float, 1}; pvar = &style.ColumnsMinSpacing;          found = true;}
+			if (name == "LogSliderDeadzone")          {var_info = {ImGuiDataType_Float, 1}; pvar = &style.LogSliderDeadzone;          found = true;}
+			if (name == "TabMinWidthForCloseButton")  {var_info = {ImGuiDataType_Float, 1}; pvar = &style.TabMinWidthForCloseButton;  found = true;}
+			if (name == "ColorButtonPosition")        {var_info = {ImGuiDataType_S32,   1}; pvar = &style.ColorButtonPosition;        found = true;}
+			if (name == "DisplayWindowPadding")       {var_info = {ImGuiDataType_Float, 2}; pvar = &style.DisplayWindowPadding;       found = true;}
+			if (name == "DisplaySafeAreaPadding")     {var_info = {ImGuiDataType_Float, 2}; pvar = &style.DisplaySafeAreaPadding;     found = true;}
+			if (name == "MouseCursorScale")           {var_info = {ImGuiDataType_Float, 1}; pvar = &style.MouseCursorScale;           found = true;}
+			if (name == "AntiAliasedLines")           {var_info = {ImGuiDataType_Bool,  1}; pvar = &style.AntiAliasedLines;           found = true;}
+			if (name == "AntiAliasedLinesUseTex")     {var_info = {ImGuiDataType_Bool,  1}; pvar = &style.AntiAliasedLinesUseTex;     found = true;}
+			if (name == "AntiAliasedFill")            {var_info = {ImGuiDataType_Bool,  1}; pvar = &style.AntiAliasedFill;            found = true;}
+			if (name == "CurveTessellationTol")       {var_info = {ImGuiDataType_Float, 1}; pvar = &style.CurveTessellationTol;       found = true;}
+			if (name == "CircleTessellationMaxError") {var_info = {ImGuiDataType_Float, 1}; pvar = &style.CircleTessellationMaxError; found = true;}
+			if (name == "HoverStationaryDelay")       {var_info = {ImGuiDataType_Float, 1}; pvar = &style.HoverStationaryDelay;       found = true;}
+			if (name == "HoverDelayShort")            {var_info = {ImGuiDataType_Float, 1}; pvar = &style.HoverDelayShort;            found = true;}
+			if (name == "HoverDelayNormal")           {var_info = {ImGuiDataType_Float, 1}; pvar = &style.HoverDelayNormal;           found = true;}
+			if (name == "HoverFlagsForTooltipMouse")  {var_info = {ImGuiDataType_S32,   1}; pvar = &style.HoverFlagsForTooltipMouse;  found = true;}
+			if (name == "HoverFlagsForTooltipNav")    {var_info = {ImGuiDataType_S32,   1}; pvar = &style.HoverFlagsForTooltipNav;    found = true;}
+			if (found) continue;
 			for (int i = 0; i < ImGuiCol_COUNT; i++) {
 				if (name == ImGui::GetStyleColorName(i)) {
 					var_info.Type = ImGuiDataType_Float;
 					var_info.Count = 4;
 					pvar = &style.Colors[i];
+					found = 1;
+					break;
 				}
 			}
-			std::getline(file, line);
-			continue;
+			if (!found) {
+				LOG_WARN("Skipped unknown parameter [{}] in \"{}\" at line {}", name, filename, line_number);
+			}
 		} else {
 			bool success = false;
 			switch (var_info.Type) {
@@ -216,15 +210,15 @@ bool EditorContext::LoadStyle(const char* filename, ImGuiStyle& style) {
 			}
 			}
 			if (!success) {
-				LOG_WARN("Parameter {} skipped (unsupported count {})", name, var_info.Count);
+				LOG_WARN("Invalid value for parameter [{}]: \"{}\", expected {} value(s), skipping this parameter", name, line, var_info.Count);
 			}
 			var_info.Type = ImGuiDataType_COUNT;
-			std::getline(file, line);
-			continue;
 		}
-        
-    } while (std::getline(file, line));
+    }
 
+	if (var_info.Type != ImGuiDataType_COUNT) {
+		LOG_WARN("No value found for parameter [{}]: expected {} value(s), skipping this parameter", name, var_info.Count);
+	}
     file.close();
     return true;
 }
@@ -341,7 +335,11 @@ void EditorContext::StyleWindow() {
 			SaveStyle("style.ini", ImGui::GetStyle());
 		}
 		if (ImGui::Button("Load Style")) {
-			LoadStyle("style.ini", ImGui::GetStyle());
+			if (LoadStyle("style.ini", ImGui::GetStyle())) {
+				style = ImGui::GetStyle();
+			} else {
+				ImGui::GetStyle() = style;
+			}
 		}
 	}
 
@@ -401,39 +399,39 @@ void Editor::Finish() {
 
 inline const char* EditorContext::GetStyleVarName(ImGuiStyleVar idx) {
 	switch (idx) {
-	case ImGuiStyleVar_Alpha:                       return "Alpha";                       // float     Alpha
-	case ImGuiStyleVar_DisabledAlpha:               return "DisabledAlpha";               // float     DisabledAlpha
-	case ImGuiStyleVar_WindowPadding:               return "WindowPadding";               // ImVec2    WindowPadding
-	case ImGuiStyleVar_WindowRounding:              return "WindowRounding";              // float     WindowRounding
-	case ImGuiStyleVar_WindowBorderSize:            return "WindowBorderSize";            // float     WindowBorderSize
-	case ImGuiStyleVar_WindowMinSize:               return "WindowMinSize";               // ImVec2    WindowMinSize
-	case ImGuiStyleVar_WindowTitleAlign:            return "WindowTitleAlign";            // ImVec2    WindowTitleAlign
-	case ImGuiStyleVar_ChildRounding:               return "ChildRounding";               // float     ChildRounding
-	case ImGuiStyleVar_ChildBorderSize:             return "ChildBorderSize";             // float     ChildBorderSize
-	case ImGuiStyleVar_PopupRounding:               return "PopupRounding";               // float     PopupRounding
-	case ImGuiStyleVar_PopupBorderSize:             return "PopupBorderSize";             // float     PopupBorderSize
-	case ImGuiStyleVar_FramePadding:                return "FramePadding";                // ImVec2    FramePadding
-	case ImGuiStyleVar_FrameRounding:               return "FrameRounding";               // float     FrameRounding
-	case ImGuiStyleVar_FrameBorderSize:             return "FrameBorderSize";             // float     FrameBorderSize
-	case ImGuiStyleVar_ItemSpacing:                 return "ItemSpacing";                 // ImVec2    ItemSpacing
-	case ImGuiStyleVar_ItemInnerSpacing:            return "ItemInnerSpacing";            // ImVec2    ItemInnerSpacing
-	case ImGuiStyleVar_IndentSpacing:               return "IndentSpacing";               // float     IndentSpacing
-	case ImGuiStyleVar_CellPadding:                 return "CellPadding";                 // ImVec2    CellPadding
-	case ImGuiStyleVar_ScrollbarSize:               return "ScrollbarSize";               // float     ScrollbarSize
-	case ImGuiStyleVar_ScrollbarRounding:           return "ScrollbarRounding";           // float     ScrollbarRounding
-	case ImGuiStyleVar_GrabMinSize:                 return "GrabMinSize";                 // float     GrabMinSize
-	case ImGuiStyleVar_GrabRounding:                return "GrabRounding";                // float     GrabRounding
-	case ImGuiStyleVar_TabRounding:                 return "TabRounding";                 // float     TabRounding
-	case ImGuiStyleVar_TabBorderSize:               return "TabBorderSize";               // float     TabBorderSize
-	case ImGuiStyleVar_TabBarBorderSize:            return "TabBarBorderSize";            // float     TabBarBorderSize
-	case ImGuiStyleVar_TabBarOverlineSize:          return "TabBarOverlineSize";          // float     TabBarOverlineSize
-	case ImGuiStyleVar_TableAngledHeadersAngle:     return "TableAngledHeadersAngle";     // float     TableAngledHeadersAngle
-	case ImGuiStyleVar_TableAngledHeadersTextAlign: return "TableAngledHeadersTextAlign"; // ImVec2    TableAngledHeadersTextAlign
-	case ImGuiStyleVar_ButtonTextAlign:             return "ButtonTextAlign";             // ImVec2    ButtonTextAlign
-	case ImGuiStyleVar_SelectableTextAlign:         return "SelectableTextAlign";         // ImVec2    SelectableTextAlign
-	case ImGuiStyleVar_SeparatorTextBorderSize:     return "SeparatorTextBorderSize";     // float     SeparatorTextBorderSize
-	case ImGuiStyleVar_SeparatorTextAlign:          return "SeparatorTextAlign";          // ImVec2    SeparatorTextAlign
-	case ImGuiStyleVar_SeparatorTextPadding:        return "SeparatorTextPadding";        // ImVec2    SeparatorTextPadding
+	case ImGuiStyleVar_Alpha:                       return "Alpha";                       // float
+	case ImGuiStyleVar_DisabledAlpha:               return "DisabledAlpha";               // float
+	case ImGuiStyleVar_WindowPadding:               return "WindowPadding";               // ImVec2
+	case ImGuiStyleVar_WindowRounding:              return "WindowRounding";              // float
+	case ImGuiStyleVar_WindowBorderSize:            return "WindowBorderSize";            // float
+	case ImGuiStyleVar_WindowMinSize:               return "WindowMinSize";               // ImVec2
+	case ImGuiStyleVar_WindowTitleAlign:            return "WindowTitleAlign";            // ImVec2
+	case ImGuiStyleVar_ChildRounding:               return "ChildRounding";               // float
+	case ImGuiStyleVar_ChildBorderSize:             return "ChildBorderSize";             // float
+	case ImGuiStyleVar_PopupRounding:               return "PopupRounding";               // float
+	case ImGuiStyleVar_PopupBorderSize:             return "PopupBorderSize";             // float
+	case ImGuiStyleVar_FramePadding:                return "FramePadding";                // ImVec2
+	case ImGuiStyleVar_FrameRounding:               return "FrameRounding";               // float
+	case ImGuiStyleVar_FrameBorderSize:             return "FrameBorderSize";             // float
+	case ImGuiStyleVar_ItemSpacing:                 return "ItemSpacing";                 // ImVec2
+	case ImGuiStyleVar_ItemInnerSpacing:            return "ItemInnerSpacing";            // ImVec2
+	case ImGuiStyleVar_IndentSpacing:               return "IndentSpacing";               // float
+	case ImGuiStyleVar_CellPadding:                 return "CellPadding";                 // ImVec2
+	case ImGuiStyleVar_ScrollbarSize:               return "ScrollbarSize";               // float
+	case ImGuiStyleVar_ScrollbarRounding:           return "ScrollbarRounding";           // float
+	case ImGuiStyleVar_GrabMinSize:                 return "GrabMinSize";                 // float
+	case ImGuiStyleVar_GrabRounding:                return "GrabRounding";                // float
+	case ImGuiStyleVar_TabRounding:                 return "TabRounding";                 // float
+	case ImGuiStyleVar_TabBorderSize:               return "TabBorderSize";               // float
+	case ImGuiStyleVar_TabBarBorderSize:            return "TabBarBorderSize";            // float
+	case ImGuiStyleVar_TabBarOverlineSize:          return "TabBarOverlineSize";          // float
+	case ImGuiStyleVar_TableAngledHeadersAngle:     return "TableAngledHeadersAngle";     // float
+	case ImGuiStyleVar_TableAngledHeadersTextAlign: return "TableAngledHeadersTextAlign"; // ImVec2
+	case ImGuiStyleVar_ButtonTextAlign:             return "ButtonTextAlign";             // ImVec2
+	case ImGuiStyleVar_SelectableTextAlign:         return "SelectableTextAlign";         // ImVec2
+	case ImGuiStyleVar_SeparatorTextBorderSize:     return "SeparatorTextBorderSize";     // float
+	case ImGuiStyleVar_SeparatorTextAlign:          return "SeparatorTextAlign";          // ImVec2
+	case ImGuiStyleVar_SeparatorTextPadding:        return "SeparatorTextPadding";        // ImVec2
 	case ImGuiStyleVar_COUNT:                       return "COUNT";
 	default:
 		DEBUG_ASSERT(0, "Unknown ImGuiStyleVar");
