@@ -1,6 +1,6 @@
-#version 450
+#version 460
 #extension GL_GOOGLE_include_directive : enable
-#include "Opaque.cppm"
+#include "Opaque.h"
 
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inNormal;
@@ -14,5 +14,9 @@ layout(push_constant) uniform _constants {
 };
 
 void main() {
-	outColor = vec4(inPosition, 1.0); 
+	// vec3 col = vec3(inPosition);
+	// vec3 col = MATERIAL.emissiveFactor;
+	vec3 col = MATERIAL.baseColorFactor.xyz;
+	col = pow(col, vec3(1.0/2.2));
+	outColor = vec4(col, 1.0); 
 }

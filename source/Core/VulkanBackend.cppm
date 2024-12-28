@@ -1,9 +1,15 @@
+// #ifdef USE_MODULES
+// module;
+// #endif
+
+// #include "Bindless.h"
+
 #ifdef USE_MODULES
 export module VulkanBackend;
 import Lmath;
 import stl;
 import imgui; 
-
+import Types;
 #define _VKW_EXPORT export
 #else
 #pragma once
@@ -181,11 +187,11 @@ struct BufferDesc {
 struct Extent3D {
 	Extent3D () : width(0), height(0), depth(1) {}
 	Extent3D (uint32_t width, uint32_t height, uint32_t depth = 1) : width(width), height(height), depth(depth) {}
-	Extent3D (uvec2 const size) : width(size.x), height(size.y) {}
+	Extent3D (uvec2 const size) : width(size.x), height(size.y), depth(1) {}
 	Extent3D (uvec3 const size) : width(size.x), height(size.y), depth(size.z) {}
 	uint32_t width;
 	uint32_t height;
-	uint32_t depth = 1;
+	uint32_t depth;
 };
 
 struct Image {
@@ -263,7 +269,7 @@ struct ImageDesc {
 	Format format;
 	ImageUsageFlags usage;
 	SampleCount samples = SampleCount::_1;
-	SamplerDesc sampler;
+	SamplerDesc sampler = {};
 	std::string name = "";
 	uint32_t layers = 1;
 };
@@ -379,6 +385,33 @@ enum class VertexAttributeLayout {
 	Separate = 1,
 };
 
+enum class DynamicState {
+	ViewPort                    = 0,
+	Scissor                     = 1,
+	Line_Width                  = 2,
+	Depth_Bias                  = 3,
+	Blend_Constants             = 4,
+	Depth_Bounds                = 5,
+	Stencil_Compare_Mask        = 6,
+	Stencil_Write_Mask          = 7,
+	Stencil_Reference           = 8,
+	Cull_Mode                   = 1000267000,
+	Front_Face                  = 1000267001,
+	Primitive_Topology          = 1000267002,
+	ViewPort_With_Count         = 1000267003,
+	Scissor_With_Count          = 1000267004,
+	Vertex_Input_Binding_Stride = 1000267005,
+	Depth_Test_Enable           = 1000267006,
+	Depth_Write_Enable          = 1000267007,
+	Depth_Compare_Op            = 1000267008,
+	Depth_Bounds_Test_Enable    = 1000267009,
+	Stencil_Test_Enable         = 1000267010,
+	Stencil_Op                  = 1000267011,
+	Rasterizer_Discard_Enable   = 1000377001,
+	Depth_Bias_Enable           = 1000377002,
+	Primitive_Restart_Enable    = 1000377004,
+};
+
 struct PipelineDesc {
 	PipelinePoint point;
 	std::vector<Pipeline::Stage> stages;
@@ -391,6 +424,7 @@ struct PipelineDesc {
 	SampleCount samples = vkw::SampleCount::_1;
 	CullModeFlags cullMode = CullMode::None;
 	bool lineTopology = false;
+	std::span<const DynamicState> dynamicStates = {{DynamicState::ViewPort, DynamicState::Scissor}};
 };
 
 
@@ -554,6 +588,7 @@ struct Command {
 	// void BuildTLAS(TLAS& tlas, const std::vector<BLASInstance>& instances);
 
 	void Draw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance);
+	void DrawIndexed(uint32_t indexCount, uint32_t instanceCount, uint32_t firstIndex, int32_t vertexOffset, uint32_t firstInstance);
 	void BindVertexBuffer(Buffer const& vertexBuffer);
 	void BindIndexBuffer(Buffer const& indexBuffer);
 	void DrawMesh(Buffer const& vertexBuffer, Buffer const& indexBuffer, uint32_t indexCount);
@@ -566,8 +601,8 @@ struct Command {
 	void EndTimeStamp(int timeStampIndex);
 	void Begin();
 	void End();
-	void WaitQueue ();
-	void QueueSubmit (const SubmitInfo& submitInfo);
+	void WaitQueue();
+	void QueueSubmit(const SubmitInfo& submitInfo);
 };
 
 struct Device {
@@ -576,13 +611,22 @@ struct Device {
 	Image CreateImage(const ImageDesc& desc);
 	Pipeline CreatePipeline(const PipelineDesc& desc);
 
-	void CreateDefaultImages(Queue transferQueue);
+	void   CreateDefaultResources(Queue transferQueue);
 	Image& GetErrorImage();
+	uint   GetDefaultMaterialID();
+
+	Buffer& GetMaterialBuffer(uint materialID);
+	[[nodiscard]] uint CreateMaterialSlot();
+	void FreeMaterialSlot(uint materialID);
 
 	Queue GetQueue(QueueFlags flags);
 	Command& GetCommandBuffer(const Queue& queue);
-	void ResetStaging();
 	
+	void ResetStaging();
+	u8* GetStagingPtr();
+	u32& GetStagingOffset();
+	u32 GetStagingSize();	
+
 	void WaitQueue(Queue* queue);
 	void WaitIdle();
 

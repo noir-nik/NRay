@@ -16,7 +16,6 @@ export module Types;
 _TYPES_EXPORT using u8  = std::uint8_t;
 _TYPES_EXPORT using u16 = std::uint16_t;
 _TYPES_EXPORT using u32 = std::uint32_t;
-_TYPES_EXPORT using u32 = std::uint32_t;
 _TYPES_EXPORT using u64 = std::uint64_t;
 _TYPES_EXPORT using i8  = std::int8_t;
 _TYPES_EXPORT using i16 = std::int16_t;

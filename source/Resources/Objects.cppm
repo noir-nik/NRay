@@ -17,8 +17,6 @@ _OBJECTS_EXPORT
 namespace Objects {
 using namespace Lmath;
 
-
-
 struct Vertex {
 	vec3  position;
 	vec3  normal;
@@ -28,23 +26,16 @@ struct Vertex {
 };
 
 struct Primitive {
-	uint32_t indexCount;
-    uint32_t instanceCount;
-    uint32_t firstIndex;
-    int32_t  vertexOffset;
-    uint32_t firstInstance;
-	int materialID = 0;
+	uint32_t indexCount = 0;
+    uint32_t instanceCount = 1;
+    uint32_t firstIndex = 0;
+    int32_t  vertexOffset = 0;
+    uint32_t firstInstance = 0;
+	// uint materialBufferRID;
+	uint deviceMaterialID;
 };
 
 
-struct Mesh {
-	inline Mesh(std::string_view name = "") : name(name) {}
-	std::string name;
-	std::vector<uint> indices;
-	std::vector<Vertex> vertices;
-	std::vector<Primitive> primitives;
-	vkw::Buffer vertexBuffer;
-	vkw::Buffer indexBuffer;
-};
+
 
 } // namespace Objects

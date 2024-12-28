@@ -102,7 +102,7 @@ inline int4& operator += (int4& a, int b) { a.x += b; a.y += b; a.z += b; a.w +=
 inline int4& operator -= (int4& a, int b) { a.x -= b; a.y -= b; a.z -= b; a.w -= b;  return a; }
 
 inline void store (int* p, const int4 a_val)  { memcpy((void*)p, (void*)&a_val, sizeof(int)*4); }
-inline void load  (const int* p, int4& a_val) { memcpy((void*)&a_val, (void*)p, sizeof(int)*4); }
+inline void load  (int4& dst, const int* src) { memcpy((void*)&dst, (void*)src, sizeof(int)*4); }
 
 
 inline float2 operator+(const float2 a, const float2 b) { return float2{a.x + b.x, a.y + b.y}; }
@@ -139,7 +139,7 @@ inline float3 operator -(const float3 a) { return float3{-a.x, -a.y, -a.z}; }
 inline void store  (float* p, const float3 a_val) { memcpy((void*)p, (void*)&a_val, sizeof(float)*3); }
 inline void store_u(float* p, const float3 a_val) { memcpy((void*)p, (void*)&a_val, sizeof(float)*3); }  
 
-inline void load (const float* p, float3& a_val) { memcpy((void*)&a_val, (void*)p, sizeof(float)*3); }
+inline void load (float3& dst, const float* src) { memcpy((void*)&dst, (void*)src, sizeof(float)*3); }
 
 inline float3 min  (const float3 a, const float3 b) { return float3{min(a.x, b.x), min(a.y, b.y), min(a.z, b.z)}; }
 inline float3 max  (const float3 a, const float3 b) { return float3{max(a.x, b.x), max(a.y, b.y), max(a.z, b.z)}; }
@@ -194,10 +194,10 @@ inline float4& operator -= (float4& a, float b) { a.x -= b; a.y -= b; a.z -= b; 
 
 inline bool operator==(const float4 a, const float4 b) { return a.x == b.x && a.y == b.y && a.z == b.z && a.w == b.w; }
 
-inline void store  (float* p, const float4 a_val) { memcpy((void*)p, (void*)&a_val, sizeof(float)*4); }
-inline void store_u(float* p, const float4 a_val) { memcpy((void*)p, (void*)&a_val, sizeof(float)*4); }
+inline void store  (float* dst, const float4 src) { memcpy((void*)dst, (void*)&src, sizeof(float)*4); }
+inline void store_u(float* dst, const float4 src) { memcpy((void*)dst, (void*)&src, sizeof(float)*4); }
 
-inline void load(const float* p, float4& a_val) { memcpy((void*)&a_val, (void*)p, sizeof(float)*4); }
+inline void load(float4& dst, const float* src) { memcpy((void*)&dst, (void*)src, sizeof(float)*4); }
 
 inline float4 min  (const float4 a, const float4 b) { return float4{min(a.x, b.x), min(a.y, b.y), min(a.z, b.z), min(a.w, b.w)}; }
 inline float4 max  (const float4 a, const float4 b) { return float4{max(a.x, b.x), max(a.y, b.y), max(a.z, b.z), max(a.w, b.w)}; }
@@ -227,6 +227,13 @@ inline uint packRGBA8(float4 const& v) {
 	return res.x | (res.y << 8) | (res.z << 16) | (res.w << 24);
 }
 
+inline float4 unpackRGBA8(uint rgba) { 
+	uvec4 res = uvec4(rgba);
+	return float4(res.x/255.0f, res.y/255.0f, res.z/255.0f, res.w/255.0f);
+}
+
+template<typename T, typename Ret>
+inline Ret operator|(T const& vec, Ret (*func)(T const&)) { return func(vec); }
 
 inline void mat4_colmajor_mul_vec4(float* __restrict RES, const float* __restrict B, const float* __restrict V)
 {
@@ -680,7 +687,6 @@ inline void decompose(float4x4 const& m, float3& translation, float3& rotation, 
         rotation.z = 0;
     }
 }
-
 
 inline float4x4 operator|(const float4x4& m, float4x4(*func)(const float4x4&)) {
 	return func(m);

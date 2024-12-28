@@ -40,7 +40,6 @@ import imgui_impl_vulkan;
 #include <array>
 #endif
 
-#define USE_VLA
 #include "Macros.h"
 
 #define GLSL_VALIDATOR "glslangValidator"
@@ -161,11 +160,11 @@ struct Context {
 	// std::shared_ptr<PhysicalDevice> activePhysicalDevice;
 	// std::shared_ptr<DeviceResource> activeDevice;
 
-	const uint32_t timeStampPerPool = 64;
+	const u32 timeStampPerPool = 64;
 
 	// bool requestSeparate[QueueFlagBits::Count] = {false};
 	
-	// const uint32_t initialScratchBufferSize = 64*1024*1024;
+	// const u32 initialScratchBufferSize = 64*1024*1024;
 	// Buffer asScratchBuffer;
 	// VkDeviceAddress asScratchAddress;
 	// Buffer dummyVertexBuffer;
@@ -192,7 +191,7 @@ struct Instance: DeleteCopyDeleteMove {
 	std::string applicationName = "nRay";
 	std::string engineName = "nRay Engine";
 
-	uint32_t apiVersion;
+	u32 apiVersion;
 
 	std::vector<bool> activeLayers; // Available layers
 	std::vector<const char*> activeLayersNames;
@@ -243,13 +242,13 @@ struct PhysicalDevice: DeleteCopyDeleteMove {
 	// @param avoidIfPossible: vector of pairs (flags, priority to avoid)
 	// @param surfaceToSupport: surface to support (strict)
 	// @return best queue family index or QUEUE_NOT_FOUND if strict requirements not met
-	uint32_t GetQueueFamilyIndex(VkQueueFlags desiredFlags, VkQueueFlags undesiredFlags, const std::span<const std::pair<VkQueueFlags, float>>& avoidIfPossible = {}, VkSurfaceKHR surfaceToSupport = VK_NULL_HANDLE, const std::span<const uint32_t>& filledUpFamilies = {});
+	u32 GetQueueFamilyIndex(VkQueueFlags desiredFlags, VkQueueFlags undesiredFlags, const std::span<const std::pair<VkQueueFlags, float>>& avoidIfPossible = {}, VkSurfaceKHR surfaceToSupport = VK_NULL_HANDLE, const std::span<const u32>& filledUpFamilies = {});
 	std::vector<std::string_view> GetSupportedExtensions(const std::span<const char*>& desiredExtensions);
 };
 
 struct QueueResource {
-	uint32_t familyIndex = ~0;
-	uint32_t index = 0;
+	u32 familyIndex = ~0;
+	u32 index = 0;
 	QueueFlags flags;
 	VkQueue handle = VK_NULL_HANDLE;
 	Command command {};
@@ -271,9 +270,9 @@ struct DeviceResource: DeleteCopyDeleteMove {
 	VmaAllocator vmaAllocator;
 	PhysicalDevice* physicalDevice = nullptr;
 
-	std::unordered_map<uint32_t, std::shared_ptr<QueueResource>> uniqueQueues;
+	std::unordered_map<u32, std::shared_ptr<QueueResource>> uniqueQueues;
 
-	// std::unordered_map<uint32_t, QueueResource> uniqueQueues;
+	// std::unordered_map<u32, QueueResource> uniqueQueues;
 	// Owns all command resources outside swapchains
 	// Do not resize after creation!
 	// std::vector<Command> queuesCommands;
@@ -294,7 +293,15 @@ struct DeviceResource: DeleteCopyDeleteMove {
 	std::vector<int32_t> availableTLASRID;
 	std::vector<int32_t> availableStorageImageRID;
 
+	uint defaultMaterialID;
+	std::vector<Buffer> materialBuffers; // RID -> Buffer
+	std::vector<uint> availableMaterialIDs; // <RID, materialID>
+
 	Image errorImage;
+	Image blackImage;
+	Image grayImage;
+	Image whiteImage;
+
 
 	struct SamplerDescHash {
 		size_t operator()(const SamplerDesc& desc) const {
@@ -436,9 +443,9 @@ struct DeviceResource: DeleteCopyDeleteMove {
 
 	} pipelineLibrary;
 	
-	const uint32_t stagingBufferSize = 32 * 1024 * 1024;
-	uint8_t* stagingCpu = nullptr;
-	uint32_t stagingOffset = 0;
+	const u32 stagingBufferSize = 32 * 1024 * 1024;
+	u8* stagingCpu = nullptr;
+	u32 stagingOffset = 0;
 	Buffer staging;
 	
 	std::vector<const char*> requiredExtensions = { // Physical DeviceResource Extensions
@@ -495,9 +502,11 @@ struct DeviceResource: DeleteCopyDeleteMove {
 			vkDestroyPipeline(handle, pipeline, _ctx.allocator);
 		}
 
-		errorImage = {};
 		staging = {};
 		stagingCpu = nullptr;
+		errorImage = {};
+		materialBuffers.clear();
+
 
 		DestroyBindlessDescriptorResources();
 		for (auto& [_, sampler] : samplers) {
@@ -520,7 +529,7 @@ struct CommandResource {
 	DeviceResource* device = nullptr;
 	VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
 	// DeviceResource* device = nullptr;
-	// uint32_t queueFamily = ~0;
+	// u32 queueFamily = ~0;
 	QueueResource* queue = nullptr;
 	// PipelineResource* currentPipeline = nullptr;
 
@@ -563,8 +572,8 @@ struct SwapChainResource: DeleteCopyDeleteMove {
 	VkPresentModeKHR presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
 	VkExtent2D extent;
 
-	uint32_t framesInFlight = 2;
-	uint32_t additionalImages = 0;
+	u32 framesInFlight = 2;
+	u32 additionalImages = 0;
 
 	void CreateSurfaceFormats();
 
@@ -574,10 +583,10 @@ struct SwapChainResource: DeleteCopyDeleteMove {
 	void CreateImGui(GLFWwindow* window, SampleCount sampleCount);
 	void DestroyImGui();
 
-	inline VkSemaphore GetImageAvailableSemaphore(uint32_t currentFrame) { return imageAvailableSemaphores[currentFrame]; }
-	inline VkSemaphore GetRenderFinishedSemaphore(uint32_t currentFrame) { return renderFinishedSemaphores[currentFrame]; }
+	inline VkSemaphore GetImageAvailableSemaphore(u32 currentFrame) { return imageAvailableSemaphores[currentFrame]; }
+	inline VkSemaphore GetRenderFinishedSemaphore(u32 currentFrame) { return renderFinishedSemaphores[currentFrame]; }
 	bool SupportFormat(VkFormat format, VkImageTiling tiling, VkFormatFeatureFlags features);
-	void ChooseExtent(uint32_t width, uint32_t height);
+	void ChooseExtent(u32 width, u32 height);
 	void ChoosePresentMode();
 	void ChooseSurfaceFormat();
 };
@@ -586,8 +595,8 @@ struct SwapChainResource: DeleteCopyDeleteMove {
 struct Resource {
 	DeviceResource* device;
 	std::string name;
-	int32_t rid = Null;
-	static inline constexpr int32_t Null = ~0;
+	u32 rid = Null;
+	static inline constexpr u32 Null = ~0;
 	Resource(DeviceResource* device, const std::string& name = "") : device(device), name(name) {}
 	virtual ~Resource() = default;
 };
@@ -660,19 +669,19 @@ struct PipelineResource : Resource {
 
 
 
-uint32_t Buffer::RID() {
-	DEBUG_ASSERT(resource->rid != -1, "Invalid buffer rid");
-	return uint32_t(resource->rid);
+u32 Buffer::RID() {
+	DEBUG_ASSERT(resource->rid != Resource::Null, "Invalid buffer rid");
+	return resource->rid;
 }
 
-// uint32_t TLAS::RID() {
-//     DEBUG_ASSERT(resource->rid != -1, "Invalid tlas rid");
-//     return uint32_t(resource->rid);
+// u32 TLAS::RID() {
+//     DEBUG_ASSERT(resource->rid != Resource::Null, "Invalid tlas rid");
+//     return resource->rid;
 // }
 
-uint32_t Image::RID() {
-	DEBUG_ASSERT(resource->rid != -1, "Invalid image rid");
-	return uint32_t(resource->rid);
+u32 Image::RID() {
+	DEBUG_ASSERT(resource->rid != Resource::Null, "Invalid image rid");
+	return resource->rid;
 }
 
 
@@ -687,7 +696,7 @@ Device CreateDevice(const std::span<Queue*> queues) {
 	auto uid = UIDGenerator::Next();
 	Device device;
 	device.resource = std::make_shared<DeviceResource>(uid);
-	[[maybe_unused]]auto res = _ctx.devices.try_emplace(uid, device.resource);
+	_ctx.devices[uid] = device.resource;
 	auto& resource = *device.resource;
 	resource.Create(queues);
 	for (auto& [key, q]: resource.uniqueQueues) {
@@ -696,6 +705,20 @@ Device CreateDevice(const std::span<Queue*> queues) {
 	resource.CreateBindlessDescriptorResources();
 	resource.staging = device.CreateBuffer({resource.stagingBufferSize, BufferUsage::TransferSrc, Memory::CPU, "StagingBuffer[" + std::to_string(uid) + "]"});
 	resource.stagingCpu = (uint8_t*)resource.staging.resource->allocation->GetMappedData();
+
+	auto materialBuffer = device.CreateBuffer({
+		MATERIAL_BUFFER_CAPACITY * sizeof(GPUMaterial), BufferUsage::Storage | BufferUsage::TransferDst, Memory::GPU, "Materials[" + std::to_string(uid) + "]"
+	});
+	// auto rid = materialBuffer.RID();
+	// resource.materialBuffers[rid] = materialBuffer;
+	resource.materialBuffers.push_back(materialBuffer);
+
+	resource.availableMaterialIDs.resize(MATERIAL_BUFFER_CAPACITY * resource.materialBuffers.size());
+	
+	for (uint idx = MATERIAL_BUFFER_CAPACITY; auto& id : resource.availableMaterialIDs) {
+		id = --idx;
+	}
+	
 	return device;
 }
 
@@ -718,12 +741,24 @@ void Device::UnmapBuffer(Buffer& buffer) {
 	vmaUnmapMemory(resource->vmaAllocator, buffer.resource->allocation);
 }
 
-Command& Device::GetCommandBuffer(const Queue& queue){
+Command& Device::GetCommandBuffer(const Queue& queue) {
 	return queue.resource->command;
 }
 
-void Device::ResetStaging(){
+void Device::ResetStaging() {
 	resource->stagingOffset = 0;
+}
+
+u8* Device::GetStagingPtr() {
+	return resource->stagingCpu + resource->stagingOffset;
+}
+
+u32& Device::GetStagingOffset() {
+	return resource->stagingOffset;
+}
+
+u32 Device::GetStagingSize() {
+	return resource->stagingBufferSize;
 }
 
 Command& Queue::GetCommandBuffer() {
@@ -746,7 +781,7 @@ Queue Device::GetQueue(QueueFlags flags){
 
 Buffer Device::CreateBuffer(const BufferDesc& desc) {
 	BufferUsageFlags usage = desc.usage;
-	uint32_t size = desc.size;
+	u32 size = desc.size;
 
 	if (usage & BufferUsage::Vertex) {
 		usage |= BufferUsage::TransferDst;
@@ -985,12 +1020,13 @@ Image Device::CreateImage(const ImageDesc& desc) {
 	return image;
 }
 
-void Device::CreateDefaultImages(Queue transferQueue){
-	constexpr int nullImageSize = 16;
+void Device::CreateDefaultResources(Queue transferQueue) {
+	// Error Texture
+	constexpr int errorImageSize = 16;
 	auto& errorImage = GetErrorImage();
 	
 	errorImage = CreateImage({
-		.extent = {nullImageSize, nullImageSize},
+		.extent = {errorImageSize, errorImageSize},
 		.format = vkw::Format::RGBA8_UNORM,
 		.usage = vkw::ImageUsage::Sampled | vkw::ImageUsage::TransferDst,
 		.sampler = {vkw::Filter::Nearest, vkw::Filter::Nearest, vkw::MipmapMode::Nearest},
@@ -999,26 +1035,65 @@ void Device::CreateDefaultImages(Queue transferQueue){
 
 	LOG_INFO("Created null image {}", errorImage.RID());
 
-	uint32_t magenta = packRGBA8(vec4(1, 0, 1, 1));
-	uint32_t black = packRGBA8(vec4(0, 0, 0, 1));
-	std::array<uint32_t, nullImageSize * nullImageSize> pixels;
-	for (int x = 0; x < nullImageSize; ++x) {
-		for (int y = 0; y < nullImageSize; ++y) {
-			pixels[x * nullImageSize + y] = ((x % 2) ^ (y % 2)) ? magenta : black;
+	u32 magenta = packRGBA8({1, 0, 1, 1});
+	u32 black = packRGBA8({0, 0, 0, 1});
+	std::array<u32, errorImageSize * errorImageSize> errorImagePixels;
+	for (int x = 0; x < errorImageSize; ++x) {
+		for (int y = 0; y < errorImageSize; ++y) {
+			errorImagePixels[x * errorImageSize + y] = ((x % 2) ^ (y % 2)) ? magenta : black;
 		}
 	}
 
+	// Default Material
+	GPUMaterial defaultMaterial {
+		.baseColorFactor  = {1.0f, 1.0f, 1.0f, 1.0f},
+		.emissiveFactor   = {1.0f, 1.0f, 1.0f},
+		// .emissiveColor    = {1.0f, 1.0f, 1.0f},
+		// .emissiveStrength = 0.0f,
+		.metallicFactor   = 0.0f,
+		.roughnessFactor  = 0.5f,
+		.baseColorTexture = TEXTURE_UNDEFINED,
+		.metallicRoughnessTexture = TEXTURE_UNDEFINED,
+		.normalTexture    = TEXTURE_UNDEFINED,
+		.occlusionTexture = TEXTURE_UNDEFINED,
+		.emissiveTexture  = TEXTURE_UNDEFINED,
+	};
+
+	
+	resource->defaultMaterialID = CreateMaterialSlot();
+
 	auto cmd = GetCommandBuffer(transferQueue);
 	cmd.Begin();
+	// Error Image
 	cmd.Barrier(errorImage, {vkw::ImageLayout::TransferDst});
-	cmd.Copy(errorImage, &pixels[0], pixels.size() * sizeof(pixels[0]));
+	cmd.Copy(errorImage, &errorImagePixels[0], errorImagePixels.size() * sizeof(errorImagePixels[0]));
+	// Default Material
+	cmd.Copy(GetMaterialBuffer(resource->defaultMaterialID), &defaultMaterial, sizeof(defaultMaterial), sizeof(defaultMaterial) * resource->defaultMaterialID);
 	cmd.End();
 	cmd.QueueSubmit({});
 }
 
 
-Image& Device::GetErrorImage(){
+Image& Device::GetErrorImage() {
 	return resource->errorImage;
+}
+
+uint Device::GetDefaultMaterialID() {
+	return resource->defaultMaterialID;
+}
+
+uint Device::CreateMaterialSlot() {
+	auto id = resource->availableMaterialIDs.back();
+	resource->availableMaterialIDs.pop_back();
+	return id;
+}
+
+void Device::FreeMaterialSlot(uint materialID) {
+	resource->availableMaterialIDs.push_back(materialID);
+}
+
+Buffer& Device::GetMaterialBuffer(uint materialID) {
+	return resource->materialBuffers[materialID / MATERIAL_BUFFER_CAPACITY];
 }
 
 void Command::Dispatch(const uvec3& groups) {
@@ -1092,7 +1167,7 @@ void PipelineResource::CreatePipelineLayout(const std::span<const VkDescriptorSe
 	};
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{
 		.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		.setLayoutCount         = (uint32_t)(descriptorLayouts.size()),
+		.setLayoutCount         = (u32)(descriptorLayouts.size()),
 		.pSetLayouts            = descriptorLayouts.data(),
 		.pushConstantRangeCount = 1,
 		.pPushConstantRanges    = &pushConstant,
@@ -1176,7 +1251,7 @@ void DeviceResource::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipe
 		VkShaderModuleCreateInfo createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
 		createInfo.codeSize = bytes.size();
-		createInfo.pCode = (const uint32_t*)(bytes.data());
+		createInfo.pCode = (const u32*)(bytes.data());
 		auto result = vkCreateShaderModule(handle, &createInfo, _ctx.allocator, &shaderModules[i]);
 		DEBUG_VK(result, "Failed to create shader module!");
 		ASSERT(result == VK_SUCCESS, "Failed to create shader module!");
@@ -1189,27 +1264,6 @@ void DeviceResource::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipe
 		};
 		i++;
 	}
-
-	// std::vector<VkDescriptorSetLayout> layouts;
-	// layouts.push_back(bindlessDescriptorLayout);
-	// // layouts.push_back(descriptorSetLayout);
-
-	// // TODO: opt, specify each time, but keep compatible(same) for all pipeline layouts
-	// VkPushConstantRange pushConstant{};
-	// pushConstant.offset = 0;
-	// pushConstant.size = physicalDevice->physicalProperties2.properties.limits.maxPushConstantsSize;
-	// pushConstant.stageFlags = VK_SHADER_STAGE_ALL;
-
-	// VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
-	// pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	// pipelineLayoutInfo.setLayoutCount = layouts.size();
-	// pipelineLayoutInfo.pSetLayouts = layouts.data();
-	// pipelineLayoutInfo.pushConstantRangeCount = 1;
-	// pipelineLayoutInfo.pPushConstantRanges = &pushConstant;
-
-	// auto vkRes = vkCreatePipelineLayout(handle, &pipelineLayoutInfo, _ctx.allocator, &pipeline.resource->layout);
-	// DEBUG_VK(vkRes, "Failed to create pipeline layout!");
-	// ASSERT(vkRes == VK_SUCCESS, "Failed to create pipeline layout!");
 
 	if (desc.point == PipelinePoint::Compute) {
 		ASSERT(shaderStages.size() == 1, "Compute pipeline only support 1 stage.");
@@ -1243,7 +1297,6 @@ void DeviceResource::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipe
 			.lineWidth               = 1.0f, // line thickness in terms of number of fragments
 		};
 		
-
 		VkPipelineMultisampleStateCreateInfo multisampleState = {
 			.sType                 = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
 			.rasterizationSamples  = (VkSampleCountFlagBits)std::min(desc.samples, physicalDevice->maxSamples),
@@ -1269,10 +1322,10 @@ void DeviceResource::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipe
 
 
 		VLA(VkVertexInputAttributeDescription, attributeDescs, desc.vertexAttributes.size());
-		uint32_t attributeSize = 0;
+		u32 attributeSize = 0;
 		for (size_t i = 0; auto& format: desc.vertexAttributes) {
 			attributeDescs[i++] = VkVertexInputAttributeDescription{
-				.location = static_cast<uint32_t>(i),
+				.location = static_cast<u32>(i),
 				.binding = 0,
 				.format = (VkFormat)format,
 				.offset = attributeSize
@@ -1295,13 +1348,8 @@ void DeviceResource::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipe
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
 			.vertexBindingDescriptionCount = 1,
 			.pVertexBindingDescriptions = &bindingDescription,
-			.vertexAttributeDescriptionCount = (uint32_t)(attributeDescs.size()),
+			.vertexAttributeDescriptionCount = (u32)(attributeDescs.size()),
 			.pVertexAttributeDescriptions = attributeDescs.data(),
-		};
-
-		std::vector<VkDynamicState> dynamicStates = {
-			VK_DYNAMIC_STATE_VIEWPORT,
-			VK_DYNAMIC_STATE_SCISSOR
 		};
 		
 		// define the type of input of our pipeline
@@ -1311,11 +1359,11 @@ void DeviceResource::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipe
 			// with this parameter true we can break up lines and triangles in _STRIP topology modes
 			.primitiveRestartEnable = VK_FALSE,
 		};
-
+		
 		VkPipelineDynamicStateCreateInfo dynamicInfo{
 			.sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-			.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()),
-			.pDynamicStates    = dynamicStates.data(),
+			.dynamicStateCount = static_cast<u32>(desc.dynamicStates.size()),
+			.pDynamicStates    = reinterpret_cast<const VkDynamicState*>(desc.dynamicStates.data()),
 		};
 
 		VkPipelineViewportStateCreateInfo viewportState{
@@ -1329,7 +1377,7 @@ void DeviceResource::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipe
 		VkPipelineRenderingCreateInfoKHR pipelineRendering{
 			.sType                   = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR,
 			.viewMask                = 0,
-			.colorAttachmentCount    = static_cast<uint32_t>(desc.colorFormats.size()),
+			.colorAttachmentCount    = static_cast<u32>(desc.colorFormats.size()),
 			.pColorAttachmentFormats = reinterpret_cast<const VkFormat*>(desc.colorFormats.data()),
 			.depthAttachmentFormat   = desc.useDepth ? static_cast<VkFormat>(desc.depthFormat) : VK_FORMAT_UNDEFINED,
 			.stencilAttachmentFormat = VK_FORMAT_UNDEFINED,
@@ -1349,7 +1397,7 @@ void DeviceResource::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipe
 			.sType           = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
 			.logicOpEnable   = VK_FALSE,
 			.logicOp         = VK_LOGIC_OP_COPY,
-			.attachmentCount = static_cast<uint32_t>(blendAttachments.size()),
+			.attachmentCount = static_cast<u32>(blendAttachments.size()),
 			.pAttachments    = blendAttachments.data(),
 			.blendConstants  = {0.0f, 0.0f, 0.0f, 0.0f},
 		};
@@ -1357,7 +1405,7 @@ void DeviceResource::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipe
 		VkGraphicsPipelineCreateInfo pipelineInfo{
 			.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
 			.pNext               = &pipelineRendering,
-			.stageCount          = static_cast<uint32_t>(shaderStages.size()),
+			.stageCount          = static_cast<u32>(shaderStages.size()),
 			.pStages             = shaderStages.data(),
 			.pVertexInputState   = &vertexInputInfo,
 			.pInputAssemblyState = &inputAssembly,
@@ -1395,10 +1443,10 @@ void DeviceResource::PipelineLibrary::CreateVertexInputInterface(VertexInputInfo
 	};
 
 	VLA(VkVertexInputAttributeDescription, attributeDescs, info.vertexAttributes.size());
-	uint32_t attributeSize = 0;
+	u32 attributeSize = 0;
 	for (size_t i = 0; auto& format: info.vertexAttributes) {
 		attributeDescs[i++] = VkVertexInputAttributeDescription{
-			.location = static_cast<uint32_t>(i),
+			.location = static_cast<u32>(i),
 			.binding = 0,
 			.format = (VkFormat)format,
 			.offset = attributeSize
@@ -1421,7 +1469,7 @@ void DeviceResource::PipelineLibrary::CreateVertexInputInterface(VertexInputInfo
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
 		.vertexBindingDescriptionCount = 1,
 		.pVertexBindingDescriptions = &bindingDescription,
-		.vertexAttributeDescriptionCount = (uint32_t)(attributeDescs.size()),
+		.vertexAttributeDescriptionCount = (u32)(attributeDescs.size()),
 		.pVertexAttributeDescriptions = attributeDescs.data(),
 	};
 
@@ -1457,7 +1505,7 @@ void DeviceResource::PipelineLibrary::CreatePreRasterizationShaders(PreRasteriza
 
 	VkPipelineDynamicStateCreateInfo dynamicInfo{
 		.sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-		.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()),
+		.dynamicStateCount = static_cast<u32>(dynamicStates.size()),
 		.pDynamicStates    = dynamicStates.data(),
 	};
 
@@ -1496,7 +1544,7 @@ void DeviceResource::PipelineLibrary::CreatePreRasterizationShaders(PreRasteriza
 	// 	shaderModuleInfos.emplace_back(VkShaderModuleCreateInfo{
 	// 		.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
 	// 		.codeSize =  bytes.size(),
-	// 		.pCode    = (const uint32_t*)bytes.data()
+	// 		.pCode    = (const u32*)bytes.data()
 	// 	});
 
 	// 	shaderStages.emplace_back(VkPipelineShaderStageCreateInfo {
@@ -1519,7 +1567,7 @@ void DeviceResource::PipelineLibrary::CreatePreRasterizationShaders(PreRasteriza
 		shaderModuleInfos[i] = VkShaderModuleCreateInfo{
 			.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
 			.codeSize = bytes[i].size(),
-			.pCode    = (const uint32_t*)bytes[i].data()
+			.pCode    = (const u32*)bytes[i].data()
 		};
 
 		shaderStages[i] = VkPipelineShaderStageCreateInfo {
@@ -1535,7 +1583,7 @@ void DeviceResource::PipelineLibrary::CreatePreRasterizationShaders(PreRasteriza
 		.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
 		.pNext               = &libraryInfo,
 		.flags               = VK_PIPELINE_CREATE_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT,
-		.stageCount          = static_cast<uint32_t>(shaderStages.size()),
+		.stageCount          = static_cast<u32>(shaderStages.size()),
 		.pStages             = shaderStages.data(),
 		.pViewportState      = &viewportState,
 		.pRasterizationState = &rasterizationState,
@@ -1589,7 +1637,7 @@ void DeviceResource::PipelineLibrary::CreateFragmentShader(FragmentShaderInfo in
 		shaderModuleInfos[i] = VkShaderModuleCreateInfo{
 			.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
 			.codeSize = bytes[i].size(),
-			.pCode    = (const uint32_t*)bytes[i].data()
+			.pCode    = (const u32*)bytes[i].data()
 		};
 
 		shaderStages[i] = VkPipelineShaderStageCreateInfo {
@@ -1605,7 +1653,7 @@ void DeviceResource::PipelineLibrary::CreateFragmentShader(FragmentShaderInfo in
 		.sType              = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
 		.pNext              = &libraryInfo,
 		.flags              = VK_PIPELINE_CREATE_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT,
-		.stageCount          = static_cast<uint32_t>(shaderStages.size()),
+		.stageCount          = static_cast<u32>(shaderStages.size()),
 		.pStages             = shaderStages.data(),
 		.pMultisampleState  = &multisampleState,
 		.pDepthStencilState = &depthStencilState,
@@ -1633,7 +1681,7 @@ void DeviceResource::PipelineLibrary::CreateFragmentOutputInterface(FragmentOutp
 		.sType           = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
 		.logicOpEnable   = VK_FALSE,
 		.logicOp         = VK_LOGIC_OP_COPY,
-		.attachmentCount = static_cast<uint32_t>(blendAttachments.size()),
+		.attachmentCount = static_cast<u32>(blendAttachments.size()),
 		.pAttachments    = blendAttachments.data(),
 		.blendConstants  = {0.0f, 0.0f, 0.0f, 0.0f},
 	};
@@ -1652,7 +1700,7 @@ void DeviceResource::PipelineLibrary::CreateFragmentOutputInterface(FragmentOutp
 		.sType                   = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR,
 		.pNext                   = &libraryInfo,
 		.viewMask                = 0,
-		.colorAttachmentCount    = static_cast<uint32_t>(info.colorFormats.size()),
+		.colorAttachmentCount    = static_cast<u32>(info.colorFormats.size()),
 		.pColorAttachmentFormats = (VkFormat*)info.colorFormats.data(),
 		.depthAttachmentFormat   = info.useDepth ? (VkFormat)info.depthFormat : VK_FORMAT_UNDEFINED,
 		.stencilAttachmentFormat = VK_FORMAT_UNDEFINED,
@@ -1679,7 +1727,7 @@ VkPipeline DeviceResource::PipelineLibrary::LinkPipeline(const std::array<VkPipe
 	// Link the library parts into a graphics pipeline
 	VkPipelineLibraryCreateInfoKHR linkingInfo {
 		.sType        = VK_STRUCTURE_TYPE_PIPELINE_LIBRARY_CREATE_INFO_KHR,
-		.libraryCount = static_cast<uint32_t>(pipelines.size()),
+		.libraryCount = static_cast<u32>(pipelines.size()),
 		.pLibraries   = pipelines.data(),
 	};
 
@@ -1762,7 +1810,7 @@ void Command::BeginRendering(const RenderingInfo& info) {
 		},
 		.layerCount = info.layerCount,
 		.viewMask = 0,
-		.colorAttachmentCount = static_cast<uint32_t>(colorAttachInfos.size()),
+		.colorAttachmentCount = static_cast<u32>(colorAttachInfos.size()),
 		.pColorAttachments = colorAttachInfos.data(),
 		.pDepthAttachment = nullptr,
 		.pStencilAttachment = nullptr,
@@ -1806,8 +1854,8 @@ void Command::SetScissor(ivec4 const& scissor) {
 	VkRect2D vkScissor {
 		.offset = { scissor.x, scissor.y },
 		.extent = {
-			.width  = static_cast<uint32_t>(scissor.z),
-			.height = static_cast<uint32_t>(scissor.w)
+			.width  = static_cast<u32>(scissor.z),
+			.height = static_cast<u32>(scissor.w)
 		}
 	};
 	vkCmdSetScissor(resource->buffer, 0, 1, &vkScissor);
@@ -1830,12 +1878,17 @@ void Command::EndRendering() {
 // 	vkw::Barrier(_ctx.GetCurrentSwapChainImage(), vkw::ImageLayoutPresent);
 // }
 
-void Command::Draw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex, uint32_t firstInstance) {
+void Command::Draw(u32 vertexCount, u32 instanceCount, u32 firstVertex, u32 firstInstance) {
 	// DEBUG_TRACE("CmdDraw({},{},{},{})", vertexCount, instanceCount, firstVertex, firstInstance);
 	vkCmdDraw(resource->buffer, vertexCount, instanceCount, firstVertex, firstInstance);
 }
 
-void Command::DrawMesh(Buffer const& vertexBuffer, Buffer const& indexBuffer, uint32_t indexCount) {
+void Command::DrawIndexed(u32 indexCount, u32 instanceCount, u32 firstIndex, int32_t vertexOffset, u32 firstInstance) {
+	// DEBUG_TRACE("CmdDrawIndexed({},{},{},{},{})", indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
+	vkCmdDrawIndexed(resource->buffer, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
+}
+
+void Command::DrawMesh(Buffer const& vertexBuffer, Buffer const& indexBuffer, u32 indexCount) {
 	VkDeviceSize offsets[] = { 0 };
 	vkCmdBindVertexBuffers(resource->buffer, 0, 1, &vertexBuffer.resource->buffer, offsets);
 	vkCmdBindIndexBuffer(resource->buffer, indexBuffer.resource->buffer, 0, VK_INDEX_TYPE_UINT32);
@@ -1857,7 +1910,7 @@ void Command::BindIndexBuffer(Buffer const& indexBuffer) {
 	vkCmdBindIndexBuffer(resource->buffer, indexBuffer.resource->buffer, 0, VK_INDEX_TYPE_UINT32);
 }
 
-void Command::DrawLineStrip(Buffer const& pointsBuffer, uint32_t firstPoint, uint32_t pointCount, float thickness) {
+void Command::DrawLineStrip(Buffer const& pointsBuffer, u32 firstPoint, u32 pointCount, float thickness) {
 	VkDeviceSize offsets[] = { 0 };
 	vkCmdSetLineWidth(resource->buffer, thickness);
 	vkCmdBindVertexBuffers(resource->buffer, 0, 1, &pointsBuffer.resource->buffer, offsets);
@@ -1901,7 +1954,7 @@ void Command::BindPipeline(Pipeline& pipeline) {
 	// resource->currentPipeline = pipeline.resource.get();
 }
 
-void Command::PushConstants(const Pipeline& pipeline, const void* data, uint32_t size) {
+void Command::PushConstants(const Pipeline& pipeline, const void* data, u32 size) {
 	vkCmdPushConstants(resource->buffer, pipeline.resource->layout, VK_SHADER_STAGE_ALL, 0, size, data);
 }
 
@@ -1968,11 +2021,11 @@ void Command::QueueSubmit(const SubmitInfo& submitInfo) {
 
 	VkSubmitInfo2 info {
 		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
-		.waitSemaphoreInfoCount = static_cast<uint32_t>(submitInfo.waitSemaphore ? 1 : 0),
+		.waitSemaphoreInfoCount = static_cast<u32>(submitInfo.waitSemaphore ? 1 : 0),
 		.pWaitSemaphoreInfos = &waitInfo,
 		.commandBufferInfoCount = 1,
 		.pCommandBufferInfos = &cmdInfo,
-		.signalSemaphoreInfoCount = static_cast<uint32_t>(submitInfo.signalSemaphore ? 1 : 0),
+		.signalSemaphoreInfoCount = static_cast<u32>(submitInfo.signalSemaphore ? 1 : 0),
 		.pSignalSemaphoreInfos = &signalInfo,
 	};
 
@@ -2148,7 +2201,7 @@ void Instance::Create(){
 	// Validation layers
 	if (_ctx.enableValidationLayers) {
 		// get all available layers
-		uint32_t layerCount;
+		u32 layerCount;
 		vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
 		layers.resize(layerCount);
 		activeLayers.resize(layerCount);
@@ -2174,7 +2227,7 @@ void Instance::Create(){
 		}
 	}
 	
-	uint32_t glfwExtensionCount = 0;
+	u32 glfwExtensionCount = 0;
 	if (_ctx.presentRequested) {
 		// get all extensions required by glfw
 		glfwInit();
@@ -2192,7 +2245,7 @@ void Instance::Create(){
 	}
 
 	// get all available extensions
-	uint32_t extensionCount = 0;
+	u32 extensionCount = 0;
 	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, 0);
 	instanceExtensions.resize(extensionCount);
 	activeExtensions.resize(extensionCount);
@@ -2224,7 +2277,7 @@ void Instance::Create(){
 	VkInstanceCreateInfo createInfo{
 		.sType                   = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
 		.pApplicationInfo        = &appInfo,
-		.enabledExtensionCount   = static_cast<uint32_t>(activeExtensionsNames.size()),
+		.enabledExtensionCount   = static_cast<u32>(activeExtensionsNames.size()),
 		.ppEnabledExtensionNames = activeExtensionsNames.data(),
 	};
 
@@ -2252,7 +2305,7 @@ void Instance::Create(){
 		}
 	}
 
-	createInfo.enabledExtensionCount = static_cast<uint32_t>(activeExtensionsNames.size());
+	createInfo.enabledExtensionCount = static_cast<u32>(activeExtensionsNames.size());
     createInfo.ppEnabledExtensionNames = activeExtensionsNames.data();
 
 	VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo;
@@ -2314,7 +2367,7 @@ void Instance::Destroy() {
 
 void Context::GetPhysicalDevices() {
 	// get all devices with Vulkan support
-	uint32_t count = 0;
+	u32 count = 0;
 	vkEnumeratePhysicalDevices(_ctx.instance->handle, &count, nullptr);
 	ASSERT(count != 0, "no GPUs with Vulkan support!");
 	std::vector<VkPhysicalDevice> devices(count);
@@ -2332,13 +2385,13 @@ void Context::GetPhysicalDevices() {
 
 void PhysicalDevice::GetDetails() {
 	// get all available extensions
-	uint32_t extensionCount;
+	u32 extensionCount;
 	vkEnumerateDeviceExtensionProperties(handle, nullptr, &extensionCount, nullptr);
 	availableExtensions.resize(extensionCount);
 	vkEnumerateDeviceExtensionProperties(handle, nullptr, &extensionCount, availableExtensions.data());
 
 	// get all available families
-	uint32_t familyCount = 0;
+	u32 familyCount = 0;
 	vkGetPhysicalDeviceQueueFamilyProperties(handle, &familyCount, nullptr);
 	availableFamilies.resize(familyCount);
 	vkGetPhysicalDeviceQueueFamilyProperties(handle, &familyCount, availableFamilies.data());
@@ -2392,11 +2445,11 @@ auto PhysicalDevice::GetSupportedExtensions(const std::span<const char*>& desire
 }
 
 
-constexpr uint32_t QUEUE_NOT_FOUND = ~0u;
-constexpr uint32_t ALL_SUITABLE_QUEUES_TAKEN = ~0u - 1;
+constexpr u32 QUEUE_NOT_FOUND = ~0u;
+constexpr u32 ALL_SUITABLE_QUEUES_TAKEN = ~0u - 1;
 
-uint32_t PhysicalDevice::GetQueueFamilyIndex(VkQueueFlags desiredFlags, VkQueueFlags undesiredFlags, const std::span<const std::pair<VkQueueFlags, float>>& avoidIfPossible, VkSurfaceKHR surfaceToSupport, const std::span<const uint32_t>& filledUpFamilies) {
-	std::vector<std::pair<uint32_t, float>> candidates;
+u32 PhysicalDevice::GetQueueFamilyIndex(VkQueueFlags desiredFlags, VkQueueFlags undesiredFlags, const std::span<const std::pair<VkQueueFlags, float>>& avoidIfPossible, VkSurfaceKHR surfaceToSupport, const std::span<const u32>& filledUpFamilies) {
+	std::vector<std::pair<u32, float>> candidates;
 	auto& families = availableFamilies;
 	for (auto i = 0; i < families.size(); i++) {
 		// Check if queue family is suitable
@@ -2404,13 +2457,13 @@ uint32_t PhysicalDevice::GetQueueFamilyIndex(VkQueueFlags desiredFlags, VkQueueF
 		if (surfaceToSupport != VK_NULL_HANDLE) {
 			VkBool32 presentSupport = false;
 			VkResult res = vkGetPhysicalDeviceSurfaceSupportKHR(handle, i, surfaceToSupport, &presentSupport);
-			if (res != VK_SUCCESS) {LOG_ERROR("vkGetPhysicalDeviceSurfaceSupportKHR failed with error code: {}", (uint32_t)res); continue;}
+			if (res != VK_SUCCESS) {LOG_ERROR("vkGetPhysicalDeviceSurfaceSupportKHR failed with error code: {}", (u32)res); continue;}
 			suitable = suitable && presentSupport;
 		}
 		if (!suitable) continue; 
 		if (avoidIfPossible.empty()) return i;
 		// candidate (familyIndex, weight)
-		std::pair<uint32_t, float> candidate(i, 0.0f);
+		std::pair<u32, float> candidate(i, 0.0f);
 		// Prefer family with least number of VkQueueFlags
 		for (VkQueueFlags bit = 1; bit != 0; bit <<= 1) {
 			if (families[i].queueFlags & bit) { candidate.second += 0.01f; }
@@ -2440,9 +2493,9 @@ uint32_t PhysicalDevice::GetQueueFamilyIndex(VkQueueFlags desiredFlags, VkQueueF
 }
 
 void DeviceResource::Create(std::span<Queue*> queues) {
-	std::unordered_map<uint32_t, uint32_t> queuesToCreate; // <family index, queue count>
+	std::unordered_map<u32, u32> queuesToCreate; // <family index, queue count>
 	queuesToCreate.reserve(queues.size());
-	std::vector<uint32_t> filledUpFamilies; // Track filled up families
+	std::vector<u32> filledUpFamilies; // Track filled up families
 	std::unordered_map<GLFWwindow*, VkSurfaceKHR> surfaces; // Surfaces for checking present support
 
 	// Create surfaces for checking present support
@@ -2470,7 +2523,7 @@ void DeviceResource::Create(std::span<Queue*> queues) {
 		bool deviceSuitable = true;
 		for (auto queue: queues) {
 			if (queue->resource) {
-				LOG_WARN("Queue already has resource with flags ({}) family ({}) index ({}). Ignoring request for new queue.", (uint32_t)queue->flags, queue->resource->familyIndex, queue->resource->index);
+				LOG_WARN("Queue already has resource with flags ({}) family ({}) index ({}). Ignoring request for new queue.", (u32)queue->flags, queue->resource->familyIndex, queue->resource->index);
 				continue;
 			}
 			// Queue choosing heuristics
@@ -2485,7 +2538,7 @@ void DeviceResource::Create(std::span<Queue*> queues) {
 			// Get family index fitting requirements
 			auto familyIndex = physicalDevice.GetQueueFamilyIndex(queue->flags, 0, avoidIfPossible, surfaces[(GLFWwindow*)queue->supportedWindowToPresent], filledUpFamilies);
 			if (familyIndex == QUEUE_NOT_FOUND) {
-				LOG_WARN("Requested queue flags ({}) not available on device: ({})", (uint32_t)queue->flags, physicalDevice.physicalProperties2.properties.deviceName);
+				LOG_WARN("Requested queue flags ({}) not available on device: ({})", (u32)queue->flags, physicalDevice.physicalProperties2.properties.deviceName);
 				deviceSuitable = false;
 				break;
 			} else if (familyIndex == ALL_SUITABLE_QUEUES_TAKEN) {
@@ -2515,7 +2568,7 @@ void DeviceResource::Create(std::span<Queue*> queues) {
 		vkDestroySurfaceKHR(_ctx.instance->handle, surface, _ctx.allocator);
 	}
 
-	uint32_t maxQueuesInFamily = std::max_element(physicalDevice->availableFamilies.begin(), physicalDevice->availableFamilies.end(), [](const auto& a, const auto& b) {
+	u32 maxQueuesInFamily = std::max_element(physicalDevice->availableFamilies.begin(), physicalDevice->availableFamilies.end(), [](const auto& a, const auto& b) {
 		return a.queueCount < b.queueCount;
 	})->queueCount;
 
@@ -2625,9 +2678,9 @@ void DeviceResource::Create(std::span<Queue*> queues) {
 	VkDeviceCreateInfo createInfo{
 		.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
 		.pNext = &features2,
-		.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size()),
+		.queueCreateInfoCount = static_cast<u32>(queueCreateInfos.size()),
 		.pQueueCreateInfos = queueCreateInfos.data(),
-		.enabledExtensionCount = static_cast<uint32_t>(requiredExtensions.size()),
+		.enabledExtensionCount = static_cast<u32>(requiredExtensions.size()),
 		.ppEnabledExtensionNames = requiredExtensions.data(),
 	};
 
@@ -2685,7 +2738,7 @@ void DeviceResource::Create(std::span<Queue*> queues) {
 	VkDescriptorPoolCreateInfo imguiPoolInfo{};
 	imguiPoolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 	imguiPoolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-	imguiPoolInfo.maxSets = (uint32_t)(1024);
+	imguiPoolInfo.maxSets = (u32)(1024);
 	imguiPoolInfo.poolSizeCount = sizeof(imguiPoolSizes)/sizeof(VkDescriptorPoolSize);
 	imguiPoolInfo.pPoolSizes = imguiPoolSizes;
 
@@ -2701,7 +2754,7 @@ void SwapChainResource::CreateSurfaceFormats() {
 	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device->physicalDevice->handle, surface, &surfaceCapabilities);
 
 	// get surface formats
-	uint32_t formatCount;
+	u32 formatCount;
 	vkGetPhysicalDeviceSurfaceFormatsKHR(device->physicalDevice->handle, surface, &formatCount, nullptr);
 	if (formatCount != 0) {
 		availableSurfaceFormats.clear();
@@ -2710,7 +2763,7 @@ void SwapChainResource::CreateSurfaceFormats() {
 	}
 
 	// get present modes
-	uint32_t modeCount;
+	u32 modeCount;
 	vkGetPhysicalDeviceSurfacePresentModesKHR(device->physicalDevice->handle, surface, &modeCount, nullptr);
 	if (modeCount != 0) {
 		availablePresentModes.clear();
@@ -2739,7 +2792,7 @@ void SwapChainResource::Create(std::vector<Image>& swapChainImages, uvec2 const&
 		ChooseExtent(size.x, size.y);
 
 		// acquire additional images to prevent waiting for driver's internal operations
-		uint32_t imageCount = framesInFlight + additionalImages;
+		u32 imageCount = framesInFlight + additionalImages;
 		
 		if (imageCount < capabilities.minImageCount) {
 			LOG_WARN("Querying less images {} than the necessary: {}", imageCount, capabilities.minImageCount);
@@ -2985,10 +3038,10 @@ void SwapChain::SubmitAndPresent() {
 }
 
 
-const uint32_t MAX_STORAGE = 64;
-const uint32_t MAX_SAMPLEDIMAGES = 64;
-// const uint32_t MAX_ACCELERATIONSTRUCTURE = 64;
-const uint32_t MAX_STORAGE_IMAGES = 8192;
+const u32 MAX_STORAGE = 64;
+const u32 MAX_SAMPLEDIMAGES = 64;
+// const u32 MAX_ACCELERATIONSTRUCTURE = 64;
+const u32 MAX_STORAGE_IMAGES = 8192;
 
 
 void DeviceResource::createDescriptorPool(){
@@ -3004,7 +3057,7 @@ void DeviceResource::createDescriptorPool(){
 	 	.sType	       = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
 						// | VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT
 	 	.maxSets	   = 1,
-	 	.poolSizeCount = static_cast<uint32_t>(poolSizes.size()),
+	 	.poolSizeCount = static_cast<u32>(poolSizes.size()),
 	 	.pPoolSizes    = poolSizes.data(),
 	};
 	VkResult result = vkCreateDescriptorPool(handle, &descriptorPoolCreateInfo, nullptr, &descriptorPool);
@@ -3087,10 +3140,10 @@ void DeviceResource::CreateBindlessDescriptorResources(){
 	{
 
 		// TODO: val = min(MAX_, available)
-		const uint32_t MAX_STORAGE = 8192;
-		const uint32_t MAX_SAMPLEDIMAGES = 8192;
-		// const uint32_t MAX_ACCELERATIONSTRUCTURE = 64;
-		const uint32_t MAX_STORAGE_IMAGES = 8192;
+		const u32 MAX_STORAGE = 8192;
+		const u32 MAX_SAMPLEDIMAGES = 8192;
+		// const u32 MAX_ACCELERATIONSTRUCTURE = 64;
+		const u32 MAX_STORAGE_IMAGES = 8192;
 
 		// create descriptor set pool for bindless resources
 		std::vector<VkDescriptorPoolSize> bindlessPoolSizes = { 
@@ -3115,7 +3168,7 @@ void DeviceResource::CreateBindlessDescriptorResources(){
 			.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
 			.flags         = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
 			.maxSets       = 1,
-			.poolSizeCount = static_cast<uint32_t>(bindlessPoolSizes.size()),
+			.poolSizeCount = static_cast<u32>(bindlessPoolSizes.size()),
 			.pPoolSizes    = bindlessPoolSizes.data(),
 		};
 
@@ -3161,7 +3214,7 @@ void DeviceResource::CreateBindlessDescriptorResources(){
 
 		VkDescriptorSetLayoutBindingFlagsCreateInfo setLayoutBindingFlagsInfo{
 			.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
-			.bindingCount  = static_cast<uint32_t>(bindingFlags.size()),
+			.bindingCount  = static_cast<u32>(bindingFlags.size()),
 			.pBindingFlags = bindingFlags.data(),
 		};
 
@@ -3169,7 +3222,7 @@ void DeviceResource::CreateBindlessDescriptorResources(){
 			.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 			.pNext        = &setLayoutBindingFlagsInfo,
 			.flags        = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
-			.bindingCount = static_cast<uint32_t>(bindings.size()),
+			.bindingCount = static_cast<u32>(bindings.size()),
 			.pBindings    = bindings.data(),
 		};
 
@@ -3290,7 +3343,7 @@ void SwapChainResource::ChoosePresentMode() {
 	this->presentMode =  VK_PRESENT_MODE_FIFO_KHR;
 }
 
-void SwapChainResource::ChooseExtent(uint32_t width, uint32_t height) {
+void SwapChainResource::ChooseExtent(u32 width, u32 height) {
 	if (this->surfaceCapabilities.currentExtent.width != UINT32_MAX) {
 		this->extent = this->surfaceCapabilities.currentExtent;
 	} else {
@@ -3311,7 +3364,7 @@ void SwapChainResource::ChooseExtent(uint32_t width, uint32_t height) {
 
 
 
-bool Command::Copy(Buffer& dst, const void* data, uint32_t size, uint32_t dstOfsset) {
+bool Command::Copy(Buffer& dst, const void* data, u32 size, u32 dstOfsset) {
 	auto device = resource->device;
 	if (device->stagingBufferSize - device->stagingOffset < size) [[unlikely]] {
 		LOG_WARN("not enough size in staging buffer to copy");
@@ -3325,7 +3378,7 @@ bool Command::Copy(Buffer& dst, const void* data, uint32_t size, uint32_t dstOfs
 	return true;
 }
 
-void Command::Copy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset) {
+void Command::Copy(Buffer& dst, Buffer& src, u32 size, u32 dstOffset, u32 srcOffset) {
 	VkBufferCopy2 copyRegion{
 		.sType = VK_STRUCTURE_TYPE_BUFFER_COPY_2,
 		.pNext = nullptr,
@@ -3345,7 +3398,7 @@ void Command::Copy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset, 
 	vkCmdCopyBuffer2(resource->buffer, &copyBufferInfo);
 }
 
-bool Command::Copy(Image& dst, const void* data, uint32_t size) {
+bool Command::Copy(Image& dst, const void* data, u32 size) {
 	auto device = resource->device;
 	if (device->stagingBufferSize - device->stagingOffset < size) [[unlikely]] {
 		LOG_WARN("not enough size in staging buffer to copy");
@@ -3357,7 +3410,7 @@ bool Command::Copy(Image& dst, const void* data, uint32_t size) {
 	return true;
 }
 
-void Command::Copy(Image& dst, Buffer& src, uint32_t srcOffset) {
+void Command::Copy(Image& dst, Buffer& src, u32 srcOffset) {
 	DEBUG_ASSERT(!(dst.aspect & Aspect::Depth || dst.aspect & Aspect::Stencil), "CmdCopy don't support depth/stencil images");
 	VkBufferImageCopy2 region{
 		.sType = VK_STRUCTURE_TYPE_BUFFER_IMAGE_COPY_2,
@@ -3387,7 +3440,7 @@ void Command::Copy(Image& dst, Buffer& src, uint32_t srcOffset) {
 	vkCmdCopyBufferToImage2(resource->buffer, &copyBufferToImageInfo);
 }
 
-void Command::Copy(Buffer &dst, Image &src, uint32_t dstOffset, ivec2 imageOffset, ivec2 imageExtent) {
+void Command::Copy(Buffer &dst, Image &src, u32 dstOffset, ivec2 imageOffset, ivec2 imageExtent) {
 	DEBUG_ASSERT(!(src.aspect & Aspect::Depth || src.aspect & Aspect::Stencil), "CmdCopy don't support depth/stencil images");
 	VkBufferImageCopy2 region{
 		.sType = VK_STRUCTURE_TYPE_BUFFER_IMAGE_COPY_2,
@@ -3401,7 +3454,7 @@ void Command::Copy(Buffer &dst, Image &src, uint32_t dstOffset, ivec2 imageOffse
 			.layerCount = 1,
 		},
 		.imageOffset = {imageOffset[0], imageOffset[1], 0},
-		.imageExtent = {(uint32_t)imageExtent[0], (uint32_t)imageExtent[1], 1 },
+		.imageExtent = {(u32)imageExtent[0], (u32)imageExtent[1], 1 },
 	};
 
 	VkCopyImageToBufferInfo2 copyInfo{
@@ -3554,7 +3607,7 @@ void Command::Blit(BlitInfo const& info) {
 		.srcImageLayout = (VkImageLayout)src.layout,
 		.dstImage       = dst.resource->image,
 		.dstImageLayout = (VkImageLayout)dst.layout,
-		.regionCount    = static_cast<uint32_t>(blitRegions.size()),
+		.regionCount    = static_cast<u32>(blitRegions.size()),
 		.pRegions       = blitRegions.data(),
 		.filter         = Cast::VkFilter(info.filter),
 	};
@@ -3643,7 +3696,7 @@ void SwapChainResource::CreateImGui(GLFWwindow* window, SampleCount sampleCount)
 		.Queue               = commands[0].resource->queue->handle,
 		.DescriptorPool      = device->imguiDescriptorPool,
 		.MinImageCount       = surfaceCapabilities.minImageCount,
-		.ImageCount          = (uint32_t)imageResources.size(),
+		.ImageCount          = (u32)imageResources.size(),
 		// .MSAASamples         = (VkSampleCountFlagBits)std::min(device->physicalDevice->maxSamples, sampleCount),
 		.MSAASamples         = VK_SAMPLE_COUNT_1_BIT,
 		.PipelineCache       = device->pipelineCache,

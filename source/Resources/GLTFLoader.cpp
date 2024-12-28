@@ -1,4 +1,11 @@
 #ifdef USE_MODULES
+module;
+#endif
+
+#include "Bindless.h"
+#include "Macros.h"
+
+#ifdef USE_MODULES
 module GLTFLoader;
 import fastgltf;
 import Lmath;
@@ -9,6 +16,8 @@ import VulkanBackend;
 import SceneGraph;
 import Log;
 import Component;
+import Types;
+import Entity;
 #else
 #include "GLTFLoader.cppm"
 #include "VulkanBackend.cppm"
@@ -38,23 +47,49 @@ template<> struct ElementTraits<Lmath::vec2> : ElementTraitsBase<Lmath::vec2, Ac
 
 namespace glTF {
 using namespace Lmath;
-// auto LoadTexture(fastgltf::Asset& asset, size_t imageIndex) -> Texture;
-void LoadTextures(fastgltf::Asset& asset);
-bool LoadMaterial(fastgltf::Asset& asset, size_t materialIndex);
-void LoadMaterials(fastgltf::Asset& asset);
-void LoadMeshes(fastgltf::Asset& asset, std::unordered_map<size_t, Component::Mesh>& meshMap, vkw::Device& device);
-void LoadScene(fastgltf::Asset& asset, SceneGraph& sceneGraph);
-void LoadScenes(fastgltf::Asset& asset, std::unordered_map<size_t, Component::Mesh>& meshMap, SceneGraph& sceneGraph);
 
+struct ResourceMaps {
+	std::unordered_map<size_t, u32> textureMap;
+	std::unordered_map<size_t, Component::Material*> materialMap;
+	std::unordered_map<size_t, Component::Mesh*> meshMap;
 
-bool Loader::Load(const std::filesystem::path& filepath, SceneGraph& sceneGraph, vkw::Device& device) {
+	void clear() { textureMap.clear(); materialMap.clear(); meshMap.clear(); }
+};
+static ResourceMaps maps;
 
-	constexpr auto parserOptions =
-	  fastgltf::Options::DontRequireValidAssetMember
-	| fastgltf::Options::AllowDouble
-	| fastgltf::Options::LoadExternalBuffers
-	| fastgltf::Options::LoadExternalImages
-	| fastgltf::Options::GenerateMeshIndices;
+struct LoaderImpl {
+	struct TextureInfo {
+		uchar* imageData = nullptr;
+		int width = 0;
+		int height = 0;
+		int numChannels = 0;
+		size_t imageIndex = 0;
+	};
+	fastgltf::Asset& asset;
+	ResourceMaps& maps;
+	vkw::Device& device;
+	vkw::Queue& queue;
+	SceneGraph& sceneGraph;
+
+	TextureInfo LoadTexture(size_t textureIndex);
+	void LoadTextures();
+	void LoadMaterial(size_t materialIndex, Component::Material& material);
+	void LoadMaterials();
+	void LoadMesh(size_t meshIndex, Component::Mesh& mesh);
+	void LoadMeshes();
+	void LoadNode(const int nodeIndex, size_t offset);
+	void LoadNodes();
+};
+
+bool Loader::Load(const std::filesystem::path& filepath, SceneGraph& sceneGraph, vkw::Device& device, vkw::Queue& queue) {
+
+	constexpr auto parserOptions {
+		fastgltf::Options::DontRequireValidAssetMember
+		| fastgltf::Options::AllowDouble
+		| fastgltf::Options::LoadExternalBuffers
+		| fastgltf::Options::LoadExternalImages
+		| fastgltf::Options::GenerateMeshIndices
+	};
 
 	fastgltf::Parser parser;
 	// auto gltfFile = fastgltf::MappedGltfFile::FromPath(filepath);
@@ -62,44 +97,44 @@ bool Loader::Load(const std::filesystem::path& filepath, SceneGraph& sceneGraph,
 	fastgltf::GltfDataBuffer dataBuffer;
 
 	auto data = fastgltf::GltfDataBuffer::FromPath(filepath);
-    if (data.error() != fastgltf::Error::None) {
+	if (data.error() != fastgltf::Error::None) {
 		LOG_WARN("Failed to load asset file: {}", fastgltf::getErrorName(data.error()));
 		return false;
 	}
 
 	auto expectedAsset = parser.loadGltf(data.get(), filepath.parent_path(), parserOptions);
-    if (expectedAsset.error() != fastgltf::Error::None) {
-        LOG_WARN("Failed to load asset file: {}", fastgltf::getErrorName(expectedAsset.error()));
+	if (expectedAsset.error() != fastgltf::Error::None) {
+		LOG_WARN("Failed to load asset file: {}", fastgltf::getErrorName(expectedAsset.error()));
 		return false;
-    }
+	}
 
 	auto& asset = expectedAsset.get();
 
-	// LoadTextures(asset, loadedData);
-	// LoadMaterials(asset, loadedData);
-
-	std::unordered_map<size_t, Component::Mesh> meshMap;
-	LoadMeshes(asset, meshMap, device);
-	LoadScenes(asset, meshMap, sceneGraph);
+	maps.clear();
+	LoaderImpl loader { asset, maps, device, queue, sceneGraph };
+	loader.LoadTextures();
+	loader.LoadMaterials();
+	loader.LoadMeshes();
+	loader.LoadNodes();
 	return true;
 }
 
-/* 
-
-auto LoadTexture(fastgltf::Asset& asset, size_t textureIndex) -> fastgltf::Texture {
+auto LoaderImpl::LoadTexture(size_t textureIndex) -> TextureInfo {
 	fastgltf::Texture& texture = asset.textures[textureIndex];
-
-	std::size_t imageIndex;
-
+	
+	TextureInfo textureInfo;
+	auto& data = textureInfo.imageData;
+	auto& width = textureInfo.width;
+	auto& height = textureInfo.height;
+	auto& numChannels = textureInfo.numChannels;
+	auto& imageIndex = textureInfo.imageIndex;
+	
 	if      (texture.imageIndex.has_value())       { imageIndex = texture.imageIndex.value(); }
 	else if (texture.basisuImageIndex.has_value()) { imageIndex = texture.basisuImageIndex.value(); }
 	else if (texture.ddsImageIndex.has_value())    { imageIndex = texture.ddsImageIndex.value(); }
 	else if (texture.webpImageIndex.has_value())   { imageIndex = texture.webpImageIndex.value(); }
 
 	auto &image = asset.images[imageIndex];
-
-	int width = 0, height = 0, numChannels = 0;
-	unsigned char* data = nullptr;
 
 	std::visit(
 		fastgltf::visitor {
@@ -132,162 +167,201 @@ auto LoadTexture(fastgltf::Asset& asset, size_t textureIndex) -> fastgltf::Textu
 			}
 		},
 		image.data);
-	
-	// TODO: do this in external asset -> vulkan parser
- 	
-	if (data) {
-		auto [magFilterGltf, minFilterGltf] = GetFilters(asset, imageIndex);
-		auto magFilter = magFilterGltf == fastgltf::Filter::Nearest ? vkw::Filter::Nearest : vkw::Filter::Linear;
-		auto minFilter = minFilterGltf == fastgltf::Filter::Nearest
-			|| minFilterGltf == fastgltf::Filter::NearestMipMapNearest
-			|| minFilterGltf == fastgltf::Filter::NearestMipMapLinear
-			? vkw::Filter::Nearest
-			: vkw::Filter::Linear;
-		auto mipmapMode = minFilterGltf == fastgltf::Filter::NearestMipMapNearest
-			|| minFilterGltf == fastgltf::Filter::LinearMipMapNearest
-			? vkw::MipmapMode::Nearest
-			: vkw::MipmapMode::Linear;
-		newImage = device.CreateImage({
-			.width = uint32_t(width),
-			.height = uint32_t(height),
-			.format = GetImageFormat(asset, imageIndex),
-			.usage = vkw::ImageUsage::Sampled,
-			.magFilter = magFilter,
-			.minFilter = minFilter,
-			.mipmapMode = mipmapMode,
-			.name = "Texture " + std::to_string(imageIndex),
-		});
-
-		ImageIO::Free(data);
-		return true;
-	}
-	
-
-	// Determine format
-	auto format = Format::Linear; // Default
-
-	for (fastgltf::Material& material : asset.materials) {
-		if (material.pbrData.baseColorTexture.has_value()) { // BaseColor
-			uint diffuseTextureIndex = material.pbrData.baseColorTexture.value().textureIndex;
-			auto& diffuseTexture = asset.textures[diffuseTextureIndex];
-			if (imageIndex == diffuseTexture.imageIndex.value()) {
-				format =  Format::sRGB;
-			}
-		}
-		if (material.emissiveTexture.has_value()) { // Emissive
-			uint emissiveTextureIndex = material.emissiveTexture.value().textureIndex;
-			auto& emissiveTexture = asset.textures[emissiveTextureIndex];
-			if (imageIndex == emissiveTexture.imageIndex.value()) {
-				format =  Format::sRGB;
-			}
-		}
-	}
-	
-	// Get sampler data
-	Sampler sampler {
-		.magFilter = Filter::Linear,
-		.minFilter = Filter::Linear,
-		.wrapS = Wrap::Repeat,
-		.wrapT = Wrap::Repeat,
-		.name = "",
-	};
-
-	auto CastFilter = [](fastgltf::Filter filter) -> Filter {
-		switch (filter) {
-		case fastgltf::Filter::Nearest: return Filter::Nearest;
-		case fastgltf::Filter::Linear: return Filter::Linear;
-		case fastgltf::Filter::NearestMipMapNearest: return Filter::NearestMipMapNearest;
-		case fastgltf::Filter::NearestMipMapLinear: return Filter::NearestMipMapLinear;
-		case fastgltf::Filter::LinearMipMapNearest: return Filter::LinearMipMapNearest;
-		case fastgltf::Filter::LinearMipMapLinear: return Filter::LinearMipMapLinear;
-		default: return Filter::Linear;
-		}
-	};
-
-	auto CastWrap = [](fastgltf::Wrap wrap) -> Wrap {
-		switch (wrap) {
-		case fastgltf::Wrap::ClampToEdge: return Wrap::ClampToEdge;
-		case fastgltf::Wrap::MirroredRepeat: return Wrap::MirroredRepeat;
-		case fastgltf::Wrap::Repeat: return Wrap::Repeat;
-		default: return Wrap::Repeat;
-		}
-	};
-
-	if (texture.samplerIndex.has_value()) {
-		auto glTFsampler = asset.samplers[texture.samplerIndex.value()];
-		sampler = {
-			.magFilter = CastFilter(glTFsampler.magFilter.value_or(fastgltf::Filter::Linear)),
-			.minFilter = CastFilter(glTFsampler.minFilter.value_or(fastgltf::Filter::Linear)),
-			.wrapS = CastWrap(glTFsampler.wrapS),
-			.wrapT = CastWrap(glTFsampler.wrapT),
-			.name = glTFsampler.name.c_str(),
-		};
-	}
-
-	return {
-		.name = texture.name.c_str(),
-		.data = data,
-		.width = width,
-		.height = height,
-		.numChannels = numChannels,
-		.sampler = sampler,
-	};
+	return textureInfo;
 };
 
-void LoadTextures(fastgltf::Asset& asset) {
-	auto numImages = asset.images.size();
-	for (size_t imageIndex = 0; imageIndex < numImages; ++imageIndex) {
-		loadedData.textures.push_back(LoadTexture(asset, imageIndex));
-	}
-}
- 
+void LoaderImpl::LoadTextures() {
+	auto numTextures = asset.textures.size();
+	VLA(TextureInfo, textureInfos, numTextures);
 
-bool LoadMaterial(fastgltf::Asset& asset, size_t materialIndex) {
-	auto& materialData = asset.materials[materialIndex];
-	glTFMetalicRoughness material;
+
+	auto& cmd = queue.GetCommandBuffer();
+	device.ResetStaging();
+	cmd.Begin();
 	
-	load(materialData.pbrData.baseColorFactor.data(), material.pbrMetallicRoughness.baseColorFactor);
+	for (size_t textureIndex = 0; textureIndex < numTextures; ++textureIndex) {
+		fastgltf::Texture& texture = asset.textures[textureIndex];
+		auto& textureInfo = textureInfos[textureIndex];
+		auto& imageIndex = textureInfo.imageIndex;
+		textureInfo = LoadTexture(textureIndex);
 
-	if (materialData.pbrData.baseColorTexture.has_value()) {
-		uint diffuseMapIndex = materialData.pbrData.baseColorTexture.value().textureIndex;
-		uint imageIndex = asset.textures[diffuseMapIndex].imageIndex.value();
-		// material.pbrMetallicRoughness.baseColorTexture = textures[imageIndex];
+		if (textureInfo.imageData != nullptr) {
+
+			// Determine format
+			auto format = vkw::Format::RGBA8_UNORM; // Default
+			for (fastgltf::Material& material : asset.materials) {
+				if (material.pbrData.baseColorTexture.has_value()) { // BaseColor
+					uint diffuseTextureIndex = material.pbrData.baseColorTexture.value().textureIndex;
+					auto& diffuseTexture = asset.textures[diffuseTextureIndex];
+					if (imageIndex == diffuseTexture.imageIndex.value()) {
+						format =  vkw::Format::RGBA8_SRGB;
+					}
+				}
+				if (material.emissiveTexture.has_value()) { // Emissive
+					uint emissiveTextureIndex = material.emissiveTexture.value().textureIndex;
+					auto& emissiveTexture = asset.textures[emissiveTextureIndex];
+					if (imageIndex == emissiveTexture.imageIndex.value()) {
+						format =  vkw::Format::RGBA8_SRGB;
+					}
+				}
+			}
+
+			// Get sampler
+			auto glTFsampler = asset.samplers[texture.samplerIndex.value()];
+			auto magFilterGltf = glTFsampler.magFilter.value_or(fastgltf::Filter::Linear);
+			auto minFilterGltf = glTFsampler.minFilter.value_or(fastgltf::Filter::Linear);
+
+			auto magFilter {
+					magFilterGltf == fastgltf::Filter::Nearest
+				? vkw::Filter::Nearest
+				: vkw::Filter::Linear
+			};
+			auto minFilter {
+					minFilterGltf == fastgltf::Filter::Nearest ||
+					minFilterGltf == fastgltf::Filter::NearestMipMapNearest ||
+					minFilterGltf == fastgltf::Filter::NearestMipMapLinear
+				? vkw::Filter::Nearest
+				: vkw::Filter::Linear
+			};
+			auto mipmapMode {
+					minFilterGltf == fastgltf::Filter::NearestMipMapNearest ||
+					minFilterGltf == fastgltf::Filter::LinearMipMapNearest
+				? vkw::MipmapMode::Nearest
+				: vkw::MipmapMode::Linear
+			};
+			
+			// Create image
+			vkw::Image newImage = device.CreateImage({
+				.extent = { (uint32_t)textureInfo.width, (uint32_t)textureInfo.height, 1 },
+				.format = format,
+				.usage = vkw::ImageUsage::Sampled | vkw::ImageUsage::TransferDst,
+				.sampler = {magFilter, minFilter, mipmapMode},
+				.name = texture.name.data(),
+			});
+
+			// Add to map
+			maps.textureMap[textureIndex] = newImage.RID();
+
+			// Copy image
+			bool result;
+			uint imageSize = textureInfo.width * textureInfo.height * textureInfo.numChannels; // todo: assure numChannels == 4
+			result = cmd.Copy(newImage, textureInfo.imageData, imageSize);
+			if (!result) {
+				cmd.End();
+				cmd.QueueSubmit({});
+				device.ResetStaging();
+				cmd.Begin();
+				result = cmd.Copy(newImage, textureInfo.imageData, imageSize);
+				ASSERT(result, "Failed to copy image: not enough staging capacity");
+			}
+			
+		}
 	}
-	// todo: other fields
-	return true;
+
+	cmd.End();
+	cmd.QueueSubmit({});
+
+	for (size_t textureIndex = 0; textureIndex < numTextures; ++textureIndex) {
+		ImageIO::Free(textureInfos[textureIndex].imageData);
+	}
 }
 
-void LoadMaterials(fastgltf::Asset& asset) {
+void LoaderImpl::LoadMaterial(size_t materialIndex, Component::Material& material) {
+	auto& materialData = asset.materials[materialIndex];
+
+	auto loadTextureIndex = [this](const fastgltf::TextureInfo& textureInfo) -> u32 {
+		return maps.textureMap[textureInfo.textureIndex];
+	};
+
+	material.gpuMaterial.baseColorTexture = materialData.pbrData.baseColorTexture.has_value()
+		? loadTextureIndex(materialData.pbrData.baseColorTexture.value())
+		: TEXTURE_UNDEFINED;
+
+	material.gpuMaterial.metallicRoughnessTexture = materialData.pbrData.metallicRoughnessTexture.has_value()
+		? loadTextureIndex(materialData.pbrData.metallicRoughnessTexture.value())
+		: TEXTURE_UNDEFINED;
+
+	material.gpuMaterial.emissiveTexture = materialData.emissiveTexture.has_value()
+		? loadTextureIndex(materialData.emissiveTexture.value())
+		: TEXTURE_UNDEFINED;
+
+	material.gpuMaterial.normalTexture = materialData.normalTexture.has_value() // todo: scale
+		? loadTextureIndex(materialData.normalTexture.value())
+		: TEXTURE_UNDEFINED;
+
+	material.gpuMaterial.occlusionTexture = materialData.occlusionTexture.has_value() // todo: strength
+		? loadTextureIndex(materialData.occlusionTexture.value())
+		: TEXTURE_UNDEFINED;
+	
+	load(material.gpuMaterial.baseColorFactor, materialData.pbrData.baseColorFactor.data());
+	material.gpuMaterial.metallicFactor = materialData.pbrData.metallicFactor;
+	material.gpuMaterial.roughnessFactor = materialData.pbrData.roughnessFactor;
+	load(material.gpuMaterial.emissiveFactor, materialData.emissiveFactor.data());
+	material.emissiveStrength = materialData.emissiveStrength;
+	material.doubleSided = materialData.doubleSided;
+	material.alphaCutoff = materialData.alphaCutoff;
+	
+	switch(materialData.alphaMode) {
+		case fastgltf::AlphaMode::Opaque: material.alphaMode = Component::Material::AlphaMode::Opaque; break;
+		case fastgltf::AlphaMode::Mask:   material.alphaMode = Component::Material::AlphaMode::Mask;   break;
+		case fastgltf::AlphaMode::Blend:  material.alphaMode = Component::Material::AlphaMode::Blend;  break;
+	}
+}
+
+void LoaderImpl::LoadMaterials() {
 	auto numMaterials = asset.materials.size();
+	
+	auto& cmd = queue.GetCommandBuffer();
+	device.ResetStaging();
+	cmd.Begin();
+	
 	for (size_t materialIndex = 0; materialIndex < numMaterials; ++materialIndex) {
-		LoadMaterial(asset, materialIndex);
-	}
-}
+		auto mat = sceneGraph.CreateEntity();
+		auto& material = mat.Add<Component::Material>(asset.materials[materialIndex].name);
+		auto materialID = device.CreateMaterialSlot();
+		material.deviceMaterialID = materialID;
+		LoadMaterial(materialIndex, material);
+		maps.materialMap[materialIndex] = &material;
 
- */
- 
+		cmd.Copy(device.GetMaterialBuffer(materialID), &material.gpuMaterial, sizeof(GPUMaterial), (materialID % MATERIAL_BUFFER_CAPACITY) * sizeof(GPUMaterial));
+	}
+	
+	cmd.End();
+	cmd.QueueSubmit({});
+}
 
 // std::vector<uint32_t> indices;
 // std::vector<Vertex> vertices;
 
-void LoadMesh(fastgltf::Asset& asset, size_t meshIndex, Component::Mesh& mesh, vkw::Device& device) {
+void LoaderImpl::LoadMesh(size_t meshIndex, Component::Mesh& mesh) {
 	auto& glTFmesh = asset.meshes[meshIndex];
 	auto numPrimitives = glTFmesh.primitives.size();
+	mesh.primitives.resize(numPrimitives);
 
 	for (size_t primitiveIndex = 0; primitiveIndex < numPrimitives; ++primitiveIndex) {
 		auto& p = glTFmesh.primitives[primitiveIndex];
-		// Primitive primitive;
+		auto& primitive = mesh.primitives[primitiveIndex];
+		size_t initialVertex = mesh.vertices.size();
 
-		size_t initialVertex = mesh->vertices.size();
-
+		if (p.materialIndex.has_value()) {
+			DEBUG_ASSERT(maps.materialMap.find(p.materialIndex.value()) != maps.materialMap.end(), "Material index {} not found", p.materialIndex.value());
+			primitive.deviceMaterialID = maps.materialMap[p.materialIndex.value()]->deviceMaterialID;
+		} else {
+			primitive.deviceMaterialID = device.GetDefaultMaterialID();
+		}
+		
 		// Indexes
 		if (p.indicesAccessor.has_value()) {
 			fastgltf::Accessor& indexaccessor = asset.accessors[p.indicesAccessor.value()];
-			mesh->indices.reserve(mesh->indices.size() + indexaccessor.count);
+			mesh.indices.reserve(mesh.indices.size() + indexaccessor.count);
+			primitive.indexCount = indexaccessor.count;
+			primitive.firstIndex = mesh.indices.size();
+			primitive.vertexOffset = initialVertex;
+			primitive.firstInstance = 0;
 
 			fastgltf::iterateAccessor<std::uint32_t>(asset, indexaccessor,
 				[&](std::uint32_t idx) {
-					mesh->indices.push_back(idx + initialVertex);
+					mesh.indices.push_back(idx + initialVertex);
 				});
 		}
 
@@ -295,7 +369,7 @@ void LoadMesh(fastgltf::Asset& asset, size_t meshIndex, Component::Mesh& mesh, v
 		auto position = p.findAttribute("POSITION");
 		if (position != p.attributes.end()) {
 			auto& posAccessor = asset.accessors[position->accessorIndex];
-			mesh->vertices.resize(mesh->vertices.size() + posAccessor.count);
+			mesh.vertices.resize(mesh.vertices.size() + posAccessor.count);
 
 			fastgltf::iterateAccessorWithIndex<vec3>(asset, posAccessor,
 				[&](vec3 v, size_t index) {
@@ -305,7 +379,7 @@ void LoadMesh(fastgltf::Asset& asset, size_t meshIndex, Component::Mesh& mesh, v
 					newvtx.color = vec4 { 1.f };
 					newvtx.uv.x = 0;
 					newvtx.uv.y = 0;
-					mesh->vertices[initialVertex + index] = newvtx;
+					mesh.vertices[initialVertex + index] = newvtx;
 				});
 		}
 		
@@ -314,7 +388,7 @@ void LoadMesh(fastgltf::Asset& asset, size_t meshIndex, Component::Mesh& mesh, v
 		if (normals != p.attributes.end()) {
 			fastgltf::iterateAccessorWithIndex<vec3>(asset, asset.accessors[normals->accessorIndex],
 				[&](vec3 v, size_t index) {
-					mesh->vertices[initialVertex + index].normal = v;
+					mesh.vertices[initialVertex + index].normal = v;
 				});
 		}
 
@@ -323,8 +397,8 @@ void LoadMesh(fastgltf::Asset& asset, size_t meshIndex, Component::Mesh& mesh, v
 		if (uv != p.attributes.end()) {
 			fastgltf::iterateAccessorWithIndex<vec2>(asset, asset.accessors[uv->accessorIndex],
 				[&](vec2 v, size_t index) {
-					mesh->vertices[initialVertex + index].uv.x = v.x;
-					mesh->vertices[initialVertex + index].uv.y = 1.0f - v.y;
+					mesh.vertices[initialVertex + index].uv.x = v.x;
+					mesh.vertices[initialVertex + index].uv.y = 1.0f - v.y;
 				});
 		}
 
@@ -333,7 +407,7 @@ void LoadMesh(fastgltf::Asset& asset, size_t meshIndex, Component::Mesh& mesh, v
 		if (colors != p.attributes.end()) {
 			fastgltf::iterateAccessorWithIndex<vec4>(asset, asset.accessors[colors->accessorIndex],
 				[&](vec4 v, size_t index) {
-					mesh->vertices[initialVertex + index].color = v;
+					mesh.vertices[initialVertex + index].color = v;
 				});
 		}
 
@@ -342,52 +416,51 @@ void LoadMesh(fastgltf::Asset& asset, size_t meshIndex, Component::Mesh& mesh, v
 		if (tangent != p.attributes.end()) {
 			fastgltf::iterateAccessorWithIndex<vec3>(asset, asset.accessors[tangent->accessorIndex],
 				[&](vec3 v, size_t index) {
-					mesh->vertices[initialVertex + index].tangent = v;
+					mesh.vertices[initialVertex + index].tangent = v;
 				});
 		}
 	}
 }
 
-void LoadMeshes(fastgltf::Asset& asset, std::unordered_map<size_t, Component::Mesh>& meshMap, vkw::Device& device) {
+void LoaderImpl::LoadMeshes() {
 	auto numMeshes = asset.meshes.size();
 	LOG_INFO("Loading {} meshes", numMeshes);
 	for (size_t meshIndex = 0; meshIndex < numMeshes; ++meshIndex) {
-		auto mesh = std::make_shared<Objects::Mesh>(asset.meshes[meshIndex].name);
-		auto it = meshMap.emplace(meshIndex, mesh);
-		if (!it.second) {
-			LOG_WARN("Component::Mesh {} already exists", meshIndex);
-			continue;
-		}
-		mesh->name = asset.meshes[meshIndex].name;
-		LoadMesh(asset, meshIndex, mesh, device);
-		mesh->vertexBuffer = device.CreateBuffer({
-			.size = mesh->vertices.size() * sizeof(Objects::Vertex),
+		auto meshEntity = sceneGraph.CreateEntity();
+		auto& mesh = meshEntity.Add<Component::Mesh>();
+		maps.meshMap[meshIndex] = &mesh;
+		mesh.name = asset.meshes[meshIndex].name;
+		LoadMesh(meshIndex, mesh);
+		mesh.vertexBuffer = device.CreateBuffer({
+			.size = mesh.vertices.size() * sizeof(Objects::Vertex),
 			.usage = vkw::BufferUsage::Vertex,
-			.name = "Vertex buffer " + mesh->name,
+			.name = "Vertex buffer " + mesh.name,
 		});
-		mesh->indexBuffer = device.CreateBuffer({
-			.size = mesh->indices.size() * sizeof(uint32_t),
+		mesh.indexBuffer = device.CreateBuffer({
+			.size = mesh.indices.size() * sizeof(uint32_t),
 			.usage = vkw::BufferUsage::Index,
-			.name = "Index buffer " + mesh->name,
+			.name = "Index buffer " + mesh.name,
 		});
 	}
 
-	auto transferQueue = device.GetQueue(vkw::QueueFlagBits::Transfer);
-	auto& cmd = transferQueue.GetCommandBuffer();
+	// auto transferQueue = device.GetQueue(vkw::QueueFlagBits::Transfer);
+	// auto& cmd = transferQueue.GetCommandBuffer();
+	auto& cmd = queue.GetCommandBuffer();
 	device.ResetStaging();
 	cmd.Begin();
 	bool result;
 	auto copyToBuffer = [&](vkw::Buffer& buffer, const void* data, uint32_t size) {
 		result = cmd.Copy(buffer, data, size);
-		if (!result) {
+		if (!result) [[unlikely]] { 
 			cmd.End();
 			cmd.QueueSubmit({});
+			device.ResetStaging();
 			cmd.Begin();
 			result = cmd.Copy(buffer, data, size);
 			ASSERT(result, "Failed to copy buffer: not enough staging capacity");
 		}
 	};
-	for (auto& [_, mesh] : meshMap) {
+	for (auto& [_, mesh] : maps.meshMap) {
 		copyToBuffer(mesh->vertexBuffer, mesh->vertices.data(), mesh->vertices.size() * sizeof(Objects::Vertex));
 		copyToBuffer(mesh->indexBuffer, mesh->indices.data(), mesh->indices.size() * sizeof(uint32_t));
 	}
@@ -395,15 +468,15 @@ void LoadMeshes(fastgltf::Asset& asset, std::unordered_map<size_t, Component::Me
 	cmd.QueueSubmit({});
 }
 
-void LoadNode(fastgltf::Asset& asset, const int gltfNodeIndex, std::unordered_map<size_t, Component::Mesh>& meshMap, SceneGraph& sceneGraph, size_t offset) {
-	auto& glTFNode = asset.nodes[gltfNodeIndex];
-	auto& newNode = sceneGraph.nodes[offset + gltfNodeIndex];
+void LoaderImpl::LoadNode(const int nodeIndex, size_t offset) {
+	auto& glTFNode = asset.nodes[nodeIndex];
+	auto& newNode = sceneGraph.nodes[offset + nodeIndex];
 	newNode.entity = sceneGraph.CreateEntity(glTFNode.name);
 	DEBUG_TRACE("Loading node {}", glTFNode.name.c_str());
 	newNode.entity.Add<Component::Transform>();
 	if (glTFNode.meshIndex.has_value()) {
-		Component::Mesh mesh = meshMap[glTFNode.meshIndex.value()];
-		newNode.entity.Add<Component::Mesh>(mesh); //todo: fix
+		auto mesh = maps.meshMap[glTFNode.meshIndex.value()];
+		newNode.entity.Add<Component::Mesh*>(mesh);
 	} else {
 		// todo : empty, volume flags
 	}
@@ -428,11 +501,11 @@ void LoadNode(fastgltf::Asset& asset, const int gltfNodeIndex, std::unordered_ma
 	for (size_t i = 0; i < childNodeCount; ++i) {
 		auto glfwNodeIndex = glTFNode.children[i];
 		newNode.children[i] = glfwNodeIndex;
-		LoadNode(asset, glfwNodeIndex, meshMap, sceneGraph, offset);
+		LoadNode(glfwNodeIndex, offset);
 	}
 }
 
-void LoadScenes(fastgltf::Asset& asset, std::unordered_map<size_t, Component::Mesh>& meshMap, SceneGraph& sceneGraph) {
+void LoaderImpl::LoadNodes() {
 	
 	auto numNodes = asset.nodes.size();
 
@@ -458,7 +531,7 @@ void LoadScenes(fastgltf::Asset& asset, std::unordered_map<size_t, Component::Me
 		auto numChildNodes = asset.scenes[sceneIndex].nodeIndices.size();
 		for (auto childNodeIndex = 0; childNodeIndex < numChildNodes; ++childNodeIndex) {
 			auto glfwNodeIndex = asset.scenes[sceneIndex].nodeIndices[childNodeIndex];
-			LoadNode(asset, glfwNodeIndex, meshMap, sceneGraph, nodeOffset);
+			LoadNode(glfwNodeIndex, nodeOffset);
 			currentScene.children[numChildren + childOffsetsForScenes[sceneIndex] + childNodeIndex] = nodeOffset + glfwNodeIndex;
 		}
 	}

@@ -85,7 +85,7 @@ struct glTFMetalicRoughness {
 
 class Loader {
 public:
-	bool Load(const std::filesystem::path& filepath, SceneGraph& sceneGraph, vkw::Device& device);
+	bool Load(const std::filesystem::path& filepath, SceneGraph& sceneGraph, vkw::Device& device, vkw::Queue& queue);
 	
 	std::unordered_map<int, Component::Mesh> meshMap;
 };

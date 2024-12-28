@@ -47,7 +47,7 @@ struct SceneGraph {
 		root.children.push_back(0);
 	}
 
-	inline Entity CreateEntity(const std::string_view& name) {
+	inline Entity CreateEntity(const std::string_view& name = "") {
 		Entity entity = {registry, registry->create()};
 		entity.Add<Component::Name>(name);
 		return entity;

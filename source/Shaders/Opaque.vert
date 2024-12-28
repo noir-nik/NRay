@@ -1,8 +1,9 @@
-#version 450
+#version 460
 #extension GL_GOOGLE_include_directive : enable
-
 #include "inverse.glsl"
 #include "transpose.glsl"
+
+#include "Opaque.h"
 
 layout(location = 0) in vec3  inPosition;
 layout(location = 1) in vec3  inNormal;

@@ -1,9 +1,16 @@
 #ifdef USE_MODULES
+module;
+#endif
+
+#include "Bindless.h"
+
+#ifdef USE_MODULES
 export module Component;
 #define _COMPONENT_EXPORT export
 import Lmath;
 import Objects;
 import stl;
+import VulkanBackend;
 #else
 #pragma once
 #define _COMPONENT_EXPORT
@@ -18,6 +25,7 @@ import stl;
 _COMPONENT_EXPORT
 namespace Component {
 using namespace Lmath;
+using namespace Objects;
 
 struct Name {
     std::string name;
@@ -34,21 +42,38 @@ struct Transform {
 	inline Transform(bool dirty = true) : dirty(dirty) {}
 };
 
+// using Mesh = std::shared_ptr<Objects::Mesh>;
 
-// struct Mesh {
-// 	Mesh(std::shared_ptr<Objects::Mesh> mesh) : mesh(mesh) {}
-// 	std::shared_ptr<Objects::Mesh> mesh;
-// };
-using Mesh = std::shared_ptr<Objects::Mesh>;
+struct Mesh {
+	Mesh(const Mesh&) = delete;
+	Mesh& operator=(const Mesh&) = delete;
 
-// struct Mesh {
-// 	inline Mesh(std::string_view name = "") : name(name) {}
-// 	std::string name;
-// 	std::vector<uint> indices;
-// 	std::vector<Objects::Vertex> vertices;
-// 	std::vector<Objects::Primitive> primitives;
-// 	vkw::Buffer vertexBuffer;
-// 	vkw::Buffer indexBuffer;
-// };
+	inline Mesh(std::string_view name = "") : name(name) {}
+	std::string name;
+	std::vector<uint> indices;
+	std::vector<Vertex> vertices;
+	std::vector<Primitive> primitives;
+	vkw::Buffer vertexBuffer;
+	vkw::Buffer indexBuffer;
+};
+
+struct Material {
+	enum class AlphaMode : std::uint8_t {
+		Opaque,
+		Mask,
+		Blend,
+	};
+	std::string name;
+	GPUMaterial gpuMaterial;
+	uint deviceMaterialID = {};
+
+	bool doubleSided = false;
+	float alphaCutoff = 0.5f;
+	float emissiveStrength = 1.0f;
+	AlphaMode alphaMode = AlphaMode::Opaque;
+
+	Material(std::string_view name) : name(name) {}
+};
+
 
 } // namespace Component

@@ -7,6 +7,8 @@ namespace Opaque {
 using namespace Lmath;
 #endif // ENGINE
 
+#include "Bindless.h"
+
 struct OpaqueLight {
 	vec3 position;
 	float range;
@@ -14,42 +16,16 @@ struct OpaqueLight {
 	float intensity;
 };
 
-struct OpaqueMaterial {
-	struct {
-		vec4 baseColorFactor = vec4(1.0f);
-		Texture baseColorTexture;
-		float metallicFactor = float(1.0f);
-		float roughnessFactor = float(1.0f);
-		Texture metallicRoughnessTexture;
-		// extensions
-		// extras
-	} pbrMetallicRoughness;
-	
-	Texture normalTexture;
-	Texture occlusionTexture;
-
-	Texture emissiveTexture;
-	vec3 emissiveFactor = vec3(0.0f);
-
-	std::string alphaMode = "OPAQUE";
-	float alphaCutoff = 0.5f;
-
-	bool doubleSided = false;
-};
-
-
-struct Model {
-	mat4 model;
-};
-
 struct OpaqueConstants {
 	mat4 viewProj;
-	int modelID;
+	mat4 model;
 	OpaqueLight light;
-	OpaqueMaterial material;
 
 	vec3 cameraPosition;
-	int pad[1];
+	int materialBufferRID;
+	
+	int materialIndex; // in buffer
+	int pad[3];
 };
 
 #ifdef ENGINE

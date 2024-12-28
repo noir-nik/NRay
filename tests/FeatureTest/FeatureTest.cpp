@@ -1,6 +1,7 @@
 #ifdef USE_MODULES
 module;
 #include "Phong.h"
+#include "Opaque.h"
 module FeatureTest;
 import glfw;
 import imgui;
@@ -55,11 +56,11 @@ namespace {
 struct DrawViewportInfo;
 
 struct AppContext : DeleteCopyDeleteMove {
-	vkw::Pipeline pipeline;
 
+	vkw::Pipeline pipeline;
 	vkw::Pipeline glTFPipeline;
 	vkw::Pipeline texPipeline;
-	// vkw::Pipeline computePipeline;
+	vkw::Pipeline opaquePipeline;
 
 	uint32_t width, height;
 
@@ -220,14 +221,13 @@ void AppContext::CreateShaders() {
 			{.stage = vkw::ShaderStage::Vertex, .path = "source/Shaders/Phong.vert"},
 			{.stage = vkw::ShaderStage::Fragment, .path = "source/Shaders/Phong.frag"},
 		},
-		.name = "Feature pipeline",
-		// pos2 + color3
+		.name = "Phong pipeline",
 		.vertexAttributes = {
-			vkw::Format::RGB32_sfloat,  // vec3  position;
-			vkw::Format::RGB32_sfloat,  // vec3  normal;
-			vkw::Format::RG32_sfloat,   // vec2  uv;
-			vkw::Format::RGBA32_sfloat, // vec4  color;
-			vkw::Format::RGB32_sfloat   // vec3  tangent;
+			vkw::Format::RGB32_sfloat,  // vec3 position;
+			vkw::Format::RGB32_sfloat,  // vec3 normal;
+			vkw::Format::RG32_sfloat,   // vec2 uv;
+			vkw::Format::RGBA32_sfloat, // vec4 color;
+			vkw::Format::RGB32_sfloat   // vec3 tangent;
 		},
 		.colorFormats = {renderFormat},
 		.useDepth = true,
@@ -242,15 +242,28 @@ void AppContext::CreateShaders() {
 			{.stage = vkw::ShaderStage::Vertex, .path = "source/Shaders/Quad.vert"},
 			{.stage = vkw::ShaderStage::Fragment, .path = "source/Shaders/TexImage.frag"},
 		},
-		.name = "Feature pipeline",
-		// pos2 + color3
-		// .vertexAttributes = {
-		// 	vkw::Format::RGB32_sfloat,  // vec3  position;
-		// 	vkw::Format::RGB32_sfloat,  // vec3  normal;
-		// 	vkw::Format::RG32_sfloat,   // vec2  uv;
-		// 	vkw::Format::RGBA32_sfloat, // vec4  color;
-		// 	vkw::Format::RGB32_sfloat   // vec3  tangent;
-		// },
+		.name = "Tex pipeline",
+		.colorFormats = {renderFormat},
+		.useDepth = true,
+		.depthFormat = resource.depthImage.format,
+		.samples = sampleCount,
+		.lineTopology = false
+	});
+
+	opaquePipeline = device.CreatePipeline({
+		.point = vkw::PipelinePoint::Graphics,
+		.stages = {
+			{.stage = vkw::ShaderStage::Vertex, .path = "source/Shaders/Opaque.vert"},
+			{.stage = vkw::ShaderStage::Fragment, .path = "source/Shaders/Opaque.frag"},
+		},
+		.name = "Opaque pipeline",
+		.vertexAttributes = {
+			vkw::Format::RGB32_sfloat,  // vec3 position;
+			vkw::Format::RGB32_sfloat,  // vec3 normal;
+			vkw::Format::RG32_sfloat,   // vec2 uv;
+			vkw::Format::RGBA32_sfloat, // vec4 color;
+			vkw::Format::RGB32_sfloat   // vec3 tangent;
+		},
 		.colorFormats = {renderFormat},
 		.useDepth = true,
 		.depthFormat = resource.depthImage.format,
@@ -261,7 +274,6 @@ void AppContext::CreateShaders() {
 }
 
 void AppContext::CreateImages() {
-	device.CreateDefaultImages(queue);
 }
 
 void AppContext::CreateWindowResources(Entity window) {
@@ -330,7 +342,7 @@ void AppContext::UploadBuffers() {
 
 	glTF::Loader loader;
 	const char* filepath = "assets/models/test_scene.gltf";
-	auto res = loader.Load(filepath, project.GetSceneGraph(), device);
+	auto res = loader.Load(filepath, project.GetSceneGraph(), device, queue);
 	ASSERT(res, "Failed to load gltf file");
 
 	auto& sceneGraph = project.GetSceneGraph();
@@ -339,27 +351,26 @@ void AppContext::UploadBuffers() {
 
 void AppContext::DrawViewport(vkw::Command& cmd, Runtime::Camera const& camera) {
 
+	// cmd.Barrier(resource.renderImage, {vkw::ImageLayout::TransferDst});
+	// cmd.ClearColorImage(resource.renderImage, {0.7f, 0.0f, 0.4f, 1.0f});
+
+/*  // Phong
 	Phong::PhongConstants constants{};
 	constants.viewProj = camera.proj * (camera.view | affineInverse);
 	constants.light = phongLight.Get<Phong::PhongLight>();
 	constants.material = phongMaterial.Get<Phong::PhongMaterial>();
 	constants.cameraPosition = camera.getPosition();
-
-	// cmd.Barrier(resource.renderImage, {vkw::ImageLayout::TransferDst});
-	// cmd.ClearColorImage(resource.renderImage, {0.7f, 0.0f, 0.4f, 1.0f});
-
-/* 
 	cmd.BindPipeline(glTFPipeline);
 	auto registry = project.GetSceneGraph().registry;
 	for (auto& meshNode : registry->view<Component::Mesh>()) {
 		constants.model = registry->get<Component::Transform>(meshNode).global;
 		cmd.PushConstants(glTFPipeline, &constants, sizeof(constants));
 		Component::Mesh& mesh = registry->get<Component::Mesh>(meshNode);
-		cmd.DrawMesh(mesh->vertexBuffer, mesh->indexBuffer, mesh->indexBuffer.size / sizeof(uint32_t));
+		cmd.DrawMesh(mesh.vertexBuffer, mesh.indexBuffer, mesh.indexBuffer.size / sizeof(uint32_t));
 	}
  */
 
-/* 
+/*  // Cube
 	FeatureTestConstants debugConstants{
 		.view = camera.view | affineInverse,
 		.proj = camera.proj,
@@ -371,11 +382,36 @@ void AppContext::DrawViewport(vkw::Command& cmd, Runtime::Camera const& camera) 
 	cmd.Draw(vertices.size(), 1, 0, 0);
  */
 
+/* 	// Quad
 	cmd.BindVertexBuffer(cubeVertexBuffer);
 	cmd.BindPipeline(texPipeline);
 	cmd.Draw(6, 1, 0, 0);
+ */
 
+ 	Opaque::OpaqueConstants constants{};
+	constants.viewProj = camera.proj * (camera.view | affineInverse);
+	constants.light = {
+		.position = vec3(10.0, 10.0, 0.0),
+		.color = vec3(0.8, 0.8, 0.8)
+	};
+	constants.cameraPosition = camera.getPosition();
 
+	cmd.BindPipeline(opaquePipeline);
+	auto registry = project.GetSceneGraph().registry;
+	for (auto& meshNode : registry->view<Component::Mesh*>()) {
+		auto mesh = registry->get<Component::Mesh*>(meshNode);
+		constants.model = registry->get<Component::Transform>(meshNode).global;
+		cmd.BindVertexBuffer(mesh->vertexBuffer);
+		cmd.BindIndexBuffer(mesh->indexBuffer);
+		for (auto& p : mesh->primitives) {
+			// constants.materialID = p.materialID;
+			constants.materialBufferRID = device.GetMaterialBuffer(p.deviceMaterialID).RID();
+			constants.materialIndex = p.deviceMaterialID % MATERIAL_BUFFER_CAPACITY;
+			cmd.PushConstants(opaquePipeline, &constants, sizeof(constants));
+			cmd.DrawIndexed(p.indexCount, p.instanceCount, p.firstIndex, p.vertexOffset, p.firstInstance);
+			// cmd.DrawMesh(mesh.vertexBuffer, mesh.indexBuffer, mesh.indexBuffer.size / sizeof(uint32_t));
+		}
+	}
 }
 
 void AppContext::DrawWindow(Entity window) {
@@ -708,13 +744,6 @@ void AppContext::RecreateFrameResources(Window* window) {
 		window->SetFramebufferResized(false);
 		window->AddFramesToDraw(1);
 	}
-
-	// }
-	// ivec2 size = w->GetSize();
-	// if (size.x > renderImage.width || size.y > renderImage.height) {
-	// 	CreateImages(size.x, size.y);
-	// }
-	// camera->extent = {viewportSize.x, viewportSize.y};
 }
 
 } // namespace
@@ -841,6 +870,7 @@ void FeatureTestApplication::Setup() {
 	ctx->queue = {vkw::QueueFlagBits::Graphics | vkw::QueueFlagBits::Compute | vkw::QueueFlagBits::Transfer, windowHandle.GetGLFWwindow()};
 	vkw::Queue* queues[] = {&ctx->queue};
 	ctx->device = vkw::CreateDevice(queues);
+	ctx->device.CreateDefaultResources(ctx->queue);
 	ctx->mainWindow = mainWindow;
 	ctx->CreateWindowResources(mainWindow);
 
