@@ -1,11 +1,11 @@
-# *
-# !*/
-# !*.*
-# !Makefile
+# Ignore files without extension
+*
+!*/
+!*.*
+!Makefile
 
 .vscode/
 .vscode/*
-
 
 
 my*
@@ -22,6 +22,8 @@ logs/*
 *.pdb
 *.exe
 *.o
+*.out
+*.d
 *.obj
 *.res
 *.lib

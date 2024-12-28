@@ -1,2 +1,2 @@
 #include <optional>
-#include <fastgltf/core.hpp>
+#include <fmt/core.h>

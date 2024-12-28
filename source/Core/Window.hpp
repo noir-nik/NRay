@@ -6,7 +6,8 @@
 
 #include "Base.hpp"
 #include "Lmath.hpp"
-#include "VulkanBase.hpp"
+#include "VulkanBase.hpp" // For swapchain
+#include "UI.hpp"
 
 class WindowManager;
 enum class WindowMode {
@@ -122,6 +123,8 @@ class Window {
 
 	bool focused = true;
 
+	UI::Context UIContext;
+
 	enum Attrib {
 		Decorated = GLFW_DECORATED,
 		Resizable = GLFW_RESIZABLE,
@@ -216,7 +219,8 @@ public:
 	inline void        AddFramesToDraw(int value)           { framesToDraw += value; }
 
 	inline void        CreateSwapchain(vkw::Device& device, vkw::Queue& queue){ if (!swapChainAlive) swapChain.Create(device, queue, window, size.x, size.y); swapChainAlive = true; }
-	inline void        CreateUI(vkw::SampleCount sampleCount) { swapChain.CreateUI(sampleCount); }
+	void               CreateUI(vkw::SampleCount sampleCount);
+	void               SetUIContextCurrent()               { UIContext.SetCurrent(); }
 	inline void        RecreateSwapchain()                 { ASSERT(swapChainAlive, "RecreateSwapchain: Swapchain is not alive"); swapChain.Recreate(size.x, size.y);} 
 	inline bool        GetSwapchainDirty()                 { return swapChain.GetDirty(); }
 	inline auto&       GetSwapchain()                      { return swapChain; }

@@ -347,7 +347,7 @@ void Editor::Draw() {
 }
 
 void Editor::BeginFrame() {
-	vkw::BeginImGui();
+	vkw::ImGuiNewFrame();
 	ImGui::NewFrame();
 }
 
@@ -357,11 +357,6 @@ ImDrawData* Editor::EndFrame() {
 }
 
 void Editor::Setup(){
-	IMGUI_CHECKVERSION();
-	ImGui::CreateContext();
-	ImGuiIO& io = ImGui::GetIO();
-
-	// io.IniFilename = nullptr;
 
 	ctx.defaultStyle = ImGui::GetStyle();
 
@@ -374,30 +369,8 @@ void Editor::Setup(){
 		ctx.style = ctx.defaultStyle;
 	}
 
-	// io.ConfigFlags |= ImGuiConfigFlags_DockingEnable
-
-	// io.BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
-	// io.BackendFlags &= ~ImGuiBackendFlags_HasMouseCursors;
-
-	// io.Fonts->AddFontDefault();
-	const float fontSize = 15.0f;
-	for (const auto& entry : std::filesystem::directory_iterator("assets/fonts")) {
-		if (entry.path().extension() == ".ttf" || entry.path().extension() == ".otf") {
-			// auto font = io.Fonts->AddFontFromFileTTF(entry.path().string().c_str(), fontSize);
-			// if (font && entry.path().filename() == "InterVariable.ttf") {
-			// 	io.FontDefault = font;
-			// }
-			if (entry.path().filename() == "InterVariable.ttf") {
-				auto font = io.Fonts->AddFontFromFileTTF(entry.path().string().c_str(), fontSize);
-				io.FontDefault = font;
-			}
-		}
-	}
 }
 
-void Editor::Finish() {
-	ImGui::DestroyContext();
-}
 
 inline const char* EditorContext::GetStyleVarName(ImGuiStyleVar idx) {
 	switch (idx) {

@@ -35,6 +35,64 @@ struct PhysicalDevice;
 struct DeviceResource;
 struct SwapChain;
 
+namespace Cast {
+
+inline constexpr VkFormat VkFormat(enum Format value) {
+	switch (value) {
+		case Format::Undefined:         return VK_FORMAT_UNDEFINED;
+
+		case Format::R8_unorm:          return VK_FORMAT_R8_UNORM;
+
+		case Format::RGBA8_UNORM:       return VK_FORMAT_R8G8B8A8_UNORM;
+		case Format::RGBA8_SRGB:        return VK_FORMAT_R8G8B8A8_SRGB;
+		case Format::BGRA8_unorm:       return VK_FORMAT_B8G8R8A8_UNORM;
+		case Format::BGRA8_sRGB:        return VK_FORMAT_B8G8R8A8_SRGB;
+		case Format::RGBA16_sfloat:     return VK_FORMAT_R16G16B16A16_SFLOAT;
+
+		case Format::RG32_sfloat:       return VK_FORMAT_R32G32_SFLOAT;
+		case Format::RGB32_sfloat:      return VK_FORMAT_R32G32B32_SFLOAT;
+		case Format::RGBA32_sfloat:     return VK_FORMAT_R32G32B32A32_SFLOAT;
+
+		case Format::D16_unorm:         return VK_FORMAT_D16_UNORM;
+		case Format::D32_sfloat:        return VK_FORMAT_D32_SFLOAT;
+		case Format::D24_unorm_S8_uint: return VK_FORMAT_D24_UNORM_S8_UINT;
+		default: return VK_FORMAT_UNDEFINED;
+	}
+	return VK_FORMAT_UNDEFINED;
+}
+
+inline constexpr VkFilter VkFilter(enum Filter value) {
+	switch (value) {
+		case Filter::Nearest:   return VK_FILTER_NEAREST;
+		case Filter::Linear:    return VK_FILTER_LINEAR;
+		case Filter::Cubic_Ext: return VK_FILTER_CUBIC_EXT;
+		default: return VK_FILTER_LINEAR;
+	}
+	return VK_FILTER_LINEAR;
+}
+
+inline constexpr VkSamplerMipmapMode VkSamplerMipmapMode(enum MipmapMode value) {
+	switch (value) {
+		case MipmapMode::Nearest: return VK_SAMPLER_MIPMAP_MODE_NEAREST;
+		case MipmapMode::Linear:  return VK_SAMPLER_MIPMAP_MODE_LINEAR;
+		default: return VK_SAMPLER_MIPMAP_MODE_LINEAR;
+	}
+	return VK_SAMPLER_MIPMAP_MODE_LINEAR;
+}
+
+inline constexpr VkSamplerAddressMode VkSamplerAddressMode(enum WrapMode value) {
+	switch (value) {
+		case WrapMode::Repeat:            return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+		case WrapMode::MirroredRepeat:    return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+		case WrapMode::ClampToEdge:       return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+		case WrapMode::ClampToBorder:     return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+		case WrapMode::MirrorClampToEdge: return VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE;
+		default: return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	}
+}
+
+} // namespace Cast
+
 
 struct Context {	
 	// void EndCommandBuffer(VkSubmitInfo submitInfo);
@@ -173,6 +231,7 @@ struct PhysicalDevice: DeleteCopyMove {
 struct QueueResource {
 	uint32_t familyIndex = ~0;
 	uint32_t index = 0;
+	QueueFlags flags;
 	VkQueue handle = VK_NULL_HANDLE;
 	Command command {};
 	// UID uid;
@@ -329,7 +388,7 @@ struct DeviceResource: DeleteCopyMove {
 
 	} pipelineLibrary;
 	
-	const uint32_t stagingBufferSize = 2 * 1024 * 1024;
+	const uint32_t stagingBufferSize = 32 * 1024 * 1024;
 	u8* stagingCpu = nullptr;
 	uint32_t stagingOffset = 0;
 	Buffer staging;
@@ -355,7 +414,7 @@ struct DeviceResource: DeleteCopyMove {
 	void CreateBindlessDescriptorResources();
 	void DestroyBindlessDescriptorResources();
 
-	VkSampler CreateSampler(VkDevice device, float maxLod, float maxAnisotropy = 0.0f);
+	VkSampler CreateSampler(VkDevice device, SamplerDesc desc);
 
 	void SetDebugUtilsObjectName(const VkDebugUtilsObjectNameInfoEXT& pNameInfo);
 	
@@ -469,8 +528,8 @@ struct SwapChainResource: DeleteCopyMove {
 struct Resource {
 	DeviceResource* device;
 	std::string name;
-	int32_t rid;
-
+	int32_t rid = Null;
+	static inline constexpr int32_t Null = ~0;
 	Resource(DeviceResource* device, const std::string& name = "") : device(device), name(name) {}
 	virtual ~Resource() = default;
 };
@@ -483,7 +542,7 @@ struct BufferResource : Resource {
 
 	~BufferResource() override {
 		vmaDestroyBuffer(device->vmaAllocator, buffer, allocation);
-		if (rid >= 0) {
+		if (rid != Null) {
 			device->availableBufferRID.push_back(rid);
 		}
 	}
@@ -514,12 +573,12 @@ struct ImageResource : Resource {
 			layersView.clear();
 			vkDestroyImageView(device->handle, view, _ctx.allocator);
 			vmaDestroyImage(device->vmaAllocator, image, allocation);
-			if (rid >= 0) {
+			if (rid != Null) {
 				device->availableImageRID.push_back(rid);
 				for (ImTextureID imguiRID : imguiRIDs) {
 				    ImGui_ImplVulkan_RemoveTexture((VkDescriptorSet)imguiRID);
 				}
-				rid = -1;
+				rid = Null;
 				imguiRIDs.clear();
 			}
 		}
@@ -577,15 +636,13 @@ Device CreateDevice(const std::vector<Queue*>& queues) {
 		q->command.resource->Create(&resource, q.get());
 	}
 	resource.CreateBindlessDescriptorResources();
-	resource.staging = device.CreateBuffer(resource.stagingBufferSize, BufferUsage::TransferSrc, Memory::CPU, "StagingBuffer[" + std::to_string(uid) + "]");
+	resource.staging = device.CreateBuffer({resource.stagingBufferSize, BufferUsage::TransferSrc, Memory::CPU, "StagingBuffer[" + std::to_string(uid) + "]"});
 	resource.stagingCpu = (u8*)resource.staging.resource->allocation->GetMappedData();
 	return device;
 }
 
 
 void Destroy() {
-	ImGui_ImplVulkan_Shutdown();
-	ImGui_ImplGlfw_Shutdown();
 	_ctx.physicalDevices.clear();
 	_ctx.devices.clear();
 	_ctx.instance->Destroy();
@@ -607,8 +664,32 @@ Command& Device::GetCommandBuffer(const Queue& queue){
 	return queue.resource->command;
 }
 
+void Device::ResetStaging(){
+	resource->stagingOffset = 0;
+}
 
-Buffer Device::CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags memory, const std::string& name) {
+Command& Queue::GetCommandBuffer() {
+	return resource->command; 
+}
+
+Queue::Queue(const std::shared_ptr<QueueResource>& resource):
+	resource(resource),
+	flags(resource->flags) {}
+
+Queue Device::GetQueue(QueueFlags flags){
+	for (auto& [_, queue] : resource->uniqueQueues) {
+		if (queue->flags & flags) {
+			return Queue(queue);
+		}
+	}
+	return Queue();
+}
+
+
+Buffer Device::CreateBuffer(const BufferDesc& desc) {
+	BufferUsageFlags usage = desc.usage;
+	uint32_t size = desc.size;
+
 	if (usage & BufferUsage::Vertex) {
 		usage |= BufferUsage::TransferDst;
 	}
@@ -631,7 +712,7 @@ Buffer Device::CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags m
 		usage |= BufferUsage::Address;
 	}
 
-	std::shared_ptr<BufferResource> res = std::make_shared<BufferResource>(this->resource.get(), name);
+	std::shared_ptr<BufferResource> res = std::make_shared<BufferResource>(this->resource.get(), desc.name);
 
 	VkBufferCreateInfo bufferInfo{
 		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -643,7 +724,7 @@ Buffer Device::CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags m
 	constexpr VmaAllocationCreateFlags cpuFlags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
 	
 	VmaAllocationCreateInfo allocInfo = {
-		.flags = memory & Memory::CPU? cpuFlags: 0,
+		.flags = desc.memory & Memory::CPU? cpuFlags: 0,
 		.usage = VMA_MEMORY_USAGE_AUTO,
 	};
 
@@ -656,7 +737,7 @@ Buffer Device::CreateBuffer(uint32_t size, BufferUsageFlags usage, MemoryFlags m
 		.resource = res,
 		.size = size,
 		.usage = usage,
-		.memory = memory,
+		.memory = desc.memory,
 	};
 
 	if (usage & BufferUsage::Storage) {
@@ -692,7 +773,7 @@ Image Device::CreateImage(const ImageDesc& desc) {
 		.sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 		.flags         = (VkImageCreateFlags)(desc.layers == 6? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT: 0),
 		.imageType     = VK_IMAGE_TYPE_2D,
-		.format        = (VkFormat)desc.format,
+		.format        = Cast::VkFormat(desc.format),
 		.extent = {	
 			.width     = desc.width,
 			.height    = desc.height,
@@ -809,35 +890,35 @@ Image Device::CreateImage(const ImageDesc& desc) {
 	}
 	if (desc.usage & ImageUsage::Storage) {
 		VkDescriptorImageInfo descriptorInfo = {
-			.sampler = resource->genericSampler,
-			.imageView = res->view,
+			.sampler     = resource->genericSampler,
+			.imageView   = res->view,
 			.imageLayout = VK_IMAGE_LAYOUT_GENERAL,
 		};
 		VkWriteDescriptorSet write = {
-			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = resource->bindlessDescriptorSet,
-			.dstBinding = BINDING_STORAGE_IMAGE,
+			.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.dstSet          = resource->bindlessDescriptorSet,
+			.dstBinding      = BINDING_STORAGE_IMAGE,
 			.dstArrayElement = image.RID(),
 			.descriptorCount = 1,
-			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-			.pImageInfo = &descriptorInfo,
+			.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+			.pImageInfo      = &descriptorInfo,
 		};
 		
 		vkUpdateDescriptorSets(resource->handle, 1, &write, 0, nullptr);
 	}
 
 	resource->SetDebugUtilsObjectName({
-		.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-		.objectType = VkObjectType::VK_OBJECT_TYPE_IMAGE,
+		.sType        = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+		.objectType   = VkObjectType::VK_OBJECT_TYPE_IMAGE,
 		.objectHandle = (uint64_t)(VkImage)res->image,
-		.pObjectName = desc.name.c_str(),
+		.pObjectName  = desc.name.c_str(),
 	});
 
 	resource->SetDebugUtilsObjectName({
-		.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-		.objectType = VkObjectType::VK_OBJECT_TYPE_IMAGE_VIEW,
+		.sType        = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+		.objectType   = VkObjectType::VK_OBJECT_TYPE_IMAGE_VIEW,
 		.objectHandle = (uint64_t)(VkImageView)res->view,
-		.pObjectName = (desc.name + "View").c_str(),
+		.pObjectName  = (desc.name + "View").c_str(),
 	});
 	return image;
 }
@@ -1671,6 +1752,10 @@ void Command::BindVertexBuffer(Buffer& vertexBuffer) {
 	vkCmdBindVertexBuffers(resource->buffer, 0, 1, &vertexBuffer.resource->buffer, offsets);
 }
 
+void Command::BindIndexBuffer(Buffer& indexBuffer) {
+	vkCmdBindIndexBuffer(resource->buffer, indexBuffer.resource->buffer, 0, VK_INDEX_TYPE_UINT32);
+}
+
 void Command::DrawLineStrip(const Buffer& pointsBuffer, uint32_t firstPoint, uint32_t pointCount, float thickness) {
 	VkDeviceSize offsets[] = { 0 };
 	vkCmdSetLineWidth(resource->buffer, thickness);
@@ -1683,10 +1768,6 @@ void Command::DrawLineStrip(const Buffer& pointsBuffer, uint32_t firstPoint, uin
 //     vkCmdBindVertexBuffers(resource->buffer, 0, 1, &_ctx.dummyVertexBuffer.resource->buffer, offsets);
 //     vkCmdDraw(resource->buffer, 6, 1, 0, 0);
 // }
-
-void Command::DrawImGui(ImDrawData* data) {
-    ImGui_ImplVulkan_RenderDrawData(data, resource->buffer);
-}
 
 
 // int CmdBeginTimeStamp(const std::string& name) {
@@ -1721,11 +1802,6 @@ void Command::BindPipeline(Pipeline& pipeline) {
 
 void Command::PushConstants(void* data, uint32_t size) {
 	vkCmdPushConstants(resource->buffer, resource->currentPipeline->layout, VK_SHADER_STAGE_ALL, 0, size, data);
-}
-
-void BeginImGui() {
-    ImGui_ImplVulkan_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
 }
 
 // vkWaitForFences + vkResetFences +
@@ -2317,7 +2393,7 @@ void DeviceResource::Create(const std::vector<Queue*>& queues) {
 				continue;
 			}
 			// Create queue
-			queue->resource = std::make_shared<QueueResource>(familyIndex, queuesToCreate[familyIndex]);
+			queue->resource = std::make_shared<QueueResource>(familyIndex, queuesToCreate[familyIndex], queue->flags);
 			queuesToCreate[familyIndex]++;
 			if (queuesToCreate[familyIndex] == physicalDevice.availableFamilies[familyIndex].queueCount) {
 				filledUpFamilies.push_back(familyIndex);
@@ -2494,7 +2570,7 @@ void DeviceResource::Create(const std::vector<Queue*>& queues) {
 		vkGetDeviceQueue(handle, q->resource->familyIndex, q->resource->index, &q->resource->handle);
 	}
 
-	genericSampler = CreateSampler(handle, 1.0);
+	genericSampler = CreateSampler(handle, {});
 	if (_ctx.enableValidationLayers) {
 		vkSetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetDeviceProcAddr(handle, "vkSetDebugUtilsObjectNameEXT");
 	}
@@ -2729,66 +2805,15 @@ void SwapChain::Create(Device& device, vkw::Queue& queue, GLFWwindow* window, ui
 	dirty = false;
 }
 
-void SwapChain::CreateUI(SampleCount sampleCount) {
-	resource->CreateImGui(window, sampleCount);
-}
-
 void SwapChain::Destroy(){
 	for (auto& cmd: resource->commands) {
 		vkWaitForFences(resource->device->handle, 1, &cmd.resource->fence, VK_TRUE, UINT_MAX);
 	}
 	resource->commands.clear();
 	swapChainImages.clear();
-	resource->DestroyImGui();
 	resource->Destroy();
 }
 
-void ImGuiCheckVulkanResult(VkResult res) {
-    if (res == 0) {
-        return;
-	}
-	LOG_WARN("Imgui error: {}", VK_ERROR_STRING(res));
-	DEBUG_VK(res, "Imgui error: {}", VK_ERROR_STRING(res));
-}
-
-void SwapChainResource::CreateImGui(GLFWwindow* window, SampleCount sampleCount) {
-	if (_ctx.imguiInitialized) return;
-	_ctx.imguiInitialized = true;
-	std::vector <Format> colorFormats = { vkw::Format::RGBA8_unorm};
-	std::vector <Format> depthFormats = { vkw::Format::D32_sfloat };
-	ImGui_ImplVulkan_InitInfo initInfo{
-		.Instance            = _ctx.instance->handle,
-		.PhysicalDevice      = device->physicalDevice->handle,
-		.Device              = device->handle,
-		.QueueFamily         = commands[0].resource->queue->familyIndex,
-		.Queue               = commands[0].resource->queue->handle,
-		.DescriptorPool      = device->imguiDescriptorPool,
-		.MinImageCount       = surfaceCapabilities.minImageCount,
-		.ImageCount          = (uint32_t)imageResources.size(),
-		.MSAASamples         = (VkSampleCountFlagBits)std::min(device->physicalDevice->maxSamples, sampleCount),
-		.PipelineCache       = device->pipelineCache,
-		.UseDynamicRendering = true,
-		.PipelineRenderingCreateInfo{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-			.colorAttachmentCount    = 1,
-			.pColorAttachmentFormats = reinterpret_cast<const VkFormat*>(colorFormats.data()),
-			.depthAttachmentFormat   = static_cast<VkFormat>(depthFormats[0]),
-		},
-		.Allocator           = _ctx.allocator,
-		.CheckVkResultFn     = ImGuiCheckVulkanResult,
-	};
-	ImGui_ImplVulkan_Init(&initInfo);
-	// ImGui_ImplVulkan_CreateFontsTexture();
-	ImGui_ImplGlfw_InitForVulkan(window, true);
-}
-
-
-
-void SwapChainResource::DestroyImGui() {
-	// ImGui_ImplVulkan_DestroyFontsTexture();
-	// ImGui_ImplVulkan_Shutdown();
-	// ImGui_ImplGlfw_Shutdown();
-}
 
 void SwapChain::Recreate(uint32_t width, uint32_t height) {
 	DEBUG_ASSERT(!(width == 0 || height == 0), "Window size is 0, swapchain NOT recreated");
@@ -3185,17 +3210,18 @@ void SwapChainResource::ChooseExtent(uint32_t width, uint32_t height) {
 
 
 
-void Command::Copy(Device& device, Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset) {
-	if (device.resource->stagingBufferSize - device.resource->stagingOffset < size) {
-		LOG_ERROR("not enough size in staging buffer to copy");
-		// todo: allocate additional buffer
-		return;
+bool Command::Copy(Buffer& dst, void* data, uint32_t size, uint32_t dstOfsset) {
+	auto device = resource->device;
+	if (device->stagingBufferSize - device->stagingOffset < size) {
+		LOG_WARN("not enough size in staging buffer to copy");
+		return false;
 	}
 	// memcpy(resource->stagingCpu + resource->stagingOffset, data, size);
-	vmaCopyMemoryToAllocation(device.resource->vmaAllocator, data, device.resource->staging.resource->allocation, device.resource->stagingOffset, size);
-	Copy(dst, device.resource->staging, size, dstOfsset, device.resource->stagingOffset);
-	DEBUG_TRACE("CmdCopy, size: {}, offset: {}", size, device.resource->stagingOffset);
-	device.resource->stagingOffset += size;
+	vmaCopyMemoryToAllocation(device->vmaAllocator, data, device->staging.resource->allocation, device->stagingOffset, size);
+	Copy(dst, device->staging, size, dstOfsset, device->stagingOffset);
+	DEBUG_TRACE("CmdCopy, size: {}, offset: {}", size, device->stagingOffset);
+	device->stagingOffset += size;
+	return true;
 }
 
 void Command::Copy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset, uint32_t srcOffset) {
@@ -3218,15 +3244,16 @@ void Command::Copy(Buffer& dst, Buffer& src, uint32_t size, uint32_t dstOffset, 
 	vkCmdCopyBuffer2(resource->buffer, &copyBufferInfo);
 }
 
-void Command::Copy(Device& device, Image& dst, void* data, uint32_t size) {
-	if (device.resource->stagingBufferSize - device.resource->stagingOffset < size) {
-		LOG_ERROR("not enough size in staging buffer to copy");
-		// todo: allocate additional buffer
-		return;
+bool Command::Copy(Image& dst, void* data, uint32_t size) {
+	auto device = resource->device;
+	if (device->stagingBufferSize - device->stagingOffset < size) {
+		LOG_WARN("not enough size in staging buffer to copy");
+		return false;
 	}
-	memcpy(device.resource->stagingCpu + device.resource->stagingOffset, data, size);
-	Copy(dst, device.resource->staging, device.resource->stagingOffset);
-	device.resource->stagingOffset += size;
+	memcpy(device->stagingCpu + device->stagingOffset, data, size);
+	Copy(dst, device->staging, device->stagingOffset);
+	device->stagingOffset += size;
+	return true;
 }
 
 void Command::Copy(Image& dst, Buffer& src, uint32_t srcOffset) {
@@ -3383,7 +3410,7 @@ void Command::ClearColorImage(Image& img, const float4& color) {
 	vkCmdClearColorImage(resource->buffer, img.resource->image, (VkImageLayout)img.layout, &clearColor, 1, &range);
 }
 
-void Command::Blit(Image& dst, Image& src, ivec4 dstRegion, ivec4 srcRegion) {	
+void Command::Blit(Image& dst, Image& src, ivec4 dstRegion, ivec4 srcRegion, Filter filter) {	
 	if (srcRegion == ivec4{}) {srcRegion = {0, 0, (int)src.width, (int)src.height};}
 	if (dstRegion == ivec4{}) {dstRegion = {0, 0, (int)dst.width, (int)dst.height};}
 	
@@ -3415,32 +3442,32 @@ void Command::Blit(Image& dst, Image& src, ivec4 dstRegion, ivec4 srcRegion) {
 		.dstImageLayout = (VkImageLayout)dst.layout,
 		.regionCount    = 1,
 		.pRegions       = &blitRegion,
-		.filter         = VK_FILTER_LINEAR,
+		.filter         = Cast::VkFilter(filter),
 	};
 
 	vkCmdBlitImage2(resource->buffer, &blitInfo);
 }
 
-VkSampler DeviceResource::CreateSampler(VkDevice device, float maxLod, float maxAnisotropy) {
+VkSampler DeviceResource::CreateSampler(VkDevice device, SamplerDesc desc) {
 	VkSamplerCreateInfo samplerInfo{
 		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
 		.pNext  = nullptr,
 		.flags  = 0,
-		.magFilter = VK_FILTER_LINEAR,
-		.minFilter = VK_FILTER_LINEAR,
-		.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
-		.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-		.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-		.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+		.magFilter = Cast::VkFilter(desc.magFilter),
+		.minFilter = Cast::VkFilter(desc.minFilter),
+		.mipmapMode = Cast::VkSamplerMipmapMode(desc.mipmapMode),
+		.addressModeU = Cast::VkSamplerAddressMode(desc.wrapU),
+		.addressModeV = Cast::VkSamplerAddressMode(desc.wrapV),
+		.addressModeW = Cast::VkSamplerAddressMode(desc.wrapW),
 		.mipLodBias = 0.0f,
 		
-		.anisotropyEnable = maxAnisotropy == 0.0f ? VK_FALSE : physicalDevice->physicalFeatures2.features.samplerAnisotropy,
-		.maxAnisotropy = maxAnisotropy,
+		.anisotropyEnable = desc.maxAnisotropy == 0.0f ? VK_FALSE : physicalDevice->physicalFeatures2.features.samplerAnisotropy,
+		.maxAnisotropy = desc.maxAnisotropy,
 		.compareEnable = VK_FALSE,
 		.compareOp = VK_COMPARE_OP_ALWAYS,
 
-		.minLod = 0.0f,
-		.maxLod = maxLod,
+		.minLod = desc.minLod,
+		.maxLod = desc.maxLod,
 
 		.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
 		.unnormalizedCoordinates = VK_FALSE,
@@ -3460,6 +3487,65 @@ size_t Pipeline::Stage::Hash() const {
 	hash = HashCombine(hash, std::hash<std::string>{}(path.string()));
 	hash = HashCombine(hash, std::hash<std::string>{}(entryPoint));
 	return hash;
+}
+
+
+
+void ImGuiCheckVulkanResult(VkResult res) {
+    if (res == 0) {
+        return;
+	}
+	LOG_WARN("Imgui error: {}", VK_ERROR_STRING(res));
+	DEBUG_VK(res, "Imgui error: {}", VK_ERROR_STRING(res));
+}
+
+
+void SwapChain::CreateUI(SampleCount sampleCount) {
+	resource->CreateImGui(window, sampleCount);
+}
+
+void SwapChainResource::CreateImGui(GLFWwindow* window, SampleCount sampleCount) {
+	if (_ctx.imguiInitialized) return;
+	_ctx.imguiInitialized = true;
+	std::vector <Format> colorFormats = { vkw::Format::RGBA8_UNORM};
+	std::vector <Format> depthFormats = { vkw::Format::D32_sfloat };
+	ImGui_ImplVulkan_InitInfo initInfo{
+		.Instance            = _ctx.instance->handle,
+		.PhysicalDevice      = device->physicalDevice->handle,
+		.Device              = device->handle,
+		.QueueFamily         = commands[0].resource->queue->familyIndex,
+		.Queue               = commands[0].resource->queue->handle,
+		.DescriptorPool      = device->imguiDescriptorPool,
+		.MinImageCount       = surfaceCapabilities.minImageCount,
+		.ImageCount          = (uint32_t)imageResources.size(),
+		.MSAASamples         = (VkSampleCountFlagBits)std::min(device->physicalDevice->maxSamples, sampleCount),
+		.PipelineCache       = device->pipelineCache,
+		.UseDynamicRendering = true,
+		.PipelineRenderingCreateInfo{
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+			.colorAttachmentCount    = 1,
+			.pColorAttachmentFormats = reinterpret_cast<const VkFormat*>(colorFormats.data()),
+			.depthAttachmentFormat   = static_cast<VkFormat>(depthFormats[0]),
+		},
+		.Allocator           = _ctx.allocator,
+		.CheckVkResultFn     = ImGuiCheckVulkanResult,
+	};
+	ImGui_ImplVulkan_Init(&initInfo);
+	ImGui_ImplGlfw_InitForVulkan(window, true);
+}
+
+void ImGuiNewFrame() {
+	ImGui_ImplVulkan_NewFrame();
+	ImGui_ImplGlfw_NewFrame();
+}
+
+void Command::DrawImGui(ImDrawData* data) {
+	ImGui_ImplVulkan_RenderDrawData(data, resource->buffer);
+}
+
+void ImGuiShutdown() {
+	ImGui_ImplVulkan_Shutdown();
+	ImGui_ImplGlfw_Shutdown();
 }
 
 }
@@ -3520,4 +3606,3 @@ static const char *VK_ERROR_STRING(VkResult result) {
 		return "VK_<Unknown>";
 	}
 }
-

@@ -18,7 +18,6 @@ public:
 	void run(FeatureTestInfo* pFeatureTestInfo);
 private:
 	void Setup();
-	void Create();
 	void Draw();
 	void Compute();
 	void MainLoop();

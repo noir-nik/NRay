@@ -76,6 +76,8 @@ void WindowFocusCallback(GLFWwindow* window, int focused) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
 	LOG_WINDOW("Window {} focused {}", pWindow->GetName(), focused);
 
+	pWindow->SetUIContextCurrent();
+
 	if (pWindow->windowFocusCallback)
 		pWindow->windowFocusCallback(pWindow, focused);
 }
@@ -311,8 +313,14 @@ Window::Window(int width, int height, const char* name): size( width, height ), 
 	ApplyChanges();
 }
 
+void Window::CreateUI(vkw::SampleCount sampleCount) {
+	UIContext.Init();
+	swapChain.CreateUI(sampleCount); 
+}
+
 void Window::Destroy() {
 	swapChain.Destroy();
+	UIContext.Destroy();
 	glfwGetWindowPos(window, &pos.x, &pos.y);
 	glfwDestroyWindow(window);
 	alive = false;

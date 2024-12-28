@@ -238,7 +238,9 @@ static inline float4& operator -= (float4& a, float b) { a.x -= b; a.y -= b; a.z
 static inline bool operator==(const float4 a, const float4 b) { return a.x == b.x && a.y == b.y && a.z == b.z && a.w == b.w; }
 
 static inline void store  (float* p, const float4 a_val) { memcpy((void*)p, (void*)&a_val, sizeof(float)*4); }
-static inline void store_u(float* p, const float4 a_val) { memcpy((void*)p, (void*)&a_val, sizeof(float)*4); }  
+static inline void store_u(float* p, const float4 a_val) { memcpy((void*)p, (void*)&a_val, sizeof(float)*4); }
+
+static inline void load(const float* p, float4& a_val) { memcpy((void*)&a_val, (void*)p, sizeof(float)*4); }
 
 static inline float4 min  (const float4 a, const float4 b) { return float4{std::min(a.x, b.x), std::min(a.y, b.y), std::min(a.z, b.z), std::min(a.w, b.w)}; }
 static inline float4 max  (const float4 a, const float4 b) { return float4{std::max(a.x, b.x), std::max(a.y, b.y), std::max(a.z, b.z), std::max(a.w, b.w)}; }
@@ -312,6 +314,8 @@ static inline float3& operator -= (float3& a, float b) { a.x -= b; a.y -= b; a.z
 
 static inline void store  (float* p, const float3 a_val) { memcpy((void*)p, (void*)&a_val, sizeof(float)*3); }
 static inline void store_u(float* p, const float3 a_val) { memcpy((void*)p, (void*)&a_val, sizeof(float)*3); }  
+
+static inline void load (const float* p, float3& a_val) { memcpy((void*)&a_val, (void*)p, sizeof(float)*3); }
 
 static inline float3 min  (const float3 a, const float3 b) { return float3{std::min(a.x, b.x), std::min(a.y, b.y), std::min(a.z, b.z)}; }
 static inline float3 max  (const float3 a, const float3 b) { return float3{std::max(a.x, b.x), std::max(a.y, b.y), std::max(a.z, b.z)}; }
@@ -472,6 +476,8 @@ struct float4x4
 	float4 m_col[4];
 };
 
+using mat4 = float4x4;
+
 static inline float4 mul(const float4x4& m, const float4& v)
 {
 	float4 res;
@@ -527,6 +533,7 @@ static inline float4x4 rotate4x4Z(float phi)
 	return res;
 }
 
+// Rotation around an arbitrary axis
 static inline float4x4 rotate4x4(float3 axis, float angle)
 {
 	axis = normalize(axis);
