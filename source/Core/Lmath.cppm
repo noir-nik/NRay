@@ -76,6 +76,11 @@ inline int4& operator -= (int4& a, int b) { a.x -= b; a.y -= b; a.z -= b; a.w -=
 inline void store (int* p, const int4 a_val)  { memcpy((void*)p, (void*)&a_val, sizeof(int)*4); }
 inline void load  (const int* p, int4& a_val) { memcpy((void*)&a_val, (void*)p, sizeof(int)*4); }
 
+
+inline float2 operator+(const float2 a, const float2 b) { return float2{a.x + b.x, a.y + b.y}; }
+inline float2 operator-(const float2 a, const float2 b) { return float2{a.x - b.x, a.y - b.y}; }
+
+
 inline float3 operator+(const float3 a, const float3 b) { return float3{a.x + b.x, a.y + b.y, a.z + b.z}; }
 inline float3 operator-(const float3 a, const float3 b) { return float3{a.x - b.x, a.y - b.y, a.z - b.z}; }
 inline float3 operator*(const float3 a, const float3 b) { return float3{a.x * b.x, a.y * b.y, a.z * b.z}; }
@@ -131,8 +136,6 @@ inline float3 cross(const float3 a, const float3 b)
 }
 
 
-
-
 inline bool operator==(const int4& a, const int4& b) { return a.x == b.x && a.y == b.y && a.z == b.z && a.w == b.w; }
 inline bool operator!=(const int4& a, const int4& b) { return a.x != b.x || a.y != b.y || a.z != b.z || a.w != b.w; }
 
@@ -172,7 +175,7 @@ inline float4 min  (const float4 a, const float4 b) { return float4{min(a.x, b.x
 inline float4 max  (const float4 a, const float4 b) { return float4{max(a.x, b.x), max(a.y, b.y), max(a.z, b.z), max(a.w, b.w)}; }
 inline float4 clamp(const float4 u, const float4 a, const float4 b) { return float4{clamp(u.x, a.x, b.x), clamp(u.y, a.y, b.y), clamp(u.z, a.z, b.z), clamp(u.w, a.w, b.w)}; }
 inline float4 clamp(const float4 u, float a, float b) { return float4{clamp(u.x, a, b), clamp(u.y, a, b), clamp(u.z, a, b), clamp(u.w, a, b)}; }
-
+inline float4 round(const float4 a)                 { return float4{std::round(a.x), std::round(a.y), std::round(a.z), std::round(a.w)}; }
 // inline float4 abs (const float4 a) { return float4{std::abs(a.x), std::abs(a.y), std::abs(a.z), std::abs(a.w)}; } 
 // inline float4 sign(const float4 a) { return float4{sign(a.x), sign(a.y), sign(a.z), sign(a.w)}; }
 
@@ -191,10 +194,10 @@ inline  float dot(const float4 a, const float4 b)  { return a.x*b.x + a.y*b.y + 
 inline  float length(const float4 a) { return std::sqrt(dot(a,a)); }
 
 
-
-
-inline float2 operator+(const float2 a, const float2 b) { return float2{a.x + b.x, a.y + b.y}; }
-inline float2 operator-(const float2 a, const float2 b) { return float2{a.x - b.x, a.y - b.y}; }
+inline uint packRGBA8(float4 const& v) { 
+	uvec4 res = uvec4(round(clamp(v, 0.0f, 1.0f) * 255.0f));
+	return res.x | (res.y << 8) | (res.z << 16) | (res.w << 24);
+}
 
 
 inline void mat4_colmajor_mul_vec4(float* __restrict RES, const float* __restrict B, const float* __restrict V)

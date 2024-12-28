@@ -220,6 +220,26 @@ enum class WrapMode : std::uint16_t {
     MirrorClampToEdge = 4,
 };
 
+enum class CompareOp {
+	Never = 0,
+	Less = 1,
+	Equal = 2,
+	LessOrEqual = 3,
+	Greater = 4,
+	NotEqual = 5,
+	GreaterOrEqual = 6,
+	Always = 7,
+	MaxEnum = 0x7FFFFFFF
+};
+
+enum class BorderColor {
+	IntOpaqueBlack = 0,
+	IntOpaqueWhite = 1,
+	FloatOpaqueBlack = 2,
+	FloatOpaqueWhite = 3,
+	MaxEnum = 0x7FFFFFFF
+};
+
 struct SamplerDesc {
 	Filter magFilter = Filter::Linear;
 	Filter minFilter = Filter::Linear;
@@ -227,12 +247,16 @@ struct SamplerDesc {
 	WrapMode wrapU = WrapMode::Repeat;
 	WrapMode wrapV = WrapMode::Repeat;
 	WrapMode wrapW = WrapMode::Repeat;
+	float mipLodBias = 0.0f;
+	bool anisotropyEnable = false;
 	float maxAnisotropy = 0.0f;
+	bool compareEnable = false;
+	CompareOp compareOp = CompareOp::Always;
 	float minLod = 0.0f;
 	float maxLod = 1.0f;
+	BorderColor borderColor = BorderColor::IntOpaqueBlack;
+	bool unnormalizedCoordinates = false;
 };
-
-
 
 struct ImageDesc {
 	Extent3D extent;
@@ -451,7 +475,7 @@ struct BufferBarrier/* : MemoryBarrier */ {
 
 struct ImageBarrier/* : MemoryBarrier */ {
 	ImageLayout   newLayout           = ImageLayout::MaxEnum;
-	ImageLayout   oldLayout           = ImageLayout::MaxEnum;
+	ImageLayout   oldLayout           = ImageLayout::MaxEnum; // == use previous layout
 	uint32_t      srcQueueFamilyIndex = QueueFamilyIgnored;
 	uint32_t      dstQueueFamilyIndex = QueueFamilyIgnored;
 	MemoryBarrier memoryBarrier;

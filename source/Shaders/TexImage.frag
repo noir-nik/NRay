@@ -13,5 +13,6 @@ layout (location = 0) out vec4 outFragColor;
 void main() 
 {
 	// outFragColor = texture(textures[ctx.albedo],inUV);
-	outFragColor = vec4(inUV, 0.0, 1.0);
+	outFragColor = texture(textures[0],inUV);
+	// outFragColor = vec4(inUV, 0.0, 1.0);
 }

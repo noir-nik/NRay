@@ -300,7 +300,35 @@ struct DeviceResource: DeleteCopyDeleteMove {
 	std::vector<int32_t> availableImageRID;
 	std::vector<int32_t> availableTLASRID;
 	std::vector<int32_t> availableStorageImageRID;
+
+	struct SamplerDescHash {
+		size_t operator()(const SamplerDesc& desc) const {
+			size_t hash = 0;
+			hash = HashCombine(hash, static_cast<size_t>(desc.magFilter));
+			hash = HashCombine(hash, static_cast<size_t>(desc.minFilter));
+			hash = HashCombine(hash, static_cast<size_t>(desc.mipmapMode));
+			hash = HashCombine(hash, static_cast<size_t>(desc.wrapU));
+			hash = HashCombine(hash, static_cast<size_t>(desc.wrapV));
+			hash = HashCombine(hash, static_cast<size_t>(desc.wrapW));
+			hash = HashCombine(hash, std::hash<float>()(desc.mipLodBias));
+			hash = HashCombine(hash, std::hash<bool>()(desc.anisotropyEnable));
+			hash = HashCombine(hash, std::hash<float>()(desc.maxAnisotropy));
+			hash = HashCombine(hash, std::hash<bool>()(desc.compareEnable));
+			hash = HashCombine(hash, static_cast<size_t>(desc.compareOp));
+			hash = HashCombine(hash, std::hash<float>()(desc.minLod));
+			hash = HashCombine(hash, std::hash<float>()(desc.maxLod));
+			hash = HashCombine(hash, static_cast<size_t>(desc.borderColor));
+			hash = HashCombine(hash, std::hash<bool>()(desc.unnormalizedCoordinates));
+			return hash;
+		}
+
+		bool operator()(const SamplerDesc& lhs, const SamplerDesc& rhs) const {
+			return memcmp(&lhs, &rhs, sizeof(SamplerDesc)) == 0;
+		}
+	};
+	
 	VkSampler genericSampler;
+	std::unordered_map<SamplerDesc, VkSampler, SamplerDescHash, SamplerDescHash> samplers;
 
 	VkPipelineCache pipelineCache = VK_NULL_HANDLE;
 	
@@ -315,7 +343,6 @@ struct DeviceResource: DeleteCopyDeleteMove {
 			bool lineTopology = false;
 			CullModeFlags cullMode = CullMode::None;
 			std::vector<Pipeline::Stage> stages;
-
 		};
 
 		struct FragmentShaderInfo {
@@ -440,7 +467,18 @@ struct DeviceResource: DeleteCopyDeleteMove {
 	void CreateBindlessDescriptorResources();
 	void DestroyBindlessDescriptorResources();
 
-	VkSampler CreateSampler(VkDevice device, SamplerDesc desc);
+	VkSampler CreateSampler(SamplerDesc const& desc);
+
+	VkSampler getSampler(SamplerDesc const& desc) { 
+		auto sampler = samplers.find(desc);
+		if (sampler == samplers.end()) {
+			VkSampler sampler = CreateSampler(desc);
+			samplers[desc] = sampler;
+			return sampler;
+		} else {
+			return sampler->second;
+		}
+	}
 
 	void SetDebugUtilsObjectName(const VkDebugUtilsObjectNameInfoEXT& pNameInfo);
 	
@@ -476,7 +514,10 @@ struct DeviceResource: DeleteCopyDeleteMove {
 		stagingCpu = nullptr;
 		DestroyBindlessDescriptorResources();
 		vmaDestroyAllocator(vmaAllocator);
-		vkDestroySampler(handle, genericSampler, _ctx.allocator);
+		// vkDestroySampler(handle, , _ctx.allocator);
+		for (auto& [_, sampler] : samplers) {
+			vkDestroySampler(handle, sampler, _ctx.allocator);
+		}
 
 		for (auto& [_, queue] : uniqueQueues) {
 			queue->command.resource.reset();
@@ -605,7 +646,7 @@ struct ImageResource : Resource {
 			if (rid != Null) {
 				device->availableImageRID.push_back(rid);
 				for (ImTextureID imguiRID : imguiRIDs) {
-				    ImGui_ImplVulkan_RemoveTexture((VkDescriptorSet)imguiRID);
+				    // ImGui_ImplVulkan_RemoveTexture((VkDescriptorSet)imguiRID);
 				}
 				rid = Null;
 				imguiRIDs.clear();
@@ -894,14 +935,18 @@ Image Device::CreateImage(const ImageDesc& desc) {
 		case Aspect::Depth | Aspect::Stencil: newLayout = ImageLayout::DepthStencilRead; break;
 		default: break;
 		}
-		res->imguiRIDs.resize(desc.layers);
-		
-		for (int i = 0; i < desc.layers; i++) {
-			res->imguiRIDs[i] = (ImTextureID) ImGui_ImplVulkan_AddTexture(resource->genericSampler, res->layersView[i], (VkImageLayout)newLayout);
-		}
+
+		// res->imguiRIDs.resize(desc.layers);
+		// if (desc.layers > 1) {
+        //     for (int i = 0; i < desc.layers; i++) {
+        //         res->imguiRIDs[i] = (ImTextureID)ImGui_ImplVulkan_AddTexture(resource->, res->layersView[i], (VkImageLayout)newLayout);
+        //     }
+        // } else {
+        //     res->imguiRIDs[0] = (ImTextureID)ImGui_ImplVulkan_AddTexture(resource->, res->view, (VkImageLayout)newLayout);
+        // }
 
 		VkDescriptorImageInfo descriptorInfo = {
-			.sampler = resource->genericSampler,
+			.sampler = resource->getSampler(desc.sampler),
 			.imageView = res->view,
 			.imageLayout = (VkImageLayout)newLayout,
 		};
@@ -919,7 +964,7 @@ Image Device::CreateImage(const ImageDesc& desc) {
 	}
 	if (desc.usage & ImageUsage::Storage) {
 		VkDescriptorImageInfo descriptorInfo = {
-			.sampler     = resource->genericSampler,
+			.sampler     = resource->getSampler(desc.sampler),
 			.imageView   = res->view,
 			.imageLayout = VK_IMAGE_LAYOUT_GENERAL,
 		};
@@ -2602,7 +2647,10 @@ void DeviceResource::Create(std::span<Queue*> queues) {
 		vkGetDeviceQueue(handle, q->resource->familyIndex, q->resource->index, &q->resource->handle);
 	}
 
-	genericSampler = CreateSampler(handle, {});
+	SamplerDesc genericSamplerDesc {};
+	genericSampler = CreateSampler(genericSamplerDesc);
+	samplers[genericSamplerDesc] = genericSampler;
+	
 	if (_ctx.enableValidationLayers) {
 		vkSetDebugUtilsObjectNameEXT = (PFN_vkSetDebugUtilsObjectNameEXT)vkGetDeviceProcAddr(handle, "vkSetDebugUtilsObjectNameEXT");
 	}
@@ -3493,7 +3541,7 @@ void Command::Blit(BlitInfo const& info) {
 	vkCmdBlitImage2(resource->buffer, &blitInfo);
 }
 
-VkSampler DeviceResource::CreateSampler(VkDevice device, SamplerDesc desc) {
+VkSampler DeviceResource::CreateSampler(SamplerDesc const& desc) {
 	VkSamplerCreateInfo samplerInfo{
 		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
 		.pNext  = nullptr,
