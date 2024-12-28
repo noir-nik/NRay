@@ -2,7 +2,7 @@
 #version 460
 
 #extension GL_GOOGLE_include_directive : enable
-#include "ShaderCommon.h"
+#include "Bindless.h"
 #include "HelloTriangle.hpp"
 
 // #extension GL_EXT_debug_printf : enable

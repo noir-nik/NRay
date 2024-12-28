@@ -1,6 +1,4 @@
 #pragma once
-
-#include "Lmath.hpp"
 #include <cstdint>
 #include <imgui/imgui.h>
 #include <span>
@@ -9,6 +7,12 @@
 #include <filesystem>
 #include <memory>
 #include <string>
+
+#ifdef USE_MODULES
+import Lmath;
+#else
+#include "Lmath.hpp"
+#endif
 
 struct GLFWwindow;
 

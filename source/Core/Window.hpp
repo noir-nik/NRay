@@ -5,9 +5,14 @@
 #include <string>
 
 #include "Base.hpp"
-#include "Lmath.hpp"
 #include "VulkanBase.hpp" // For swapchain
 #include "UI.hpp"
+
+#ifdef USE_MODULES
+import Lmath;
+#else
+#include "Lmath.hpp"
+#endif
 
 class WindowManager;
 enum class WindowMode {
@@ -217,6 +222,7 @@ public:
 	inline int         GetFramesToDraw()                   { return framesToDraw; }
 	// inline void        SetDrawNeeded(bool value)           { framesToDraw = value; }
 	inline void        AddFramesToDraw(int value)           { framesToDraw += value; }
+	inline void        SetFramesToDraw(int value)           { framesToDraw = value; }
 
 	inline void        CreateSwapchain(vkw::Device& device, vkw::Queue& queue){ if (!swapChainAlive) swapChain.Create(device, queue, window, size.x, size.y); swapChainAlive = true; }
 	void               CreateUI(vkw::SampleCount sampleCount);

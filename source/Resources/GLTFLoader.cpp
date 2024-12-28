@@ -396,8 +396,7 @@ void LoadNode(fastgltf::Asset& asset, const int gltfNodeIndex, std::unordered_ma
 			memcpy(&local, matrix.data(), sizeof(matrix));
 		},
 		[&](fastgltf::TRS transform) {
-			memcpy(&local, translate(rotate(scale(fastgltf::math::fmat4x4(), transform.scale),transform.rotation),
-			transform.translation).data(), sizeof(fastgltf::math::fmat4x4));
+			memcpy(&local, scale(rotate(translate(fastgltf::math::fmat4x4(), transform.translation), transform.rotation), (transform.scale)).data(), sizeof(fastgltf::math::fmat4x4));
 		},
 		[&](auto&&) {
 			LOG_WARN("Unsupported fastgltf::visitor default (transform) {}", glTFNode.name);

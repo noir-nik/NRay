@@ -3,8 +3,14 @@
 #include <cstdint>
 #include <string>
 #include <vector>
-#include "Lmath.hpp"
 #include "Objects.hpp"
+#include "Phong.h"
+
+#ifdef USE_MODULES
+import Lmath;
+#else
+#include "Lmath.hpp"
+#endif
 
 namespace Component {
 using namespace Lmath;
@@ -30,7 +36,5 @@ struct Transform {
 // 	std::shared_ptr<Objects::Mesh> mesh;
 // };
 using Mesh = std::shared_ptr<Objects::Mesh>;
-
-
 
 } // namespace Component

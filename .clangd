@@ -18,4 +18,5 @@ CompileFlags:
 		-Ideps/fastgltf/deps/simdjson,
 		--target=x86_64-w64-windows-gnu,
 		-DNRAY_DEBUG,
+		-DUSE_MODULES
 	]

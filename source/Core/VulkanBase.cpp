@@ -2,7 +2,7 @@
 #include "Base.hpp"
 #include "Util.hpp"
 #include "VulkanBase.hpp"
-#include "ShaderCommon.h"
+#include "Bindless.h"
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -108,16 +108,16 @@ struct Context {
 	bool presentRequested = false;
 
 #ifdef NRAY_DEBUG
-	bool enableValidationLayers = true;
+	static constexpr bool enableValidationLayers = true;
 #else
-	bool enableValidationLayers = false;
+	static constexpr bool enableValidationLayers = false;
 #endif
-	bool enableDebugReport = false;
+	static constexpr bool enableDebugReport = false;
 	
-	bool usePipelineLibrary = false;
-	bool linkTimeOptimization = true; // Pipeline library link
+	static constexpr bool usePipelineLibrary = false;
+	static constexpr bool linkTimeOptimization = true; // Pipeline library link
 
-	bool enableUnusedAttachments = false;
+	static constexpr bool enableUnusedAttachments = false;
 
 
 	bool imguiInitialized = false;
@@ -170,8 +170,8 @@ struct Instance: DeleteCopyMove {
 	VkInstance handle = VK_NULL_HANDLE;
 	VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
 	VkDebugReportCallbackEXT debugReport = VK_NULL_HANDLE;
-	std::string applicationName = "Vulkan Slang Compute";
-	std::string engineName = "Vulkan Compute";
+	std::string applicationName = "nRay";
+	std::string engineName = "nRay Engine";
 
 	uint32_t apiVersion;
 
@@ -429,7 +429,9 @@ struct DeviceResource: DeleteCopyMove {
 	~DeviceResource() {
 		// dummyVertexBuffer = {};
 		// asScratchBuffer = {};
-		vkDestroyDescriptorPool(handle, imguiDescriptorPool, _ctx.allocator);
+		if (imguiDescriptorPool != VK_NULL_HANDLE) {
+			vkDestroyDescriptorPool(handle, imguiDescriptorPool, _ctx.allocator);
+		}
 		
 		for (auto& [_, pipeline]: pipelineLibrary.vertexInputInterfaces) {
 			vkDestroyPipeline(handle, pipeline, _ctx.allocator);
@@ -1700,9 +1702,10 @@ void Command::BeginRendering(const std::vector<std::span<const Image>>& colorAtt
 
 	VkViewport _viewport = {
 		.x = viewport.x,
-		.y = viewport.y,
+		// .y = viewport.y,
+		.y = viewport.w,
 		.width = viewport.z,
-		.height = viewport.w,
+		.height = -viewport.w,
 		.minDepth = 0.0f,
 		.maxDepth = 1.0f,
 	};
@@ -3507,8 +3510,9 @@ void SwapChain::CreateUI(SampleCount sampleCount) {
 void SwapChainResource::CreateImGui(GLFWwindow* window, SampleCount sampleCount) {
 	if (_ctx.imguiInitialized) return;
 	_ctx.imguiInitialized = true;
-	std::vector <Format> colorFormats = { vkw::Format::RGBA8_UNORM};
-	std::vector <Format> depthFormats = { vkw::Format::D32_sfloat };
+	VkFormat colorFormats[] = { VK_FORMAT_R8G8B8A8_UNORM };
+	// VkFormat* colorFormats = new VkFormat[] { VK_FORMAT_R8G8B8A8_UNORM };
+	VkFormat depthFormat =  VK_FORMAT_D32_SFLOAT;
 	ImGui_ImplVulkan_InitInfo initInfo{
 		.Instance            = _ctx.instance->handle,
 		.PhysicalDevice      = device->physicalDevice->handle,
@@ -3521,17 +3525,17 @@ void SwapChainResource::CreateImGui(GLFWwindow* window, SampleCount sampleCount)
 		.MSAASamples         = (VkSampleCountFlagBits)std::min(device->physicalDevice->maxSamples, sampleCount),
 		.PipelineCache       = device->pipelineCache,
 		.UseDynamicRendering = true,
-		.PipelineRenderingCreateInfo{
+		.PipelineRenderingCreateInfo = {
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
 			.colorAttachmentCount    = 1,
-			.pColorAttachmentFormats = reinterpret_cast<const VkFormat*>(colorFormats.data()),
-			.depthAttachmentFormat   = static_cast<VkFormat>(depthFormats[0]),
+			.pColorAttachmentFormats = colorFormats,
+			.depthAttachmentFormat   = depthFormat,
 		},
 		.Allocator           = _ctx.allocator,
 		.CheckVkResultFn     = ImGuiCheckVulkanResult,
 	};
-	ImGui_ImplVulkan_Init(&initInfo);
 	ImGui_ImplGlfw_InitForVulkan(window, true);
+	ImGui_ImplVulkan_Init(&initInfo);
 }
 
 void ImGuiNewFrame() {

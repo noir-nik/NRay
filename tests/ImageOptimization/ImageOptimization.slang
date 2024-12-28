@@ -1,5 +1,5 @@
 #define SLANG
-#include "../../source/Shaders/ShaderCommon.h"
+#include "../../source/Shaders/Bindless.h"
 #include "ImageOptimization.hpp"
 
 #define ImageOpt float4Buffers[ctx.imageOptRID]

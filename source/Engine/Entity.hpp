@@ -4,7 +4,7 @@
 using Registry = entt::registry;
 
 struct Entity {
-	Entity(Registry* registry, entt::entity entity = entt::null) : entity(entity), registry(registry) {}
+	Entity(Registry* registry = nullptr, entt::entity entity = entt::null) : entity(entity), registry(registry) {}
 	Registry* registry;
 	entt::entity entity;
 	inline static constexpr entt::entity Null = entt::null;
@@ -32,6 +32,11 @@ struct Entity {
 
 	template<typename Type>
 	inline Type& GetComponent() {
+		return registry->get<Type>(entity);
+	}
+
+	template<typename Type>
+	inline const Type& GetComponent() const {
 		return registry->get<Type>(entity);
 	}
 

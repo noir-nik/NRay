@@ -4,7 +4,12 @@
 #include <cstdint>
 #include <vector>
 
+#ifdef USE_MODULES
+import Lmath;
+#else
 #include "Lmath.hpp"
+#endif
+
 using float3 = Lmath::float3;
 using float4x4 = Lmath::float4x4;
 

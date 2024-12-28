@@ -52,8 +52,8 @@ struct SceneGraph {
 		nodes.resize(size, {registry});
 	}
 
-	void UpdateTransforms(Node &node, const Component::Transform& parentTransform);
+	void UpdateTransforms(Node& node, const Component::Transform& parentTransform);
 	void DebugPrint();
-	void DebugPrintTree(Node& node, int indent);
+	void DebugPrintTree(const Node& node, int indent);
 };
 

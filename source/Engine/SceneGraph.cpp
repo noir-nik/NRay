@@ -1,22 +1,18 @@
 #include <SceneGraph.hpp>
+#ifdef USE_MODULES
+import Lmath;
+#else
 #include "Lmath.hpp"
+#endif
 
 using namespace Lmath;
 
 void SceneGraph::UpdateTransforms(Node &node, const Component::Transform& parentTransform) {
 	auto& transform = node.entity.GetComponent<Component::Transform>();
-	// printf("\n%s ", node.entity.GetComponent<Component::Name>().name.c_str());
-	// printf("Children: %d\n", node.children.size());
+
 	if (transform.dirty ||  parentTransform.dirty ) {
 		transform.global = parentTransform.global * transform.local;
 	}
-
-	// for (int i = 0; i < 4; i++) {
-	// 		for (int j = 0; j < 4; j++) {
-	// 			printf("%f ", transform.global[i][j]);
-	// 		}
-	// 		printf("\n");
-	// 	}
 	
 	for (auto& childIndex : node.children) {
 		UpdateTransforms(nodes[childIndex], transform);
@@ -29,7 +25,7 @@ void SceneGraph::DebugPrint() {
 	DebugPrintTree(root, 0);
 }
 
-void SceneGraph::DebugPrintTree(Node& node, int indent) {
+void SceneGraph::DebugPrintTree(const Node&  node, int indent) {
 	for (int i = 0; i < indent; i++) {
 		printf("  ");
 	}
@@ -38,3 +34,4 @@ void SceneGraph::DebugPrintTree(Node& node, int indent) {
 		DebugPrintTree(nodes[childIndex], indent + 1);
 	}
 }
+

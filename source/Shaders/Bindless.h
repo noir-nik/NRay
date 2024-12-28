@@ -1,17 +1,3 @@
-#ifdef ENGINE
-#pragma once
-
-#include "Lmath.hpp"
-
-using vec2 = Lmath::vec2;
-using vec3 = Lmath::vec3;
-using vec4 = Lmath::vec4;
-using ivec4 = Lmath::ivec4;
-
-using float3 = Lmath::float3;
-using float4 = Lmath::float4;
-using float4x4 = Lmath::float4x4;
-#endif
 
 #define BINDING_TEXTURE 0 // Sampled image
 #define BINDING_BUFFER 1
@@ -29,10 +15,6 @@ using float4x4 = Lmath::float4x4;
 #extension GL_EXT_nonuniform_qualifier : enable
 #extension GL_EXT_shader_image_load_formatted : require
 
-struct Pixel{
-  vec4 value;
-};
-
 // layout(set = 0, binding = BINDING_TEXTURE) uniform sampler2D textures[];
 // layout(set = 0, binding = BINDING_TEXTURE) uniform samplerCube cubeTextures[];
 
@@ -46,10 +28,6 @@ layout(set = 0, binding = BINDING_BUFFER) buffer float4Buffer {
 
 layout(binding = BINDING_STORAGE_IMAGE) uniform image2D images[];
 
-// Neural SDF
-#define w_b floatBuffers[ctx.weightsRID].data
-#define outputImage float4Buffers[ctx.outputImageRID].data
-
 #endif
 
 
@@ -58,8 +36,6 @@ layout(binding = BINDING_STORAGE_IMAGE) uniform image2D images[];
 [[vk::binding(BINDING_BUFFER, 0)]] RWStructuredBuffer<float> floatBuffers[];
 [[vk::binding(BINDING_BUFFER, 0)]] RWStructuredBuffer<float4> float4Buffers[];
 [[vk::binding(BINDING_STORAGE_IMAGE, 0)]] RWTexture2D<float4> images[];
-
-#define w_b floatBuffers[ctx.weightsRID]
-#define outputImage float4Buffers[ctx.outputImageRID]
+// [[vk::binding(BINDING_TLAS, 0)]] AccelerationStructure tlas;
 
 #endif

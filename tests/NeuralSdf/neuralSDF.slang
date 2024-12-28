@@ -1,5 +1,5 @@
 #define SLANG
-#include "../../source/Shaders/ShaderCommon.h"
+#include "../../source/Shaders/Bindless.h"
 #include "NeuralSdf.hpp"
 #define fov 90.
 #define itfov 1.0 / (tan(3.141592654 * fov / (180. * 2.)))
@@ -11,6 +11,9 @@
 #define MAX_STEPS 200
 
 static const float W_0 = 30.0;
+
+#define w_b floatBuffers[ctx.weightsRID]
+#define outputImage float4Buffers[ctx.outputImageRID]
 
 [[vk::push_constant]]
 NeuralSdfConstants ctx;

@@ -8,10 +8,12 @@
 #include "Log.hpp"
 #include "Window.hpp"
 #include "VulkanBase.hpp"
-#include "ShaderCommon.h"
+#include "Bindless.h"
 #include "Editor.hpp"
 #include "FileManager.hpp"
 #include "FeatureTest.hpp"
+
+#include "Phong.h"
 
 #include "GLTFLoader.hpp"
 #include "Project.hpp"
@@ -23,7 +25,7 @@ namespace {
 struct AppContext {
 	vkw::Pipeline pipeline;
 
-	vkw::Pipeline glLTPipeline;
+	vkw::Pipeline glTFPipeline;
 	// vkw::Pipeline computePipeline;
 
 	uint32_t width, height;
@@ -35,6 +37,7 @@ struct AppContext {
 	// float4x4 worldViewProjInv;
 
 	vkw::SampleCount sampleCount = vkw::SampleCount::_4;
+	// vkw::SampleCount sampleCount = vkw::SampleCount::_1;
 	// vkw::Format renderFormat = vkw::Format::RGBA16_sfloat;
 	vkw::Format renderFormat = vkw::Format::RGBA8_UNORM;
 	
@@ -51,6 +54,10 @@ struct AppContext {
 	std::unordered_map<Window*, vkw::Image> colorImages;
 	std::unordered_map<Window*, vkw::Image> depthImages;
 	std::unordered_map<Window*, vkw::Image> resolveImages;
+
+	Entity phongMaterial;
+	Entity phongLight;
+
 
 	Editor editor;
 
@@ -77,28 +84,12 @@ struct AppContext {
 };
 static AppContext* ctx;
 
-struct Camera {
-    vec3 velocity;
-
-	vec3 focus = {0.0f, 0.0f, 0.0f};
-	float rotation_factor = 0.0025f;
-	float zoom_factor = 0.01f;
-	float move_factor = 0.00107f;
-
-    mat4 view = lookAt(vec3(0.0f, 0.0f, -3.0f), focus, vec3(0.0f, 1.0f, 0.0f));
-	mat4 proj = perspective(60.0f, 1.0f, 0.1f, 100.0f);
-
-
-};
-static Camera camera;
+static Objects::Camera camera(vec3(0.0f, 0.0f, 30.0f), vec3(0.0f, 0.0f, 0.0f), vec3(0.0f, 1.0f, 0.0f));
 
 struct Vertex {
 	vec3 pos;
 	vec3 color;
 };
-
-
-
 
 void FramebufferCallback(Window* window, int width, int height);
 void RefreshCallback(Window* window);
@@ -106,8 +97,8 @@ void MouseButtonCallback(Window* window, int button, int action, int mods);
 void KeyCallback(Window* window, int key, int scancode, int action, int mods);
 void CursorPosCallback(Window *window, double xpos, double ypos);
 void ScrollCallback(Window *window, double xoffset, double yoffset);
-
-
+void IconifyCallback(Window* window, int iconified);
+void printMatrix(const float4x4& m, const char* name = nullptr);
 // const std::vector<Vertex> vertices = {
 // 	{{0.0f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
 // 	{{-0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}},
@@ -173,14 +164,14 @@ void AppContext::CreateShaders() {
 		.useDepth = true,
 		.depthFormat = depthImages[mainWindow].format,
 		.samples = sampleCount,
-		.lineTopology = true
+		.lineTopology = false
 	});
 
-	glLTPipeline = device.CreatePipeline({
+	glTFPipeline = device.CreatePipeline({
 		.point = vkw::PipelinePoint::Graphics,
 		.stages = {
-			{.stage = vkw::ShaderStage::Vertex, .path = "tests/FeatureTest/glTF.vert"},
-			{.stage = vkw::ShaderStage::Fragment, .path = "tests/FeatureTest/glTF.frag"},
+			{.stage = vkw::ShaderStage::Vertex, .path = "source/Shaders/Phong.vert"},
+			{.stage = vkw::ShaderStage::Fragment, .path = "source/Shaders/Phong.frag"},
 		},
 		.name = "Feature pipeline",
 		// pos2 + color3
@@ -214,6 +205,7 @@ void AppContext::CreateWindowResources(Window* window) {
 	window->AddKeyCallback(KeyCallback);
 	window->AddCursorPosCallback(CursorPosCallback);
 	window->AddScrollCallback(ScrollCallback);
+	window->AddWindowIconifyCallback(IconifyCallback);
 
 	uint2 maxSize = uint2(window->GetSizeLimits().zw());
 
@@ -269,13 +261,16 @@ void AppContext::UploadBuffers() {
 	sceneGraph.DebugPrint();
 }
 
+
 void AppContext::RecordCommands(Window* window) {
 	auto size = window->GetSize();
 	auto glfwWindow = window->GetGLFWwindow();
 	vec4 viewport = {0, 0, (float)size.x, (float)size.y};
-	FeatureTestConstants constants{};
-	constants.view = inverse4x4(camera.view);
-	constants.proj = perspective(60.0f, (float)size.x / size.y, 0.01f, 1000.0f);
+	PhongConstants constants{};
+	constants.viewProj = camera.proj * inverse4x4(camera.view);
+	constants.light = phongLight.GetComponent<PhongLight>();
+	constants.material = phongMaterial.GetComponent<PhongMaterial>();
+	constants.cameraPosition = camera.getPosition();
 
 	// LOG_INFO("Viewport: {}, {}, {}, {}", viewport.x, viewport.y, viewport.z, viewport.w); 
 
@@ -287,36 +282,35 @@ void AppContext::RecordCommands(Window* window) {
 	// cmd.Barrier(renderImages[window], {vkw::ImageLayout::TransferDst});
 	// cmd.ClearColorImage(renderImages[window], {0.7f, 0.0f, 0.4f, 1.0f});
 	if (sampleCount == vkw::SampleCount::_1) {
-		// cmd.BeginRendering({{{resolveImages[window]}}}, {depthImages[window]}, 1, viewport);
-		cmd.BeginRendering({{{resolveImages[window]}}}, {}, 1, viewport);
+		cmd.BeginRendering({{{resolveImages[window]}}}, {depthImages[window]}, 1, viewport);
+		// cmd.BeginRendering({{{resolveImages[window]}}}, {}, 1, viewport);
 	} else {
-		// cmd.BeginRendering({{{colorImages[window], resolveImages[window]}}}, {depthImages[window]}, 1, viewport);
-		cmd.BeginRendering({{{colorImages[window], resolveImages[window]}}}, {}, 1, viewport);
+		cmd.BeginRendering({{{colorImages[window], resolveImages[window]}}}, {depthImages[window]}, 1, viewport);
+		// cmd.BeginRendering({{{colorImages[window], resolveImages[window]}}}, {}, 1, viewport);
 	}
-	// cmd.BindPipeline(pipeline);
+	;
 	
-	cmd.BindPipeline(glLTPipeline);
-
+	cmd.BindPipeline(glTFPipeline);
 	for (auto& meshNode : meshes) {
 		constants.model = meshNode.GetComponent<Component::Transform>().global;
 		// print name
 		// printf("%s\n", meshNode.GetComponent<Component::Name>().name.c_str());
-		// // print model
-		// for (int i = 0; i < 4; i++) {
-		// 	for (int j = 0; j < 4; j++) {
-		// 		printf("%f ", constants.model[i][j]);
-		// 	}
-		// 	printf("\n");
-		// }
 		cmd.PushConstants(&constants, sizeof(constants));
 		auto& mesh = meshNode.GetComponent<Component::Mesh>();
-		cmd.DrawMesh(mesh->vertexBuffer, mesh->indexBuffer, mesh->indexBuffer.size / sizeof(uint));
+		cmd.DrawMesh(mesh->vertexBuffer, mesh->indexBuffer, mesh->indexBuffer.size / sizeof(uint32_t));
 	}
 
-
-	
-	// cmd.Draw(vertices.size(), 1, 0, 0);
-
+/* 
+	FeatureTestConstants debugConstants{
+		.view = inverse4x4(camera.view),
+		.proj = camera.proj,
+		.viewProj = camera.proj * inverse4x4(camera.view),
+	};
+	cmd.BindPipeline(pipeline);
+	cmd.PushConstants(&debugConstants, sizeof(debugConstants));
+	cmd.BindVertexBuffer(cubeVertexBuffer);
+	cmd.Draw(vertices.size(), 1, 0, 0);
+ */
 	cmd.DrawImGui(imguiDrawData);
 
 	cmd.EndRendering();
@@ -329,25 +323,28 @@ void AppContext::RecordCommands(Window* window) {
 }
 
 void AppContext::DrawWindow(Window* window) {
-	if (window->GetDrawNeeded() && !window->GetIconified()) {
-		window->SetUIContextCurrent();
-		editor.BeginFrame();
-		editor.Draw();
-		imguiDrawData = editor.EndFrame();
-		
-		RecordCommands(window);
-		if (window->swapChain.GetDirty()) {
-			LOG_WARN("RecordCommands: Swapchain dirty");
-			return;
-		}
-		window->swapChain.SubmitAndPresent();
-		if (window->swapChain.GetDirty()) {
-			LOG_WARN("SubmitAndPresent: Swapchain dirty");
-			return;
-		}
-		window->AddFramesToDraw(-1);
-		window->SetFrameCount((window->GetFrameCount() + 1) % (1 << 15));
+	window->SetUIContextCurrent();
+	editor.BeginFrame();
+	editor.Draw(camera);
+	imguiDrawData = editor.EndFrame();
+	
+	RecordCommands(window);
+	if (window->swapChain.GetDirty()) {
+		LOG_WARN("RecordCommands: Swapchain dirty");
+		return;
 	}
+	window->swapChain.SubmitAndPresent();
+	if (window->swapChain.GetDirty()) {
+		LOG_WARN("SubmitAndPresent: Swapchain dirty");
+		return;
+	}
+	// ImGuiIO& io = ImGui::GetIO();
+	// if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+	// 	ImGui::UpdatePlatformWindows();
+	// 	ImGui::RenderPlatformWindowsDefault();
+	// }
+	window->AddFramesToDraw(-1);
+	window->SetFrameCount((window->GetFrameCount() + 1) % (1 << 15));
 }
 
 void KeyCallback(Window* window, int key, int scancode, int action, int mods) {
@@ -464,10 +461,10 @@ Hit MouseHitTest (Window *window, double xpos, double ypos) {
 
 
 void CursorPosCallback (Window *window, double xpos, double ypos) {
-	vec3 camera_pos = camera.view.col(3).xyz();
-	vec3 camera_right = camera.view.get_col(0).xyz();
-	vec3 camera_up = camera.view.get_col(1).xyz();
-	vec3 camera_forward = camera.view.get_col(2).xyz();
+	vec3 camera_right = camera.getRight();
+	vec3 camera_up = camera.getUp();
+	vec3 camera_forward = camera.getForward();
+	auto camera_pos = camera.getPosition();
 
 	window->AddFramesToDraw(1);
 
@@ -499,8 +496,8 @@ void CursorPosCallback (Window *window, double xpos, double ypos) {
 		
 		default:
 			camera_pos -= camera.focus;
-			// camera.view = rotate4x4(camera_up, mouse.deltaPos.x * camera.rotation_factor) * rotate4x4(camera_right, -mouse.deltaPos.y * camera.rotation_factor)  * camera.view; // trackball
-			camera.view = rotate4x4Y(mouse.deltaPos.x * camera.rotation_factor) * rotate4x4(camera_right, -mouse.deltaPos.y * camera.rotation_factor)  * camera.view;
+			// camera.view = rotate4x4(camera_up, mouse.deltaPos.x * camera.rotation_factor) * rotate4x4(camera_right, mouse.deltaPos.y * camera.rotation_factor)  * camera.view; // trackball
+			camera.view = rotate4x4Y((camera_up.y > 0 ? 1.0f : -1.0f) * mouse.deltaPos.x * camera.rotation_factor) * rotate4x4(camera_right, mouse.deltaPos.y * camera.rotation_factor)  * camera.view;
 			camera_pos += camera.focus;
 
 			break;
@@ -509,7 +506,7 @@ void CursorPosCallback (Window *window, double xpos, double ypos) {
 	}
 	if (mouse.buttons[GLFW_MOUSE_BUTTON_MIDDLE]) {
 		auto move_factor = camera.move_factor * length(camera_pos - camera.focus);
-		auto movement =  move_factor * (camera_up * mouse.deltaPos.y + camera_right * mouse.deltaPos.x); 
+		auto movement =  move_factor * (camera_up * -mouse.deltaPos.y + camera_right * mouse.deltaPos.x); 
 		camera.focus += movement;
 		camera.view = translate4x4(movement) * camera.view;
 		// window->AddFramesToDraw(1);
@@ -538,13 +535,20 @@ void ScrollCallback(Window *window, double xoffset, double yoffset){
 void FramebufferCallback(Window* window, int width, int height) {
 	// DEBUG_TRACE("Window {} framebuffer resized to {}x{}", window->GetName(), width, height);
 	if (width == 0 || height == 0) {return;}
+	camera.proj = perspective(60.0f, (float)width / height, 0.01f, 1000.0f); // TODO: move to size callback
 	// LOG_INFO("RecreateFrameResources {} callback", window->GetName());
 	ctx->RecreateFrameResources(window);
 }
 
 void RefreshCallback(Window* window) {
-	// window->AddFramesToDraw(1);
-	// ctx->DrawWindow(window);
+	window->AddFramesToDraw(1);
+	ctx->DrawWindow(window);
+}
+
+void IconifyCallback(Window* window, int iconified) {
+	if (iconified) {
+		window->SetFramesToDraw(0);
+	}
 }
 
 void AppContext::RecreateFrameResources(Window* window) {
@@ -627,6 +631,7 @@ void AppContext::RecreateFrameResources(Window* window) {
 
 void FeatureTestApplication::run(FeatureTestInfo* pFeatureTestInfo) {
 	info = pFeatureTestInfo;
+	Create();
 	Setup();
 	MainLoop();
 	// Draw();
@@ -647,15 +652,36 @@ void BatterySaver() {
 	lastFrameTime = std::chrono::high_resolution_clock::now();
 }
 
+void FeatureTestApplication::Create() {
+	ctx = new AppContext();
+
+	ctx->phongMaterial = ctx->project.CreateEntity("PhongMaterial");
+	// phongMaterial.AddComponent<PhongMaterial>();
+	PhongMaterial phongMat = {
+		.ambient = vec3(0.1, 0.1, 0.1),
+		.diffuse = vec3(0.8, 0.8, 0.8),
+		.specular = vec3(0.8, 0.8, 0.8),
+		.shininess = 64.0
+	};
+	ctx->project.registry.emplace<PhongMaterial>(ctx->phongMaterial.entity, phongMat);
+
+	PhongLight light = {
+		.position = vec3(10.0, 10.0, 0.0),
+		.color = vec3(0.8, 0.8, 0.8)
+	};
+	ctx->phongLight = ctx->project.CreateEntity("PhongLight");
+	ctx->project.registry.emplace<PhongLight>(ctx->phongLight.entity, light);
+}
+
 void FeatureTestApplication::Setup() {
 	vkw::Init();
-
-	ctx = new AppContext();
 
 	UI::Init();
 	ctx->editor.Setup();
 	ctx->width = info->width;
 	ctx->height = info->height;
+
+	camera.proj = perspective(60.0f, (float)ctx->width / ctx->height, 0.01f, 1000.0f);
 
 	auto window = new Window(ctx->width, ctx->height, "NRay");
 	ctx->queue = {vkw::QueueFlagBits::Graphics | vkw::QueueFlagBits::Compute | vkw::QueueFlagBits::Transfer, window->GetGLFWwindow()};
@@ -674,16 +700,36 @@ void FeatureTestApplication::Setup() {
 	ctx->CreateShaders();
 }
 
-void RemoveWindow(std::set<Window*>::iterator& it) {
-	auto window = *it;
-	ctx->depthImages.erase(window);
-	ctx->colorImages.erase(window);
-	ctx->resolveImages.erase(window);
-	it = ctx->windows.erase(it);
-	if (window == ctx->mainWindow) {
-		ctx->mainWindow = nullptr;
+bool DrawOrRemoveWindow(Window* window) {
+	window->ApplyChanges();
+	if (window->GetAlive()) {
+		// LOG_INFO("Iconified {}", window->GetIconified());
+		if (!window->GetIconified()) {
+			// Recreate swapchain if needed
+			if (window->GetSwapchainDirty() || window->GetFramebufferResized()) {
+				// LOG_INFO("DIRTY FRAME RESOURCES");
+				window->UpdateFramebufferSize();
+				ctx->device.WaitIdle();
+				window->RecreateSwapchain();
+				window->SetFramebufferResized(false);
+				window->AddFramesToDraw(1);
+			}
+			// Draw if needed
+			if (window->GetDrawNeeded()){
+				ctx->DrawWindow(window);
+			}
+		}
+		return false;
+	} else {
+		ctx->depthImages.erase(window);
+		ctx->colorImages.erase(window);
+		ctx->resolveImages.erase(window);
+		if (window == ctx->mainWindow) {
+			ctx->mainWindow = nullptr;
+		}
+		delete window;
+		return true;
 	}
-	delete window;
 }
 
 static int loopCount = 0;
@@ -698,18 +744,9 @@ void FeatureTestApplication::MainLoop() {
 		auto& sceneGraph = ctx->project.GetSceneGraph();
 		sceneGraph.UpdateTransforms(sceneGraph.root, sceneGraph.root.entity.GetComponent<Component::Transform>());
 
-		for (auto it = ctx->windows.begin(); it != ctx->windows.end();) {
-			auto window = *it;
-			// LOG_INFO("Window: {}, frames to draw: {}", window->GetName(),window->GetFramesToDraw());
-			window->ApplyChanges();
-			if (!window->GetAlive()) {
-				RemoveWindow(it);
-				continue;
-			}
-			ctx->RecreateFrameResources(window);
-			ctx->DrawWindow(window);
-			++it;
-		}
+		std::erase_if(ctx->windows, [](const auto &window) {
+			return DrawOrRemoveWindow(window);
+		});
 		// BatterySaver();
 	}
 	ctx->device.WaitIdle();
@@ -725,4 +762,16 @@ void FeatureTestApplication::Finish() {
 	delete ctx;
 	vkw::Destroy();
 	WindowManager::Finish();
+}
+
+void printMatrix(const float4x4& m, const char* name) {
+	if (name) {
+		printf("  %s: \n", name);
+	}
+	for (int i = 0; i < 4; ++i) {
+		for (int j = 0; j < 4; ++j) {
+			printf("    % .6f ", m[i][j]);
+		}
+		printf("\n");
+	}
 }

@@ -1,6 +1,12 @@
+#ifdef USE_MODULES
+import Lmath;
+#else
+#include "Lmath.hpp"
+#endif
 #include "Editor.hpp"
 #include "VulkanBase.hpp"
 #include "Base.hpp"
+#include <UI.hpp>
 #include <cstdio>
 #include <imgui/imgui.h>
 #include <imgui/imgui_internal.h>
@@ -16,6 +22,8 @@ struct EditorContext {
 	void RenderUI();
 	void StyleWindow(); 
 	void StyleEditor();
+
+	void DebugWindow(Objects::Camera& camera);
 	
 	bool SaveStyle(const char* filename,const ImGuiStyle& style);
 	bool LoadStyle(const char* filename,ImGuiStyle& style);
@@ -337,10 +345,55 @@ void EditorContext::StyleWindow() {
 	ImGui::End();
 }
 
+void EditorContext::DebugWindow(Objects::Camera& camera) {
 
-void Editor::Draw() {
+	if (ImGui::Begin("Debug Window", nullptr)) {
+		ImGui::Text("Camera Focus: (%.2f, %.2f, %.2f)", camera.focus.x, camera.focus.y, camera.focus.z);
+
+		// static float position[3] = { 0.0f, 2.0f, -30.0f };
+		// static float rotation[3] = { 0.0f, 0.0f, 0.0f };
+		static float cameraUp[3] = { 0.0f, 1.0f, 0.0f };
+
+		
+		Lmath::float3 position;
+		Lmath::float3 rotation;
+		Lmath::float3 scale;
+		camera.view.inverse().decompose(position, rotation, scale);
+
+		// ImGui::SliderFloat3("Camera Position", position.M, -50.0f, 50.0f);
+		// ImGui::SliderFloat3("Camera Focus", rotation.M, -50.0f, 50.0f);
+		// ImGui::SliderFloat3("Camera Up", cameraUp, -1.0f, 1.0f);
+
+		// camera.view = Lmath::inverse4x4(Lmath::lookAt(Lmath::vec3(position[0], position[1], position[2]),
+		// 	Lmath::vec3(rotation[0], rotation[1], rotation[2]),
+		// 	Lmath::vec3(cameraUp[0], cameraUp[1], cameraUp[2])));
+
+		// camera.view = Lmath::lookAt(Lmath::vec3(position[0], position[1], position[2]),
+		// 	Lmath::vec3(rotation[0], rotation[1], rotation[2]),
+		// 	Lmath::vec3(cameraUp[0], cameraUp[1], cameraUp[2]));
+
+
+		ImGui::Text("Camera Position: (%.2f, %.2f, %.2f)", position.x, position.y, position.z);
+		ImGui::Text("Camera Rotation: (%.2f, %.2f, %.2f)", rotation.x, rotation.y, rotation.z);
+		ImGui::Text("Camera Scale: (%.2f, %.2f, %.2f)", scale.x, scale.y, scale.z);
+
+		for (int i = 0; i < 4; i++) {
+			ImGui::Text("%.2f, %.2f, %.2f, %.2f",
+				camera.view[i][0], camera.view[i][1], camera.view[i][2], camera.view[i][3]);
+		}
+	}
+
+	ImGui::End();
+}
+
+
+void Editor::Draw(Objects::Camera& camera) {
+
 	ImGui::ShowDemoWindow();
 	ctx.MainMenu();
+
+	ctx.DebugWindow(camera);
+
 	// ctx.StyleWindow();
 	
 	// ctx.RenderUI();
@@ -407,6 +460,7 @@ inline const char* EditorContext::GetStyleVarName(ImGuiStyleVar idx) {
 	case ImGuiStyleVar_SeparatorTextBorderSize:     return "SeparatorTextBorderSize";     // float
 	case ImGuiStyleVar_SeparatorTextAlign:          return "SeparatorTextAlign";          // ImVec2
 	case ImGuiStyleVar_SeparatorTextPadding:        return "SeparatorTextPadding";        // ImVec2
+	case ImGuiStyleVar_DockingSeparatorSize:        return "DockingSeparatorSize";        // float
 	case ImGuiStyleVar_COUNT:                       return "COUNT";
 	default:
 		DEBUG_ASSERT(0, "Unknown ImGuiStyleVar");

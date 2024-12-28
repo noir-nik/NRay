@@ -76,7 +76,7 @@ void WindowFocusCallback(GLFWwindow* window, int focused) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
 	LOG_WINDOW("Window {} focused {}", pWindow->GetName(), focused);
 
-	pWindow->SetUIContextCurrent();
+	if (focused) pWindow->SetUIContextCurrent();
 
 	if (pWindow->windowFocusCallback)
 		pWindow->windowFocusCallback(pWindow, focused);
@@ -104,7 +104,9 @@ void FramebufferSizeCallback(GLFWwindow* window, int width, int height) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
 	LOG_WINDOW("Window {} framebuffer resized to {}x{}", pWindow->GetName(), width, height);
 	
-	pWindow->AddFramesToDraw(1);
+	if (width != 0 && height != 0) {
+		pWindow->AddFramesToDraw(1);
+	}
 	pWindow->SetFramebufferResized(true);
 	// LOG_WINDOW("Window {} framebuffer resized to {}x{}", pWindow->GetName(), width, height);
 	
@@ -284,7 +286,7 @@ Window::Window(int width, int height, const char* name): size( width, height ), 
 
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 	window = glfwCreateWindow(width, height, name, nullptr, nullptr);
-	// LOG_INFO("Window::Create({}x{}):{}", width, height, name);
+	// LOG_INFO("Window::Create({}x{}):{} {}", width, height, name, (void*)window);
 	GetPos();
 	auto vidMode = glfwGetVideoMode(glfwGetPrimaryMonitor());
 	sizeLimits = { 30, 30, vidMode->width, vidMode->height };
@@ -320,9 +322,9 @@ void Window::CreateUI(vkw::SampleCount sampleCount) {
 
 void Window::Destroy() {
 	swapChain.Destroy();
-	UIContext.Destroy();
 	glfwGetWindowPos(window, &pos.x, &pos.y);
 	glfwDestroyWindow(window);
+	UIContext.Destroy();
 	alive = false;
 }
 

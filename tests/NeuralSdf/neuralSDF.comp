@@ -1,6 +1,6 @@
 #version 450
 #extension GL_GOOGLE_include_directive : enable
-#include "ShaderCommon.h"
+#include "Bindless.h"
 #include "NeuralSdf.hpp"
 #extension GL_ARB_separate_shader_objects : enable
 
@@ -17,6 +17,12 @@ layout (local_size_x = WORKGROUP_SIZE, local_size_y = WORKGROUP_SIZE, local_size
 #define MAX_STEPS		200	
 
 const float W_0 = 30.0; 
+
+
+// Neural SDF
+#define w_b floatBuffers[ctx.weightsRID].data
+#define outputImage float4Buffers[ctx.outputImageRID].data
+
 
 // layout(push_constant) uniform params_t
 // {

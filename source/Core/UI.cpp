@@ -17,7 +17,8 @@ void Init(){
 	setupContext = ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
 	sharedFontAtlas = io.Fonts;
-	// io.ConfigFlags |= ;
+	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+	// io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 	// io.IniFilename = nullptr;
 
 	// io.Fonts->AddFontDefault();
@@ -37,31 +38,34 @@ void Init(){
 			}
 		}
 	}
+	io.FontDefault = defaultFont;
 
-	
 }
 
 void Destroy() {
-	ImGui::SetCurrentContext(setupContext);
+	// ImGui::SetCurrentContext(setupContext);
+	vkw::ImGuiShutdown();
 	ImGui::DestroyContext(setupContext);
 }
 
 
 void Context::Init() {
-	context = ImGui::CreateContext(sharedFontAtlas);
-	auto& io = ImGui::GetIO();
-	io.FontDefault = defaultFont;
-	SetCurrent();
+	// context = ImGui::CreateContext(sharedFontAtlas);
+	// SetCurrent();
+	// auto& io = ImGui::GetIO();
+	// io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+	// io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+	// io.FontDefault = defaultFont;
 }
 
 void Context::SetCurrent(){
-	ImGui::SetCurrentContext(static_cast<ImGuiContext*>(context));
+	// ImGui::SetCurrentContext(static_cast<ImGuiContext*>(context));
 }
 
 void Context::Destroy() {
-	SetCurrent();
-	vkw::ImGuiShutdown();
-	ImGui::DestroyContext(static_cast<ImGuiContext*>(context));
+	// SetCurrent();
+	// vkw::ImGuiShutdown();
+	// ImGui::DestroyContext(static_cast<ImGuiContext*>(context));
 }
 
 

@@ -4,7 +4,6 @@
 #include <memory>
 #include "VulkanBase.hpp"
 
-#include "Lmath.hpp"
 namespace Objects {
 using namespace Lmath;
 
@@ -38,4 +37,22 @@ struct Mesh {
 	vkw::Buffer indexBuffer;
 };
 
+struct Camera {
+	static constexpr float rotation_factor = 0.0025f;
+	static constexpr float zoom_factor = 0.01f;
+	static constexpr float move_factor = 0.00107f;
+
+	Camera(const vec3& position, const vec3& focus = vec3(0.0f, 0.0f, 0.0f), const vec3& up = vec3(0.0f, 1.0f, 0.0f)) : focus(focus) {
+		view = affineInverse4x4(lookAt(position, focus, up));
+	}
+	
+	inline const vec3& getRight()    const { return view.col(0).xyz(); }
+	inline const vec3& getUp()       const { return view.col(1).xyz(); }
+	inline const vec3& getForward()  const { return view.col(2).xyz(); }
+	inline const vec3& getPosition() const { return view.col(3).xyz(); }
+
+	vec3 focus;
+    mat4 view;
+	mat4 proj;
+};
 }

@@ -26,9 +26,9 @@ public:
 		registry.clear();
 	}
 
+	entt::registry registry;
 private:
 	std::string name;
 	std::string filepath;
-	entt::registry registry;
 	SceneGraph sceneGraph;
 };

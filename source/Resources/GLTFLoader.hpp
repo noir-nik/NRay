@@ -4,10 +4,15 @@
 #include <memory>
 #include <vector>
 
-#include "Lmath.hpp"
 #include "Component.hpp"
 #include "SceneGraph.hpp"
 #include "VulkanBase.hpp"
+
+#ifdef USE_MODULES
+import Lmath;
+#else
+#include "Lmath.hpp"
+#endif
 
 namespace glTF {
 using namespace Component;
