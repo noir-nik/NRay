@@ -111,7 +111,7 @@ void UploadBuffers() {
 	cmd.Copy(ctx.vertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(Vertex));
 	cmd.Barrier({});
 	cmd.EndCommandBuffer();
-	cmd.QueueSubmit({});
+	cmd.QueueSubmit();
 }
 
 void RecordCommands(Window* window) {

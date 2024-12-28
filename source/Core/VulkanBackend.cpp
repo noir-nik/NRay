@@ -55,6 +55,11 @@ import imgui_impl_vulkan;
 #define DEBUG_VK(res, ...)
 #endif
 
+#ifdef MemoryBarrier
+#pragma push_macro("MemoryBarrier")
+#undef MemoryBarrier
+#endif
+
 static const char *VK_ERROR_STRING(VkResult result);
 namespace vkw {
 struct Instance;
@@ -3687,3 +3692,7 @@ static const char *VK_ERROR_STRING(VkResult result) {
 		return "VK_<Unknown>";
 	}
 }
+
+#ifdef MemoryBarrier
+#pragma pop_macro("MemoryBarrier")
+#endif

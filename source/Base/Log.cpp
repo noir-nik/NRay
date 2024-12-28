@@ -7,10 +7,9 @@ module Log;
 import spdlog;
 import stl;
 #else
-#define SPDLOG_COMPILED_LIB
+#include "Log.cppm"
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/sinks/basic_file_sink.h>
-#include "Log.cppm"
 #endif
 
 

@@ -43,8 +43,7 @@ struct SceneGraph {
 		root.entity.Add<Component::Transform>(false);
 
 		// Add Default scene
-		AddScene("Scene");
-		root.children.push_back(0);
+		root.children.push_back(AddNode("Scene"));
 	}
 
 	inline Entity CreateEntity(const std::string_view& name = "") {
@@ -64,12 +63,6 @@ struct SceneGraph {
 		nodes.emplace_back(CreateEntity(name));
 		nodes.back().entity.Add<Component::Transform>(false);
 		return nodes.size() - 1;
-	}
-
-	void AddScene(const std::string_view& name) {
-		nodes.emplace_back(CreateEntity(name));
-		nodes.back().entity.Add<Component::Transform>(false);
-		// scenes.push_back(nodes.size() - 1);
 	}
 
 	inline void resize(std::size_t size) {

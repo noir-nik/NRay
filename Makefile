@@ -8,14 +8,17 @@ COMPILE_IMGUI := 1
 
 USE_MODULES := 1
 USE_HEADER_UNITS := 1
+USE_EXCEPTIONS := 0
+USE_VLA := 1
 
-ifeq ($(CC),g++)
-USE_MODULES := 0
+SPDLOG_COMPILED_LIB := 0
+
+ifeq ($(USE_MODULES), 0)
+	SPDLOG_COMPILED_LIB := 1
 endif
 
 mkfile_path := $(abspath $(lastword $(MAKEFILE_LIST)))
 DEPS_PATH := deps
-
 # fastgltf
 
 # SUBMODULE_LIBS_LIST := fastgltf spdlog glfw3
@@ -51,9 +54,20 @@ LIB_EXT := a
 -C := -c
 
 DEFINES := -DENGINE
-DEFINES += -DUSE_VLA
 
-CXXFLAGS := -MMD -MP $(INCLUDES) $(DEFINES) -std=c++20 -Wno-vla
+CXXFLAGS := -MMD -MP $(INCLUDES) $(DEFINES) -std=c++20
+
+ifeq ($(USE_EXCEPTIONS), 0)
+	CXXFLAGS += -fno-exceptions -DSPDLOG_NO_EXCEPTIONS
+endif
+
+ifeq ($(USE_VLA), 1)
+	CXXFLAGS += -DUSE_VLA -Wno-vla
+endif
+
+ifeq ($(SPDLOG_COMPILED_LIB), 1)
+	CXXFLAGS += -DSPDLOG_COMPILED_LIB
+endif
 
 ifeq ($(STATIC_LINK), 1)
 	LDFLAGS += -static -static-libgcc -static-libstdc++
@@ -67,8 +81,6 @@ endif
 
 AR := ar
 ARFLAGS = rcs
-
-
 
 BUILD_DIR := build
 BIN_DIR := bin
@@ -94,6 +106,10 @@ else
 	TARGET_DIR := $(PLATFORM_BUILD_DIR)
 	RM := rm -rf
 # USE_MODULES = 0
+endif
+
+ifeq ($(CC),g++)
+USE_MODULES := 0
 endif
 
 LDFLAGS += $(foreach lib,$(LIBS),-l$(lib))
@@ -432,7 +448,10 @@ $(TARGET): \
 	$(OBJS_GLFW) \
 	$(OBJS_FASTGLTF) \
 	$(OBJS_SIMDJSON) \
-	$(OBJS_SPDLOG) \
+
+ifeq ($(SPDLOG_COMPILED_LIB), 1)
+$(TARGET): $(OBJS_SPDLOG)
+endif
 
 ifeq ($(USE_MODULES), 1)
 $(TARGET): $(CPP_MODULE_OBJS)

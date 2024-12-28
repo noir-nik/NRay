@@ -50,9 +50,9 @@ namespace glTF {
 using namespace Lmath;
 
 struct ResourceMaps {
-	std::unordered_map<size_t, u32> textureMap;
-	std::unordered_map<size_t, Component::Material*> materialMap;
-	std::unordered_map<size_t, Component::Mesh*> meshMap;
+	std::unordered_map<u32, u32> textureMap;
+	std::unordered_map<u32, Component::Material*> materialMap;
+	std::unordered_map<u32, Component::Mesh*> meshMap;
 
 	void clear() { textureMap.clear(); materialMap.clear(); meshMap.clear(); }
 };
@@ -73,14 +73,25 @@ struct LoaderImpl {
 	vkw::Queue& queue;
 	SceneGraph& sceneGraph;
 
-	TextureInfo LoadTexture(size_t textureIndex);
+	auto LoadTexture(fastgltf::Texture const& assetTexture) -> TextureInfo;
 	void LoadTextures();
-	void LoadMaterial(size_t materialIndex, Component::Material& material);
+	void LoadMaterial(fastgltf::Material const& materialData, Component::Material& material);
 	void LoadMaterials();
-	void LoadMesh(size_t meshIndex, Component::Mesh& mesh);
+	void LoadMesh(fastgltf::Mesh const& assetMesh, Component::Mesh& mesh);
 	void LoadMeshes();
 	void LoadNode(const int nodeIndex, size_t offset);
 	void LoadNodes();
+};
+
+fastgltf::visitor sourcesVisitor {
+	[](std::monostate) { return "std::monostate"; },
+	[](fastgltf::sources::BufferView) { return "sources::BufferView"; },
+	[](fastgltf::sources::URI) { return "sources::URI"; },
+	[](fastgltf::sources::Array) { return "sources::Array"; },
+	[](fastgltf::sources::Vector) { return "sources::Vector"; },
+	[](fastgltf::sources::CustomBuffer) { return "sources::CustomBuffer"; },
+	[](fastgltf::sources::ByteView) { return "sources::ByteView"; },
+	[](fastgltf::sources::Fallback) { return "sources::Fallback"; },
 };
 
 bool Loader::Load(const std::filesystem::path& filepath, SceneGraph& sceneGraph, Materials& materials, vkw::Device& device, vkw::Queue& queue) {
@@ -121,9 +132,8 @@ bool Loader::Load(const std::filesystem::path& filepath, SceneGraph& sceneGraph,
 	return true;
 }
 
-auto LoaderImpl::LoadTexture(size_t textureIndex) -> TextureInfo {
-	fastgltf::Texture& texture = asset.textures[textureIndex];
-	
+auto LoaderImpl::LoadTexture(fastgltf::Texture const& assetTexture) -> TextureInfo {
+
 	TextureInfo textureInfo;
 	auto& data = textureInfo.imageData;
 	auto& width = textureInfo.width;
@@ -131,18 +141,18 @@ auto LoaderImpl::LoadTexture(size_t textureIndex) -> TextureInfo {
 	auto& numChannels = textureInfo.numChannels;
 	auto& imageIndex = textureInfo.imageIndex;
 	
-	if      (texture.imageIndex.has_value())       { imageIndex = texture.imageIndex.value(); }
-	else if (texture.basisuImageIndex.has_value()) { imageIndex = texture.basisuImageIndex.value(); }
-	else if (texture.ddsImageIndex.has_value())    { imageIndex = texture.ddsImageIndex.value(); }
-	else if (texture.webpImageIndex.has_value())   { imageIndex = texture.webpImageIndex.value(); }
+	if      (assetTexture.imageIndex.has_value())       { imageIndex = assetTexture.imageIndex.value(); }
+	else if (assetTexture.basisuImageIndex.has_value()) { imageIndex = assetTexture.basisuImageIndex.value(); }
+	else if (assetTexture.ddsImageIndex.has_value())    { imageIndex = assetTexture.ddsImageIndex.value(); }
+	else if (assetTexture.webpImageIndex.has_value())   { imageIndex = assetTexture.webpImageIndex.value(); }
 
 	auto &image = asset.images[imageIndex];
 
 	std::visit(
 		fastgltf::visitor {
 			[&](fastgltf::sources::URI& filePath) {
-				ASSERT(filePath.fileByteOffset == 0, "No support for offsets with stbi: {} ", texture.name);
-				ASSERT(filePath.uri.isLocalPath(), "No support for external files with stbi: {} ", texture.name);
+				ASSERT(filePath.fileByteOffset == 0, "No support for offsets with stbi: {} ", image.name);
+				ASSERT(filePath.uri.isLocalPath(), "No support for external files with stbi: {} ", image.name);
 				data = ImageIO::Load(std::string(filePath.uri.path()).c_str(), &width, &height, &numChannels, 4);
 			},
 			[&](fastgltf::sources::Vector& vector) {
@@ -159,16 +169,23 @@ auto LoaderImpl::LoadTexture(size_t textureIndex) -> TextureInfo {
 						static_cast<int>(bufferView.byteLength), &width, &height, &numChannels, 4);
 					},
 					[&](auto& arg) {
-						LOG_WARN("Unsupported fastgltf::visitor default (BUfferView) {}", texture.name);
+						LOG_WARN("Unsupported fastgltf::visitor default (BufferView) {}", image.name);
 					}
 				},
 					buffer.data);
 			},
+			[&](fastgltf::sources::Array& array) {
+				data = ImageIO::LoadFromMemory(reinterpret_cast<const uchar*>(array.bytes.data()),
+				static_cast<int>(array.bytes.size()), &width, &height, &numChannels, 4);
+			},
 			[&](auto& arg) {
-				LOG_WARN("Unsupported fastgltf::visitor default {}", texture.name);
+				LOG_WARN("Unsupported fastgltf::visitor default (Image) {} with variant type: {}", image.name, std::visit(sourcesVisitor, image.data));
 			}
 		},
 		image.data);
+	if (data) {
+		LOG_INFO ("Loaded texture: {} {} {} {}", image.name, width, height, numChannels);
+	}
 	return textureInfo;
 };
 
@@ -181,11 +198,10 @@ void LoaderImpl::LoadTextures() {
 	device.ResetStaging();
 	cmd.Begin();
 	
-	for (size_t textureIndex = 0; textureIndex < numTextures; ++textureIndex) {
-		fastgltf::Texture& texture = asset.textures[textureIndex];
+	for (size_t textureIndex = 0; auto const& assetTexture : asset.textures) {
 		auto& textureInfo = textureInfos[textureIndex];
 		auto& imageIndex = textureInfo.imageIndex;
-		textureInfo = LoadTexture(textureIndex);
+		textureInfo = LoadTexture(assetTexture);
 
 		if (textureInfo.imageData != nullptr) {
 
@@ -209,7 +225,7 @@ void LoaderImpl::LoadTextures() {
 			}
 
 			// Get sampler
-			auto glTFsampler = asset.samplers[texture.samplerIndex.value()];
+			auto glTFsampler = asset.samplers[assetTexture.samplerIndex.value()];
 			auto magFilterGltf = glTFsampler.magFilter.value_or(fastgltf::Filter::Linear);
 			auto minFilterGltf = glTFsampler.minFilter.value_or(fastgltf::Filter::Linear);
 
@@ -233,77 +249,71 @@ void LoaderImpl::LoadTextures() {
 			};
 			
 			// Create image
-			vkw::Image newImage = device.CreateImage({
+			auto newImageEntity = sceneGraph.CreateEntity(asset.images[imageIndex].name);
+			auto& newImage = newImageEntity.Add<vkw::Image>(device.CreateImage({
 				.extent = { (uint32_t)textureInfo.width, (uint32_t)textureInfo.height, 1 },
 				.format = format,
 				.usage = vkw::ImageUsage::Sampled | vkw::ImageUsage::TransferDst,
 				.sampler = {magFilter, minFilter, mipmapMode},
-				.name = texture.name.data(),
-			});
-
-			// Add to map
-			maps.textureMap[textureIndex] = newImage.RID();
+				.name = assetTexture.name.data(),
+			}));
 
 			// Copy image
 			bool result;
 			uint imageSize = textureInfo.width * textureInfo.height * textureInfo.numChannels; // todo: assure numChannels == 4
+			cmd.Barrier(newImage, {vkw::ImageLayout::TransferDst});
 			result = cmd.Copy(newImage, textureInfo.imageData, imageSize);
 			if (!result) {
 				cmd.End();
-				cmd.QueueSubmit({});
+				cmd.QueueSubmit();
 				device.ResetStaging();
 				cmd.Begin();
 				result = cmd.Copy(newImage, textureInfo.imageData, imageSize);
 				ASSERT(result, "Failed to copy image: not enough staging capacity");
 			}
-			
+
+			// Add to map
+			maps.textureMap[textureIndex++] = newImage.RID();
 		}
 	}
 
 	cmd.End();
-	cmd.QueueSubmit({});
+	cmd.QueueSubmit();
 
 	for (size_t textureIndex = 0; textureIndex < numTextures; ++textureIndex) {
 		ImageIO::Free(textureInfos[textureIndex].imageData);
 	}
 }
 
-void LoaderImpl::LoadMaterial(size_t materialIndex, Component::Material& material) {
-	auto& materialData = asset.materials[materialIndex];
+void LoaderImpl::LoadMaterial(fastgltf::Material const& assetMaterial, Component::Material& material) {
 
-	auto loadTextureIndex = [this](const fastgltf::TextureInfo& textureInfo) -> u32 {
-		return maps.textureMap[textureInfo.textureIndex];
-	};
-
-	material.gpuMaterial.baseColorTexture = materialData.pbrData.baseColorTexture.has_value()
-		? loadTextureIndex(materialData.pbrData.baseColorTexture.value())
-		: TEXTURE_UNDEFINED;
-
-	material.gpuMaterial.metallicRoughnessTexture = materialData.pbrData.metallicRoughnessTexture.has_value()
-		? loadTextureIndex(materialData.pbrData.metallicRoughnessTexture.value())
-		: TEXTURE_UNDEFINED;
-
-	material.gpuMaterial.emissiveTexture = materialData.emissiveTexture.has_value()
-		? loadTextureIndex(materialData.emissiveTexture.value())
-		: TEXTURE_UNDEFINED;
-
-	material.gpuMaterial.normalTexture = materialData.normalTexture.has_value() // todo: scale
-		? loadTextureIndex(materialData.normalTexture.value())
-		: TEXTURE_UNDEFINED;
-
-	material.gpuMaterial.occlusionTexture = materialData.occlusionTexture.has_value() // todo: strength
-		? loadTextureIndex(materialData.occlusionTexture.value())
-		: TEXTURE_UNDEFINED;
+	auto& gpuMaterial = material.gpuMaterial;
 	
-	material.gpuMaterial.baseColorFactor = make_float4(materialData.pbrData.baseColorFactor.data());
-	material.gpuMaterial.metallicFactor  = materialData.pbrData.metallicFactor;
-	material.gpuMaterial.roughnessFactor = materialData.pbrData.roughnessFactor;
-	material.gpuMaterial.emissiveFactor  = make_float3(materialData.emissiveFactor.data());
-	material.emissiveStrength = materialData.emissiveStrength;
-	material.doubleSided = materialData.doubleSided;
-	material.alphaCutoff = materialData.alphaCutoff;
+	if (const auto& tex = assetMaterial.pbrData.baseColorTexture) {
+		gpuMaterial.baseColorTexture = maps.textureMap[tex->textureIndex];
+	}
+	if (const auto& tex = assetMaterial.pbrData.metallicRoughnessTexture) {
+		gpuMaterial.metallicRoughnessTexture = maps.textureMap[tex->textureIndex];
+	}
+	if (const auto& tex = assetMaterial.emissiveTexture) {
+		gpuMaterial.emissiveTexture = maps.textureMap[tex->textureIndex];
+	}
+	if (const auto& tex = assetMaterial.normalTexture) {
+		gpuMaterial.normalTexture = maps.textureMap[tex->textureIndex];
+	}
+	if (const auto& tex = assetMaterial.occlusionTexture) {
+		gpuMaterial.occlusionTexture = maps.textureMap[tex->textureIndex];
+	}
+
+	gpuMaterial.baseColorFactor = make_float4(assetMaterial.pbrData.baseColorFactor.data());
+	gpuMaterial.metallicFactor  = assetMaterial.pbrData.metallicFactor;
+	gpuMaterial.roughnessFactor = assetMaterial.pbrData.roughnessFactor;
+	gpuMaterial.emissiveFactor  = make_float3(assetMaterial.emissiveFactor.data());
+	material.emissiveStrength = assetMaterial.emissiveStrength;
+	material.doubleSided = assetMaterial.doubleSided;
+	material.alphaCutoff = assetMaterial.alphaCutoff;
 	
-	switch(materialData.alphaMode) {
+	switch(assetMaterial.alphaMode) {
 		case fastgltf::AlphaMode::Opaque: material.alphaMode = Component::Material::AlphaMode::Opaque; break;
 		case fastgltf::AlphaMode::Mask:   material.alphaMode = Component::Material::AlphaMode::Mask;   break;
 		case fastgltf::AlphaMode::Blend:  material.alphaMode = Component::Material::AlphaMode::Blend;  break;
@@ -317,31 +327,30 @@ void LoaderImpl::LoadMaterials() {
 	device.ResetStaging();
 	cmd.Begin();
 	
-	for (size_t materialIndex = 0; materialIndex < numMaterials; ++materialIndex) {
+	for (size_t materialIndex = 0; auto const& assetMaterial : asset.materials) {
 		auto mat = sceneGraph.CreateEntity();
-		auto& material = mat.Add<Component::Material>(asset.materials[materialIndex].name.c_str());
+		auto& material = mat.Add<Component::Material>(assetMaterial.name.c_str());
 		auto materialID = materials.CreateSlot();
 		material.deviceMaterialID = materialID;
-		LoadMaterial(materialIndex, material);
-		maps.materialMap[materialIndex] = &material;
+		LoadMaterial(assetMaterial, material);
+		maps.materialMap[materialIndex++] = &material;
 
-		cmd.Copy(materials.GetBuffer(materialID), &material.gpuMaterial, sizeof(GPUMaterial), materials.GetOffset(materialID));
+		cmd.Copy(materials.GetBuffer(materialID), &material.gpuMaterial, sizeof(GpuTypes::Material), materials.GetOffset(materialID));
 	}
 	
 	cmd.End();
-	cmd.QueueSubmit({});
+	cmd.QueueSubmit();
 }
 
 // std::vector<uint32_t> indices;
 // std::vector<Vertex> vertices;
 
-void LoaderImpl::LoadMesh(size_t meshIndex, Component::Mesh& mesh) {
-	auto& glTFmesh = asset.meshes[meshIndex];
-	auto numPrimitives = glTFmesh.primitives.size();
+void LoaderImpl::LoadMesh(fastgltf::Mesh const& assetMesh, Component::Mesh& mesh) {
+	auto numPrimitives = assetMesh.primitives.size();
 	mesh.primitives.resize(numPrimitives);
 
 	for (size_t primitiveIndex = 0; primitiveIndex < numPrimitives; ++primitiveIndex) {
-		auto& p = glTFmesh.primitives[primitiveIndex];
+		auto& p = assetMesh.primitives[primitiveIndex];
 		auto& primitive = mesh.primitives[primitiveIndex];
 		size_t initialVertex = mesh.vertices.size();
 
@@ -400,7 +409,7 @@ void LoaderImpl::LoadMesh(size_t meshIndex, Component::Mesh& mesh) {
 			fastgltf::iterateAccessorWithIndex<vec2>(asset, asset.accessors[uv->accessorIndex],
 				[&](vec2 v, size_t index) {
 					mesh.vertices[initialVertex + index].uv.x = v.x;
-					mesh.vertices[initialVertex + index].uv.y = 1.0f - v.y;
+					mesh.vertices[initialVertex + index].uv.y = v.y;
 				});
 		}
 
@@ -427,12 +436,12 @@ void LoaderImpl::LoadMesh(size_t meshIndex, Component::Mesh& mesh) {
 void LoaderImpl::LoadMeshes() {
 	auto numMeshes = asset.meshes.size();
 	LOG_INFO("Loading {} meshes", numMeshes);
-	for (size_t meshIndex = 0; meshIndex < numMeshes; ++meshIndex) {
+	for (u32 meshIndex = 0; auto const& assetMesh : asset.meshes) {
 		auto meshEntity = sceneGraph.CreateEntity();
 		auto& mesh = meshEntity.Add<Component::Mesh>();
-		maps.meshMap[meshIndex] = &mesh;
-		mesh.name = asset.meshes[meshIndex].name;
-		LoadMesh(meshIndex, mesh);
+		maps.meshMap[meshIndex++] = &mesh;
+		mesh.name = assetMesh.name;
+		LoadMesh(assetMesh, mesh);
 		mesh.vertexBuffer = device.CreateBuffer({
 			.size = mesh.vertices.size() * sizeof(Objects::Vertex),
 			.usage = vkw::BufferUsage::Vertex,
@@ -455,7 +464,7 @@ void LoaderImpl::LoadMeshes() {
 		result = cmd.Copy(buffer, data, size);
 		if (!result) [[unlikely]] { 
 			cmd.End();
-			cmd.QueueSubmit({});
+			cmd.QueueSubmit();
 			device.ResetStaging();
 			cmd.Begin();
 			result = cmd.Copy(buffer, data, size);
@@ -467,7 +476,7 @@ void LoaderImpl::LoadMeshes() {
 		copyToBuffer(mesh->indexBuffer, mesh->indices.data(), mesh->indices.size() * sizeof(uint32_t));
 	}
 	cmd.End();
-	cmd.QueueSubmit({});
+	cmd.QueueSubmit();
 }
 
 void LoaderImpl::LoadNode(const int nodeIndex, size_t offset) {

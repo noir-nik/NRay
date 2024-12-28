@@ -35,7 +35,6 @@ module;
 #include <cstring> 
 #endif
 
-
 #ifdef USE_HEADER_UNITS
 export module stl;
 

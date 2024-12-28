@@ -1,4 +1,3 @@
-
 #ifdef USE_MODULES
 export module Materials;
 #define _MATERIALS_EXPORT export

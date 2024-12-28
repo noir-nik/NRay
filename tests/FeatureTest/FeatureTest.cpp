@@ -96,13 +96,7 @@ struct AppContext : DeleteCopyDeleteMove {
 	// Runtime::Context runtimeContext;
 
 	Project project;
-	inline Entity CreateEntity(const std::string_view& name = "") {
-		auto entity = Entity(&registry, registry.create());
-		entity.Add<Component::Name>(name);
-		return entity;
-	}
-
-	Registry registry;
+	// Registry registry;
 
 	// std::vector<Entity> meshes;
 	void Setup();
@@ -293,6 +287,7 @@ void AppContext::CreateDefaultResources() {
 	});
 
 	LOG_INFO("Created null image {}", errorImage.RID());
+	DEBUG_ASSERT(errorImage.RID() == 0, "Error image must be created with RID 0");
 
 	u32 magenta = packRGBA8({1, 0, 1, 1});
 	u32 black = packRGBA8({0, 0, 0, 1});
@@ -313,14 +308,11 @@ void AppContext::CreateDefaultResources() {
 			// .emissiveStrength = 0.0f,
 			.metallicFactor   = 0.0f,
 			.roughnessFactor  = 0.5f,
-			.baseColorTexture = TEXTURE_UNDEFINED,
-			.metallicRoughnessTexture = TEXTURE_UNDEFINED,
-			.normalTexture    = TEXTURE_UNDEFINED,
-			.occlusionTexture = TEXTURE_UNDEFINED,
-			.emissiveTexture  = TEXTURE_UNDEFINED,
 		},
 		.deviceMaterialID = materials.CreateSlot()
 	};
+
+	DEBUG_ASSERT(defaultMaterial.deviceMaterialID == 0, "Default material ID must be 0");
 
 	auto cmd = device.GetCommandBuffer(queue);
 	cmd.Begin();
@@ -328,9 +320,9 @@ void AppContext::CreateDefaultResources() {
 	cmd.Barrier(errorImage, {vkw::ImageLayout::TransferDst});
 	cmd.Copy(errorImage, &errorImagePixels[0], errorImagePixels.size() * sizeof(errorImagePixels[0]));
 	// Default Material
-	cmd.Copy(materials.GetBuffer(defaultMaterial.deviceMaterialID), &defaultMaterial.gpuMaterial, sizeof(GPUMaterial), sizeof(GPUMaterial) * defaultMaterial.deviceMaterialID);
+	cmd.Copy(materials.GetBuffer(defaultMaterial.deviceMaterialID), &defaultMaterial.gpuMaterial, sizeof(GpuTypes::Material), sizeof(GpuTypes::Material) * defaultMaterial.deviceMaterialID);
 	cmd.End();
-	cmd.QueueSubmit({});
+	cmd.QueueSubmit();
 }
 
 void AppContext::CreateWindowResources(Entity window) {
@@ -395,7 +387,7 @@ void AppContext::UploadBuffers() {
 	cmd.Copy(cubeVertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(VertexDebug));
 	cmd.Barrier({});
 	cmd.End();
-	cmd.QueueSubmit({});
+	cmd.QueueSubmit();
 
 	glTF::Loader loader;
 	const char* filepath = "assets/models/test_scene.gltf";
@@ -464,7 +456,7 @@ void AppContext::DrawViewport(vkw::Command& cmd, Runtime::Camera const& camera) 
 			// LOG_INFO("Draw primitive {} {}", p.material->deviceMaterialID, mesh->name);
 			auto materialID = p.material ? p.material->deviceMaterialID : defaultMaterial.deviceMaterialID;
 			constants.materialBufferRID = materials.GetBuffer(materialID).RID();
-			constants.materialOffset = materials.GetOffset(materialID) / sizeof(GPUMaterial);
+			constants.materialOffset = materials.GetOffset(materialID) / sizeof(GpuTypes::Material);
 			cmd.PushConstants(opaquePipeline, &constants, sizeof(constants));
 			cmd.DrawIndexed(p.indexCount, p.instanceCount, p.firstIndex, p.vertexOffset, p.firstInstance);
 			// cmd.DrawMesh(mesh.vertexBuffer, mesh.indexBuffer, mesh.indexBuffer.size / sizeof(uint32_t));
@@ -778,7 +770,7 @@ void RefreshCallback(Window* window) {
 	auto size = window->GetSize();
 	if (size.x == 0 || size.y == 0) {return;}
 	window->AddFramesToDraw(1);
-	ctx->DrawWindow(Entity(&ctx->registry, static_cast<entt::entity>(window->GetEntityHandle())));
+	ctx->DrawWindow(Entity(&ctx->project.registry, static_cast<entt::entity>(window->GetEntityHandle())));
 }
 
 void IconifyCallback(Window* window, int iconified) {
@@ -806,7 +798,7 @@ void AppContext::RecreateFrameResources(Window* window) {
 
 void AppContext::Setup() {
 	Editor::Setup(&project.GetSceneGraph());
-	mainWindow = CreateEntity("Main Window");
+	mainWindow = project.CreateEntity("Main Window");
 	auto style = Editor::GetStyle();
 	mainWindow.Add<Window>(WindowCreateInfo{.name = "NRay", .imGuiStyle = style});
 	[[maybe_unused]] auto& windowData = mainWindow.Add<Runtime::WindowData>(true);
@@ -937,7 +929,7 @@ void FeatureTestApplication::Setup() {
 }
 
 void DrawOrRemoveWindows() {
-	auto registry = &ctx->registry;
+	auto registry = &ctx->project.registry;
 	auto view = registry->view<Window>();
 	for (auto w: view) {
 		auto& windowHandle = registry->get<Window>(w);
@@ -956,7 +948,7 @@ void DrawOrRemoveWindows() {
 				}
 				// Draw if needed
 				if (windowHandle.GetDrawNeeded()){
-					ctx->DrawWindow({&ctx->registry, static_cast<entt::entity>(windowHandle.GetEntityHandle())});
+					ctx->DrawWindow({&ctx->project.registry, static_cast<entt::entity>(windowHandle.GetEntityHandle())});
 				}
 			}
 		} else {
@@ -974,11 +966,11 @@ void FeatureTestApplication::MainLoop() {
 	lastFrameTime = std::chrono::high_resolution_clock::now();
 	while (ctx->mainWindow.entity != Entity::Null) {
 		// std::any_of( ctx->windows.begin(), ctx->windows.end(), [](const auto &window) {
-		// ctx->registry.any_of( ctx->windows.begin(), ctx->windows.end(), [](const auto &window) {
+		// ctx->project.registry.any_of( ctx->windows.begin(), ctx->windows.end(), [](const auto &window) {
 		auto& sceneGraph = ctx->project.GetSceneGraph();
 		sceneGraph.UpdateTransforms(sceneGraph.root, sceneGraph.root.entity.Get<Component::Transform>());
 
-		auto registry = &ctx->registry;
+		auto registry = &ctx->project.registry;
 		auto view = registry->view<Window>();//view->remove(ctx->mainWindow.entity);
 		std::any_of( view.begin(), view.end(), [registry](const auto &window) {
 			Window& windowHandle = registry->get<Window>(window);
@@ -994,8 +986,8 @@ void FeatureTestApplication::MainLoop() {
 void FeatureTestApplication::Finish() {
 	ctx->project.Destroy();
 	UI::Destroy();
-	for (auto& window : ctx->registry.view<Window>()) {
-		ctx->registry.destroy(window);
+	for (auto& window : ctx->project.registry.view<Window>()) {
+		ctx->project.registry.destroy(window);
 	}
 	
 	delete ctx;

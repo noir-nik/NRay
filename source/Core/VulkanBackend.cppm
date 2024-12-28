@@ -603,7 +603,7 @@ struct Command {
 	void Begin();
 	void End();
 	void WaitQueue();
-	void QueueSubmit(const SubmitInfo& submitInfo);
+	void QueueSubmit(const SubmitInfo& submitInfo = {});
 };
 
 struct Device {

@@ -2,7 +2,7 @@
 module;
 #endif
 
-#include "GPUTypes.h"
+#include "GpuTypes.h"
 
 #ifdef USE_MODULES
 module Materials;
@@ -20,7 +20,7 @@ void Materials::Init(vkw::Device device, vkw::Queue queue, uint capacity){
 
 auto Materials::Expand() -> void {
 	buffers.emplace_back(device.CreateBuffer({
-		bufferCapacity * sizeof(GPUMaterial), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst, vkw::Memory::GPU, "Materials[" + std::to_string(buffers.size()) + "]"
+		bufferCapacity * sizeof(GpuTypes::Material), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst, vkw::Memory::GPU, "Materials[" + std::to_string(buffers.size()) + "]"
 	}));
 	auto size = availableSlots.size();
 	availableSlots.resize(size + bufferCapacity);
@@ -46,5 +46,5 @@ auto Materials::GetBuffer(uint materialID) -> vkw::Buffer& {
 }
 
 auto Materials::GetOffset(uint materialID) -> uint {
-	return (materialID % bufferCapacity) * sizeof(GPUMaterial);
+	return (materialID % bufferCapacity) * sizeof(GpuTypes::Material);
 }

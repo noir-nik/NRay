@@ -51,7 +51,7 @@ struct Material {
 		Blend,
 	};
 	std::string name;
-	GPUMaterial gpuMaterial;
+	GpuTypes::Material gpuMaterial;
 	uint deviceMaterialID = {};
 
 	bool doubleSided = false;

@@ -6,12 +6,12 @@ module;
 #define _LOG_EXPORT
 #endif
 
-#define SPDLOG_COMPILED_LIB
-// #include <spdlog/fmt/fmt.h>
-#include <spdlog/spdlog.h>
-
 #ifdef USE_MODULES
 export module Log;
+import spdlog;
+import stl;
+#else
+#include <spdlog/spdlog.h>
 #endif
 
 _LOG_EXPORT

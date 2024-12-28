@@ -20,7 +20,9 @@ using Lmath::uint;
 
 #define MAX_MODELS 256
 
-#define TEXTURE_UNDEFINED ~0u
+#ifndef ENGINE
+#define EXISTS(textureIndex) (textureIndex != TEXTURE_UNDEFINED)
+#endif // ENGINE
 
 #ifdef GLSL
 
@@ -43,7 +45,7 @@ layout(set = 0, binding = BINDING_BUFFER) buffer float4Buffer {
 } float4Buffers[];
 
 layout(set = 0, binding = BINDING_BUFFER) readonly buffer MaterialBuffer {
-	GPUMaterial materials[MATERIAL_BUFFER_CAPACITY];
+	Material materials[];
 } materialBuffers[];
 
 layout(set = 0, binding = BINDING_STORAGE_IMAGE) uniform image2D images[];

@@ -16,7 +16,13 @@ layout(push_constant) uniform _constants {
 void main() {
 	// vec3 col = vec3(inPosition);
 	// vec3 col = MATERIAL.emissiveFactor;
-	vec3 col = MATERIAL.baseColorFactor.xyz;
+	vec4 baseColor = MATERIAL.baseColorFactor;
+	if (EXISTS(MATERIAL.baseColorTexture)) {
+        baseColor *= texture(textures[MATERIAL.baseColorTexture], inUV);
+    }
+
+	// vec3 col = MATERIAL.baseColorFactor.xyz;
+	vec3 col = baseColor.xyz;
 	col = pow(col, vec3(1.0/2.2));
 	outColor = vec4(col, 1.0); 
 }
