@@ -8,10 +8,17 @@ TARGET := nRay
 COMPILE_IMGUI := 0
 STATIC_LINK := 0
 
+mkfile_path := $(abspath $(lastword $(MAKEFILE_LIST)))
+DEPS_PATH := deps
+
+
+SUBMODULE_LIBS := fastgltf fmt
+
+
 INCLUDES := -Isource/Core -Isource/Base -Isource/Shaders -Ideps\fastgltf\include
 CXXFLAGS := -MMD -MP $(INCLUDES) -DENGINE
-LDFLAGS :=
-LIBS := spdlog fmt 
+LDFLAGS := -Lbin/lib
+LIBS := spdlog
 
 ifeq ($(STATIC_LINK), 1)
 	LDFLAGS += -static -static-libgcc -static-libstdc++
@@ -24,6 +31,8 @@ BIN_DIR := bin
 ifeq ($(OS),Windows_NT)
 	LDFLAGS += -fuse-ld=lld
 	LIBS := $(LIBS)  glfw3 Gdi32 vulkan-1
+	LIB_PATH := $(dir $(mkfile_path))bin/lib
+	LIB_BUILD_DIR := build
 	OBJ_DIR := build
 	BUILD_DIR := .
 	MKDIR_BUILD := cmd /c if not exist $(BUILD_DIR) mkdir $(BUILD_DIR)
@@ -35,6 +44,8 @@ ifeq ($(OS),Windows_NT)
 else
 	CC := g++
 	LIBS := $(LIBS) vulkan fmt glfw GL m
+	LIB_PATH := $(dir $(mkfile_path))bin/lib-linux
+	LIB_BUILD_DIR := build-linux
 	OBJ_DIR := build-linux
 	BUILD_DIR := build-linux
 	MKDIR_BUILD := mkdir -p $(BUILD_DIR)
@@ -46,6 +57,7 @@ else
 	COMPILE_IMGUI := 1
 endif
 
+SUBMODULE_LIBS := $(foreach lib,$(SUBMODULE_LIBS),$(LIB_PATH)/lib$(lib).a)
 
 
 # Folders
@@ -136,13 +148,14 @@ release: CXXFLAGS += $(OPT_RELEASE)
 release: LDFLAGS  += $(OPT_RELEASE)
 release: build_target
 
-build_target: create_dirs build_libs $(TARGET)
+build_target: create_dirs $(TARGET)
 
 create_dirs:
 	@$(MKDIR_BUILD)
 	@$(MKDIR_OBJ)
 	@$(MKDIR_BIN)
 
+$(TARGET): $(SUBMODULE_LIBS)
 
 $(TARGET): $(OBJS)
 	@echo "Linking $(patsubst $(BUILD_DIR)/%,%,$^)"
@@ -206,24 +219,51 @@ clean:
 	@$(CLEAN_OBJ)
 	@echo "=== Cleaned ==="
 
+cleanlib:
+# @$(RM) $(LIB_PATH)\libfastgltf.a
+	@$(RM) $(DEPS_PATH)\fastgltf\build\CMakeCache.txt
+
 rm:
 	$(RM) $(wildcard *.bmp)
 
 
-mkfile_path := $(abspath $(lastword $(MAKEFILE_LIST)))
-LIB_PATH := $(dir $(mkfile_path))bin/lib
+# ===== Libraries ======
 
-CMAKE_FLAGS :=  -DCMAKE_CXX_FLAGS="-target x86_64-w64-mingw32" \
-				-DCMAKE_C_COMPILER_TARGET="x86_64-windows-gnu" \
+
+
+CMAKE_FLAGS :=  -DCMAKE_LIBRARY_OUTPUT_DIRECTORY=$(LIB_PATH) \
+				-DCMAKE_ARCHIVE_OUTPUT_DIRECTORY=$(LIB_PATH)
+
+
+
+
+
+
+ifeq ($(OS),Windows_NT)
+CMAKE_CXX_FLAGS := -target x86_64-w64-mingw32
+CMAKE_FLAGS +=  -G "MinGW Makefiles" \
 				-DCMAKE_EXE_LINKER_FLAGS_INIT="-fuse-ld=lld" \
-				-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=$(LIB_PATH) \
-				-DCMAKE_ARCHIVE_OUTPUT_DIRECTORY=$(LIB_PATH) \
 				-DCMAKE_MODULE_LINKER_FLAGS_INIT="-fuse-ld=lld" \
 				-DCMAKE_SHARED_LINKER_FLAGS_INIT="-fuse-ld=lld" \
 				-DCMAKE_LINKER_FLAGS_INIT="-fuse-ld=lld" \
+				-DCMAKE_C_COMPILER_TARGET="x86_64-windows-gnu"
 
-build_libs: $(LIB_PATH)/libfastgltf.a
 
+else
+
+endif
+
+ifeq ($(OS),Windows_NT)
 $(LIB_PATH)/libfastgltf.a:
-	cmake deps/fastgltf -Bdeps/fastgltf/build -G "MinGW Makefiles" ${CMAKE_FLAGS}
-	cmake --build deps/fastgltf/build
+# cmake $(DEPS_PATH)/fastgltf -B$(DEPS_PATH)/fastgltf/build -G "MinGW Makefiles" ${CMAKE_FLAGS} -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ 
+	cmake $(DEPS_PATH)/fastgltf -B$(DEPS_PATH)/fastgltf/$(LIB_BUILD_DIR) ${CMAKE_FLAGS} -DCMAKE_CXX_FLAGS="-target x86_64-w64-mingw32 -femulated-tls"
+	cmake --build $(DEPS_PATH)/fastgltf/$(LIB_BUILD_DIR)
+else
+$(LIB_PATH)/libfastgltf.a:
+	cmake $(DEPS_PATH)/fastgltf -B$(DEPS_PATH)/fastgltf/$(LIB_BUILD_DIR) ${CMAKE_FLAGS}
+	cmake --build $(DEPS_PATH)/fastgltf/$(LIB_BUILD_DIR)
+endif
+
+$(LIB_PATH)/libfmt.a:
+	cmake $(DEPS_PATH)/fmt -B$(DEPS_PATH)/fmt/$(LIB_BUILD_DIR) ${CMAKE_FLAGS} -DCMAKE_CXX_FLAGS="$(CMAKE_CXX_FLAGS)" -DFMT_TEST=OFF
+	cmake --build $(DEPS_PATH)/fmt/$(LIB_BUILD_DIR)

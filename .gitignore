@@ -27,16 +27,7 @@ logs/*
 *.lib
 *.a
 *.la
-*.dSYM
-*,e1f
-*,ff8
-*.lnk
-*.err
-*.exp
-*.map
-*.orig
-*~
-*.swp
+
 *.tmp
 *.rej
 
@@ -48,3 +39,4 @@ logs/*
 *.log
 
 !assets/*
+!assets/*/*

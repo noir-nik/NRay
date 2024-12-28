@@ -381,7 +381,7 @@ void Editor::Setup(){
 
 	// io.Fonts->AddFontDefault();
 	const float fontSize = 15.0f;
-	for (const auto& entry : std::filesystem::directory_iterator("bin")) {
+	for (const auto& entry : std::filesystem::directory_iterator("assets/fonts")) {
 		if (entry.path().extension() == ".ttf" || entry.path().extension() == ".otf") {
 			// auto font = io.Fonts->AddFontFromFileTTF(entry.path().string().c_str(), fontSize);
 			// if (font && entry.path().filename() == "InterVariable.ttf") {
