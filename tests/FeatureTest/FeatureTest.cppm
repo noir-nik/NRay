@@ -10,17 +10,11 @@ import Lmath;
 #endif // USE_MODULES
 using namespace Lmath;
 
-_FEATURETEST_EXPORT
-struct FeatureTestInfo
-{
-	int width;
-	int height;
-};
 
 _FEATURETEST_EXPORT
 class FeatureTestApplication {
 public:
-	void run(FeatureTestInfo* pFeatureTestInfo);
+	void run();
 private:
 	void Create();
 	void Setup();
@@ -28,8 +22,6 @@ private:
 	void Compute();
 	void MainLoop();
 	void Finish();
-
-	FeatureTestInfo* info;
 };
 #else
 #define _FEATURETEST_EXPORT

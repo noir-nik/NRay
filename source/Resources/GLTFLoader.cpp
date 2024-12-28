@@ -18,6 +18,7 @@ import Log;
 import Component;
 import Types;
 import Entity;
+import Materials;
 #else
 #include "GLTFLoader.cppm"
 #include "VulkanBackend.cppm"
@@ -67,6 +68,7 @@ struct LoaderImpl {
 	};
 	fastgltf::Asset& asset;
 	ResourceMaps& maps;
+	Materials& materials;
 	vkw::Device& device;
 	vkw::Queue& queue;
 	SceneGraph& sceneGraph;
@@ -81,7 +83,7 @@ struct LoaderImpl {
 	void LoadNodes();
 };
 
-bool Loader::Load(const std::filesystem::path& filepath, SceneGraph& sceneGraph, vkw::Device& device, vkw::Queue& queue) {
+bool Loader::Load(const std::filesystem::path& filepath, SceneGraph& sceneGraph, Materials& materials, vkw::Device& device, vkw::Queue& queue) {
 
 	constexpr auto parserOptions {
 		fastgltf::Options::DontRequireValidAssetMember
@@ -111,7 +113,7 @@ bool Loader::Load(const std::filesystem::path& filepath, SceneGraph& sceneGraph,
 	auto& asset = expectedAsset.get();
 
 	maps.clear();
-	LoaderImpl loader { asset, maps, device, queue, sceneGraph };
+	LoaderImpl loader { asset, maps, materials, device, queue, sceneGraph };
 	loader.LoadTextures();
 	loader.LoadMaterials();
 	loader.LoadMeshes();
@@ -293,10 +295,10 @@ void LoaderImpl::LoadMaterial(size_t materialIndex, Component::Material& materia
 		? loadTextureIndex(materialData.occlusionTexture.value())
 		: TEXTURE_UNDEFINED;
 	
-	load(material.gpuMaterial.baseColorFactor, materialData.pbrData.baseColorFactor.data());
-	material.gpuMaterial.metallicFactor = materialData.pbrData.metallicFactor;
+	material.gpuMaterial.baseColorFactor = make_float4(materialData.pbrData.baseColorFactor.data());
+	material.gpuMaterial.metallicFactor  = materialData.pbrData.metallicFactor;
 	material.gpuMaterial.roughnessFactor = materialData.pbrData.roughnessFactor;
-	load(material.gpuMaterial.emissiveFactor, materialData.emissiveFactor.data());
+	material.gpuMaterial.emissiveFactor  = make_float3(materialData.emissiveFactor.data());
 	material.emissiveStrength = materialData.emissiveStrength;
 	material.doubleSided = materialData.doubleSided;
 	material.alphaCutoff = materialData.alphaCutoff;
@@ -317,13 +319,13 @@ void LoaderImpl::LoadMaterials() {
 	
 	for (size_t materialIndex = 0; materialIndex < numMaterials; ++materialIndex) {
 		auto mat = sceneGraph.CreateEntity();
-		auto& material = mat.Add<Component::Material>(asset.materials[materialIndex].name);
-		auto materialID = device.CreateMaterialSlot();
+		auto& material = mat.Add<Component::Material>(asset.materials[materialIndex].name.c_str());
+		auto materialID = materials.CreateSlot();
 		material.deviceMaterialID = materialID;
 		LoadMaterial(materialIndex, material);
 		maps.materialMap[materialIndex] = &material;
 
-		cmd.Copy(device.GetMaterialBuffer(materialID), &material.gpuMaterial, sizeof(GPUMaterial), (materialID % MATERIAL_BUFFER_CAPACITY) * sizeof(GPUMaterial));
+		cmd.Copy(materials.GetBuffer(materialID), &material.gpuMaterial, sizeof(GPUMaterial), materials.GetOffset(materialID));
 	}
 	
 	cmd.End();
@@ -345,9 +347,9 @@ void LoaderImpl::LoadMesh(size_t meshIndex, Component::Mesh& mesh) {
 
 		if (p.materialIndex.has_value()) {
 			DEBUG_ASSERT(maps.materialMap.find(p.materialIndex.value()) != maps.materialMap.end(), "Material index {} not found", p.materialIndex.value());
-			primitive.deviceMaterialID = maps.materialMap[p.materialIndex.value()]->deviceMaterialID;
+			primitive.material = maps.materialMap[p.materialIndex.value()];
 		} else {
-			primitive.deviceMaterialID = device.GetDefaultMaterialID();
+			primitive.material = nullptr;
 		}
 		
 		// Indexes

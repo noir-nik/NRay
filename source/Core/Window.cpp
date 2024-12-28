@@ -288,14 +288,16 @@ void WindowManager::Finish() {
 }
 
 // Window factory
-Window::Window(int width, int height, const char* name, void* imguiStyle): name(name), size( width, height ) {
+Window::Window(WindowCreateInfo const& info): name(info.name), size( info.size ) {
 
 	if (!WindowManager::is_initialized) {
 		WindowManager::Init();
 	}
+	auto& width = info.size.x;
+	auto& height = info.size.y;
 
 	glfwWindowHint(GLFW::Resizable, GLFW::True);
-	window = glfwCreateWindow(width, height, name, nullptr, nullptr);
+	window = glfwCreateWindow(width, height, info.name, nullptr, nullptr);
 	// LOG_INFO("Window::Create({}x{}):{} {}", width, height, name, (void*)window);
 	GetPos();
 	auto vidMode = glfwGetVideoMode(glfwGetPrimaryMonitor());
@@ -322,7 +324,7 @@ Window::Window(int width, int height, const char* name, void* imguiStyle): name(
 	glfwSetCharModsCallback          (window, _InputCallbacks::CharModsCallback   );
 	glfwSetDropCallback              (window, _InputCallbacks::DropCallback       );
 
-	UIContext.Init(imguiStyle); 
+	UIContext.Init(info.imGuiStyle); 
 
 	ApplyChanges();
 }

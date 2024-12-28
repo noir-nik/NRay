@@ -1,7 +1,11 @@
 #ifdef USE_MODULES
 module;
+#endif
+
 #include "Phong.h"
 #include "Opaque.h"
+
+#ifdef USE_MODULES
 module FeatureTest;
 import glfw;
 import imgui;
@@ -13,7 +17,6 @@ import stl;
 import Log;
 import Editor;
 import Entity;
-import Component;
 import Project;
 import Objects;
 import GLTFLoader;
@@ -22,6 +25,7 @@ import UI;
 import Runtime;
 import Types;
 import Structs;
+import Materials;
 #else
 #include "Lmath.cppm"
 #include "VulkanBackend.cppm"
@@ -30,22 +34,18 @@ import Structs;
 #include "Bindless.h"
 #include "Editor.cppm"
 #include "FeatureTest.cppm"
-
-#include "Phong.h"
-
 #include "GLTFLoader.cppm"
 #include "Project.cppm"
-
 #include "UI.cppm"
+#include "Types.cppm"
+#include "Structs.cppm"
+#include "Materials.cppm"
+#include "Runtime.cppm"
 
 #include <cstdint>
 #include <cstdio>
 #include <vector>
 
-#include "Types.cppm"
-#include "Structs.cppm"
-
-#include "Runtime.cppm"
 #endif
 
 
@@ -62,8 +62,6 @@ struct AppContext : DeleteCopyDeleteMove {
 	vkw::Pipeline texPipeline;
 	vkw::Pipeline opaquePipeline;
 
-	uint32_t width, height;
-
 	// float4x4 viewMat;
 	// float4x4 worldViewInv;
 	// float4x4 worldViewProjInv;
@@ -73,20 +71,27 @@ struct AppContext : DeleteCopyDeleteMove {
 	// vkw::Format renderFormat = vkw::Format::RGBA16_sfloat;
 	vkw::Format renderFormat = vkw::Format::RGBA8_UNORM;
 	
-	vkw::Format depthFormat = vkw::Format::D32_sfloat;
+	vkw::Format depthFormat = vkw::Format::D32_SFLOAT;
 
 	// vkw::Buffer outputImage;
 	vkw::Buffer cubeVertexBuffer;
 	vkw::Device device;
 
 	vkw::Queue queue;
-	// vkw::Image renderImage;
+	
 
 	Entity mainWindow;
 
-
 	Entity phongMaterial;
 	Entity phongLight;
+
+	vkw::Image errorImage;
+	// vkw::Image blackImage;
+	// vkw::Image grayImage;
+	// vkw::Image whiteImage;
+
+	Component::Material defaultMaterial;
+	Materials materials;
 
 	// Runtime::Context runtimeContext;
 
@@ -100,9 +105,9 @@ struct AppContext : DeleteCopyDeleteMove {
 	Registry registry;
 
 	// std::vector<Entity> meshes;
-
+	void Setup();
 	void CreateShaders();
-	void CreateImages();
+	void CreateDefaultResources();
 	void CreateWindowResources(Entity window);
 	void UploadBuffers();
 	void DrawWindow(Entity window);
@@ -199,6 +204,7 @@ const std::vector<VertexDebug> vertices = {
 
 void AppContext::CreateShaders() {
 	auto& resource = mainWindow.Get<WindowImageResource>();
+/* 	
 	pipeline = device.CreatePipeline({
 		.point = vkw::PipelinePoint::Graphics,
 		.stages = {
@@ -207,7 +213,7 @@ void AppContext::CreateShaders() {
 		},
 		.name = "Feature pipeline",
 		// pos2 + color3
-		.vertexAttributes = {vkw::Format::RGB32_sfloat, vkw::Format::RGB32_sfloat},
+		.vertexAttributes = {vkw::Format::RGB32_SFLOAT, vkw::Format::RGB32_SFLOAT},
 		.colorFormats = {renderFormat},
 		.useDepth = true,
 		.depthFormat = resource.depthImage.format,
@@ -223,11 +229,11 @@ void AppContext::CreateShaders() {
 		},
 		.name = "Phong pipeline",
 		.vertexAttributes = {
-			vkw::Format::RGB32_sfloat,  // vec3 position;
-			vkw::Format::RGB32_sfloat,  // vec3 normal;
-			vkw::Format::RG32_sfloat,   // vec2 uv;
-			vkw::Format::RGBA32_sfloat, // vec4 color;
-			vkw::Format::RGB32_sfloat   // vec3 tangent;
+			vkw::Format::RGB32_SFLOAT,  // vec3 position;
+			vkw::Format::RGB32_SFLOAT,  // vec3 normal;
+			vkw::Format::RG32_SFLOAT,   // vec2 uv;
+			vkw::Format::RGBA32_SFLOAT, // vec4 color;
+			vkw::Format::RGB32_SFLOAT   // vec3 tangent;
 		},
 		.colorFormats = {renderFormat},
 		.useDepth = true,
@@ -249,7 +255,7 @@ void AppContext::CreateShaders() {
 		.samples = sampleCount,
 		.lineTopology = false
 	});
-
+ */
 	opaquePipeline = device.CreatePipeline({
 		.point = vkw::PipelinePoint::Graphics,
 		.stages = {
@@ -258,11 +264,11 @@ void AppContext::CreateShaders() {
 		},
 		.name = "Opaque pipeline",
 		.vertexAttributes = {
-			vkw::Format::RGB32_sfloat,  // vec3 position;
-			vkw::Format::RGB32_sfloat,  // vec3 normal;
-			vkw::Format::RG32_sfloat,   // vec2 uv;
-			vkw::Format::RGBA32_sfloat, // vec4 color;
-			vkw::Format::RGB32_sfloat   // vec3 tangent;
+			vkw::Format::RGB32_SFLOAT,  // vec3 position;
+			vkw::Format::RGB32_SFLOAT,  // vec3 normal;
+			vkw::Format::RG32_SFLOAT,   // vec2 uv;
+			vkw::Format::RGBA32_SFLOAT, // vec4 color;
+			vkw::Format::RGB32_SFLOAT   // vec3 tangent;
 		},
 		.colorFormats = {renderFormat},
 		.useDepth = true,
@@ -273,7 +279,58 @@ void AppContext::CreateShaders() {
 
 }
 
-void AppContext::CreateImages() {
+void AppContext::CreateDefaultResources() {
+
+	// Error Texture
+	constexpr int errorImageSize = 16;
+	
+	errorImage = device.CreateImage({
+		.extent = {errorImageSize, errorImageSize},
+		.format = vkw::Format::RGBA8_UNORM,
+		.usage = vkw::ImageUsage::Sampled | vkw::ImageUsage::TransferDst,
+		.sampler = {vkw::Filter::Nearest, vkw::Filter::Nearest, vkw::MipmapMode::Nearest},
+		.name = "Error Texture"
+	});
+
+	LOG_INFO("Created null image {}", errorImage.RID());
+
+	u32 magenta = packRGBA8({1, 0, 1, 1});
+	u32 black = packRGBA8({0, 0, 0, 1});
+	std::array<u32, errorImageSize * errorImageSize> errorImagePixels;
+	for (int x = 0; x < errorImageSize; ++x) {
+		for (int y = 0; y < errorImageSize; ++y) {
+			errorImagePixels[x * errorImageSize + y] = ((x % 2) ^ (y % 2)) ? magenta : black;
+		}
+	}
+
+	// Default Material
+	defaultMaterial = {
+		.name = "Default material",
+		.gpuMaterial = {
+			.baseColorFactor  = {1.0f, 1.0f, 1.0f, 1.0f},
+			.emissiveFactor   = {1.0f, 1.0f, 1.0f},
+			// .emissiveColor    = {1.0f, 1.0f, 1.0f},
+			// .emissiveStrength = 0.0f,
+			.metallicFactor   = 0.0f,
+			.roughnessFactor  = 0.5f,
+			.baseColorTexture = TEXTURE_UNDEFINED,
+			.metallicRoughnessTexture = TEXTURE_UNDEFINED,
+			.normalTexture    = TEXTURE_UNDEFINED,
+			.occlusionTexture = TEXTURE_UNDEFINED,
+			.emissiveTexture  = TEXTURE_UNDEFINED,
+		},
+		.deviceMaterialID = materials.CreateSlot()
+	};
+
+	auto cmd = device.GetCommandBuffer(queue);
+	cmd.Begin();
+	// Error Image
+	cmd.Barrier(errorImage, {vkw::ImageLayout::TransferDst});
+	cmd.Copy(errorImage, &errorImagePixels[0], errorImagePixels.size() * sizeof(errorImagePixels[0]));
+	// Default Material
+	cmd.Copy(materials.GetBuffer(defaultMaterial.deviceMaterialID), &defaultMaterial.gpuMaterial, sizeof(GPUMaterial), sizeof(GPUMaterial) * defaultMaterial.deviceMaterialID);
+	cmd.End();
+	cmd.QueueSubmit({});
 }
 
 void AppContext::CreateWindowResources(Entity window) {
@@ -342,7 +399,7 @@ void AppContext::UploadBuffers() {
 
 	glTF::Loader loader;
 	const char* filepath = "assets/models/test_scene.gltf";
-	auto res = loader.Load(filepath, project.GetSceneGraph(), device, queue);
+	auto res = loader.Load(filepath, project.GetSceneGraph(), materials, device, queue);
 	ASSERT(res, "Failed to load gltf file");
 
 	auto& sceneGraph = project.GetSceneGraph();
@@ -404,9 +461,10 @@ void AppContext::DrawViewport(vkw::Command& cmd, Runtime::Camera const& camera) 
 		cmd.BindVertexBuffer(mesh->vertexBuffer);
 		cmd.BindIndexBuffer(mesh->indexBuffer);
 		for (auto& p : mesh->primitives) {
-			// constants.materialID = p.materialID;
-			constants.materialBufferRID = device.GetMaterialBuffer(p.deviceMaterialID).RID();
-			constants.materialIndex = p.deviceMaterialID % MATERIAL_BUFFER_CAPACITY;
+			// LOG_INFO("Draw primitive {} {}", p.material->deviceMaterialID, mesh->name);
+			auto materialID = p.material ? p.material->deviceMaterialID : defaultMaterial.deviceMaterialID;
+			constants.materialBufferRID = materials.GetBuffer(materialID).RID();
+			constants.materialOffset = materials.GetOffset(materialID) / sizeof(GPUMaterial);
 			cmd.PushConstants(opaquePipeline, &constants, sizeof(constants));
 			cmd.DrawIndexed(p.indexCount, p.instanceCount, p.firstIndex, p.vertexOffset, p.firstInstance);
 			// cmd.DrawMesh(mesh.vertexBuffer, mesh.indexBuffer, mesh.indexBuffer.size / sizeof(uint32_t));
@@ -746,6 +804,35 @@ void AppContext::RecreateFrameResources(Window* window) {
 	}
 }
 
+void AppContext::Setup() {
+	Editor::Setup(&project.GetSceneGraph());
+	mainWindow = CreateEntity("Main Window");
+	auto style = Editor::GetStyle();
+	mainWindow.Add<Window>(WindowCreateInfo{.name = "NRay", .imGuiStyle = style});
+	[[maybe_unused]] auto& windowData = mainWindow.Add<Runtime::WindowData>(true);
+
+	mainWindow.Add<WindowImageResource>();
+	Window& windowHandle = mainWindow.Get<Window>();
+	windowHandle.SetEntityHandle(static_cast<EntityType>(mainWindow.entity));
+	
+	queue = {vkw::QueueFlagBits::Graphics | vkw::QueueFlagBits::Compute | vkw::QueueFlagBits::Transfer, windowHandle.GetGLFWwindow()};
+	vkw::Queue* queues[] = {&queue};
+	device = vkw::CreateDevice(queues);
+	materials.Init(device, queue);
+	CreateDefaultResources();
+	CreateWindowResources(mainWindow);
+
+	cubeVertexBuffer = device.CreateBuffer({
+		vertices.size() * sizeof(VertexDebug),
+		vkw::BufferUsage::Vertex,
+		vkw::Memory::GPU,
+		"Cube Vertex Buffer"
+	});
+	
+	UploadBuffers();
+	CreateShaders();
+}
+
 } // namespace
 
 
@@ -800,8 +887,7 @@ void AppContext::RecreateFrameResources(Window* window) {
 
 // } // namespace
 
-void FeatureTestApplication::run(FeatureTestInfo* pFeatureTestInfo) {
-	info = pFeatureTestInfo;
+void FeatureTestApplication::run() {
 	Create();
 	Setup();
 	MainLoop();
@@ -846,44 +932,8 @@ void FeatureTestApplication::Create() {
 
 void FeatureTestApplication::Setup() {
 	vkw::Init();
-
 	UI::Init();
-	ctx->width = info->width;
-	ctx->height = info->height;
-	Editor::Setup(&ctx->project.GetSceneGraph());
-
-	// ctx->runtimeContext.camera = &camera;
-	// ctx->runtimeContext.sceneGraph = &ctx->project.GetSceneGraph();
-
-	// camera.setProj(fov, ctx->width, ctx->height, zNear, zFar);
-
-	// auto window = new Window(ctx->width, ctx->height, "NRay");
-	auto mainWindow = ctx->CreateEntity("Main Window");
-	auto style = Editor::GetStyle();
-	mainWindow.Add<Window>(ctx->width, ctx->height, "NRay", style);
-	[[maybe_unused]] auto& windowData = mainWindow.Add<Runtime::WindowData>(true);
-	// Editor::SetupWindow(windowData);
-	mainWindow.Add<WindowImageResource>();
-	Window& windowHandle = mainWindow.Get<Window>();
-	windowHandle.SetEntityHandle(static_cast<EntityType>(mainWindow.entity));
-	
-	ctx->queue = {vkw::QueueFlagBits::Graphics | vkw::QueueFlagBits::Compute | vkw::QueueFlagBits::Transfer, windowHandle.GetGLFWwindow()};
-	vkw::Queue* queues[] = {&ctx->queue};
-	ctx->device = vkw::CreateDevice(queues);
-	ctx->device.CreateDefaultResources(ctx->queue);
-	ctx->mainWindow = mainWindow;
-	ctx->CreateWindowResources(mainWindow);
-
-	ctx->cubeVertexBuffer = ctx->device.CreateBuffer({
-		vertices.size() * sizeof(VertexDebug),
-		vkw::BufferUsage::Vertex,
-		vkw::Memory::GPU,
-		"Cube Vertex Buffer"
-	});
-	
-	ctx->UploadBuffers();
-	ctx->CreateShaders();
-	ctx->CreateImages();
+	ctx->Setup();
 }
 
 void DrawOrRemoveWindows() {

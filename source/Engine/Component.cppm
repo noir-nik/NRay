@@ -44,19 +44,6 @@ struct Transform {
 
 // using Mesh = std::shared_ptr<Objects::Mesh>;
 
-struct Mesh {
-	Mesh(const Mesh&) = delete;
-	Mesh& operator=(const Mesh&) = delete;
-
-	inline Mesh(std::string_view name = "") : name(name) {}
-	std::string name;
-	std::vector<uint> indices;
-	std::vector<Vertex> vertices;
-	std::vector<Primitive> primitives;
-	vkw::Buffer vertexBuffer;
-	vkw::Buffer indexBuffer;
-};
-
 struct Material {
 	enum class AlphaMode : std::uint8_t {
 		Opaque,
@@ -72,7 +59,29 @@ struct Material {
 	float emissiveStrength = 1.0f;
 	AlphaMode alphaMode = AlphaMode::Opaque;
 
-	Material(std::string_view name) : name(name) {}
+	// Material(std::string_view name) : name(name) {}
+};
+
+struct Primitive {
+	uint32_t indexCount = 0;
+    uint32_t instanceCount = 1;
+    uint32_t firstIndex = 0;
+    int32_t  vertexOffset = 0;
+    uint32_t firstInstance = 0;
+	Material* material = nullptr;
+};
+
+struct Mesh {
+	Mesh(const Mesh&) = delete;
+	Mesh& operator=(const Mesh&) = delete;
+
+	inline Mesh(std::string_view name = "") : name(name) {}
+	std::string name;
+	std::vector<uint> indices;
+	std::vector<Vertex> vertices;
+	std::vector<Primitive> primitives;
+	vkw::Buffer vertexBuffer;
+	vkw::Buffer indexBuffer;
 };
 
 

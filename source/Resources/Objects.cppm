@@ -25,15 +25,6 @@ struct Vertex {
 	vec3  tangent;
 };
 
-struct Primitive {
-	uint32_t indexCount = 0;
-    uint32_t instanceCount = 1;
-    uint32_t firstIndex = 0;
-    int32_t  vertexOffset = 0;
-    uint32_t firstInstance = 0;
-	// uint materialBufferRID;
-	uint deviceMaterialID;
-};
 
 
 

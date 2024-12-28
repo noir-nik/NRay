@@ -89,10 +89,18 @@ _WINDOW_EXPORT
 extern Mouse mouse;
 
 _WINDOW_EXPORT
+struct WindowCreateInfo {
+	Lmath::ivec2 size = { 1280, 960 };
+	Lmath::ivec2 pos = { 30, 30 };
+	const char* name = "Window";
+	void* imGuiStyle = nullptr;
+};
+
+_WINDOW_EXPORT
 class Window {
 	friend class WindowManager;
 	GLFWwindow*   window             = nullptr;
-	std::string   name               = "Engine";
+	std::string   name               = "Window";
 	Lmath::int2   pos                = { 0, 30 };
 	Lmath::int2   size               = { 640, 480 };
 	int           monitorIndex       = 0;
@@ -161,7 +169,7 @@ public:
 	vkw::SwapChain swapChain;
 	// void* uiDrawData = nullptr;
 
-	Window(int width, int height, const char* name = "NRay", void* imguiStyle = nullptr);
+	Window(WindowCreateInfo const& info);
 	inline ~Window(){ if(alive) Destroy(); }
 	void ApplyChanges();
 	void UpdateFramebufferSize();

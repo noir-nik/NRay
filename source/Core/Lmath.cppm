@@ -140,6 +140,7 @@ inline void store  (float* p, const float3 a_val) { memcpy((void*)p, (void*)&a_v
 inline void store_u(float* p, const float3 a_val) { memcpy((void*)p, (void*)&a_val, sizeof(float)*3); }  
 
 inline void load (float3& dst, const float* src) { memcpy((void*)&dst, (void*)src, sizeof(float)*3); }
+inline float3 make_float3(const float* p) { float3 r; memcpy((void*)&r, (void*)p, sizeof(float)*3); return r; }
 
 inline float3 min  (const float3 a, const float3 b) { return float3{min(a.x, b.x), min(a.y, b.y), min(a.z, b.z)}; }
 inline float3 max  (const float3 a, const float3 b) { return float3{max(a.x, b.x), max(a.y, b.y), max(a.z, b.z)}; }
@@ -198,6 +199,7 @@ inline void store  (float* dst, const float4 src) { memcpy((void*)dst, (void*)&s
 inline void store_u(float* dst, const float4 src) { memcpy((void*)dst, (void*)&src, sizeof(float)*4); }
 
 inline void load(float4& dst, const float* src) { memcpy((void*)&dst, (void*)src, sizeof(float)*4); }
+inline float4 make_float4(const float* p) { float4 r; memcpy((void*)&r, (void*)p, sizeof(float)*4); return r; }
 
 inline float4 min  (const float4 a, const float4 b) { return float4{min(a.x, b.x), min(a.y, b.y), min(a.z, b.z), min(a.w, b.w)}; }
 inline float4 max  (const float4 a, const float4 b) { return float4{max(a.x, b.x), max(a.y, b.y), max(a.z, b.z), max(a.w, b.w)}; }

@@ -4,6 +4,7 @@ export module GLTFLoader;
 import VulkanBackend;
 import Component;
 import SceneGraph;
+import Materials;
 import stl;
 #else
 #pragma once
@@ -11,7 +12,9 @@ import stl;
 // #include "VulkanBackend.cppm"
 #include "Component.cppm"
 #include "SceneGraph.cppm"
+#include "Materials.cppm"
 #include <string>
+
 #include <filesystem>
 #include <memory>
 #include <vector>
@@ -85,9 +88,7 @@ struct glTFMetalicRoughness {
 
 class Loader {
 public:
-	bool Load(const std::filesystem::path& filepath, SceneGraph& sceneGraph, vkw::Device& device, vkw::Queue& queue);
-	
-	std::unordered_map<int, Component::Mesh> meshMap;
+	bool Load(const std::filesystem::path& filepath, SceneGraph& sceneGraph, Materials& materials, vkw::Device& device, vkw::Queue& queue);
 };
 
 } // namespace glTF

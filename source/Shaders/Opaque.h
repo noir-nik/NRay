@@ -1,13 +1,14 @@
 #ifndef OPAQUE_H
 #define OPAQUE_H
 
+#include "Bindless.h"
+
 #ifdef ENGINE
 #include "Lmath_types.h"
 namespace Opaque {
 using namespace Lmath;
 #endif // ENGINE
 
-#include "Bindless.h"
 
 struct OpaqueLight {
 	vec3 position;
@@ -24,7 +25,7 @@ struct OpaqueConstants {
 	vec3 cameraPosition;
 	int materialBufferRID;
 	
-	int materialIndex; // in buffer
+	int materialOffset; // in buffer
 	int pad[3];
 };
 

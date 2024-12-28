@@ -15,6 +15,7 @@ import Types;
 #pragma once
 #define _VKW_EXPORT
 #include "Lmath_types.h"
+#include "Types.cppm"
 
 #include <cstdint>
 #include <span>
@@ -77,21 +78,21 @@ using BufferUsageFlags = Flags;
 enum Format {
 	Undefined         = 0,
 
-	R8_unorm          = 9,  // Sampled, heightmap
+	R8_UNORM          = 9,  // Sampled, heightmap
 
 	RGBA8_UNORM       = 37, // ColorAttachment
 	RGBA8_SRGB        = 43,
-	BGRA8_unorm       = 44,
-	BGRA8_sRGB        = 50,
-	RGBA16_sfloat     = 97,
+	BGRA8_UNORM       = 44,
+	BGRA8_SRGB        = 50,
+	RGBA16_SFLOAT     = 97,
 
-	RG32_sfloat       = 103, // VertexAttribute
-	RGB32_sfloat      = 106, 
-	RGBA32_sfloat     = 109, 
+	RG32_SFLOAT       = 103, // VertexAttribute
+	RGB32_SFLOAT      = 106, 
+	RGBA32_SFLOAT     = 109, 
 
-	D16_unorm         = 124, // DepthStencilAttachment
-	D32_sfloat        = 126, // DepthAttachment
-	D24_unorm_S8_uint = 129, // DepthStencilAttachment
+	D16_UNORM         = 124, // DepthStencilAttachment
+	D32_SFLOAT        = 126, // DepthAttachment
+	D24_UNORM_S8_UINT = 129, // DepthStencilAttachment
 };
 
 namespace ImageUsage {
@@ -611,14 +612,6 @@ struct Device {
 	Image CreateImage(const ImageDesc& desc);
 	Pipeline CreatePipeline(const PipelineDesc& desc);
 
-	void   CreateDefaultResources(Queue transferQueue);
-	Image& GetErrorImage();
-	uint   GetDefaultMaterialID();
-
-	Buffer& GetMaterialBuffer(uint materialID);
-	[[nodiscard]] uint CreateMaterialSlot();
-	void FreeMaterialSlot(uint materialID);
-
 	Queue GetQueue(QueueFlags flags);
 	Command& GetCommandBuffer(const Queue& queue);
 	
@@ -653,8 +646,8 @@ class SwapChain {
 public:
 	// ~SwapChain() { printf("~SwapChain\n"); }
 
-	inline Image&      GetCurrentImage()   { return swapChainImages[currentImageIndex]; }
-	Command&    GetCommandBuffer();
+	inline Image& GetCurrentImage()   { return swapChainImages[currentImageIndex]; }
+	Command&      GetCommandBuffer();
 
 	void Create(Device& device, vkw::Queue& queue, void* glfwWindow, uvec2 const size);
 	void CreateUI(SampleCount sampleCount);

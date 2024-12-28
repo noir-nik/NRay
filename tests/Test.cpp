@@ -55,11 +55,7 @@ static void ImageOptimizationTest() {
  */
 static void FeatureTest() {
 	FeatureTestApplication app;
-	FeatureTestInfo FeatureTestInfo = {
-		.width = 640*2,
-		.height = 480*2,
-	};
-	app.run(&FeatureTestInfo);
+	app.run();
 }
 /* 
 static void RadienceFieldTest() {

@@ -12,6 +12,7 @@ module;
 export module Types;
 #endif
 
+_TYPES_EXPORT using uint = unsigned int;
 
 _TYPES_EXPORT using u8  = std::uint8_t;
 _TYPES_EXPORT using u16 = std::uint16_t;
@@ -26,3 +27,5 @@ _TYPES_EXPORT using f64 = double;
 
 
 _TYPES_EXPORT using EntityType = u32;
+
+#undef _TYPES_EXPORT

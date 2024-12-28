@@ -50,7 +50,8 @@ OBJ_EXT := o
 LIB_EXT := a
 -C := -c
 
-DEFINES := -DENGINE -DUSE_VLA
+DEFINES := -DENGINE
+DEFINES += -DUSE_VLA
 
 CXXFLAGS := -MMD -MP $(INCLUDES) $(DEFINES) -std=c++20 -Wno-vla
 

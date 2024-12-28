@@ -68,21 +68,21 @@ inline constexpr VkFormat VkFormat(enum Format value) {
 	switch (value) {
 		case Format::Undefined:         return VK_FORMAT_UNDEFINED;
 
-		case Format::R8_unorm:          return VK_FORMAT_R8_UNORM;
+		case Format::R8_UNORM:          return VK_FORMAT_R8_UNORM;
 
 		case Format::RGBA8_UNORM:       return VK_FORMAT_R8G8B8A8_UNORM;
 		case Format::RGBA8_SRGB:        return VK_FORMAT_R8G8B8A8_SRGB;
-		case Format::BGRA8_unorm:       return VK_FORMAT_B8G8R8A8_UNORM;
-		case Format::BGRA8_sRGB:        return VK_FORMAT_B8G8R8A8_SRGB;
-		case Format::RGBA16_sfloat:     return VK_FORMAT_R16G16B16A16_SFLOAT;
+		case Format::BGRA8_UNORM:       return VK_FORMAT_B8G8R8A8_UNORM;
+		case Format::BGRA8_SRGB:        return VK_FORMAT_B8G8R8A8_SRGB;
+		case Format::RGBA16_SFLOAT:     return VK_FORMAT_R16G16B16A16_SFLOAT;
 
-		case Format::RG32_sfloat:       return VK_FORMAT_R32G32_SFLOAT;
-		case Format::RGB32_sfloat:      return VK_FORMAT_R32G32B32_SFLOAT;
-		case Format::RGBA32_sfloat:     return VK_FORMAT_R32G32B32A32_SFLOAT;
+		case Format::RG32_SFLOAT:       return VK_FORMAT_R32G32_SFLOAT;
+		case Format::RGB32_SFLOAT:      return VK_FORMAT_R32G32B32_SFLOAT;
+		case Format::RGBA32_SFLOAT:     return VK_FORMAT_R32G32B32A32_SFLOAT;
 
-		case Format::D16_unorm:         return VK_FORMAT_D16_UNORM;
-		case Format::D32_sfloat:        return VK_FORMAT_D32_SFLOAT;
-		case Format::D24_unorm_S8_uint: return VK_FORMAT_D24_UNORM_S8_UINT;
+		case Format::D16_UNORM:         return VK_FORMAT_D16_UNORM;
+		case Format::D32_SFLOAT:        return VK_FORMAT_D32_SFLOAT;
+		case Format::D24_UNORM_S8_UINT: return VK_FORMAT_D24_UNORM_S8_UINT;
 		default: return VK_FORMAT_UNDEFINED;
 	}
 	return VK_FORMAT_UNDEFINED;
@@ -293,16 +293,6 @@ struct DeviceResource: DeleteCopyDeleteMove {
 	std::vector<int32_t> availableTLASRID;
 	std::vector<int32_t> availableStorageImageRID;
 
-	uint defaultMaterialID;
-	std::vector<Buffer> materialBuffers; // RID -> Buffer
-	std::vector<uint> availableMaterialIDs; // <RID, materialID>
-
-	Image errorImage;
-	Image blackImage;
-	Image grayImage;
-	Image whiteImage;
-
-
 	struct SamplerDescHash {
 		size_t operator()(const SamplerDesc& desc) const {
 			size_t hash = 0;
@@ -504,9 +494,6 @@ struct DeviceResource: DeleteCopyDeleteMove {
 
 		staging = {};
 		stagingCpu = nullptr;
-		errorImage = {};
-		materialBuffers.clear();
-
 
 		DestroyBindlessDescriptorResources();
 		for (auto& [_, sampler] : samplers) {
@@ -706,19 +693,6 @@ Device CreateDevice(const std::span<Queue*> queues) {
 	resource.staging = device.CreateBuffer({resource.stagingBufferSize, BufferUsage::TransferSrc, Memory::CPU, "StagingBuffer[" + std::to_string(uid) + "]"});
 	resource.stagingCpu = (uint8_t*)resource.staging.resource->allocation->GetMappedData();
 
-	auto materialBuffer = device.CreateBuffer({
-		MATERIAL_BUFFER_CAPACITY * sizeof(GPUMaterial), BufferUsage::Storage | BufferUsage::TransferDst, Memory::GPU, "Materials[" + std::to_string(uid) + "]"
-	});
-	// auto rid = materialBuffer.RID();
-	// resource.materialBuffers[rid] = materialBuffer;
-	resource.materialBuffers.push_back(materialBuffer);
-
-	resource.availableMaterialIDs.resize(MATERIAL_BUFFER_CAPACITY * resource.materialBuffers.size());
-	
-	for (uint idx = MATERIAL_BUFFER_CAPACITY; auto& id : resource.availableMaterialIDs) {
-		id = --idx;
-	}
-	
 	return device;
 }
 
@@ -892,11 +866,11 @@ Image Device::CreateImage(const ImageDesc& desc) {
 
 	AspectFlags aspect{};
 	switch (desc.format) {
-		case D24_unorm_S8_uint:
+		case D24_UNORM_S8_UINT:
 			aspect = Aspect::Stencil; // Invalid, cannot be both stencil and depth, todo: create separate imageview
 		[[fallthrough]];
-		case D32_sfloat: 
-		case D16_unorm:
+		case D32_SFLOAT: 
+		case D16_UNORM:
 			aspect |= Aspect::Depth;
 			break;
 		
@@ -1018,82 +992,6 @@ Image Device::CreateImage(const ImageDesc& desc) {
 		.pObjectName  = (desc.name + "View").c_str(),
 	});
 	return image;
-}
-
-void Device::CreateDefaultResources(Queue transferQueue) {
-	// Error Texture
-	constexpr int errorImageSize = 16;
-	auto& errorImage = GetErrorImage();
-	
-	errorImage = CreateImage({
-		.extent = {errorImageSize, errorImageSize},
-		.format = vkw::Format::RGBA8_UNORM,
-		.usage = vkw::ImageUsage::Sampled | vkw::ImageUsage::TransferDst,
-		.sampler = {vkw::Filter::Nearest, vkw::Filter::Nearest, vkw::MipmapMode::Nearest},
-		.name = "Error Texture"
-	});
-
-	LOG_INFO("Created null image {}", errorImage.RID());
-
-	u32 magenta = packRGBA8({1, 0, 1, 1});
-	u32 black = packRGBA8({0, 0, 0, 1});
-	std::array<u32, errorImageSize * errorImageSize> errorImagePixels;
-	for (int x = 0; x < errorImageSize; ++x) {
-		for (int y = 0; y < errorImageSize; ++y) {
-			errorImagePixels[x * errorImageSize + y] = ((x % 2) ^ (y % 2)) ? magenta : black;
-		}
-	}
-
-	// Default Material
-	GPUMaterial defaultMaterial {
-		.baseColorFactor  = {1.0f, 1.0f, 1.0f, 1.0f},
-		.emissiveFactor   = {1.0f, 1.0f, 1.0f},
-		// .emissiveColor    = {1.0f, 1.0f, 1.0f},
-		// .emissiveStrength = 0.0f,
-		.metallicFactor   = 0.0f,
-		.roughnessFactor  = 0.5f,
-		.baseColorTexture = TEXTURE_UNDEFINED,
-		.metallicRoughnessTexture = TEXTURE_UNDEFINED,
-		.normalTexture    = TEXTURE_UNDEFINED,
-		.occlusionTexture = TEXTURE_UNDEFINED,
-		.emissiveTexture  = TEXTURE_UNDEFINED,
-	};
-
-	
-	resource->defaultMaterialID = CreateMaterialSlot();
-
-	auto cmd = GetCommandBuffer(transferQueue);
-	cmd.Begin();
-	// Error Image
-	cmd.Barrier(errorImage, {vkw::ImageLayout::TransferDst});
-	cmd.Copy(errorImage, &errorImagePixels[0], errorImagePixels.size() * sizeof(errorImagePixels[0]));
-	// Default Material
-	cmd.Copy(GetMaterialBuffer(resource->defaultMaterialID), &defaultMaterial, sizeof(defaultMaterial), sizeof(defaultMaterial) * resource->defaultMaterialID);
-	cmd.End();
-	cmd.QueueSubmit({});
-}
-
-
-Image& Device::GetErrorImage() {
-	return resource->errorImage;
-}
-
-uint Device::GetDefaultMaterialID() {
-	return resource->defaultMaterialID;
-}
-
-uint Device::CreateMaterialSlot() {
-	auto id = resource->availableMaterialIDs.back();
-	resource->availableMaterialIDs.pop_back();
-	return id;
-}
-
-void Device::FreeMaterialSlot(uint materialID) {
-	resource->availableMaterialIDs.push_back(materialID);
-}
-
-Buffer& Device::GetMaterialBuffer(uint materialID) {
-	return resource->materialBuffers[materialID / MATERIAL_BUFFER_CAPACITY];
 }
 
 void Command::Dispatch(const uvec3& groups) {
@@ -1320,22 +1218,23 @@ void DeviceResource::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipe
 			.maxDepthBounds        = 1.0f,
 		};
 
-
 		VLA(VkVertexInputAttributeDescription, attributeDescs, desc.vertexAttributes.size());
 		u32 attributeSize = 0;
-		for (size_t i = 0; auto& format: desc.vertexAttributes) {
-			attributeDescs[i++] = VkVertexInputAttributeDescription{
-				.location = static_cast<u32>(i),
+		for (u32 i = 0; auto& format: desc.vertexAttributes) {
+			// attributeDescs[i++] = VkVertexInputAttributeDescription{ // This gives a bug with gcc (.location starts at 1, not 0)
+			attributeDescs[i] = VkVertexInputAttributeDescription{
+				.location = i,
 				.binding = 0,
-				.format = (VkFormat)format,
+				.format = static_cast<VkFormat>(format),
 				.offset = attributeSize
 			};
 			switch (format) {
-			case Format::RG32_sfloat:   attributeSize += 2 * sizeof(float); break;
-			case Format::RGB32_sfloat:  attributeSize += 3 * sizeof(float); break;
-			case Format::RGBA32_sfloat: attributeSize += 4 * sizeof(float); break;
+			case Format::RG32_SFLOAT:   attributeSize += 2 * sizeof(float); break;
+			case Format::RGB32_SFLOAT:  attributeSize += 3 * sizeof(float); break;
+			case Format::RGBA32_SFLOAT: attributeSize += 4 * sizeof(float); break;
 			default: DEBUG_ASSERT(false, "Invalid Vertex Attribute"); break;
 			}
+			i++; // So we move it here
 		}
 
 		VkVertexInputBindingDescription bindingDescription{
@@ -1348,7 +1247,7 @@ void DeviceResource::CreatePipelineImpl(const PipelineDesc& desc, Pipeline& pipe
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
 			.vertexBindingDescriptionCount = 1,
 			.pVertexBindingDescriptions = &bindingDescription,
-			.vertexAttributeDescriptionCount = (u32)(attributeDescs.size()),
+			.vertexAttributeDescriptionCount = static_cast<u32>(attributeDescs.size()),
 			.pVertexAttributeDescriptions = attributeDescs.data(),
 		};
 		
@@ -1444,19 +1343,20 @@ void DeviceResource::PipelineLibrary::CreateVertexInputInterface(VertexInputInfo
 
 	VLA(VkVertexInputAttributeDescription, attributeDescs, info.vertexAttributes.size());
 	u32 attributeSize = 0;
-	for (size_t i = 0; auto& format: info.vertexAttributes) {
-		attributeDescs[i++] = VkVertexInputAttributeDescription{
-			.location = static_cast<u32>(i),
+	for (u32 i = 0; auto& format: info.vertexAttributes) {
+		attributeDescs[i] = VkVertexInputAttributeDescription{
+			.location = i,
 			.binding = 0,
-			.format = (VkFormat)format,
+			.format = static_cast<VkFormat>(format),
 			.offset = attributeSize
 		};
 		switch (format) {
-		case Format::RG32_sfloat:   attributeSize += 2 * sizeof(float); break;
-		case Format::RGB32_sfloat:  attributeSize += 3 * sizeof(float); break;
-		case Format::RGBA32_sfloat: attributeSize += 4 * sizeof(float); break;
+		case Format::RG32_SFLOAT:   attributeSize += 2 * sizeof(float); break;
+		case Format::RGB32_SFLOAT:  attributeSize += 3 * sizeof(float); break;
+		case Format::RGBA32_SFLOAT: attributeSize += 4 * sizeof(float); break;
 		default: DEBUG_ASSERT(false, "Invalid Vertex Attribute"); break;
 		}
+		i++;
 	}
 
 	VkVertexInputBindingDescription bindingDescription{
@@ -3367,7 +3267,7 @@ void SwapChainResource::ChooseExtent(u32 width, u32 height) {
 bool Command::Copy(Buffer& dst, const void* data, u32 size, u32 dstOfsset) {
 	auto device = resource->device;
 	if (device->stagingBufferSize - device->stagingOffset < size) [[unlikely]] {
-		LOG_WARN("not enough size in staging buffer to copy");
+		LOG_WARN("Not enough size in staging buffer to copy");
 		return false;
 	}
 	// memcpy(resource->stagingCpu + resource->stagingOffset, data, size);
@@ -3401,7 +3301,7 @@ void Command::Copy(Buffer& dst, Buffer& src, u32 size, u32 dstOffset, u32 srcOff
 bool Command::Copy(Image& dst, const void* data, u32 size) {
 	auto device = resource->device;
 	if (device->stagingBufferSize - device->stagingOffset < size) [[unlikely]] {
-		LOG_WARN("not enough size in staging buffer to copy");
+		LOG_WARN("Not enough size in staging buffer to copy");
 		return false;
 	}
 	memcpy(device->stagingCpu + device->stagingOffset, data, size);
@@ -3686,6 +3586,7 @@ void SwapChainResource::CreateImGui(GLFWwindow* window, SampleCount sampleCount)
 	// if (_ctx.imguiInitialized) return;
 	// _ctx.imguiInitialized = true;
 	VkFormat colorFormats[] = { VK_FORMAT_R8G8B8A8_UNORM };
+	// VkFormat colorFormats[] = { VK_FORMAT_R8G8B8A8_UNORM };
 	// VkFormat* colorFormats = new VkFormat[] { VK_FORMAT_R8G8B8A8_UNORM };
 	VkFormat depthFormat =  VK_FORMAT_D32_SFLOAT;
 	ImGui_ImplVulkan_InitInfo initInfo{

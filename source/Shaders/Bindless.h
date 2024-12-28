@@ -7,8 +7,9 @@ using Lmath::vec4;
 using Lmath::vec3;
 using Lmath::vec2;
 using Lmath::uint;
-
 #endif // ENGINE
+
+#include "GpuTypes.h"
 
 #define BINDING_TEXTURE 0 // Sampled image
 #define BINDING_BUFFER 1
@@ -18,28 +19,8 @@ using Lmath::uint;
 #define WORKGROUP_SIZE 16
 
 #define MAX_MODELS 256
-#define MATERIAL_BUFFER_CAPACITY 256
 
 #define TEXTURE_UNDEFINED ~0u
-
-struct GPUMaterial {
-	vec4 baseColorFactor;
-	vec3 emissiveFactor;
-	// vec3 emissiveColor;
-	// float emissiveStrength;
-
-	float metallicFactor;
-	float roughnessFactor;
-	uint baseColorTexture;
-	uint metallicRoughnessTexture;
-
-	uint normalTexture;
-	uint occlusionTexture;
-	uint emissiveTexture;
-	int pad[1];
-
-	// int doubleSided;
-};
 
 #ifdef GLSL
 
@@ -67,7 +48,7 @@ layout(set = 0, binding = BINDING_BUFFER) readonly buffer MaterialBuffer {
 
 layout(set = 0, binding = BINDING_STORAGE_IMAGE) uniform image2D images[];
 
-#define MATERIAL materialBuffers[ctx.materialBufferRID].materials[ctx.materialID]
+#define MATERIAL materialBuffers[ctx.materialBufferRID].materials[ctx.materialOffset]
 #endif // GLSL
 
 
