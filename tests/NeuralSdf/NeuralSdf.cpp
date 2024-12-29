@@ -1,7 +1,13 @@
+#ifdef USE_MODULES
+import lmath;
+import vulkan_backend;
+#else
+#include "lmath.hpp"
+#include <vulkan_backend/core.hpp>
 #include "Pch.hpp"
 
-#include "VulkanBase.hpp"
-#include "ShaderCommon.h"
+#endif
+#include "Bindless.h"
 #include "FileManager.hpp"
 
 #include "NeuralSdf.hpp"
@@ -11,15 +17,15 @@
 using Pixel = vec4;
 namespace{
 struct Context {
-	vkw::Pipeline glslPipeline;
-	vkw::Pipeline slangPipeline;
+	vb::Pipeline glslPipeline;
+	vb::Pipeline slangPipeline;
 
 	std::unordered_map<std::string, int> shaderVersions;
-	vkw::Buffer weightsGPU;
-	vkw::Buffer outputImage;
+	vb::Buffer weightsGPU;
+	vb::Buffer outputImage;
 
-	vkw::Buffer bufferCPUglsl;
-	vkw::Buffer bufferCPUslang;
+	vb::Buffer bufferCPUglsl;
+	vb::Buffer bufferCPUslang;
 
 	int width, height;
 	int numLayers, layerSize;
@@ -30,7 +36,7 @@ struct Context {
 };
 static Context ctx;
 }
-void CreatePipeline(vkw::Pipeline& pipeline, const vkw::PipelineDesc& desc) {
+void CreatePipeline(vb::Pipeline& pipeline, const vb::PipelineDesc& desc) {
 	bool should_update = false;
 	for (auto& stage : desc.stages) {
 		auto path = stage.path.string();
@@ -46,25 +52,25 @@ void CreatePipeline(vkw::Pipeline& pipeline, const vkw::PipelineDesc& desc) {
 		}
 	}
 	if (should_update) {
-		pipeline = vkw::CreatePipeline(desc);
+		pipeline = vb::CreatePipeline(desc);
 	}
 }
 
 void CreateShaders() {
 	CreatePipeline(ctx.glslPipeline, {
-		.point = vkw::PipelinePoint::Compute,
+		.point = vb::PipelinePoint::Compute,
 		.stages = {
-			// {.stage = vkw::ShaderStage::Compute, .path = "clearColor.slang"},
-			{.stage = vkw::ShaderStage::Compute, .path = "tests/NeuralSdf/neuralSDF.comp"},
+			// {.stage = vb::ShaderStage::Compute, .path = "clearColor.slang"},
+			{.stage = vb::ShaderStage::Compute, .path = "tests/NeuralSdf/neuralSDF.comp"},
 		},
 		.name = "Neural Sdf Glsl",
 	});
 
 	CreatePipeline(ctx.slangPipeline, {
-		.point = vkw::PipelinePoint::Compute,
+		.point = vb::PipelinePoint::Compute,
 		.stages = {
-			// {.stage = vkw::ShaderStage::Compute, .path = "clearColor.slang"},
-			{.stage = vkw::ShaderStage::Compute, .path = "tests/NeuralSdf/neuralSDF.slang"},
+			// {.stage = vb::ShaderStage::Compute, .path = "clearColor.slang"},
+			{.stage = vb::ShaderStage::Compute, .path = "tests/NeuralSdf/neuralSDF.slang"},
 		},
 		.name = "Neural Sdf Slang",
 	});
@@ -72,34 +78,34 @@ void CreateShaders() {
 }
 
 void CreateImages(uint32_t width, uint32_t height) {
-	ctx.outputImage = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferSrc, vkw::Memory::GPU, "Output Image");
-	ctx.weightsGPU = vkw::CreateBuffer(ctx.num_parameters * sizeof(float), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst, vkw::Memory::GPU, "Neural Sdf Weights");
-	// ctx.imageGPU = vkw::CreateImage({
+	ctx.outputImage = vb::CreateBuffer(width * height * sizeof(Pixel), vb::BufferUsage::Storage | vb::BufferUsage::TransferSrc, vb::Memory::GPU, "Output Image");
+	ctx.weightsGPU = vb::CreateBuffer(ctx.num_parameters * sizeof(float), vb::BufferUsage::Storage | vb::BufferUsage::TransferDst, vb::Memory::GPU, "Neural Sdf Weights");
+	// ctx.imageGPU = vb::CreateImage({
 	// 	.width = width,
 	// 	.height = height,
-	// 	.format = vkw::Format::RGBA32_sfloat,
-	// 	// .format = vkw::Format::RGBA8_unorm,
-	// 	.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::TransferDst | vkw::ImageUsage::TransferSrc | vkw::ImageUsage::Storage,
+	// 	.format = vb::Format::RGBA32_sfloat,
+	// 	// .format = vb::Format::RGBA8_unorm,
+	// 	.usage = vb::ImageUsage::ColorAttachment | vb::ImageUsage::TransferDst | vb::ImageUsage::TransferSrc | vb::ImageUsage::Storage,
 	// 	.name = "imageGPU"
 	// });
 
-	ctx.bufferCPUglsl = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst, vkw::Memory::CPU, "bufferCPUglsl");
-	ctx.bufferCPUslang = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst, vkw::Memory::CPU, "bufferCPUslang");
+	ctx.bufferCPUglsl = vb::CreateBuffer(width * height * sizeof(Pixel), vb::BufferUsage::Storage | vb::BufferUsage::TransferDst, vb::Memory::CPU, "bufferCPUglsl");
+	ctx.bufferCPUslang = vb::CreateBuffer(width * height * sizeof(Pixel), vb::BufferUsage::Storage | vb::BufferUsage::TransferDst, vb::Memory::CPU, "bufferCPUslang");
 }
 
 
 
-static void saveBuffer(const char *fname, vkw::Buffer& buffer, uint32_t width, uint32_t height) {
+static void saveBuffer(char const *fname, vb::Buffer& buffer, uint32_t width, uint32_t height) {
 	std::vector<unsigned char> image;
 	image.reserve(width * height * 4);
-	Pixel* mappedMemory = (Pixel*)vkw::MapBuffer(buffer);
+	Pixel* mappedMemory = (Pixel*)vb::MapBuffer(buffer);
 	for (int i = 0; i < width * height; i++) {
 		image.push_back(255.0f * mappedMemory[i].r);
 		image.push_back(255.0f * mappedMemory[i].g);
 		image.push_back(255.0f * mappedMemory[i].b);
 		image.push_back(255.0f);
 	}
-	vkw::UnmapBuffer(buffer);
+	vb::UnmapBuffer(buffer);
 	FileManager::SaveBMP(fname, (const uint32_t*)image.data(), width, height);
 }
 
@@ -125,8 +131,8 @@ void NeuralSdfApplication::Setup() {
 }
 
 void NeuralSdfApplication::Create() {
-	// TODO: vkw::requestCompute();
-	vkw::Init();
+	// TODO: vb::requestCompute();
+	vb::Init();
 	CreateImages(ctx.width, ctx.height);
 	CreateShaders();
 }
@@ -141,7 +147,7 @@ void NeuralSdfApplication::Compute() {
 	constants.weightsRID = ctx.weightsGPU.RID();
 	constants.outputImageRID = ctx.outputImage.RID();
 
-	auto cmd = vkw::GetCommandBuffer(vkw::Queue::Compute);
+	auto cmd = vb::GetCommandBuffer(vb::Queue::Compute);
 	cmd.BeginCommandBuffer();
 
 	cmd.Copy(ctx.weightsGPU, weights.data(), ctx.num_parameters * sizeof(float));
@@ -150,7 +156,7 @@ void NeuralSdfApplication::Compute() {
 	constants.outputImageRID = ctx.bufferCPUglsl.RID();
 	cmd.PushConstants(&constants, sizeof(constants));
 	cmd.Dispatch({(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
-	cmd.Barrier({});
+	cmd.Barrier();
 
 	// Slang shader
 	cmd.BindPipeline(ctx.slangPipeline);
@@ -160,7 +166,7 @@ void NeuralSdfApplication::Compute() {
 
 	timer.Start();
 	cmd.EndCommandBuffer();
-	vkw::WaitQueue(vkw::Queue::Compute);
+	vb::WaitQueue(vb::Queue::Compute);
 	printf("Compute time: %fs\n", timer.Elapsed());
 	timer.Start();
 	saveBuffer("neuralSdfglsl.bmp", ctx.bufferCPUglsl, ctx.width, ctx.height);
@@ -171,5 +177,5 @@ void NeuralSdfApplication::Compute() {
 void NeuralSdfApplication::Finish() {
 	ctx = {};
 	weights.clear();
-	vkw::Destroy();
+	vb::Destroy();
 }

@@ -1,5 +1,5 @@
 #define SLANG
-#include "../../source/Shaders/ShaderCommon.h"
+#include "../../source/Shaders/Bindless.h"
 #include "RadienceField.hpp"
 
 [[vk::binding(BINDING_BUFFER, 0)]] RWStructuredBuffer<Cell> CellBuffers[];

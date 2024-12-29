@@ -1,13 +1,17 @@
 #if (!defined SLANG) && (!defined GLSL)
 #pragma once
+#ifdef USE_MODULES
+import lmath;
+#else
+#include "lmath.hpp"
+#endif
 #include <string>
 #include <cstdint>
 #include <vector>
 
-#include "Lmath.hpp"
 
-using mat2  = Lmath::float4;
-using vec2  = Lmath::float2;
+using mat2  = lmath::float4;
+using vec2  = lmath::float2;
 
 struct WindowTestInfo
 {

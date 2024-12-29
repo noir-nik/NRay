@@ -1,9 +1,20 @@
-#include "Log.hpp"
+#ifdef USE_MODULES
+module;
+#endif
 
+#ifdef USE_MODULES
+module Log;
+import spdlog;
+import std;
+#else
+#include "Log.cppm"
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/sinks/basic_file_sink.h>
+#endif
+
 
 std::shared_ptr<spdlog::logger> Logger::_logger;
+
 constexpr bool log_to_file = 0;
 constexpr bool use_time_in_log_filename = 1;
 
@@ -14,7 +25,7 @@ void Logger::Init(){
 	sinks[0]->set_pattern("%^[%T.%e] [%^%L%$] %v");
 	// file sink
 	if (log_to_file) {
-		char filename[64];
+		char filename[256];
 		if (use_time_in_log_filename) {
 			auto now = std::time(nullptr);
 			auto tm = *std::localtime(&now);
@@ -22,7 +33,7 @@ void Logger::Init(){
 			// std::strftime(filename, sizeof(filename), "logs/log-%F-%T.txt", &tm);
 		}
 		else {
-			strcpy(filename, "logs/log.txt");
+			std::sprintf(filename, "logs/log.txt");
 		}
 		sinks.emplace_back(std::make_shared<spdlog::sinks::basic_file_sink_mt>(filename, true));
 		sinks[1]->set_pattern("[%T.%e] [%L] %v");

@@ -1,42 +1,47 @@
-# *
-# !*/
-# !*.*
-# !Makefile
+# Ignore files without extension
+*
+!*/
+!*.*
+!Makefile
 
 .vscode/
 .vscode/*
-
-
 
 my*
 *.bmp
 bin/
 build/
-build-linux/
 logs/*
-
-deps/*
 
 *.spv
 *.so
 *.so.*
 *.dll
+*.pdb
 *.exe
 *.o
+*.out
+*.d
 *.obj
 *.res
 *.lib
 *.a
 *.la
-*.dSYM
-*,e1f
-*,ff8
-*.lnk
-*.err
-*.exp
-*.map
-*.orig
-*~
-*.swp
+
+*.pcm
+*.gcm
+
 *.tmp
 *.rej
+
+*.mk
+
+*.ttf
+*.ttc
+*.otf
+
+*.ini
+*.log
+
+!assets/*
+!assets/*/*

@@ -1,0 +1,28 @@
+[submodule "deps/fastgltf"]
+	path = deps/fastgltf
+	url = https://github.com/spnda/fastgltf.git
+[submodule "deps/fmt"]
+	path = deps/fmt
+	url = https://github.com/fmtlib/fmt.git
+[submodule "deps/spdlog"]
+	path = deps/spdlog
+	url = https://github.com/gabime/spdlog.git
+[submodule "deps/entt"]
+	path = deps/entt
+	url = https://github.com/skypjack/entt.git
+[submodule "deps/stb"]
+	path = deps/stb
+	url = https://github.com/nothings/stb.git
+[submodule "deps/glfw"]
+	path = deps/glfw
+	url = https://github.com/glfw/glfw.git
+[submodule "deps/imgui"]
+	path = deps/imgui
+	url = https://github.com/ocornut/imgui.git
+	branch = docking
+[submodule "deps/MikkTSpace"]
+	path = deps/MikkTSpace
+	url = https://github.com/mmikk/MikkTSpace.git
+[submodule "deps/vulkan_backend"]
+	path = deps/vulkan_backend
+	url = https://github.com/noir-nik/vulkan_backend.git

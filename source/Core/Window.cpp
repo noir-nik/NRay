@@ -1,9 +1,17 @@
-#include "Log.hpp"
-
-#include "Window.hpp"
+#ifdef USE_MODULES
+module Window;
+import lmath;
+import glfw;
+import Log;
+#else
+#include "Window.cppm"
+#include "lmath.hpp"
+#include "glfw.cppm"
+#include "Log.cppm"
+#endif
 // #include <imgui/imgui.h>
 
-#define WINDOW_ALIVE_GUARD if (!alive) {LOG_WARN("ALIVE_GUARD {}:{}", __FILE__, __LINE__) return;}
+#define WINDOW_ALIVE_GUARD if (!alive) {LOG_WARN("ALIVE_GUARD {}:{}", __FILE__, __LINE__); return;}
 #define TRACE_WINDOW 0
 #define TRACE_INPUT 0
 #if TRACE_WINDOW
@@ -76,6 +84,8 @@ void WindowFocusCallback(GLFWwindow* window, int focused) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
 	LOG_WINDOW("Window {} focused {}", pWindow->GetName(), focused);
 
+	if (focused) pWindow->SetUIContextCurrent();
+
 	if (pWindow->windowFocusCallback)
 		pWindow->windowFocusCallback(pWindow, focused);
 }
@@ -102,7 +112,9 @@ void FramebufferSizeCallback(GLFWwindow* window, int width, int height) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
 	LOG_WINDOW("Window {} framebuffer resized to {}x{}", pWindow->GetName(), width, height);
 	
-	pWindow->SetDrawNeeded(true);
+	if (width != 0 && height != 0) {
+		pWindow->AddFramesToDraw(1);
+	}
 	pWindow->SetFramebufferResized(true);
 	// LOG_WINDOW("Window {} framebuffer resized to {}x{}", pWindow->GetName(), width, height);
 	
@@ -129,7 +141,7 @@ void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
 	LOG_INPUT("Window {} mouse button: {}, action: {}, mods: {}", pWindow->GetName(), button, action, mods);
 
 	mouse.buttons[button] = action;
-	mouse.mods = mods;
+	mouse.mods = static_cast<GLFW::Mod>(mods);
 
 	if (pWindow->mouseButtonCallback)
 		pWindow->mouseButtonCallback(pWindow, button, action, mods);
@@ -139,12 +151,12 @@ void CursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
 	LOG_INPUT("Window {} cursor pos: {}, {}", pWindow->GetName(), xpos, ypos);
 
-	mouse.deltaPos = mouse.pos - Lmath::vec2(xpos, ypos);
-	mouse.pos = Lmath::vec2(xpos, ypos);
+	mouse.deltaPos = mouse.pos - lmath::vec2(xpos, ypos);
+	mouse.pos = lmath::vec2(xpos, ypos);
 	// LOG_INPUT("Window {} delta mouse pos: {}, {}", pWindow->GetName(), pWindow->deltaMousePos.x, pWindow->deltaMousePos.y);
 
 	// Drag window
-	// if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
+	// if (glfwGetMouseButton(window, GLFW::MOUSE_BUTTON_RIGHT) == GLFW::PRESS) {
 	// 	pWindow->CmdSetPos(pWindow->GetPos().x - mouse.deltaPos.x, pWindow->GetPos().y - mouse.deltaPos.y);
 	// 	mouse.pos = mouse.pos + mouse.deltaPos;
 	// }
@@ -176,22 +188,24 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
 	LOG_INPUT("Window {} key: {}, scancode: {}, action: {}, mods: {}", pWindow->GetName(), key, scancode, action, mods);
 
-	if (action == GLFW_PRESS) {
-		switch (key) {
-		case GLFW_KEY_ESCAPE:
-			pWindow->SetShouldClose(true);
-			break;
-		case GLFW_KEY_F11: {
-			auto moden = pWindow->GetMode();
+	auto typed_key = static_cast<GLFW::Key>(key);
+
+	if (action == GLFW::Press) {
+		switch (typed_key) {
+		// case GLFW::Key::ESCAPE:
+		// 	pWindow->SetShouldClose(true);
+		// 	break;
+		case GLFW::Key::F11: {
+			auto mode = pWindow->GetMode();
 			// LOG_INFO("Window {} mode: {}", pWindow->GetName(), (int)mode);
-			if (pWindow->GetMode() == WindowMode::WindowedFullScreen) {
+			if (mode == WindowMode::WindowedFullScreen) {
 				pWindow->SetMode(WindowMode::Windowed);
 			} else {
 				pWindow->StoreWindowSize();
 				pWindow->SetMode(WindowMode::WindowedFullScreen);
 			}}
 			break;
-		case GLFW_KEY_F8 : {
+		case GLFW::Key::F8 : {
 			pWindow->SetDecorated(!pWindow->GetDecorated());
 		}
 			break;
@@ -222,7 +236,7 @@ void CharModsCallback(GLFWwindow* window, unsigned int codepoint, int mods) {
 }
 
 
-void DropCallback (GLFWwindow *window, int path_count, const char *paths[]) {
+void DropCallback (GLFWwindow *window, int path_count, char const *paths[]) {
 	Window* pWindow = (Window*)glfwGetWindowUserPointer(window);
 	LOG_INPUT("Window {} drop: {}", pWindow->GetName(), path_count);
 	
@@ -230,7 +244,7 @@ void DropCallback (GLFWwindow *window, int path_count, const char *paths[]) {
 		ctx.pathsDrop.push_back(paths[i]);
 	}
 	for (int i = 0; i < path_count; i++) {
-		printf("%s\n", paths[i]);
+		LOG_TRACE("Window {} drop: {}", pWindow->GetName(), paths[i]);
 	}
 
 	if (pWindow->dropCallback)
@@ -239,7 +253,7 @@ void DropCallback (GLFWwindow *window, int path_count, const char *paths[]) {
 }
 
 
-static void errorCallback(int error, const char* description)
+static void errorCallback(int error, char const* description)
 {
 	LOG_ERROR("[GLFW ERROR] ({}) {}", error, description);
 }
@@ -258,7 +272,7 @@ void WindowManager::Init(){
 	}
 
 	// glfw uses OpenGL context by default
-	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+	glfwWindowHint(GLFW::ClientApi, GLFW::NoApi);
 	
 	// // ctx.monitors = glfwGetMonitors(&ctx.monitorCount);
 	// glfwGetVideoModes(ctx.monitors[monitorIndex], &videoModeIndex);
@@ -268,23 +282,23 @@ void WindowManager::Init(){
 
 // Call after all graphics contexts are destroyed
 void WindowManager::Finish() {
-	// Do not Log
 	if (!is_initialized) return;
-	printf("WindowManager::Finish()\n");
 	glfwTerminate();
 	is_initialized = false;
 }
 
 // Window factory
-Window::Window(int width, int height, const char* name): width(width), height(height), name(name) {
+Window::Window(WindowCreateInfo const& info): name(info.name), size( info.size ) {
 
 	if (!WindowManager::is_initialized) {
 		WindowManager::Init();
 	}
+	auto& width = info.size.x;
+	auto& height = info.size.y;
 
-	glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
-	window = glfwCreateWindow(width, height, name, nullptr, nullptr);
-	// LOG_INFO("Window::Create({}x{}):{}", width, height, name);
+	glfwWindowHint(GLFW::Resizable, GLFW::True);
+	window = glfwCreateWindow(width, height, info.name, nullptr, nullptr);
+	// LOG_INFO("Window::Create({}x{}):{} {}", width, height, name, (void*)window);
 	GetPos();
 	auto vidMode = glfwGetVideoMode(glfwGetPrimaryMonitor());
 	sizeLimits = { 30, 30, vidMode->width, vidMode->height };
@@ -310,29 +324,28 @@ Window::Window(int width, int height, const char* name): width(width), height(he
 	glfwSetCharModsCallback          (window, _InputCallbacks::CharModsCallback   );
 	glfwSetDropCallback              (window, _InputCallbacks::DropCallback       );
 
+	UIContext.Init(info.imGuiStyle); 
+
 	ApplyChanges();
 }
 
 void Window::Destroy() {
-	swapChain.Destroy();
+	if (swapChainAlive) {
+		// swapChain.Destroy();
+	}
 	glfwGetWindowPos(window, &pos.x, &pos.y);
+	UIContext.Destroy();
 	glfwDestroyWindow(window);
 	alive = false;
 }
 
 void Window::ApplyChanges() {
 	WINDOW_ALIVE_GUARD
-	// Destroy if should close
-	if (GetShouldClose()) {
-		Destroy();
-		return;
-	}
-	
 	// Change mode
 	if (newMode != mode) {
 		mode = newMode;
 		framebufferResized = true;
-		drawNeeded = true;
+		framesToDraw += 1;
 		
 		int monitorCount;
 		auto monitors = glfwGetMonitors(&monitorCount);
@@ -344,20 +357,20 @@ void Window::ApplyChanges() {
 		switch (newMode) {
 		case WindowMode::Windowed:
 			// posY = std::max(posY, 31);
-			glfwSetWindowMonitor(window, nullptr, windowedSize.x, windowedSize.y, windowedSize.z, windowedSize.w, GLFW_DONT_CARE);
+			glfwSetWindowMonitor(window, nullptr, windowedSize.x, windowedSize.y, windowedSize.z, windowedSize.w, GLFW::DontCare);
 			if (maximized) {
 				glfwMaximizeWindow(window);
 			}
-			// glfwSetWindowAttrib(window, GLFW_MAXIMIZED, maximized);
-			glfwSetWindowAttrib(window, GLFW_RESIZABLE, resizable);
-			glfwSetWindowAttrib(window, GLFW_DECORATED, decorated);
+			// glfwSetWindowAttrib(window, GLFW::MAXIMIZED, maximized);
+			glfwSetWindowAttrib(window, GLFW::Resizable, resizable);
+			glfwSetWindowAttrib(window, GLFW::Decorated, decorated);
 			break;
 			case WindowMode::WindowedFullScreen:
 			
-			glfwWindowHint(GLFW_RED_BITS, monitorMode->redBits);
-			glfwWindowHint(GLFW_GREEN_BITS, monitorMode->greenBits);
-			glfwWindowHint(GLFW_BLUE_BITS, monitorMode->blueBits);
-			glfwWindowHint(GLFW_REFRESH_RATE, monitorMode->refreshRate);
+			glfwWindowHint(GLFW::RedBits, monitorMode->redBits);
+			glfwWindowHint(GLFW::GreenBits, monitorMode->greenBits);
+			glfwWindowHint(GLFW::BlueBits, monitorMode->blueBits);
+			glfwWindowHint(GLFW::RefreshRate, monitorMode->refreshRate);
 			glfwSetWindowMonitor(window, monitor, 0, 0, monitorMode->width, monitorMode->height, monitorMode->refreshRate);
 			break;
 		case WindowMode::FullScreen:
@@ -379,7 +392,7 @@ void Window::ApplyChanges() {
 
 void Window::Update() {
 	WINDOW_ALIVE_GUARD
-	// for (int i = GLFW_KEY_SPACE; i < GLFW_KEY_LAST + 1; i++) {
+	// for (int i = GLFW::Key::SPACE; i < GLFW::Key::LAST + 1; i++) {
 	// 	lastKeyState[i] = glfwGetKey(window, i);
 	// }
 	// deltaScroll = 0;
@@ -389,8 +402,8 @@ void Window::Update() {
 	lastTime = newTime;
 	// double x, y;
 	// glfwGetCursorPos(window, &x, &y);
-	// deltaMousePos = mousePos - Lmath::vec2(x, y);
-	// mousePos = Lmath::vec2(x, y);
+	// deltaMousePos = mousePos - lmath::vec2(x, y);
+	// mousePos = lmath::vec2(x, y);
 }
 
 std::string VideoModeText(GLFWvidmode mode) {
@@ -402,7 +415,7 @@ std::string VideoModeText(GLFWvidmode mode) {
 void Window::UpdateFramebufferSize() {
 	WINDOW_ALIVE_GUARD
 	// framebufferResized = false;
-	glfwGetFramebufferSize(window, &width, &height);
+	glfwGetFramebufferSize(window, &size.x, &size.y);
 }
 
 // bool Window::IsKeyPressed(uint16_t keyCode) {

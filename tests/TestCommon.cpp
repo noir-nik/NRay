@@ -1,12 +1,15 @@
-#include "Pch.hpp"
+#ifdef USE_MODULES
+import lmath;
+import vulkan_backend;
+#else
+#include <vulkan_backend/core.hpp>
 #include "TestCommon.hpp"
-#include "Lmath.hpp"
-#include "FileManager.hpp"
-#include "VulkanBase.hpp"
+#include "FileManager.cppm"
+#endif
 
-using Pixel = Lmath::float4;
+using Pixel = lmath::float4;
 
-void fillUV(Lmath::float4* image, int width, int height){
+void fillUV(lmath::float4* image, int width, int height){
 	for (auto i = 0; i < height; i++) {
 		for (auto j = 0; j < width; j++) {
 			int idx = i * width + j;

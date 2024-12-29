@@ -1,6 +1,6 @@
 #define SLANG
-#include "../../source/Shaders/ShaderCommon.h"
-#include "FeatureTest.hpp"
+#include "../../source/Shaders/Bindless.h"
+#include "FeatureTest.cppm"
 
 [[vk::push_constant]]
 FeatureTestConstants ctx;

@@ -1,19 +1,23 @@
 #if defined(ENGINE)
 #pragma once
+#ifdef USE_MODULES
+import lmath;
+#else
+#include "lmath.hpp"
+#endif
 #include <string>
 #include <cstdint>
 #include <vector>
 
-#include "Lmath.hpp"
-using float3 = Lmath::float3;
-using float4x4 = Lmath::float4x4;
+using float3 = lmath::float3;
+using float4x4 = lmath::float4x4;
 
 
 struct RadienceFieldInfo
 {
 	int width;
 	int height;
-	const char* gridPath;
+	char const* gridPath;
 	int gridSize;
 };
 

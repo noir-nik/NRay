@@ -1,29 +1,34 @@
-#include "Pch.hpp"
+#ifdef USE_MODULES
+import lmath;
+import vulkan_backend;
+#else
+#include "lmath_types.hpp"
+#include <vulkan_backend/core.hpp>
+#endif
 
-#include "VulkanBase.hpp"
-#include "ShaderCommon.h"
-#include "FileManager.hpp"
+#include "Bindless.h"
+#include "FileManager.cppm"
 
-#include "ImageOptimization.hpp"
-#include "../TestCommon.hpp"
-#include "Timer.hpp"
+#include "ImageOptimization.cppm"
+#include "../TestCommon.cppm"
+#include "Timer.cppm"
 
 using Pixel = vec4;
 namespace {
 struct Context {
-	vkw::Pipeline pipeline;
+	vb::Pipeline pipeline;
 
 	int width, height;
 	float learningRate;
 	int numIterations;
 
-	vkw::Buffer BufferGT;
-	vkw::Buffer BufferOpt;
-	vkw::Buffer grad;
+	vb::Buffer BufferGT;
+	vb::Buffer BufferOpt;
+	vb::Buffer grad;
 
-	vkw::Buffer bufferCPU;
+	vb::Buffer bufferCPU;
 	
-	vkw::Image imageCPU;
+	vb::Image imageCPU;
 
 	void CreateImages(uint32_t width, uint32_t height);
 	void CreateShaders();
@@ -32,26 +37,26 @@ static Context ctx;
 }
 
 void Context::CreateShaders() {
-	pipeline = vkw::CreatePipeline({
-		.point = vkw::PipelinePoint::Compute,
+	pipeline = vb::CreatePipeline({
+		.point = vb::PipelinePoint::Compute,
 		.stages = {
-			{.stage = vkw::ShaderStage::Compute, .path = "tests/ImageOptimization/ImageOptimization.slang"},
-			// {.stage = vkw::ShaderStage::Compute, .path = "tests/ImageOptimization/ImageOptimization.comp"},
+			{.stage = vb::ShaderStage::Compute, .path = "tests/ImageOptimization/ImageOptimization.slang"},
+			// {.stage = vb::ShaderStage::Compute, .path = "tests/ImageOptimization/ImageOptimization.comp"},
 		},
 		.name = "Image Optimization Test",
 	});
 }
 
 void Context::CreateImages(uint32_t width, uint32_t height) {
-	ctx.BufferGT = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst, vkw::Memory::GPU, "Ground Truth Image");
-	ctx.BufferOpt = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferSrc | vkw::BufferUsage::TransferDst, vkw::Memory::GPU, "Optimized Image");
-	ctx.grad = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage, vkw::Memory::GPU, "Gradient Image");
-	ctx.bufferCPU = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst, vkw::Memory::CPU, "Output Image");
-	ctx.imageCPU = vkw::CreateImage({
+	ctx.BufferGT = vb::CreateBuffer(width * height * sizeof(Pixel), vb::BufferUsage::Storage | vb::BufferUsage::TransferDst, vb::Memory::GPU, "Ground Truth Image");
+	ctx.BufferOpt = vb::CreateBuffer(width * height * sizeof(Pixel), vb::BufferUsage::Storage | vb::BufferUsage::TransferSrc | vb::BufferUsage::TransferDst, vb::Memory::GPU, "Optimized Image");
+	ctx.grad = vb::CreateBuffer(width * height * sizeof(Pixel), vb::BufferUsage::Storage, vb::Memory::GPU, "Gradient Image");
+	ctx.bufferCPU = vb::CreateBuffer(width * height * sizeof(Pixel), vb::BufferUsage::Storage | vb::BufferUsage::TransferDst, vb::Memory::CPU, "Output Image");
+	ctx.imageCPU = vb::CreateImage({
 		.width = width,
 		.height = height,
-		.format = vkw::Format::RGBA32_sfloat,
-		.usage = vkw::ImageUsage::ColorAttachment | vkw::ImageUsage::TransferSrc | vkw::ImageUsage::TransferDst,
+		.format = vb::Format::RGBA32_sfloat,
+		.usage = vb::ImageUsage::ColorAttachment | vb::ImageUsage::TransferSrc | vb::ImageUsage::TransferDst,
 		.name = "Output Image",
 	});
 }
@@ -72,7 +77,7 @@ void ImageOptimizationApplication::Setup() {
 }
 
 void ImageOptimizationApplication::Create() {
-	vkw::Init();
+	vb::Init();
 	ctx.CreateImages(ctx.width, ctx.height);
 	ctx.CreateShaders();
 }
@@ -95,26 +100,26 @@ void ImageOptimizationApplication::Compute() {
 	std::vector<float4> imageUV(ctx.width * ctx.height);
 	fillUV(imageUV.data(), ctx.width, ctx.height);
 
-	auto cmd = vkw::GetCommandBuffer(vkw::Queue::Compute);
+	auto cmd = vb::GetCommandBuffer(vb::Queue::Compute);
 	cmd.BeginCommandBuffer();
 	// Prepare BufferGT and BufferOpt
 	cmd.Copy(ctx.BufferGT, imageUV.data(), ctx.width * ctx.height * sizeof(Pixel));
-	cmd.Barrier(ctx.imageCPU, {vkw::ImageLayout::General});
+	cmd.Barrier(ctx.imageCPU, {vb::ImageLayout::General});
 	cmd.ClearColorImage(ctx.imageCPU, {0.0f, 0.0f, 0.5f, 0.0f});
-	cmd.Barrier(ctx.imageCPU, {vkw::ImageLayout::TransferSrc});
+	cmd.Barrier(ctx.imageCPU, {vb::ImageLayout::TransferSrc});
 	cmd.Copy(ctx.BufferOpt, ctx.imageCPU);
-	cmd.Barrier({});
+	cmd.Barrier();
 
 	cmd.BindPipeline(ctx.pipeline);
 	cmd.PushConstants(&constants, sizeof(constants));
 
 	cmd.Dispatch({(uint32_t)ceil(ctx.width / float(WORKGROUP_SIZE)), (uint32_t)ceil(ctx.height / float(WORKGROUP_SIZE)), 1});
-	cmd.Barrier({});
+	cmd.Barrier();
 	cmd.Copy(ctx.bufferCPU, ctx.BufferOpt, ctx.width * ctx.height * sizeof(Pixel));
 
 	timer.Start();
 	cmd.EndCommandBuffer();
-	vkw::WaitQueue(vkw::Queue::Compute);
+	vb::WaitQueue(vb::Queue::Compute);
 	printf("Compute time: %fs\n", timer.Elapsed());
 	timer.Start();
 	saveBuffer("imageOpt.bmp", &ctx.bufferCPU, ctx.width, ctx.height);
@@ -123,5 +128,5 @@ void ImageOptimizationApplication::Compute() {
 
 void ImageOptimizationApplication::Finish() {
 	ctx = {};
-	vkw::Destroy();
+	vb::Destroy();
 }

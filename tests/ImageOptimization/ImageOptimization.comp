@@ -1,6 +1,6 @@
 #version 450
 #extension GL_GOOGLE_include_directive : enable
-#include "ShaderCommon.h"
+#include "Bindless.h"
 #include "ImageOptimization.hpp"
 
 layout (local_size_x = WORKGROUP_SIZE, local_size_y = WORKGROUP_SIZE, local_size_z = 1 ) in;

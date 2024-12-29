@@ -1,22 +1,27 @@
+#ifdef USE_MODULES
+import lmath;
+import vulkan_backend;
+#else
+#include "lmath.hpp"
+#include <vulkan_backend/core.hpp>
+#endif
 #include "Pch.hpp"
-
-#include "VulkanBase.hpp"
-#include "ShaderCommon.h"
+#include "Bindless.h"
 #include "FileManager.hpp"
 
 #include "RadienceField.hpp"
 #include "../TestCommon.hpp"
 #include "Timer.hpp"
 
-using namespace Lmath;
+using namespace lmath;
 
 using Pixel = vec4;
 namespace {
 struct Context {
-	vkw::Pipeline pipeline;
+	vb::Pipeline pipeline;
 
 	int width, height;
-	const char *gridPath;
+	char const *gridPath;
 	int gridSize;
 	int numCells;
 	std::vector<Cell> grid;
@@ -25,8 +30,8 @@ struct Context {
 	float4x4 worldViewInv;
 	float4x4 worldViewProjInv;
 
-	vkw::Buffer BufferGrid;
-	vkw::Buffer outputImage;
+	vb::Buffer BufferGrid;
+	vb::Buffer outputImage;
 
 	void CreateImages(uint32_t width, uint32_t height);
 	void CreateShaders();
@@ -34,19 +39,19 @@ struct Context {
 static Context ctx;
 }
 void Context::CreateShaders() {
-	pipeline = vkw::CreatePipeline({
-		.point = vkw::PipelinePoint::Compute,
+	pipeline = vb::CreatePipeline({
+		.point = vb::PipelinePoint::Compute,
 		.stages = {
-			// {.stage = vkw::ShaderStage::Compute, .path = "tests/RadienceField/RadienceField.slang"},
-			{.stage = vkw::ShaderStage::Compute, .path = "tests/RadienceField/RadienceField.comp"},
+			// {.stage = vb::ShaderStage::Compute, .path = "tests/RadienceField/RadienceField.slang"},
+			{.stage = vb::ShaderStage::Compute, .path = "tests/RadienceField/RadienceField.comp"},
 		},
 		.name = "Slang Test",
 	});
 }
 
 void Context::CreateImages(uint32_t width, uint32_t height) {
-	ctx.BufferGrid = vkw::CreateBuffer(ctx.numCells * sizeof(Cell), vkw::BufferUsage::Storage | vkw::BufferUsage::TransferDst, vkw::Memory::GPU, "Grid");
-	ctx.outputImage = vkw::CreateBuffer(width * height * sizeof(Pixel), vkw::BufferUsage::Storage, vkw::Memory::CPU, "Output Image");
+	ctx.BufferGrid = vb::CreateBuffer(ctx.numCells * sizeof(Cell), vb::BufferUsage::Storage | vb::BufferUsage::TransferDst, vb::Memory::GPU, "Grid");
+	ctx.outputImage = vb::CreateBuffer(width * height * sizeof(Pixel), vb::BufferUsage::Storage, vb::Memory::CPU, "Output Image");
 }
 
 void RadienceFieldApplication::run(RadienceFieldInfo* pRadienceFieldInfo) {
@@ -80,7 +85,7 @@ void RadienceFieldApplication::Setup() {
 }
 
 void RadienceFieldApplication::Create() {
-	vkw::Init();
+	vb::Init();
 	ctx.CreateImages(ctx.width, ctx.height);
 	ctx.CreateShaders();
 }
@@ -104,11 +109,11 @@ void RadienceFieldApplication::Compute() {
 	constants.worldViewInv = ctx.worldViewInv;
 	constants.worldViewProjInv = ctx.worldViewProjInv;
 
-	auto cmd = vkw::GetCommandBuffer(vkw::Queue::Compute);
+	auto cmd = vb::GetCommandBuffer(vb::Queue::Compute);
 	cmd.BeginCommandBuffer();
 	// Prepare BufferGT and BufferOpt
 	cmd.Copy(ctx.BufferGrid, ctx.grid.data(), ctx.numCells * sizeof(Cell));
-	cmd.Barrier({});
+	cmd.Barrier();
 
 	cmd.BindPipeline(ctx.pipeline);
 	cmd.PushConstants(&constants, sizeof(constants));
@@ -117,7 +122,7 @@ void RadienceFieldApplication::Compute() {
 
 	timer.Start();
 	cmd.EndCommandBuffer();
-	vkw::WaitQueue(vkw::Queue::Compute);
+	vb::WaitQueue(vb::Queue::Compute);
 	printf("Compute time: %fs\n", timer.Elapsed());
 	timer.Start();
 	saveBuffer("RadienceField.bmp", &ctx.outputImage, ctx.width, ctx.height);
@@ -126,5 +131,5 @@ void RadienceFieldApplication::Compute() {
 
 void RadienceFieldApplication::Finish() {
 	ctx = {};
-	vkw::Destroy();
+	vb::Destroy();
 }

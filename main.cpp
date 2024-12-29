@@ -1,17 +1,22 @@
-#include "Pch.hpp"
 
-#include "VulkanBase.hpp"
+#ifdef USE_MODULES
+import Log;
+import FeatureTest;
+#else
+#include "Log.cppm"
+#include "tests/FeatureTest/FeatureTest.cppm"
+#endif
+// #include "tests/Test.hpp"
 
-#include "FileManager.hpp"
-
-#include "tests/Test.hpp"
-
-#include <filesystem>
-
-// Example
 int main(int argc, char* argv[])
 {
 	Logger::Init();
-	Test::Test(Test::Feature);
+	FeatureTestApplication app;
+	if (argc != 2) {
+		LOG_INFO("Please provide a path to gltf file");
+	} else {
+		app.run(argv[1]);
+	}
+	// Test::Test(Test::Feature);
 	return 0;
 }

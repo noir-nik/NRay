@@ -1,13 +1,20 @@
-#include "Pch.hpp"
+#ifdef USE_MODULES
+module FileManager;
+import Log;
+import std;
+#else
+#include "Log.cppm"
+#include "FileManager.cppm"
+#include <filesystem>
+#include <fstream>
+#endif
 
-#include "FileManager.hpp"
-
-std::vector<char> FileManager::ReadRawBytes(const std::string& filename) {
+std::vector<char> FileManager::ReadRawBytes(std::string const& filename) {
 	std::ifstream file(filename, std::ios::ate | std::ios::binary);
 	if (!file.is_open()) {
 		LOG_CRITICAL("Failed to open file: '{}'", filename);
 	}
-	size_t fileSize = (size_t)file.tellg();
+	std::size_t fileSize = (std::size_t)file.tellg();
 	std::vector<char> buffer(fileSize);
 	file.seekg(0);
 	file.read(buffer.data(), fileSize);
@@ -16,12 +23,12 @@ std::vector<char> FileManager::ReadRawBytes(const std::string& filename) {
 	return buffer;
 }
 
-void FileManager::ReadFloats(const std::string& filename, std::vector<float> &buffer) {
+void FileManager::ReadFloats(std::string const& filename, std::vector<float> &buffer) {
 	std::ifstream file(filename, std::ios::ate | std::ios::binary);
 	if (!file.is_open()) {
 		LOG_CRITICAL("Failed to open file: '{}'", filename);
 	}
-	size_t fileSize = (size_t)file.tellg();
+	std::size_t fileSize = (std::size_t)file.tellg();
 	buffer.resize(fileSize / sizeof(float));
 	file.seekg(0);
 	file.read((char*)buffer.data(), fileSize);
@@ -29,7 +36,7 @@ void FileManager::ReadFloats(const std::string& filename, std::vector<float> &bu
 }
 
 /// @return Last write time of a file in seconds since epoch
-int FileManager::GetFileVersion(const std::string& filename) {
+int FileManager::GetFileVersion(std::string const& filename) {
 	std::filesystem::path filePath(filename);
 	if (!std::filesystem::exists(filePath)) {
 		LOG_ERROR("File does not exist: '{}'", filename);
@@ -45,7 +52,7 @@ int FileManager::GetFileVersion(const std::string& filename) {
 namespace { // BMP helper
 struct Pixel3 { unsigned char r, g, b; };
 
-void WriteBMP(const char* fname, Pixel3* a_pixelData, int width, int height)
+void WriteBMP(char const* fname, Pixel3* a_pixelData, int width, int height)
 {
   int paddedsize = (width*height) * sizeof(Pixel3);
 
@@ -67,18 +74,18 @@ void WriteBMP(const char* fname, Pixel3* a_pixelData, int width, int height)
   bmpinfoheader[11] = (unsigned char)(height>>24);
 
   std::ofstream out(fname, std::ios::out | std::ios::binary);
-  out.write((const char*)bmpfileheader, 14);
-  out.write((const char*)bmpinfoheader, 40);
-  out.write((const char*)a_pixelData, paddedsize);
+  out.write((char const*)bmpfileheader, 14);
+  out.write((char const*)bmpinfoheader, 40);
+  out.write((char const*)a_pixelData, paddedsize);
   out.flush();
   out.close();
 }
 }
-void FileManager::SaveBMP(const char* fname, const unsigned int* pixels, int w, int h)
+void FileManager::SaveBMP(char const* fname, unsigned const int* pixels, int w, int h)
 {
   std::vector<Pixel3> pixels2(w*h);
 
-  for (size_t i = 0; i < pixels2.size(); i++)
+  for (std::size_t i = 0; i < pixels2.size(); i++)
   {
 
     Pixel3 px;

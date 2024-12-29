@@ -1,5 +1,5 @@
 #define SLANG
-#include "../../source/Shaders/ShaderCommon.h"
+#include "../../source/Shaders/Bindless.h"
 
 [[vk::push_constant]]
 SlangTestConstants ctx;
