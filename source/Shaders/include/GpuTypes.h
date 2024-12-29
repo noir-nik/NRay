@@ -34,9 +34,9 @@ struct Material {
 	float metallicFactor    _EQ_1f;
 
 	float roughnessFactor   _EQ_1f;
-    float normalScale       _EQ_1f;
-    float occlusionStrength _EQ_1f;
-    float alphaCutoff       _EQ_05f;
+	float normalScale       _EQ_1f;
+	float occlusionStrength _EQ_1f;
+	float alphaCutoff       _EQ_05f;
 
 	uint baseColorTexture         _EQ_UNDEFINED;
 	uint metallicRoughnessTexture _EQ_UNDEFINED;

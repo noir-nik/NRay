@@ -34,7 +34,6 @@ import Materials;
 #include <vulkan_backend/core.hpp>
 #include "Window.cppm"
 #include "Log.cppm"
-#include "Bindless.h"
 #include "Editor.cppm"
 #include "FeatureTest.cppm"
 #include "GLTFLoader.cppm"
