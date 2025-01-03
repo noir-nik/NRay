@@ -95,6 +95,7 @@ struct LoadInfo {
 	Materials& materials;
 	vb::Device& device;
 	vb::Queue& queue;
+	vb::Command& cmd;
 	u32 const& errorImageID;
 };
 

@@ -102,7 +102,7 @@ struct AppContext : Structs::NoCopyNoMove {
 	// vb::Image grayImage;
 	// vb::Image whiteImage;
 
-	std::unordered_map<Window*, vb::Swapchain> swapchains;
+	// std::unordered_map<Window*, vb::Swapchain> swapchains;
 
 	Component::Material defaultMaterial;
 	Materials materials;
@@ -116,7 +116,7 @@ struct AppContext : Structs::NoCopyNoMove {
 	// std::vector<Entity> meshes;
 	void Setup();
 	void CreateShaders();
-	void CreateImGui(Window* window, vb::SampleCount sampleCount);
+	void CreateImGui(Entity window, vb::SampleCount sampleCount);
 	void CreateDefaultResources();
 	void CreateWindowResources(Entity window);
 	void UploadBuffers();
@@ -125,19 +125,19 @@ struct AppContext : Structs::NoCopyNoMove {
 	void RenderUI();
 	void DrawImgui(Entity window);
 	void DrawViewport(vb::Command& cmd, Camera const& camera);
-	void RecreateFrameResources(Window* window);
+	void RecreateFrameResources(EntityType window);
 
 	void test();
 };
 static AppContext* ctx;
 
-struct WindowImageResource : Structs::NoCopyNoMove {
+struct WindowResource : Structs::NoCopyNoMove {
 	vb::Image colorImage;
 	vb::Image resolveImage;
 	vb::Image depthImage;
 	vb::Image uiColorImage;
 	vb::Image uiResolveImage;
-
+	vb::Swapchain swapchain;
 };
 
 
@@ -208,7 +208,7 @@ std::vector<VertexDebug> const vertices = {
 };
 
 void AppContext::CreateShaders() {
-	auto& resource = mainWindow.Get<WindowImageResource>();
+	auto& resource = mainWindow.Get<WindowResource>();
 	bool constexpr skip_recompilation = false; 
 
 	char compile_options[128];
@@ -357,7 +357,7 @@ void AppContext::CreateDefaultResources() {
 
 	DEBUG_ASSERT(defaultMaterial.deviceMaterialID == 0, "Default material ID must be 0");
 
-	auto cmd = queue.GetCommandBuffer();
+	auto cmd = mainWindow.Get<WindowResource>().swapchain.GetCommandBuffer();
 	cmd.Begin();
 	// Error Image
 	cmd.Barrier(errorImage, {vb::ImageLayout::eTransferDstOptimal});
@@ -365,16 +365,17 @@ void AppContext::CreateDefaultResources() {
 	// Default Material
 	cmd.Copy(materials.GetBuffer(defaultMaterial.deviceMaterialID), &defaultMaterial.gpuMaterial, sizeof(GpuTypes::Material), sizeof(GpuTypes::Material) * defaultMaterial.deviceMaterialID);
 	cmd.End();
-	cmd.QueueSubmit();
+	cmd.QueueSubmit(queue);
 }
 
 void ImGuiCheckVulkanResult(VkResult result) {
 	vb::CheckVkResultDefault(result, "ImGui error!");
 }
 
-void AppContext::CreateImGui(Window* window, vb::SampleCount sampleCount) {
-	VkFormat depthFormat   =  VK_FORMAT_D32_SFLOAT;
-	auto& swapchain        = swapchains[window];
+void AppContext::CreateImGui(Entity window, vb::SampleCount sampleCount) {
+
+	Window& windowHandle   = window.Get<Window>();
+	auto& swapchain        = window.Get<WindowResource>().swapchain;
 	vb::ImGuiInitInfo info = swapchain.GetImGuiInfo();
 	VkFormat colorFormat   = VkFormat(swapchain.GetFormat());
 
@@ -382,8 +383,8 @@ void AppContext::CreateImGui(Window* window, vb::SampleCount sampleCount) {
 		.Instance            = info.Instance,
 		.PhysicalDevice      = info.PhysicalDevice,
 		.Device              = info.Device,
-		.QueueFamily         = info.QueueFamily,
-		.Queue               = info.Queue,
+		.QueueFamily         = queue.GetFamilyIndex(),
+		.Queue               = queue.GetHandle(),
 		.DescriptorPool      = info.DescriptorPool,
 		.MinImageCount       = info.MinImageCount,
 		.ImageCount          = info.ImageCount,
@@ -394,12 +395,12 @@ void AppContext::CreateImGui(Window* window, vb::SampleCount sampleCount) {
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
 			.colorAttachmentCount    = 1,
 			.pColorAttachmentFormats = &colorFormat,
-			.depthAttachmentFormat   = depthFormat,
+			.depthAttachmentFormat   = VkFormat(depthFormat),
 		},
 		.Allocator           = reinterpret_cast<VkAllocationCallbacks const*>(info.Allocator),
 		.CheckVkResultFn     = ImGuiCheckVulkanResult,
 	};
-	ImGui_ImplGlfw_InitForVulkan(window->GetGLFWwindow(), true);
+	ImGui_ImplGlfw_InitForVulkan(windowHandle, true);
 	ImGui_ImplVulkan_Init(&init_info);
 }
 
@@ -407,18 +408,18 @@ void AppContext::CreateImGui(Window* window, vb::SampleCount sampleCount) {
 void AppContext::CreateWindowResources(Entity window) {
 	using namespace std::literals;
 	Window& windowHandle = window.Get<Window>();
+	auto& resource = window.Get<WindowResource>();
 	uint2 size = uint2(windowHandle.GetSize());
 	vb::Surface s = reinterpret_cast<VkSurfaceKHR>(windowHandle.GetSurface());
 
-	swapchains[&windowHandle] = device.CreateSwapchain({
-		// .window = windowHandle.GetGLFWwindow(), 
+	resource.swapchain = device.CreateSwapchain({
 		.surface = s,
 		.extent = {size.x, size.y},
-		.queue = queue,
+		.queueFamilyindex = queue.GetFamilyIndex(),
 		.destroy_surface = true,
 	});
 	
-	CreateImGui(&windowHandle, vb::SampleCount::e1);
+	CreateImGui(window, vb::SampleCount::e1);
 	windowHandle.AddFramebufferSizeCallback(FramebufferCallback);
 	windowHandle.AddMouseButtonCallback(MouseButtonCallback);
 	windowHandle.AddWindowRefreshCallback(RefreshCallback);
@@ -429,8 +430,6 @@ void AppContext::CreateWindowResources(Entity window) {
 
 	uint2 sizeLimits = uint2(windowHandle.GetSizeLimits().zw());
 	vb::Extent3D maxSize = {sizeLimits.x, sizeLimits.y};
-
-	auto& resource = window.Get<WindowImageResource>();
 
 	resource.depthImage = device.CreateImage({
         .extent = maxSize,
@@ -472,15 +471,15 @@ void AppContext::CreateWindowResources(Entity window) {
 }
 
 void AppContext::UploadBuffers() {
-	auto& cmd = queue.GetCommandBuffer();
+	auto& cmd = mainWindow.Get<WindowResource>().swapchain.GetCommandBuffer();
 	cmd.Begin();
 	cmd.Copy(cubeVertexBuffer, (void*)vertices.data(), vertices.size() * sizeof(VertexDebug));
 	cmd.Barrier();
 	cmd.End();
-	cmd.QueueSubmit();
+	cmd.QueueSubmit(queue);
 
 	glTF::Loader loader;
-	auto res = loader.Load({gltfPath, project.GetSceneGraph(), materials, device, queue, errorImage.GetResourceID()});
+	auto res = loader.Load({gltfPath, project.GetSceneGraph(), materials, device, queue, cmd, errorImage.GetResourceID()});
 	ASSERT(res, "Failed to load gltf file");
 
 	auto& sceneGraph = project.GetSceneGraph();
@@ -561,8 +560,8 @@ void AppContext::DrawViewport(vb::Command& cmd, Camera const& camera) {
 void AppContext::DrawWindow(Entity window) {
 	auto& windowHandle = window.Get<Window>();
 	auto& windowData   = window.Get<Editor::WindowData>();
-	auto& resource     = window.Get<WindowImageResource>();
-	auto& swapchain    = swapchains[&windowHandle];
+	auto& resource     = window.Get<WindowResource>();
+	auto& swapchain    = resource.swapchain;
 	auto& cmd          = swapchain.GetCommandBuffer();
 
 	windowHandle.SetUIContextCurrent();
@@ -680,7 +679,7 @@ void AppContext::DrawWindow(Entity window) {
 	
 	cmd.Barrier(targetImage, {vb::ImageLayout::ePresentSrcKHR});
 
-	swapchain.SubmitAndPresent();
+	swapchain.SubmitAndPresent(queue, queue);
 	if (swapchain.GetDirty()) {
 		LOG_WARN("SubmitAndPresent: Swapchain dirty");
 		return;
@@ -892,7 +891,7 @@ void FramebufferCallback(Window* window, int width, int height) {
 	// camera.setProj(fov, width, height, zNear, zFar);
 
 	// LOG_INFO("RecreateFrameResources {} callback", window->GetName());	
-	ctx->RecreateFrameResources(window);
+	ctx->RecreateFrameResources(window->GetEntityHandle());
 }
 
 void RefreshCallback(Window* window) {
@@ -908,23 +907,24 @@ void IconifyCallback(Window* window, int iconified) {
 	}
 }
 
-void AppContext::RecreateFrameResources(Window* window) {
-	if (!window->GetAlive()) { /* LOG_WARN("RecreateFrameResources: Window is dead"); */ return;} // important
-	if (window->GetIconified()) {/* LOG_TRACE("RecreateFrameResources: size = 0"); */ return;};
+void AppContext::RecreateFrameResources(EntityType window) {
+	Window& windowHandle = project.GetRegistry().get<Window>(entt::entity(window));
+	if (!windowHandle.GetAlive()) { /* LOG_WARN("RecreateFrameResources: Window is dead"); */ return;} // important
+	if (windowHandle.GetIconified()) {/* LOG_TRACE("RecreateFrameResources: size = 0"); */ return;};
 
 	device.WaitIdle();
-	auto swapchain = swapchains[window];
+	auto swapchain = project.GetRegistry().get<WindowResource>(entt::entity(window)).swapchain;
 	bool swapChainDirty = swapchain.GetDirty();
-	bool framebufferResized = window->GetFramebufferResized();
-	// LOG_INFO("RecreateFrameResources {} {} {} {}", window->GetName(), (void*)window->GetGLFWwindow(), swapChainDirty, framebufferResized);
+	bool framebufferResized = windowHandle.GetFramebufferResized();
+	// LOG_INFO("RecreateFrameResources {} {} {} {}", windowHandle.GetName(), (void*)windowHandle.GetGLFWwindow(), swapChainDirty, framebufferResized);
 	if (swapChainDirty || framebufferResized) {
 		// LOG_INFO("DIRTY FRAME RESOURCES");
-		window->UpdateFramebufferSize();
-		// window->RecreateSwapchain();
-		uint2 size = uint2(window->GetSize());
+		windowHandle.UpdateFramebufferSize();
+		// windowHandle.RecreateSwapchain();
+		uint2 size = uint2(windowHandle.GetSize());
 		swapchain.Recreate(size.x, size.y);
-		window->SetFramebufferResized(false);
-		window->AddFramesToDraw(1);
+		windowHandle.SetFramebufferResized(false);
+		windowHandle.AddFramesToDraw(1);
 	}
 }
 
@@ -936,7 +936,7 @@ void AppContext::Setup() {
 	mainWindow.Add<Window>(WindowCreateInfo{.name = "NRay", .imGuiStyle = style});
 	[[maybe_unused]] auto& windowData = mainWindow.Add<Editor::WindowData>(true);
 
-	mainWindow.Add<WindowImageResource>();
+	mainWindow.Add<WindowResource>();
 	Window& windowHandle = mainWindow.Get<Window>();
 	windowHandle.SetEntityHandle(static_cast<EntityType>(mainWindow.entity));
 	
@@ -976,8 +976,8 @@ void AppContext::Setup() {
 	// queue.supportedWindowToPresent = windowHandle.GetGLFWwindow();
 
 	materials.Init(device, queue);
-	CreateDefaultResources();
 	CreateWindowResources(mainWindow);
+	CreateDefaultResources();
 
 	cubeVertexBuffer = device.CreateBuffer({
 		vertices.size() * sizeof(VertexDebug),
@@ -1049,6 +1049,7 @@ void DrawOrRemoveWindows() {
 	auto view = registry->view<Window>();
 	for (auto w: view) {
 		auto& windowHandle = registry->get<Window>(w);
+		auto& swapchain = registry->get<WindowResource>(w).swapchain;
 		if (windowHandle.GetShouldClose()) {
 			ctx->device.WaitIdle();
 			windowHandle.Destroy();
@@ -1061,12 +1062,12 @@ void DrawOrRemoveWindows() {
 			// LOG_INFO("Iconified {}", windowHandle.GetIconified());
 			if (!windowHandle.GetIconified()) {
 				// Recreate swapchain if needed
-				if (ctx->swapchains[&windowHandle].GetDirty() || windowHandle.GetFramebufferResized()) {
+				if (swapchain.GetDirty() || windowHandle.GetFramebufferResized()) {
 					LOG_INFO("DIRTY FRAME RESOURCES");
 					windowHandle.UpdateFramebufferSize();
 					ctx->device.WaitIdle();
 					uint2 size = uint2(windowHandle.GetSize());
-					ctx->swapchains[&windowHandle].Recreate(size.x, size.y);
+					swapchain.Recreate(size.x, size.y);
 
 					windowHandle.SetFramebufferResized(false);
 					windowHandle.AddFramesToDraw(1);

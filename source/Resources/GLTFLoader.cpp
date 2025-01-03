@@ -70,6 +70,7 @@ struct LoaderImpl {
 	Materials& materials;
 	vb::Device& device;
 	vb::Queue& queue;
+	vb::Command& cmd;
 	SceneGraph& sceneGraph;
 	u32 const errorImageID;
 	// LoadInfo const& info
@@ -125,7 +126,7 @@ bool Loader::Load(LoadInfo const& info) {
 	auto& asset = expectedAsset.get();
 
 	maps.clear();
-	LoaderImpl loader { asset, maps, info.materials, info.device, info.queue, info.sceneGraph, info.errorImageID};
+	LoaderImpl loader { asset, maps, info.materials, info.device, info.queue, info.cmd, info.sceneGraph, info.errorImageID};
 	loader.LoadTextures();
 	loader.LoadMaterials();
 	loader.LoadMeshes();
@@ -206,7 +207,6 @@ void LoaderImpl::LoadTextures() {
 	VLA(TextureInfo, textureInfos, numTextures);
 
 
-	auto& cmd = queue.GetCommandBuffer();
 	device.ResetStaging();
 	cmd.Begin();
 	
@@ -283,7 +283,7 @@ void LoaderImpl::LoadTextures() {
 			result = cmd.Copy(newImage, textureInfo.imageData, imageSize);
 			if (!result) {
 				cmd.End();
-				cmd.QueueSubmit();
+				cmd.QueueSubmit(queue);
 				device.ResetStaging();
 				cmd.Begin();
 				result = cmd.Copy(newImage, textureInfo.imageData, imageSize);
@@ -299,7 +299,7 @@ void LoaderImpl::LoadTextures() {
 	}
 
 	cmd.End();
-	cmd.QueueSubmit();
+	cmd.QueueSubmit(queue);
 
 	for (auto& info : textureInfos) {
 		ImageIO::Free(info.imageData);
@@ -344,7 +344,6 @@ void LoaderImpl::LoadMaterial(fastgltf::Material const& assetMaterial, Component
 void LoaderImpl::LoadMaterials() {
 	auto numMaterials = asset.materials.size();
 	
-	auto& cmd = queue.GetCommandBuffer();
 	device.ResetStaging();
 	cmd.Begin();
 	
@@ -360,7 +359,7 @@ void LoaderImpl::LoadMaterials() {
 	}
 	
 	cmd.End();
-	cmd.QueueSubmit();
+	cmd.QueueSubmit(queue);
 }
 
 // std::vector<u32> indices;
@@ -475,8 +474,6 @@ void LoaderImpl::LoadMeshes() {
 	}
 
 	// auto transferQueue = device.GetQueue(vb::QueueFlagBits::Transfer);
-	// auto& cmd = transferQueue.GetCommandBuffer();
-	auto& cmd = queue.GetCommandBuffer();
 	device.ResetStaging();
 	cmd.Begin();
 	bool result;
@@ -484,7 +481,7 @@ void LoaderImpl::LoadMeshes() {
 		result = cmd.Copy(buffer, data, size);
 		if (!result) [[unlikely]] { 
 			cmd.End();
-			cmd.QueueSubmit();
+			cmd.QueueSubmit(queue);
 			device.ResetStaging();
 			cmd.Begin();
 			result = cmd.Copy(buffer, data, size);
@@ -496,7 +493,7 @@ void LoaderImpl::LoadMeshes() {
 		copyToBuffer(mesh->indexBuffer, mesh->indices.data(), mesh->indices.size() * sizeof(u32));
 	}
 	cmd.End();
-	cmd.QueueSubmit();
+	cmd.QueueSubmit(queue);
 }
 
 void LoaderImpl::LoadNode(int const nodeIndex, std::size_t offset) {
