@@ -122,6 +122,7 @@ WARNINGS_ENABLE := \
 
 VB_DEFINES := \
 	-DVB_USE_STD_MODULE=1 \
+	-DVB_USE_VULKAN_MODULE=1 \
 	-DVB_USE_VLA \
 	-D VB_IMGUI \
 	-DVB_GLFW \
@@ -468,6 +469,7 @@ EXTERNAL_MODULES := \
 	$(patsubst %.cppm,%,$(notdir $(wildcard $(EXTERNAL_MODULES_DIR)/imgui/*.cppm))) \
 	$(patsubst %.cppm,%,$(notdir $(wildcard $(EXTERNAL_MODULES_DIR)/stb/*.cppm))) \
 	vulkan_backend \
+	vulkan_hpp \
 	fastgltf \
 
 # $(info $(EXTERNAL_MODULES))
@@ -477,7 +479,7 @@ MAIN_MODULE_TARGET := NRay
 CPP_MODULE_TARGETS := $(foreach module,$(CPP_MODULES),$(MODULES_BUILD_DIR)/$(module).pcm)
 
 CPP_MODULE_OBJS := $(patsubst %.pcm, $(MODULES_OBJS_DIR)/%.o, $(notdir $(CPP_MODULE_TARGETS) $(EXTERNAL_MODULE_TARGETS)))
-# $(info $(CPP_MODULE_OBJS))
+# $(info $(CPP_MODULE_TARGETS))
 
 # $(CPP_MODULE_TARGETS) : get_cpp_module_dependencies
 # .PHONY: get_cpp_module_dependencies
@@ -625,7 +627,19 @@ $(MODULES_BUILD_DIR)/%.pcm: $(SRC_DIR)/Base/%.cppm
 endif # STD_MODULE_AVAILABLE
 
 
+# ============================================ Vulkan module =============================================
+VULKAN_MODULE_TARGET := $(MODULES_BUILD_DIR)/vulkan_hpp.pcm
 
+VULKAN_MODULE_DEFINES := \
+	-DVULKAN_HPP_NO_EXCEPTIONS \
+	-DVULKAN_HPP_RAII_NO_EXCEPTIONS \
+	-DVULKAN_HPP_NO_SMART_HANDLE \
+	-DVULKAN_HPP_NO_CONSTRUCTORS \
+	-DVULKAN_HPP_NO_UNION_CONSTRUCTORS \
+
+$(MODULES_BUILD_DIR)/vulkan_hpp.pcm: $(VULKAN_SDK)/Include/vulkan/vulkan.cppm
+	@echo "Compiling module $(notdir $<)"
+	@$(CXX) $(CXXFLAGS) $(VULKAN_MODULE_DEFINES) --precompile -c -x c++-module "$<" -o $@
 
 # ============================================ Modules ===================================================
 

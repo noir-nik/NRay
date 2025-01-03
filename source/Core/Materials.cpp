@@ -21,7 +21,9 @@ void Materials::Init(vb::Device device, vb::Queue queue, uint capacity){
 
 auto Materials::Expand() -> void {
 	buffers.emplace_back(device.CreateBuffer({
-		buffer_capacity * sizeof(GpuTypes::Material), vb::BufferUsage::Storage | vb::BufferUsage::TransferDst, vb::Memory::GPU, "Materials[" + std::to_string(buffers.size()) + "]"
+		buffer_capacity * sizeof(GpuTypes::Material),
+			vb::BufferUsage::eStorageBuffer | vb::BufferUsage::eTransferDst,
+			vb::Memory::GPU, "Materials[" + std::to_string(buffers.size()) + "]"
 	}));
 	auto size = available_slots.size();
 	available_slots.resize(size + buffer_capacity);

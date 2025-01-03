@@ -5,6 +5,7 @@ import lmath;
 import Types;
 import glfw;
 import UI;
+import Structs;
 import std;
 #else
 #pragma once
@@ -14,6 +15,7 @@ import std;
 #include "Types.cppm"
 #include "glfw.cppm"
 #include "UI.cppm"
+#include "Structs.cppm"
 
 #include <chrono>
 #include <vector>
@@ -95,9 +97,10 @@ struct WindowCreateInfo {
 };
 
 _WINDOW_EXPORT
-class Window {
+class Window : Structs::NoCopyNoMove {
 	friend class WindowManager;
 	GLFWwindow*   window             = nullptr;
+	void*         surface            = nullptr;
 	std::string   name               = "Window";
 	lmath::int2   pos                = { 0, 30 };
 	lmath::int2   size               = { 640, 480 };
@@ -174,7 +177,10 @@ public:
 	bool IsKeyPressed(u16 keyCode);
 	void Destroy();
 
+	[[nodiscard]] inline operator GLFWwindow*() const      { return window; }
 	inline GLFWwindow* GetGLFWwindow()                     { return window; }
+	inline void*       GetSurface()                        { return surface; }
+	inline void        SetSurface(void* value)             { surface = value; }
 	inline EntityType  GetEntityHandle()                   { return entityHandle; }
 	inline void        SetEntityHandle(EntityType handle)  { entityHandle = handle; }
 	inline void        WaitEvents()                        { glfwWaitEvents(); }
@@ -224,15 +230,10 @@ public:
 
 	inline bool        GetDrawNeeded()                     { return framesToDraw > 0; }
 	inline int         GetFramesToDraw()                   { return framesToDraw; }
-	// inline void        SetDrawNeeded(bool value)           { framesToDraw = value; }
 	inline void        AddFramesToDraw(int value)           { framesToDraw += value; }
 	inline void        SetFramesToDraw(int value)           { framesToDraw = value; }
 
 	inline void        SetUIContextCurrent()               { UIContext.SetCurrent(); }
-	// inline auto&       GetSwapchain()                      { return swapChain; }
-
-	// inline void        SetCreateSwapchainFn (void(*fn)(GLFWwindow*)) { createSwapchainFn  = fn; }
-	// inline void        SetDestroySwapchainFn(void(*fn)(GLFWwindow*)) { destroySwapchainFn = fn; }
 
 	inline bool        GetAlive()                          { return alive; }
 	inline void        SetAlive(bool value)                { alive = value; }

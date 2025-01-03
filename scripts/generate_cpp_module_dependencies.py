@@ -57,7 +57,7 @@ def generate_dependencies(files, extension):
     return dependencies
 
 def main():
-    dirs = ["source", "tests"]
+    dirs = ["source", "tests", "deps/vulkan_backend/src"]
 
     cppm_files = find_files_with_extension(dirs, CPP_MODULE_EXTENSION)
     cpp_files = find_files_with_extension(dirs, CPP_EXTENSION)

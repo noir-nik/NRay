@@ -6,6 +6,7 @@
 
 .vscode/
 .vscode/*
+.cache
 
 my*
 *.bmp

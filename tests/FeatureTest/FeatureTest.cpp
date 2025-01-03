@@ -2,6 +2,8 @@
 module;
 #endif
 
+#include <vulkan/vulkan.h>
+
 #include "Phong.h"
 #include "Opaque.h"
 #include "GpuTypes.h"
@@ -10,6 +12,8 @@ module;
 module FeatureTest;
 import glfw;
 import imgui;
+import imgui_impl_glfw;
+import imgui_impl_vulkan;
 import Window;
 import lmath;
 import vulkan_backend;
@@ -49,6 +53,9 @@ import Materials;
 #include <cstdio>
 #include <vector>
 
+#include <imgui.h>
+#include <imgui_impl_vulkan.h>
+#include <imgui_impl_glfw.h>
 #endif
 
 #define GSLS_OPTIONS "-DGLSL -Isource/Shaders/include"
@@ -70,12 +77,12 @@ struct AppContext : Structs::NoCopyNoMove {
 	// float4x4 worldViewInv;
 	// float4x4 worldViewProjInv;
 
-	vb::SampleCount sample_count = vb::SampleCount::_4;
-	// vb::SampleCount sampleCount = vb::SampleCount::_1;
+	vb::SampleCount sample_count = vb::SampleCount::e4;
+	// vb::SampleCount sampleCount = vb::SampleCount::e1;
 	// vb::Format renderFormat = vb::Format::RGBA16Sfloat;
-	vb::Format renderFormat = vb::Format::RGBA8Unorm;
+	vb::Format renderFormat = vb::Format::eR8G8B8A8Unorm;
 	
-	vb::Format depthFormat = vb::Format::D32Sfloat;
+	vb::Format depthFormat = vb::Format::eD32Sfloat;
 
 	// vb::Buffer outputImage;
 	vb::Buffer cubeVertexBuffer;
@@ -109,6 +116,7 @@ struct AppContext : Structs::NoCopyNoMove {
 	// std::vector<Entity> meshes;
 	void Setup();
 	void CreateShaders();
+	void CreateImGui(Window* window, vb::SampleCount sampleCount);
 	void CreateDefaultResources();
 	void CreateWindowResources(Entity window);
 	void UploadBuffers();
@@ -148,7 +156,7 @@ void CursorPosCallback(Window *window, double xpos, double ypos);
 void ScrollCallback(Window *window, double xoffset, double yoffset);
 void IconifyCallback(Window* window, int iconified);
 [[maybe_unused]] void PrintMatrix(const float4x4& m, char const* name = nullptr);
-// const std::vector<Vertex> vertices = {
+// const std::vector<eVertex> vertices = {
 // 	{{0.0f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
 // 	{{-0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}},
 // 	{{0.5f, 0.5f, 0.0f},  {0.0f, 1.0f, 0.0f}},
@@ -206,19 +214,19 @@ void AppContext::CreateShaders() {
 	char compile_options[128];
 	std::snprintf(compile_options, sizeof(compile_options), 
 		"-DBINDING_TEXTURE=%u -DBINDING_BUFFER=%u %s", 
-		device.GetBinding(vb::DescriptorType::CombinedImageSampler),
-		device.GetBinding(vb::DescriptorType::StorageBuffer),
+		device.GetBinding(vb::DescriptorType::eCombinedImageSampler),
+		device.GetBinding(vb::DescriptorType::eStorageBuffer),
 		GSLS_OPTIONS);
 
 /* 	pipeline = device.CreatePipeline({
-		.point = vb::PipelinePoint::Graphics,
+		.point = vb::PipelinePoint::eGraphics,
 		.stages = {{
-			{.stage = vb::ShaderStage::Vertex, .filename = "tests/FeatureTest/FeatureTest.vert"},
-			{.stage = vb::ShaderStage::Fragment, .filename = "tests/FeatureTest/FeatureTest.frag"},
+			{.stage = vb::ShaderStage::eVertex, .filename = "tests/FeatureTest/FeatureTest.vert"},
+			{.stage = vb::ShaderStage::eFragment, .filename = "tests/FeatureTest/FeatureTest.frag"},
 		}},
 		.name = "Feature pipeline",
 		// pos2 + color3
-		.vertexAttributes = {vb::Format::RGB32Sfloat, vb::Format::RGB32Sfloat},
+		.vertexAttributes = {vb::Format::eR32G32B32Sfloat, vb::Format::eR32G32B32Sfloat},
 		.colorFormats = {{renderFormat}},
 		.useDepth = true,
 		.depthFormat = resource.depthImage.format,
@@ -227,18 +235,18 @@ void AppContext::CreateShaders() {
 	});
 
 	glTFPipeline = device.CreatePipeline({
-		.point = vb::PipelinePoint::Graphics,
+		.point = vb::PipelinePoint::eGraphics,
 		.stages = {{
-			{.stage = vb::ShaderStage::Vertex, .filename = "source/Shaders/Phong.vert"},
-			{.stage = vb::ShaderStage::Fragment, .filename = "source/Shaders/Phong.frag"},
+			{.stage = vb::ShaderStage::eVertex, .filename = "source/Shaders/Phong.vert"},
+			{.stage = vb::ShaderStage::eFragment, .filename = "source/Shaders/Phong.frag"},
 		}},
 		.name = "Phong pipeline",
 		.vertexAttributes = {
-			vb::Format::RGB32Sfloat,  // vec3 position;
-			vb::Format::RGB32Sfloat,  // vec3 normal;
-			vb::Format::RG32Sfloat,   // vec2 uv;
-			vb::Format::RGBA32Sfloat, // vec4 color;
-			vb::Format::RGBA32Sfloat  // vec4 tangent;
+			vb::Format::eR32G32B32Sfloat,  // vec3 position;
+			vb::Format::eR32G32B32Sfloat,  // vec3 normal;
+			vb::Format::eR32G32Sfloat,   // vec2 uv;
+			vb::Format::eR32G32B32A32Sfloat, // vec4 color;
+			vb::Format::eR32G32B32A32Sfloat  // vec4 tangent;
 		},
 		.colorFormats = {{renderFormat}},
 		.useDepth = true,
@@ -248,17 +256,17 @@ void AppContext::CreateShaders() {
 	});
  */
 	texPipeline = device.CreatePipeline({
-		.point = vb::PipelinePoint::Graphics,
+		.point = vb::PipelinePoint::eGraphics,
 		.stages = {{
 			{
-				.stage = vb::ShaderStage::Vertex, 
+				.stage = vb::ShaderStage::eVertex, 
 				.source = {"source/Shaders/Quad.vert"},
 				.out_path = BIN_PATH,
 				.compile_options = compile_options,
 				.allow_skip_compilation = skip_recompilation,
 			},
 			{
-				.stage = vb::ShaderStage::Fragment,
+				.stage = vb::ShaderStage::eFragment,
 				.source = {"source/Shaders/TexImage.frag"},
 				.out_path = BIN_PATH,
 				.compile_options = compile_options,
@@ -274,17 +282,17 @@ void AppContext::CreateShaders() {
 	});
 
 	opaquePipeline = device.CreatePipeline({
-		.point = vb::PipelinePoint::Graphics,
+		.point = vb::PipelinePoint::eGraphics,
 		.stages = {{
 			{
-				.stage = vb::ShaderStage::Vertex, 
+				.stage = vb::ShaderStage::eVertex, 
 				.source = {"source/Shaders/Opaque.vert"},
 				.out_path = BIN_PATH,
 				.compile_options = compile_options,
 				.allow_skip_compilation = skip_recompilation,
 			},
 			{
-				.stage = vb::ShaderStage::Fragment,
+				.stage = vb::ShaderStage::eFragment,
 				.source = {"source/Shaders/Opaque.frag"},
 				.out_path = BIN_PATH,
 				.compile_options = compile_options,
@@ -292,11 +300,11 @@ void AppContext::CreateShaders() {
 			}
 		}},
 		.vertexAttributes = {{
-			vb::Format::RGB32Sfloat,  // vec3 position;
-			vb::Format::RGB32Sfloat,  // vec3 normal;
-			vb::Format::RG32Sfloat,   // vec2 uv;
-			vb::Format::RGBA32Sfloat, // vec4 color;
-			vb::Format::RGBA32Sfloat  // vec4 tangent;
+			vb::Format::eR32G32B32Sfloat,  // vec3 position;
+			vb::Format::eR32G32B32Sfloat,  // vec3 normal;
+			vb::Format::eR32G32Sfloat,   // vec2 uv;
+			vb::Format::eR32G32B32A32Sfloat, // vec4 color;
+			vb::Format::eR32G32B32A32Sfloat  // vec4 tangent;
 		}},
 		.color_formats = {{renderFormat}},
 		.use_depth = true,
@@ -315,9 +323,9 @@ void AppContext::CreateDefaultResources() {
 	
 	errorImage = device.CreateImage({
 		.extent = {errorImageSize, errorImageSize},
-		.format = vb::Format::RGBA8Unorm,
-		.usage = vb::ImageUsage::Sampled | vb::ImageUsage::TransferDst,
-		.sampler = {vb::Filter::Nearest, vb::Filter::Nearest, vb::MipmapMode::Nearest},
+		.format = vb::Format::eR8G8B8A8Unorm,
+		.usage = vb::ImageUsage::eSampled | vb::ImageUsage::eTransferDst,
+		.sampler = {vb::Filter::eNearest, vb::Filter::eNearest, vb::MipmapMode::eNearest},
 		.name = "Error Texture"
 	});
 
@@ -352,7 +360,7 @@ void AppContext::CreateDefaultResources() {
 	auto cmd = queue.GetCommandBuffer();
 	cmd.Begin();
 	// Error Image
-	cmd.Barrier(errorImage, {vb::ImageLayout::TransferDst});
+	cmd.Barrier(errorImage, {vb::ImageLayout::eTransferDstOptimal});
 	cmd.Copy(errorImage, &errorImagePixels[0], errorImagePixels.size() * sizeof(errorImagePixels[0]));
 	// Default Material
 	cmd.Copy(materials.GetBuffer(defaultMaterial.deviceMaterialID), &defaultMaterial.gpuMaterial, sizeof(GpuTypes::Material), sizeof(GpuTypes::Material) * defaultMaterial.deviceMaterialID);
@@ -360,16 +368,57 @@ void AppContext::CreateDefaultResources() {
 	cmd.QueueSubmit();
 }
 
+void ImGuiCheckVulkanResult(VkResult result) {
+	vb::CheckVkResultDefault(result, "ImGui error!");
+}
+
+void AppContext::CreateImGui(Window* window, vb::SampleCount sampleCount) {
+	VkFormat depthFormat   =  VK_FORMAT_D32_SFLOAT;
+	auto& swapchain        = swapchains[window];
+	vb::ImGuiInitInfo info = swapchain.GetImGuiInfo();
+	VkFormat colorFormat   = VkFormat(swapchain.GetFormat());
+
+	ImGui_ImplVulkan_InitInfo init_info{
+		.Instance            = info.Instance,
+		.PhysicalDevice      = info.PhysicalDevice,
+		.Device              = info.Device,
+		.QueueFamily         = info.QueueFamily,
+		.Queue               = info.Queue,
+		.DescriptorPool      = info.DescriptorPool,
+		.MinImageCount       = info.MinImageCount,
+		.ImageCount          = info.ImageCount,
+		.MSAASamples         = VkSampleCountFlagBits(std::min(sampleCount, device.GetMaxSamples())),
+		.PipelineCache       = info.PipelineCache,
+		.UseDynamicRendering = true,
+		.PipelineRenderingCreateInfo = {
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+			.colorAttachmentCount    = 1,
+			.pColorAttachmentFormats = &colorFormat,
+			.depthAttachmentFormat   = depthFormat,
+		},
+		.Allocator           = reinterpret_cast<VkAllocationCallbacks const*>(info.Allocator),
+		.CheckVkResultFn     = ImGuiCheckVulkanResult,
+	};
+	ImGui_ImplGlfw_InitForVulkan(window->GetGLFWwindow(), true);
+	ImGui_ImplVulkan_Init(&init_info);
+}
+
+
 void AppContext::CreateWindowResources(Entity window) {
 	using namespace std::literals;
 	Window& windowHandle = window.Get<Window>();
 	uint2 size = uint2(windowHandle.GetSize());
+	vb::Surface s = reinterpret_cast<VkSurfaceKHR>(windowHandle.GetSurface());
+
 	swapchains[&windowHandle] = device.CreateSwapchain({
-		.window = windowHandle.GetGLFWwindow(), 
+		// .window = windowHandle.GetGLFWwindow(), 
+		.surface = s,
 		.extent = {size.x, size.y},
 		.queue = queue,
+		.destroy_surface = true,
 	});
-	swapchains[&windowHandle].CreateImGui(sample_count);
+	
+	CreateImGui(&windowHandle, vb::SampleCount::e1);
 	windowHandle.AddFramebufferSizeCallback(FramebufferCallback);
 	windowHandle.AddMouseButtonCallback(MouseButtonCallback);
 	windowHandle.AddWindowRefreshCallback(RefreshCallback);
@@ -386,7 +435,7 @@ void AppContext::CreateWindowResources(Entity window) {
 	resource.depthImage = device.CreateImage({
         .extent = maxSize,
         .format = depthFormat,
-        .usage = vb::ImageUsage::DepthStencilAttachment | vb::ImageUsage::TransientAttachment,
+        .usage = vb::ImageUsage::eDepthStencilAttachment | vb::ImageUsage::eTransientAttachment,
 		.samples = sample_count,
         .name = "Depth Attachment"
     });
@@ -394,14 +443,14 @@ void AppContext::CreateWindowResources(Entity window) {
 	resource.resolveImage = device.CreateImage({
 		.extent = maxSize,
 		.format = renderFormat,
-		.usage = vb::ImageUsage::ColorAttachment | vb::ImageUsage::TransferSrc,
+		.usage = vb::ImageUsage::eColorAttachment | vb::ImageUsage::eTransferSrc,
 		.name = windowHandle.GetName() + "_resolve"s,
 	});
 	
 	resource.colorImage = device.CreateImage({
 		.extent = maxSize,
 		.format = renderFormat,
-		.usage = vb::ImageUsage::ColorAttachment | vb::ImageUsage::TransientAttachment,
+		.usage = vb::ImageUsage::eColorAttachment | vb::ImageUsage::eTransientAttachment,
 		.samples = sample_count,
 		.name = windowHandle.GetName() + "_color"s,
 	});
@@ -409,14 +458,14 @@ void AppContext::CreateWindowResources(Entity window) {
 	resource.uiResolveImage = device.CreateImage({
 		.extent = maxSize,
 		.format = renderFormat,
-		.usage = vb::ImageUsage::ColorAttachment | vb::ImageUsage::TransferSrc,
+		.usage = vb::ImageUsage::eColorAttachment | vb::ImageUsage::eTransferSrc,
 		.name = windowHandle.GetName() + "_ui_resolve"s,
 	});
 	
 	resource.uiColorImage = device.CreateImage({
 		.extent = maxSize,
 		.format = renderFormat,
-		.usage = vb::ImageUsage::ColorAttachment | vb::ImageUsage::TransientAttachment,
+		.usage = vb::ImageUsage::eColorAttachment | vb::ImageUsage::eTransientAttachment,
 		.samples = sample_count,
 		.name = windowHandle.GetName() + "_ui_color"s,
 	});
@@ -560,13 +609,13 @@ void AppContext::DrawWindow(Entity window) {
 	cmd.SetScissor(fullWindowRect);
 
 	static ivec4 viewport_A;
-	cmd.Barrier(resource.colorImage, {vb::ImageLayout::ColorAttachment});
-	cmd.Barrier(resource.resolveImage, {vb::ImageLayout::ColorAttachment});
-	cmd.Barrier(resource.depthImage, {vb::ImageLayout::DepthAttachment});
+	cmd.Barrier(resource.colorImage, {vb::ImageLayout::eColorAttachmentOptimal});
+	cmd.Barrier(resource.resolveImage, {vb::ImageLayout::eColorAttachmentOptimal});
+	cmd.Barrier(resource.depthImage, {vb::ImageLayout::eDepthAttachmentOptimal});
 	// Viewports
 	if (!windowData.viewportsToRender.empty()) {
-		vb::ClearColorValue clear_color = {{0.1f, 0.1f, 0.1f, 1.0f}};
-		if (sample_count == vb::SampleCount::_1) {
+		vb::ClearColorValue clear_color = {{{0.1f, 0.1f, 0.1f, 1.0f}}};
+		if (sample_count == vb::SampleCount::e1) {
 			cmd.BeginRendering({
 				.colorAttachs = {{{
 					.colorImage = resource.resolveImage, 
@@ -602,8 +651,8 @@ void AppContext::DrawWindow(Entity window) {
 	}
 
 	// Blit viewport to swapchain image
-	cmd.Barrier(resource.resolveImage, {vb::ImageLayout::TransferSrc});
-	cmd.Barrier(targetImage,           {vb::ImageLayout::TransferDst});
+	cmd.Barrier(resource.resolveImage, {vb::ImageLayout::eTransferSrcOptimal});
+	cmd.Barrier(targetImage,           {vb::ImageLayout::eTransferDstOptimal});
 
 	vb::ImageBlit::Region blitRect = {
 		{viewport_A.x, viewport_A.y, 0}, 
@@ -615,19 +664,21 @@ void AppContext::DrawWindow(Entity window) {
 		.regions = {{{blitRect, blitRect}}}
 	});
 
-	cmd.Barrier(targetImage, {vb::ImageLayout::ColorAttachment});
+	cmd.Barrier(targetImage, {vb::ImageLayout::eColorAttachmentOptimal});
 	// Render ui to swapchain image
 	cmd.BeginRendering({
 		.colorAttachs   = {{{
 			.colorImage = targetImage,
-			.loadOp     = vb::LoadOp::Load
+			.loadOp     = vb::LoadOp::eLoad
 		}}},
 		.renderArea     = fullWindowRect,
 	});
-	cmd.DrawImGui(uiDrawData);
+
+	ImGui_ImplVulkan_RenderDrawData(static_cast<ImDrawData*>(uiDrawData), cmd.GetHandle());
+
 	cmd.EndRendering();
 	
-	cmd.Barrier(targetImage, {vb::ImageLayout::Present});
+	cmd.Barrier(targetImage, {vb::ImageLayout::ePresentSrcKHR});
 
 	swapchain.SubmitAndPresent();
 	if (swapchain.GetDirty()) {
@@ -889,23 +940,35 @@ void AppContext::Setup() {
 	Window& windowHandle = mainWindow.Get<Window>();
 	windowHandle.SetEntityHandle(static_cast<EntityType>(mainWindow.entity));
 	
+	glfwInit();
+	u32 glfwExtensionCount = 0;
+	char const** glfwExtensions;
+	glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+	std::span<char const*> instance_extensions(glfwExtensions, glfwExtensionCount);
+
 	instance = vb::CreateInstance({
 		.validation_layers = true,
-		.glfw_extensions = true
+		.extensions = instance_extensions
 	});
+
+	VkSurfaceKHR surface;
+	VkResult result = glfwCreateWindowSurface(instance.GetHandle(),
+		windowHandle.GetGLFWwindow(), nullptr, &surface);
+	vb::CheckVkResultDefault(result, "Failed to create window surface!");
+	windowHandle.SetSurface(surface);
 
 	device = instance.CreateDevice({
 		.queues = {{{
-			.flags = vb::QueueFlagBits::Graphics,
-			.present_window = windowHandle.GetGLFWwindow(),
+			.flags = vb::QueueFlagBits::eGraphics,
+			.supported_surface = surface,
 		}}}
 	});
 
 	queue = device.GetQueue();
 
 	vb::Descriptor descriptor = device.CreateDescriptor({{
-		{vb::DescriptorType::CombinedImageSampler},
-		{vb::DescriptorType::StorageBuffer},
+		{vb::DescriptorType::eCombinedImageSampler},
+		{vb::DescriptorType::eStorageBuffer},
 	}});
 
 	device.UseDescriptor(descriptor);
@@ -918,9 +981,9 @@ void AppContext::Setup() {
 
 	cubeVertexBuffer = device.CreateBuffer({
 		vertices.size() * sizeof(VertexDebug),
-		vb::BufferUsage::Vertex,
+		vb::BufferUsage::eVertexBuffer,
 		vb::Memory::GPU,
-		"Cube Vertex Buffer"
+		"Cube eVertex Buffer"
 	});
 	
 	UploadBuffers();
@@ -928,104 +991,6 @@ void AppContext::Setup() {
 }
 
 } // namespace
-
-
-// namespace {
-// using mat4 = lmath::float4x4;
-// enum class MaterialPass :uint8_t {
-//     MainColor,
-//     Transparent,
-//     Other
-// };
-
-// struct MaterialInstance {
-//     vb::Pipeline pipeline;
-//     MaterialPass passType;
-// };
-// struct RenderObject {
-//     uint32_t indexCount;
-//     uint32_t firstIndex;
-//     vb::Buffer indexBuffer;
-    
-//     MaterialInstance* material;
-
-//     mat4 transform;
-//     VkDeviceAddress vertexBufferAddress;
-// };
-
-// struct GLTFMetallic_Roughness {
-// 	vb::Pipeline opaquePipeline;
-// 	vb::Pipeline transparentPipeline;
-
-// 	// VkDescriptorSetLayout materialLayout;
-
-// 	struct MaterialConstants {
-// 		vec4 colorFactors;
-// 		vec4 metal_rough_factors;
-// 		//padding, we need it anyway for uniform buffers
-// 		vec4 extra[14];
-// 	};
-
-// 	struct MaterialResources {
-// 		vb::Image colorImage;
-// 		// VkSampler colorSampler;
-// 		vb::Image metalRoughImage;
-// 		// VkSampler metalRoughSampler;
-// 		vb::Buffer dataBuffer;
-// 		uint32_t dataBufferOffset;
-// 	};
-
-
-// 	MaterialInstance write_material(VkDevice device, MaterialPass pass, const MaterialResources& resources, DescriptorAllocatorGrowable& descriptorAllocator);
-// };
-
-// } // namespace
-
-void AppContext::test() {
-
-	UI::Init();
-	Editor::Setup(&project.GetSceneGraph());
-	mainWindow = project.CreateEntity("Main Window");
-	auto style = Editor::GetStyle();
-	mainWindow.Add<Window>(WindowCreateInfo{.name = "NRay", .imGuiStyle = style});
-	[[maybe_unused]] auto& windowData = mainWindow.Add<Editor::WindowData>(true);
-
-	mainWindow.Add<WindowImageResource>();
-	Window& windowHandle = mainWindow.Get<Window>();
-	windowHandle.SetEntityHandle(static_cast<EntityType>(mainWindow.entity));
-	
-	instance = vb::CreateInstance({
-		.validation_layers = true,
-		.glfw_extensions = true,
-	});
-	device = instance.CreateDevice({
-		.queues = {{
-			{
-				.flags = vb::QueueFlagBits::Graphics,
-				.present_window = windowHandle.GetGLFWwindow(),
-			}
-		}}
-	});
-
-	queue = device.GetQueue();
-	materials.Init(device, queue);
-	CreateDefaultResources();
-	CreateWindowResources(mainWindow);
-
-	// cubeVertexBuffer = device.CreateBuffer({
-	// 	vertices.size() * sizeof(VertexDebug),
-	// 	vb::BufferUsage::Vertex,
-	// 	vb::Memory::GPU,
-	// 	"Cube Vertex Buffer"
-	// });
-	
-	// UploadBuffers();
-	// CreateShaders();
-	
-	device.WaitQueue(queue);
-	ctx->project.Destroy();
-	UI::Destroy();
-}
 
 void FeatureTestApplication::run(char const* gltfPath) {
 	Create(gltfPath);

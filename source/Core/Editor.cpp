@@ -13,12 +13,14 @@ import Runtime;
 import Structs;
 import Component;
 import entt;
-
+import imgui_impl_glfw;
+import imgui_impl_vulkan;
 #else
 #include "lmath.hpp"
 #include <vulkan_backend/core.hpp>
-
 #include "imgui.cppm"
+#include <imgui_impl_vulkan.h>
+#include <imgui_impl_glfw.h>
 #include "Editor.cppm"
 #include "Camera.cppm"
 #include "Log.cppm"
@@ -795,8 +797,18 @@ void Draw(Data const& ctx) {
 	editorContext.Draw(ctx);
 }
 
+void ImGuiNewFrame() {
+	ImGui_ImplVulkan_NewFrame();
+	ImGui_ImplGlfw_NewFrame();
+}
+
+void ImGuiShutdown() {
+	ImGui_ImplVulkan_Shutdown();
+	ImGui_ImplGlfw_Shutdown();
+}
+
 void BeginFrame() {
-	vb::ImGuiNewFrame();
+	ImGuiNewFrame();
 	ImGui::NewFrame();
 	ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0,0,0,0));
 	ImGui::DockSpaceOverViewport(ImGui::GetWindowDockID(), 0, ImGuiDockNodeFlags_PassthruCentralNode | ImGuiDockNodeFlags_AutoHideTabBar);

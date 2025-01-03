@@ -4,10 +4,14 @@ import vulkan_backend;
 import Log;
 import std;
 import imgui;
+import imgui_impl_glfw;
+import imgui_impl_vulkan;
 #else
 #include "UI.cppm"
 #include <vulkan_backend/core.hpp>
 #include "imgui.cppm"
+#include <imgui_impl_vulkan.h>
+#include <imgui_impl_glfw.h>
 #include "Log.cppm"
 
 #include <filesystem>
@@ -82,9 +86,14 @@ void Context::SetCurrent(){
 	ImGui::SetCurrentContext(static_cast<ImGuiContext*>(context));
 }
 
+void ImGuiShutdown() {
+	ImGui_ImplVulkan_Shutdown();
+	ImGui_ImplGlfw_Shutdown();
+}
+
 void Context::Destroy() {
 	SetCurrent();
-	vb::ImGuiShutdown();
+	ImGuiShutdown();
 	ImGui::DestroyContext(static_cast<ImGuiContext*>(context));
 }
 

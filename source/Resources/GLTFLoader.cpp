@@ -218,20 +218,20 @@ void LoaderImpl::LoadTextures() {
 		if (textureInfo.imageData != nullptr) {
 
 			// Determine format
-			auto format = vb::Format::RGBA8Unorm; // Default
+			auto format = vb::Format::eR8G8B8A8Unorm; // Default
 			for (fastgltf::Material& material : asset.materials) {
 				if (material.pbrData.baseColorTexture.has_value()) { // BaseColor
 					uint diffuseTextureIndex = material.pbrData.baseColorTexture.value().textureIndex;
 					auto& diffuseTexture = asset.textures[diffuseTextureIndex];
 					if (imageIndex == diffuseTexture.imageIndex.value()) {
-						format =  vb::Format::RGBA8Srgb;
+						format =  vb::Format::eR8G8B8A8Srgb;
 					}
 				}
 				if (material.emissiveTexture.has_value()) { // Emissive
 					uint emissiveTextureIndex = material.emissiveTexture.value().textureIndex;
 					auto& emissiveTexture = asset.textures[emissiveTextureIndex];
 					if (imageIndex == emissiveTexture.imageIndex.value()) {
-						format =  vb::Format::RGBA8Srgb;
+						format =  vb::Format::eR8G8B8A8Srgb;
 					}
 				}
 			}
@@ -243,21 +243,21 @@ void LoaderImpl::LoadTextures() {
 
 			auto magFilter {
 					magFilterGltf == fastgltf::Filter::Linear
-				? vb::Filter::Linear
-				: vb::Filter::Nearest
+				? vb::Filter::eLinear
+				: vb::Filter::eNearest
 			};
 			auto minFilter {
 					minFilterGltf == fastgltf::Filter::Linear ||
 					minFilterGltf == fastgltf::Filter::LinearMipMapLinear ||
 					minFilterGltf == fastgltf::Filter::LinearMipMapNearest
-				? vb::Filter::Linear
-				: vb::Filter::Nearest
+				? vb::Filter::eLinear
+				: vb::Filter::eNearest
 			};
 			auto mipmapMode {
 					minFilterGltf == fastgltf::Filter::LinearMipMapLinear ||
 					minFilterGltf == fastgltf::Filter::NearestMipMapLinear
-				? vb::MipmapMode::Linear
-				: vb::MipmapMode::Nearest
+				? vb::MipmapMode::eLinear
+				: vb::MipmapMode::eNearest
 			};
 			
 			// Create image
@@ -265,7 +265,7 @@ void LoaderImpl::LoadTextures() {
 			auto& newImage = newImageEntity.Add<vb::Image>(device.CreateImage({
 				.extent = { (u32)textureInfo.width, (u32)textureInfo.height, 1 },
 				.format = format,
-				.usage = vb::ImageUsage::Sampled | vb::ImageUsage::TransferDst,
+				.usage = vb::ImageUsage::eSampled | vb::ImageUsage::eTransferDst,
 				.sampler = {
 					.magFilter = magFilter,
 					.minFilter = minFilter,
@@ -279,7 +279,7 @@ void LoaderImpl::LoadTextures() {
 			// Copy image
 			bool result;
 			uint imageSize = textureInfo.width * textureInfo.height * textureInfo.numChannels; // todo: assure numChannels == 4
-			cmd.Barrier(newImage, {vb::ImageLayout::TransferDst});
+			cmd.Barrier(newImage, {vb::ImageLayout::eTransferDstOptimal});
 			result = cmd.Copy(newImage, textureInfo.imageData, imageSize);
 			if (!result) {
 				cmd.End();
@@ -464,12 +464,12 @@ void LoaderImpl::LoadMeshes() {
 		LoadMesh(assetMesh, mesh);
 		mesh.vertexBuffer = device.CreateBuffer({
 			.size = mesh.vertices.size() * sizeof(Objects::Vertex),
-			.usage = vb::BufferUsage::Vertex,
+			.usage = vb::BufferUsage::eVertexBuffer,
 			.name = "Vertex buffer " + mesh.name,
 		});
 		mesh.indexBuffer = device.CreateBuffer({
 			.size = mesh.indices.size() * sizeof(u32),
-			.usage = vb::BufferUsage::Index,
+			.usage = vb::BufferUsage::eIndexBuffer,
 			.name = "Index buffer " + mesh.name,
 		});
 	}
