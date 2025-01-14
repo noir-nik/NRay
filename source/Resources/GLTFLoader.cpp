@@ -113,7 +113,7 @@ bool Loader::Load(LoadInfo const& info) {
 
 	auto data = fastgltf::GltfDataBuffer::FromPath(info.filepath);
 	if (data.error() != fastgltf::Error::None) {
-		LOG_WARN("Failed to load asset file: {}", fastgltf::getErrorName(data.error()));
+		LOG_WARN("Failed to load data buffer: {}", fastgltf::getErrorName(data.error()));
 		return false;
 	}
 

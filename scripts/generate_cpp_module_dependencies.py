@@ -8,7 +8,7 @@ CPP_EXTENSION = ".cpp"
 LINES_TO_SCAN = 50
 
 def extract_imports(file_path):
-    """Extract module imports from the first 30 lines of a file."""
+    """Extract module imports from the first LINES_TO_SCAN lines of a file."""
     imports = []
     with open(file_path, "r") as file:
         for i, line in enumerate(file):
@@ -57,7 +57,7 @@ def generate_dependencies(files, extension):
     return dependencies
 
 def main():
-    dirs = ["source", "tests", "deps/vulkan_backend/src"]
+    dirs = ["source", "tests", "deps/vulkan_backend/src", "deps/vulkan_backend/src/resource"]
 
     cppm_files = find_files_with_extension(dirs, CPP_MODULE_EXTENSION)
     cpp_files = find_files_with_extension(dirs, CPP_EXTENSION)

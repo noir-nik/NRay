@@ -38,7 +38,6 @@ import Materials;
 #include <vulkan_backend/core.hpp>
 #include "Window.cppm"
 #include "Log.cppm"
-#include "Bindless.h"
 #include "Editor.cppm"
 #include "FeatureTest.cppm"
 #include "GLTFLoader.cppm"
@@ -369,7 +368,7 @@ void AppContext::CreateDefaultResources() {
 }
 
 void ImGuiCheckVulkanResult(VkResult result) {
-	vb::CheckVkResultDefault(result, "ImGui error!");
+	vb::CheckVkResultDefault(vb::Result(result), "ImGui error!");
 }
 
 void AppContext::CreateImGui(Entity window, vb::SampleCount sampleCount) {
@@ -928,6 +927,23 @@ void AppContext::RecreateFrameResources(EntityType window) {
 	}
 }
 
+void MessageCallback(vb::LogLevel level, char const* message) {
+	switch (level) {
+	case vb::LogLevel::Trace:
+		LOG_TRACE("{}", message);
+		break;
+	case vb::LogLevel::Info:
+		LOG_INFO("{}", message);
+		break;
+	case vb::LogLevel::Warning:
+		LOG_WARN("{}", message);
+		break;
+	case vb::LogLevel::Error:
+		LOG_ERROR("{}", message);
+		break;
+	}
+}
+
 void AppContext::Setup() {
 	UI::Init();
 	Editor::Setup(&project.GetSceneGraph());
@@ -947,14 +963,15 @@ void AppContext::Setup() {
 	std::span<char const*> instance_extensions(glfwExtensions, glfwExtensionCount);
 
 	instance = vb::CreateInstance({
+		.message_callback = MessageCallback,
 		.validation_layers = true,
-		.extensions = instance_extensions
+		.extensions = instance_extensions,
 	});
 
 	VkSurfaceKHR surface;
 	VkResult result = glfwCreateWindowSurface(instance.GetHandle(),
 		windowHandle.GetGLFWwindow(), nullptr, &surface);
-	vb::CheckVkResultDefault(result, "Failed to create window surface!");
+	vb::CheckVkResultDefault(vb::Result(result), "Failed to create window surface!");
 	windowHandle.SetSurface(surface);
 
 	device = instance.CreateDevice({

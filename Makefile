@@ -5,6 +5,8 @@ TARGET := NRay
 STATIC_LINK := 0
 COMPILE_IMGUI := 1
 
+SANITIZER := 0
+
 USE_MODULES := 1
 USE_HEADER_UNITS := 0
 USE_EXCEPTIONS := 0
@@ -15,6 +17,8 @@ SPDLOG_COMPILED_LIB := 0
 STD_MODULE_AVAILABLE := 1
 
 CPP_STD := -std=c++23
+STDLIB := -stdlib=libc++
+CXXFLAGS += $(STDLIB)
 
 AR := ar
 ARFLAGS = rcs
@@ -33,7 +37,7 @@ LIB_EXT := a
 -C := -c
 
 ifeq ($(OS),Windows_NT)
-	LDFLAGS += -fuse-ld=lld
+	LDFLAGS += 
 	PYTHON := python
 	LIBS := $(LIBS) Gdi32 vulkan-1
 	PLATFORM_BUILD_DIR := $(BUILD_DIR)/win
@@ -43,7 +47,7 @@ ifeq ($(OS),Windows_NT)
 	
 	RM := $(CMD) del /Q
 else
-	CXX := g++
+# CXX := g++
 	PYTHON := python3
 	LDFLAGS += -lpthread
 	LIBS := $(LIBS) vulkan GL m
@@ -60,7 +64,7 @@ ifeq ($(findstring clang,$(CXX)),clang)
 		LDFLAGS += -stdlib=libc++
 	endif
 	CXXFLAGS += -fretain-comments-from-system-headers
-	LDFLAGS += -pthread
+	LDFLAGS += -pthread -fuse-ld=lld
 endif
 
 ifneq ($(findstring clang,$(CXX)),clang)
@@ -71,8 +75,18 @@ endif
 CXXFLAGS += $(TARGET_TRIPLE)
 LDFLAGS += $(TARGET_TRIPLE)
 
+ifeq ($(SANITIZER), 1)
+	SANITIZER_FLAGS += \
+	-fsanitize=address \
+	-fno-omit-frame-pointer \
+	-fsanitize=undefined
+
+	CXXFLAGS += $(SANITIZER_FLAGS)
+	LDFLAGS += $(SANITIZER_FLAGS)
+endif
+
 # ifeq ($(USE_MODULES),1)
-# CXXFLAGS += -DVB_VMA_IMPLEMENTATION=1
+CXXFLAGS += -DVB_VMA_IMPLEMENTATION=0
 CXXFLAGS += -D_VB_EXT_MODULES
 # endif
 
@@ -115,10 +129,12 @@ WARNINGS_DISABLE += \
 	-Wno-unused-command-line-argument \
 	-Wno-nullability-completeness
 
+CXXFLAGS += -DSPDLOG_USE_STD_FORMAT
 endif
 
 WARNINGS_ENABLE := \
-	-Wsequence-point
+	-Wsequence-point\
+	-Wdangling 	
 
 VB_DEFINES := \
 	-DVB_USE_STD_MODULE=1 \
@@ -289,7 +305,10 @@ OBJS_FMT := $(patsubst $(SRC_FMT)/%.cc, $(PLATFORM_BUILD_DIR)/fmt/%.$(OBJ_EXT), 
 
 # vulkan_backend
 SRC_VULKAN_BACKEND := $(DEPS_PATH)/vulkan_backend/src
-OBJS_VULKAN_BACKEND := $(patsubst $(SRC_VULKAN_BACKEND)/%.cpp, $(PLATFORM_BUILD_DIR)/%.$(OBJ_EXT), $(wildcard $(SRC_VULKAN_BACKEND)/*.cpp))
+OBJS_VULKAN_BACKEND := \
+	$(patsubst $(SRC_VULKAN_BACKEND)/%.cpp, $(OBJS_BUILD_DIR)/%.$(OBJ_EXT), $(wildcard $(SRC_VULKAN_BACKEND)/*.cpp)) \
+	$(patsubst $(SRC_VULKAN_BACKEND)/resource/%.cpp, $(OBJS_BUILD_DIR)/%.$(OBJ_EXT), $(wildcard $(SRC_VULKAN_BACKEND)/resource/*.cpp))
+# OBJS_VULKAN_BACKEND := $(foreach dir,$(SRC_VULKAN_BACKEND),$(patsubst $(dir)/%.cpp, $(PLATFORM_BUILD_DIR)/%.$(OBJ_EXT), $(wildcard $(dir)/*.cpp)))
 
 # $(info $(SRC_VULKAN_BACKEND))
 # $(info $(OBJS_VULKAN_BACKEND))
@@ -441,7 +460,7 @@ CPP_HEADER_TARGETS := \
 	$(patsubst %.hpp, $(HEADERS_BUILD_DIR)/%.pcm, $(CPP_HEADERS)) \
 	
 
-CPP_MODULE_DEPENDENCIES_FILE := $(BUILD_DIR)/cpp_module_dependencies.mk
+CPP_MODULE_DEPENDENCIES_FILE := $(PLATFORM_BUILD_DIR)/cpp_module_dependencies.mk
 
 $(BUILD_DIR)/%.mk: scripts/generate_cpp_module_dependencies.py $(CPP_MODULE_SRCS) $(SRCS)
 ifeq ($(OS),Windows_NT)
@@ -450,7 +469,7 @@ else
 	@mkdir -p $(BUILD_DIR)
 endif
 	@echo "Generating $(CPP_MODULE_DEPENDENCIES_FILE)"
-	@PYTHON $< > $@
+	@$(PYTHON) $< > $@
 
 
 	
@@ -511,11 +530,6 @@ endif
 ifeq ($(USE_MODULES), 1)
 $(TARGET): $(CPP_MODULE_OBJS)
 endif
-	
-	
-# $(OBJS_STB) \
-# $(OBJS_FMT)
-# @echo "Linking $(notdir $^)"
 	@echo "Linking"
 ifeq ($(CXX),cl)
 	@link $(-OUT)$(TARGET_DIR)/$@ $^ $(LDFLAGS) 
@@ -589,12 +603,12 @@ $(STD_COMPAT_TARGET): $(STD_MODULE_TARGET)
 
 ifeq ($(STD_MODULE_AVAILABLE), 1)
 
-STD_MODULE_PATH_FILE := $(BUILD_DIR)/std_module_path.mk
+STD_MODULE_PATH_FILE := $(PLATFORM_BUILD_DIR)/std_module_path.mk
 
 # get std.cppm module path
 $(STD_MODULE_PATH_FILE): scripts/get_std_module_path.py
 	@echo "Generating $(STD_MODULE_PATH_FILE)"
-	@PYTHON $< > $@
+	@$(PYTHON) $< > $@
 	
 -include $(STD_MODULE_PATH_FILE)
 
@@ -637,7 +651,7 @@ VULKAN_MODULE_DEFINES := \
 	-DVULKAN_HPP_NO_CONSTRUCTORS \
 	-DVULKAN_HPP_NO_UNION_CONSTRUCTORS \
 
-$(MODULES_BUILD_DIR)/vulkan_hpp.pcm: $(VULKAN_SDK)/Include/vulkan/vulkan.cppm
+$(MODULES_BUILD_DIR)/vulkan_hpp.pcm: $(VULKAN_SDK)/include/vulkan/vulkan.cppm
 	@echo "Compiling module $(notdir $<)"
 	@$(CXX) $(CXXFLAGS) $(VULKAN_MODULE_DEFINES) --precompile -c -x c++-module "$<" -o $@
 
@@ -672,70 +686,58 @@ $(MODULES_BUILD_DIR_CLANGD)/%.pcm: $(MODULES_BUILD_DIR)/%.pcm
 # @echo "mklink $(subst /,\,$@) ..\modules\$(notdir $<)"
 
 $(_MBD)/%.pcm: $(SRC_DIR)/Core/%.cppm
-# @rm -f $@
 	@echo "Compiling module $(notdir $<)"
-	@$(CXX) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
+	@$(CXX) $(CXXFLAGS) --precompile -c -x c++-module $< -o $@
 
 $(_MBD)/%.pcm: $(SRC_DIR)/Base/%.cppm
-# @rm -f $@
 	@echo "Compiling module $(notdir $<)"
-	@$(CXX) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
+	@$(CXX) $(CXXFLAGS) --precompile -c -x c++-module $< -o $@
 
 $(_MBD)/%.pcm: $(SRC_DIR)/Engine/%.cppm
-# @rm -f $@
 	@echo "Compiling module $(notdir $<)"
-	@$(CXX) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
+	@$(CXX) $(CXXFLAGS) --precompile -c -x c++-module $< -o $@
 
 $(_MBD)/%.pcm: $(SRC_DIR)/Resources/%.cppm
-# @rm -f $@
 	@echo "Compiling module $(notdir $<)"
-	@$(CXX) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
+	@$(CXX) $(CXXFLAGS) --precompile -c -x c++-module $< -o $@
 
 $(_MBD)/%.pcm: $(SRC_DIR)/Shaders/%.cppm
-# @rm -f $@
 	@echo "Compiling module $(notdir $<)"
-	@$(CXX) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
+	@$(CXX) $(CXXFLAGS) --precompile -c -x c++-module $< -o $@
 
 $(_MBD)/%.pcm: $(SRC_FEATURE)/%.cppm
-# @rm -f $@
 	@echo "Compiling module $(notdir $<)"
-	@$(CXX) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
+	@$(CXX) $(CXXFLAGS) --precompile -c -x c++-module $< -o $@
 
 
 # build_external_modules: $(EXTERNAL_MODULE_TARGETS)
 
 $(_MBD)/%.pcm: $(EXTERNAL_MODULES_DIR)/%.cppm
-# @rm -f $@
 	@echo "Compiling module $(notdir $<)"
-	@$(CXX) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
+	@$(CXX) $(CXXFLAGS) --precompile -c -x c++-module $< -o $@
 
 $(_MBD)/%.pcm: $(EXTERNAL_MODULES_DIR)/imgui/%.cppm
-# @rm -f $@
 	@echo "Compiling module $(notdir $<)"
-	@$(CXX) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
+	@$(CXX) $(CXXFLAGS) --precompile -c -x c++-module $< -o $@
 
 $(_MBD)/%.pcm: $(EXTERNAL_MODULES_DIR)/stb/%.cppm
-# @rm -f $@
 	@echo "Compiling module $(notdir $<)"
-	@$(CXX) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
+	@$(CXX) $(CXXFLAGS) --precompile -c -x c++-module $< -o $@
 
 # #entt
 # $(_MBD)/%.pcm: deps\entt\src\entt\entity\registry.hpp
-# @rm -f $@
 # 	@echo "Compiling module $(notdir $<)"
-# 	@$(CXX) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
+# 	@$(CXX) $(CXXFLAGS) --precompile -c -x c++-module $< -o $@
 
 # fastgltf
 $(_MBD)/%.pcm: deps/fastgltf/src/%.ixx
-# @rm -f $@
 	@echo "Compiling module $(notdir $<)"
-	@$(CXX) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
+	@$(CXX) $(CXXFLAGS) --precompile -c -x c++-module $< -o $@
 
 # vulkan_backend
 $(_MBD)/%.pcm: deps/vulkan_backend/src/%.cppm
-# @rm -f $@
 	@echo "Compiling module $(notdir $<)"
-	@$(CXX) $(filter-out -fmodule-file-deps,$(CXXFLAGS)) --precompile -c -x c++-module $< -o $@
+	@$(CXX) $(CXXFLAGS) --precompile -c -x c++-module $< -o $@
 
 
 # ========================== Module Objs =============================
@@ -769,7 +771,10 @@ GLFW_PLATFORM := _GLFW_X11
 endif
 
 ifeq ($(findstring clang,$(CXX)),clang)
+ifeq ($(OS),Windows_NT)
 _CLANG_LIBFLAGS := -target x86_64-w64-mingw32
+endif
+_CLANG_LIBFLAGS := -stdlib=libc++ $(CXXFLAGS)
 endif
 
 $(PLATFORM_BUILD_DIR)/glfw/%.$(OBJ_EXT): $(SRC_GLFW)/%.c # glfw/
@@ -799,13 +804,13 @@ $(SRC_SIMDJSON)/simdjson.h:
 # curl -L -o
 $(PLATFORM_BUILD_DIR)/simdjson/%.$(OBJ_EXT): $(SRC_SIMDJSON)/%.cpp $(SRC_SIMDJSON)/%.h # simdjson/
 	@echo "Compiling $(notdir $<)"
-	@$(CXX) -MMD -MP $(-O)$@ $(-C) $< -I$(DEPS_PATH)/fastgltf/deps/simdjson -O3 $(_CLANG_LIBFLAGS)
+	@$(CXX) $(STDLIB) -MMD -MP $(-O)$@ $(-C) $< -I$(DEPS_PATH)/fastgltf/deps/simdjson -O3 $(_CLANG_LIBFLAGS)
 
 
 # spdlog
 $(PLATFORM_BUILD_DIR)/spdlog/%.$(OBJ_EXT): $(SRC_SPDLOG)/%.cpp # spdlog/
 	@echo "Compiling $(notdir $<)"
-	@$(CXX) -MMD -MP $(-O)$@ $(-C) $< -O3 -DSPDLOG_COMPILED_LIB -DSPDLOG_NO_EXCEPTIONS -I$(DEPS_PATH)/spdlog/include $(_CLANG_LIBFLAGS)
+	@$(CXX) $(STDLIB) -MMD -MP $(-O)$@ $(-C) $< -O3 -DSPDLOG_COMPILED_LIB -DSPDLOG_NO_EXCEPTIONS -I$(DEPS_PATH)/spdlog/include $(_CLANG_LIBFLAGS)
 # -I$(DEPS_PATH)/fmt/include -DSPDLOG_FMT_EXTERNAL -DSPDLOG_FMT_EXTERNAL_HO
 
 #fmt
@@ -814,7 +819,11 @@ $(PLATFORM_BUILD_DIR)/fmt/%.$(OBJ_EXT): $(SRC_FMT)/%.cc # fmt/
 	@$(CXX) -MMD -MP $(-O)$@ $(-C) $< -I$(DEPS_PATH)/fmt/include -fmodules-ts $(_CLANG_LIBFLAGS)
 
 # vulkan_backend
-$(PLATFORM_BUILD_DIR)/%.$(OBJ_EXT): $(SRC_VULKAN_BACKEND)/%.cpp # vulkan_backend/
+$(OBJS_BUILD_DIR)/%.$(OBJ_EXT): $(SRC_VULKAN_BACKEND)/%.cpp # vulkan_backend/
+	@echo "Compiling $(notdir $<)"
+	@$(CXX) $(CXXFLAGS) $(-O)$@ $(-C) $<
+
+$(OBJS_BUILD_DIR)/%.$(OBJ_EXT): $(SRC_VULKAN_BACKEND)/resource/%.cpp # vulkan_backend/
 	@echo "Compiling $(notdir $<)"
 	@$(CXX) $(CXXFLAGS) $(-O)$@ $(-C) $<
 
@@ -824,6 +833,7 @@ DEPFILES =  $(OBJS:.$(OBJ_EXT)=.d) \
 			$(OBJS_GLFW:.$(OBJ_EXT)=.d) \
 			$(CPP_MODULE_TARGETS:.pcm=.d) \
 			$(EXTERNAL_MODULE_TARGETS:.pcm=.d) \
+			$(OBJS_VULKAN_BACKEND:.$(OBJ_EXT)=.d)
 
 -include $(wildcard $(DEPFILES))
 
