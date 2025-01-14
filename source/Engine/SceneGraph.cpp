@@ -1,13 +1,7 @@
-#ifdef USE_MODULES
 module SceneGraph;
 import lmath;
 import std.compat;
 import Log;
-#else
-#include "lmath.hpp"
-#include "SceneGraph.cppm"
-#include "Log.cppm"
-#endif
 
 using namespace lmath;
 

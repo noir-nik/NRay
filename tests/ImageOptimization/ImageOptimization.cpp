@@ -1,17 +1,6 @@
-#ifdef USE_MODULES
 import lmath;
 import vulkan_backend;
-#else
-#include "lmath_types.hpp"
-#include <vulkan_backend/core.hpp>
-#endif
-
-#include "Bindless.h"
-#include "FileManager.cppm"
-
-#include "ImageOptimization.cppm"
-#include "../TestCommon.cppm"
-#include "Timer.cppm"
+import Timer;
 
 using Pixel = vec4;
 namespace {

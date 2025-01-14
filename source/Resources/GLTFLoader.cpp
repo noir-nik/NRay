@@ -1,11 +1,8 @@
-#ifdef USE_MODULES
 module;
-#endif
 
 #include "GpuTypes.h"
 #include "Macros.h"
 
-#ifdef USE_MODULES
 module GLTFLoader;
 import fastgltf;
 import lmath;
@@ -19,24 +16,6 @@ import Component;
 import Types;
 import Entity;
 import Materials;
-#else
-#include "GpuTypes.h"
-#include "GLTFLoader.cppm"
-#include <vulkan_backend/core.hpp>
-#include "lmath.hpp"
-#include "ImageIO.cppm"
-#include "Log.cppm"
-
-#include <cstddef>
-#include <cstdint>
-#include <cstdio>
-#include <unordered_map>
-#include <vector>
-
-#include <fastgltf/core.hpp>
-#include <fastgltf/tools.hpp>
-
-#endif
 
 namespace fastgltf {
 template<> struct ElementTraits<lmath::vec4> : ElementTraitsBase<lmath::vec4, AccessorType::Vec4, float> {};

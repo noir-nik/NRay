@@ -1,4 +1,3 @@
-#ifdef USE_MODULES
 module Editor;
 import std;
 import std.compat;
@@ -15,32 +14,93 @@ import Component;
 import entt;
 import imgui_impl_glfw;
 import imgui_impl_vulkan;
-#else
-#include "lmath.hpp"
-#include <vulkan_backend/core.hpp>
-#include "imgui.cppm"
-#include <imgui_impl_vulkan.h>
-#include <imgui_impl_glfw.h>
-#include "Editor.cppm"
-#include "Camera.cppm"
-#include "Log.cppm"
-
-#include <fstream>
-#endif
-
-#include "Macros.h"
-
-// #include "Base.hpp"
-// #include <UI.hpp>
-// #include <cstdio>
-// #include <imgui/imgui.h>
-// #include <imgui/imgui_internal.h>
-// #include <string_view>
 
 #define STYLE_PATH "assets/"
 
 namespace Editor {
 using namespace lmath;
+// MSVC doesn't compile without these
+// when using imgui module
+// NOLINTBEGIN(misc-unused-using-decls)
+using ::ImGuiWindowFlags_;
+using ::ImGuiChildFlags_;
+using ::ImGuiItemFlags_;
+using ::ImGuiInputTextFlags_;
+using ::ImGuiTreeNodeFlags_;
+using ::ImGuiPopupFlags_;
+using ::ImGuiSelectableFlags_;
+using ::ImGuiComboFlags_;
+using ::ImGuiTabBarFlags_;
+using ::ImGuiTabItemFlags_;
+using ::ImGuiFocusedFlags_;
+using ::ImGuiHoveredFlags_;
+using ::ImGuiDockNodeFlags_;
+using ::ImGuiDragDropFlags_;
+using ::ImGuiDataType_;
+using ::ImGuiDir;
+using ::ImGuiSortDirection;
+using ::ImGuiKey;
+using ::ImGuiInputFlags_;
+using ::ImGuiConfigFlags_;
+using ::ImGuiBackendFlags_;
+using ::ImGuiCol_;
+using ::ImGuiStyleVar_;
+using ::ImGuiButtonFlags_;
+using ::ImGuiColorEditFlags_;
+using ::ImGuiSliderFlags_;
+using ::ImGuiMouseButton_;
+using ::ImGuiMouseCursor_;
+using ::ImGuiMouseSource;
+using ::ImGuiCond_;
+using ::ImGuiTableFlags_;
+using ::ImGuiTableColumnFlags_;
+using ::ImGuiTableRowFlags_;
+using ::ImGuiTableBgTarget_;
+using ::ImGuiTableSortSpecs;
+using ::ImGuiTableColumnSortSpecs;
+using ::ImNewWrapper;
+using ::ImGuiStyle;
+using ::ImGuiKeyData;
+using ::ImGuiIO;
+using ::ImGuiInputTextCallbackData;
+using ::ImGuiSizeCallbackData;
+using ::ImGuiWindowClass;
+using ::ImGuiPayload;
+using ::ImGuiOnceUponAFrame;
+using ::ImGuiTextFilter;
+using ::ImGuiTextBuffer;
+using ::ImGuiStoragePair;
+using ::ImGuiStorage;
+using ::ImGuiListClipper;
+using ::ImColor;
+using ::ImGuiMultiSelectFlags_;
+using ::ImGuiMultiSelectIO;
+using ::ImGuiSelectionRequestType;
+using ::ImGuiSelectionRequest;
+using ::ImGuiSelectionBasicStorage;
+using ::ImGuiSelectionExternalStorage;
+using ::ImDrawCmd;
+using ::ImDrawVert;
+using ::ImDrawCmdHeader;
+using ::ImDrawChannel;
+using ::ImDrawListSplitter;
+using ::ImDrawFlags_;
+using ::ImDrawListFlags_;
+using ::ImDrawList;
+using ::ImDrawData;
+using ::ImFontConfig;
+using ::ImFontGlyph;
+using ::ImFontGlyphRangesBuilder;
+using ::ImFontAtlasCustomRect;
+using ::ImFontAtlasFlags_;
+using ::ImFontAtlas;
+using ::ImFont;
+using ::ImGuiViewportFlags_;
+using ::ImGuiViewport;
+using ::ImGuiPlatformIO;
+using ::ImGuiPlatformMonitor;
+using ::ImGuiPlatformImeData;
+// NOLINTEND(misc-unused-using-decls)
 struct Context;
 
 void drawWindowRects(ImGuiWindow* window);
@@ -238,7 +298,7 @@ void Context::RenderUI() {
 	ImGui::Separator();
 
 	static char const* sceneObjects[] = { "Camera", "Light", "Cube", "Sphere", "Plane" };
-	for (size_t i = 0; i < ARRAY_SIZE(sceneObjects); i++) {
+	for (size_t i = 0; i < std::size(sceneObjects); i++) {
 		ImGui::Selectable(sceneObjects[i]);
 	}
 	ImGui::End();
@@ -748,7 +808,7 @@ void TextWithHoverColor(ImVec4 col, char const* fmt, ...)
     va_list args;
     va_start(args, fmt);
     char const* text_begin = g.TempBuffer.Data;
-    char const* text_end = g.TempBuffer.Data + ImFormatStringV(g.TempBuffer.Data, ARRAY_SIZE(g.TempBuffer), fmt, args);
+    char const* text_end = g.TempBuffer.Data + ImFormatStringV(g.TempBuffer.Data, std::size(g.TempBuffer), fmt, args);
     va_end(args);
 
     // Layout

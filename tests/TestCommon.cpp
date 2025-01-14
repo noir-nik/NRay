@@ -1,11 +1,5 @@
-#ifdef USE_MODULES
 import lmath;
 import vulkan_backend;
-#else
-#include <vulkan_backend/core.hpp>
-#include "TestCommon.hpp"
-#include "FileManager.cppm"
-#endif
 
 using Pixel = lmath::float4;
 

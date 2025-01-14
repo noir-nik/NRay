@@ -1,14 +1,12 @@
-#ifndef PHONG_H
-#define PHONG_H
+#ifndef SOURCE_SHADERS_INCLUDE_PHONG_H_
+#define SOURCE_SHADERS_INCLUDE_PHONG_H_
 
 #ifdef ENGINE
-#ifdef USE_MODULES
 import lmath;
-#else
-#include "lmath_types.hpp"
-#endif
 namespace Phong {
-using namespace lmath;
+using lmath::vec3;
+using lmath::vec4;
+using lmath::mat4;
 #endif // ENGINE
 
 struct PhongLight {
@@ -41,4 +39,4 @@ struct PhongConstants {
 } // namespace Phong
 #endif
 
-#endif // PHONG_H
+#endif // SOURCE_SHADERS_INCLUDE_PHONG_H_

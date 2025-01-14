@@ -23,7 +23,10 @@ CXXFLAGS += $(STDLIB)
 AR := ar
 ARFLAGS = rcs
 
+ifndef BUILD_DIR
 BUILD_DIR := build
+endif
+
 BIN_DIR := bin
 DEPS_PATH := deps
 
@@ -227,25 +230,13 @@ SRC_RESOURCES := $(SRC_DIR)/Resources
 SRC_SHADERS   := $(SRC_DIR)/Shaders
 SRC_TEST := tests
 
-
-
-# # Tests
-# SRC_NEURALSFD := tests/NeuralSdf
-# SRC_IMAGEOPT := tests/ImageOptimization
-# SRC_SLANG := tests/SlangTest
 SRC_FEATURE := tests/FeatureTest
-# SRC_RADIENCE := tests/RadienceField
-# SRC_HELLOTRIANGLE := tests/HelloTriangle
-# SRC_WINDOW := tests/Window
 
-# SRC_ALL := $(SRC_NEURALSFD) $(SRC_IMAGEOPT) $(SRC_SLANG) $(SRC_FEATURE) $(SRC_RADIENCE)
 tst_dirs := $(wildcard tests/*)
 files := $(foreach dir,$(tst_dirs),$(wildcard $(dir)/*.cpp))
 SRC_CPP := $(filter %.cpp, $(files) $(tst_dirs))
 SRC_CPP_RAW := $(notdir $(SRC_CPP))
 # SRC_CPP_RAW := $(notdir $(files))
-
-
 
 SRCS := \
 	$(wildcard $(SRC_MAIN)/*.cpp) \
@@ -412,53 +403,8 @@ else
 	$(PLATFORM_BUILD_DIR)/fmt \
 
 	@find $(SRC_DIR) -type d -exec mkdir -p -- $(OBJS_BUILD_DIR)/{} \;
-
 	@echo 0 > $(DIRS_CREATED_FILE)
-
-# $(PLATFORM_BUILD_DIR)/stb \
-
-
 endif
-
-CPP_SYSTEM_HEADERS := \
-	array \
-	atomic \
-	chrono \
-	filesystem \
-	fstream \
-	map \
-	memory \
-	mutex \
-	numeric \
-	random \
-	set \
-	span \
-	string \
-	string_view \
-	thread \
-	tuple \
-	unordered_map \
-	vector \
-	\
-	iostream \
-	\
-	cassert \
-	cmath \
-	csignal \
-	cstddef \
-	cstdint \
-	cstdlib \
-	cstring \
-
-CPP_SYSTEM_HEADER_TARGETS := \
-	$(patsubst %, $(HEADERS_BUILD_DIR)/%.pcm, $(CPP_SYSTEM_HEADERS)) \
-	
-CPP_HEADERS := entt-entity-registry.hpp
-# CPP_HEADERS := registry
-
-CPP_HEADER_TARGETS := \
-	$(patsubst %.hpp, $(HEADERS_BUILD_DIR)/%.pcm, $(CPP_HEADERS)) \
-	
 
 CPP_MODULE_DEPENDENCIES_FILE := $(PLATFORM_BUILD_DIR)/cpp_module_dependencies.mk
 
@@ -471,15 +417,7 @@ endif
 	@echo "Generating $(CPP_MODULE_DEPENDENCIES_FILE)"
 	@$(PYTHON) $< > $@
 
-
-	
-# $(subst .cppm,,$(wildcard $(SRC_SHADERS)/*.cppm))
-# CPP_MODULES := $(CPP_MODULES_PRIMARY) $(filter-out $(CPP_MODULES_PRIMARY),$(subst .cppm,,$(CPP_MODULES))))
 CPP_MODULES := $(notdir $(subst .cppm,,$(CPP_MODULE_SRCS)))
-# CPP_MODULES := $(CPP_MODULES_PRIMARY) $(notdir $(subst .cppm,,$(CPP_MODULES)))
-# $(_MBD)/UI.pcm:  $(_MBD)/FeatureTest.pcm
-# $(info $(CPP_MODULES))
-# $(info $(CPP_MODULE_DEPENDENCIES_FILE))
 
 EXTERNAL_MODULES_DIR := deps/modules
 
@@ -651,6 +589,10 @@ VULKAN_MODULE_DEFINES := \
 	-DVULKAN_HPP_NO_CONSTRUCTORS \
 	-DVULKAN_HPP_NO_UNION_CONSTRUCTORS \
 
+ifeq ($(VULKAN_SDK),)
+VULKAN_SDK := /usr
+endif # VULKAN_SDK
+
 $(MODULES_BUILD_DIR)/vulkan_hpp.pcm: $(VULKAN_SDK)/include/vulkan/vulkan.cppm
 	@echo "Compiling module $(notdir $<)"
 	@$(CXX) $(CXXFLAGS) $(VULKAN_MODULE_DEFINES) --precompile -c -x c++-module "$<" -o $@
@@ -706,6 +648,10 @@ $(_MBD)/%.pcm: $(SRC_DIR)/Shaders/%.cppm
 	@$(CXX) $(CXXFLAGS) --precompile -c -x c++-module $< -o $@
 
 $(_MBD)/%.pcm: $(SRC_FEATURE)/%.cppm
+	@echo "Compiling module $(notdir $<)"
+	@$(CXX) $(CXXFLAGS) --precompile -c -x c++-module $< -o $@
+
+$(_MBD)/%.pcm: $(SRC_TEST)/%.cppm
 	@echo "Compiling module $(notdir $<)"
 	@$(CXX) $(CXXFLAGS) --precompile -c -x c++-module $< -o $@
 

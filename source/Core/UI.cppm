@@ -1,12 +1,6 @@
-#ifdef USE_MODULES
 export module UI;
-#define _UI_EXPORT export
-#else
-#pragma once
-#define _UI_EXPORT
-#endif
 
-_UI_EXPORT
+export
 namespace UI {
 
 struct Context {

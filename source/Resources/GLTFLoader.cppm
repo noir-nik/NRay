@@ -1,28 +1,12 @@
-#ifdef USE_MODULES
 export module GLTFLoader;
-#define _GLTFLOADER_EXPORT export
 import vulkan_backend;
 import Component;
 import SceneGraph;
 import Materials;
 import Types;
 import std;
-#else
-#pragma once
-#define _GLTFLOADER_EXPORT
-// #include <vulkan_backend/core.hpp>
-#include "Component.cppm"
-#include "SceneGraph.cppm"
-#include "Materials.cppm"
-#include <string>
 
-#include <filesystem>
-#include <memory>
-#include <vector>
-#endif
-
-
-_GLTFLOADER_EXPORT
+export
 namespace glTF {
 /* 
 enum class Format {

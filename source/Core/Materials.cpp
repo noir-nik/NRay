@@ -1,18 +1,9 @@
-#ifdef USE_MODULES
 module;
-#endif
 
 #include "GpuTypes.h"
 
-#ifdef USE_MODULES
 module Materials;
 import vulkan_backend;
-#else
-#include <string>
-#include <vulkan_backend/core.hpp>
-#include "Materials.cppm"
-#endif
-
 void Materials::Init(vb::Device device, vb::Queue queue, uint capacity){
 	this->device = device;
 	this->queue = queue;

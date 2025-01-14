@@ -1,19 +1,9 @@
-#ifdef USE_MODULES
 export module Objects;
-#define _OBJECTS_EXPORT export
 import lmath;
 import vulkan_backend;
 import std;
-#else
-#pragma once
-#define _OBJECTS_EXPORT
-#include "lmath_types.hpp"
-#include <vulkan_backend/core.hpp>
-#include <cstdint>
-#include <vector>
-#endif
 
-_OBJECTS_EXPORT
+export
 namespace Objects {
 using namespace lmath;
 

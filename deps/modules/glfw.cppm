@@ -1,171 +1,163 @@
-#ifdef USE_MODULES
 module;
-#define _GLFW_EXPORT export
-#else
-#pragma once
-#define _GLFW_EXPORT
-#endif
 
 // #include <type_traits>
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
 // NOLINTBEGIN(misc-unused-using-decls)
-#ifdef USE_MODULES
 export module glfw;
 
-export using ::GLFWwindow;
-export using ::GLFWcursor;
-export using ::GLFWmonitor;
+export  {
+using ::GLFWwindow;
+using ::GLFWcursor;
+using ::GLFWmonitor;
 
-export using ::GLFWvidmode;
-export using ::GLFWmonitor;
-export using ::GLFWmonitor;
-export using ::GLFWmonitor;
-export using ::GLFWmonitor;
-export using ::GLFWmonitor;
-export using ::GLFWmonitor;
-export using ::GLFWmonitor;
+using ::GLFWvidmode;
+using ::GLFWmonitor;
+using ::GLFWmonitor;
+using ::GLFWmonitor;
+using ::GLFWmonitor;
+using ::GLFWmonitor;
+using ::GLFWmonitor;
+using ::GLFWmonitor;
 
-export using ::glfwInit;
-export using ::glfwTerminate;
-export using ::glfwInitHint;
-export using ::glfwInitAllocator;
+using ::glfwInit;
+using ::glfwTerminate;
+using ::glfwInitHint;
+using ::glfwInitAllocator;
 #if defined(VK_VERSION_1_0)
-export using ::glfwInitVulkanLoader;
+using ::glfwInitVulkanLoader;
 #endif // VK_VERSION_1_0
-export using ::glfwGetVersion;
-export using ::glfwGetVersionString;
-export using ::glfwGetError;
-export using ::glfwSetErrorCallback;
-export using ::glfwGetPlatform;
-export using ::glfwPlatformSupported;
-export using ::glfwGetMonitors;
-export using ::glfwGetPrimaryMonitor;
-export using ::glfwGetMonitorPos;
-export using ::glfwGetMonitorWorkarea;
-export using ::glfwGetMonitorPhysicalSize;
-export using ::glfwGetMonitorContentScale;
-export using ::glfwGetMonitorName;
-export using ::glfwSetMonitorUserPointer;
-export using ::glfwGetMonitorUserPointer;
-export using ::glfwSetMonitorCallback;
-export using ::glfwGetVideoModes;
-export using ::glfwGetVideoMode;
-export using ::glfwSetGamma;
-export using ::glfwGetGammaRamp;
-export using ::glfwSetGammaRamp;
-export using ::glfwDefaultWindowHints;
-export using ::glfwWindowHint;
-export using ::glfwWindowHintString;
-export using ::glfwCreateWindow;
-export using ::glfwDestroyWindow;
-export using ::glfwWindowShouldClose;
-export using ::glfwSetWindowShouldClose;
-export using ::glfwGetWindowTitle;
-export using ::glfwSetWindowTitle;
-export using ::glfwSetWindowIcon;
-export using ::glfwGetWindowPos;
-export using ::glfwSetWindowPos;
-export using ::glfwGetWindowSize;
-export using ::glfwSetWindowSizeLimits;
-export using ::glfwSetWindowAspectRatio;
-export using ::glfwSetWindowSize;
-export using ::glfwGetFramebufferSize;
-export using ::glfwGetWindowFrameSize;
-export using ::glfwGetWindowContentScale;
-export using ::glfwGetWindowOpacity;
-export using ::glfwSetWindowOpacity;
-export using ::glfwIconifyWindow;
-export using ::glfwRestoreWindow;
-export using ::glfwMaximizeWindow;
-export using ::glfwShowWindow;
-export using ::glfwHideWindow;
-export using ::glfwFocusWindow;
-export using ::glfwRequestWindowAttention;
-export using ::glfwGetWindowMonitor;
-export using ::glfwSetWindowMonitor;
-export using ::glfwGetWindowAttrib;
-export using ::glfwSetWindowAttrib;
-export using ::glfwSetWindowUserPointer;
-export using ::glfwGetWindowUserPointer;
-export using ::glfwSetWindowPosCallback;
-export using ::glfwSetWindowSizeCallback;
-export using ::glfwSetWindowCloseCallback;
-export using ::glfwSetWindowRefreshCallback;
-export using ::glfwSetWindowFocusCallback;
-export using ::glfwSetWindowIconifyCallback;
-export using ::glfwSetWindowMaximizeCallback;
-export using ::glfwSetFramebufferSizeCallback;
-export using ::glfwSetWindowContentScaleCallback;
-export using ::glfwPollEvents;
-export using ::glfwWaitEvents;
-export using ::glfwWaitEventsTimeout;
-export using ::glfwPostEmptyEvent;
-export using ::glfwGetInputMode;
-export using ::glfwSetInputMode;
-export using ::glfwRawMouseMotionSupported;
-export using ::glfwGetKeyName;
-export using ::glfwGetKeyScancode;
-export using ::glfwGetKey;
-export using ::glfwGetMouseButton;
-export using ::glfwGetCursorPos;
-export using ::glfwSetCursorPos;
-export using ::glfwCreateCursor;
-export using ::glfwCreateStandardCursor;
-export using ::glfwDestroyCursor;
-export using ::glfwSetCursor;
-export using ::glfwSetKeyCallback;
-export using ::glfwSetCharCallback;
-export using ::glfwSetCharModsCallback;
-export using ::glfwSetMouseButtonCallback;
-export using ::glfwSetCursorPosCallback;
-export using ::glfwSetCursorEnterCallback;
-export using ::glfwSetScrollCallback;
-export using ::glfwSetDropCallback;
-export using ::glfwJoystickPresent;
-export using ::glfwGetJoystickAxes;
-export using ::glfwGetJoystickButtons;
-export using ::glfwGetJoystickHats;
-export using ::glfwGetJoystickName;
-export using ::glfwGetJoystickGUID;
-export using ::glfwSetJoystickUserPointer;
-export using ::glfwGetJoystickUserPointer;
-export using ::glfwJoystickIsGamepad;
-export using ::glfwSetJoystickCallback;
-export using ::glfwUpdateGamepadMappings;
-export using ::glfwGetGamepadName;
-export using ::glfwGetGamepadState;
-export using ::glfwSetClipboardString;
-export using ::glfwGetClipboardString;
-export using ::glfwGetTime;
-export using ::glfwSetTime;
-export using ::glfwGetTimerValue;
-export using ::glfwGetTimerFrequency;
-export using ::glfwMakeContextCurrent;
-export using ::glfwGetCurrentContext;
-export using ::glfwSwapBuffers;
-export using ::glfwSwapInterval;
-export using ::glfwExtensionSupported;
-export using ::glfwGetProcAddress;
-export using ::glfwVulkanSupported;
-export using ::glfwGetRequiredInstanceExtensions;
+using ::glfwGetVersion;
+using ::glfwGetVersionString;
+using ::glfwGetError;
+using ::glfwSetErrorCallback;
+using ::glfwGetPlatform;
+using ::glfwPlatformSupported;
+using ::glfwGetMonitors;
+using ::glfwGetPrimaryMonitor;
+using ::glfwGetMonitorPos;
+using ::glfwGetMonitorWorkarea;
+using ::glfwGetMonitorPhysicalSize;
+using ::glfwGetMonitorContentScale;
+using ::glfwGetMonitorName;
+using ::glfwSetMonitorUserPointer;
+using ::glfwGetMonitorUserPointer;
+using ::glfwSetMonitorCallback;
+using ::glfwGetVideoModes;
+using ::glfwGetVideoMode;
+using ::glfwSetGamma;
+using ::glfwGetGammaRamp;
+using ::glfwSetGammaRamp;
+using ::glfwDefaultWindowHints;
+using ::glfwWindowHint;
+using ::glfwWindowHintString;
+using ::glfwCreateWindow;
+using ::glfwDestroyWindow;
+using ::glfwWindowShouldClose;
+using ::glfwSetWindowShouldClose;
+using ::glfwGetWindowTitle;
+using ::glfwSetWindowTitle;
+using ::glfwSetWindowIcon;
+using ::glfwGetWindowPos;
+using ::glfwSetWindowPos;
+using ::glfwGetWindowSize;
+using ::glfwSetWindowSizeLimits;
+using ::glfwSetWindowAspectRatio;
+using ::glfwSetWindowSize;
+using ::glfwGetFramebufferSize;
+using ::glfwGetWindowFrameSize;
+using ::glfwGetWindowContentScale;
+using ::glfwGetWindowOpacity;
+using ::glfwSetWindowOpacity;
+using ::glfwIconifyWindow;
+using ::glfwRestoreWindow;
+using ::glfwMaximizeWindow;
+using ::glfwShowWindow;
+using ::glfwHideWindow;
+using ::glfwFocusWindow;
+using ::glfwRequestWindowAttention;
+using ::glfwGetWindowMonitor;
+using ::glfwSetWindowMonitor;
+using ::glfwGetWindowAttrib;
+using ::glfwSetWindowAttrib;
+using ::glfwSetWindowUserPointer;
+using ::glfwGetWindowUserPointer;
+using ::glfwSetWindowPosCallback;
+using ::glfwSetWindowSizeCallback;
+using ::glfwSetWindowCloseCallback;
+using ::glfwSetWindowRefreshCallback;
+using ::glfwSetWindowFocusCallback;
+using ::glfwSetWindowIconifyCallback;
+using ::glfwSetWindowMaximizeCallback;
+using ::glfwSetFramebufferSizeCallback;
+using ::glfwSetWindowContentScaleCallback;
+using ::glfwPollEvents;
+using ::glfwWaitEvents;
+using ::glfwWaitEventsTimeout;
+using ::glfwPostEmptyEvent;
+using ::glfwGetInputMode;
+using ::glfwSetInputMode;
+using ::glfwRawMouseMotionSupported;
+using ::glfwGetKeyName;
+using ::glfwGetKeyScancode;
+using ::glfwGetKey;
+using ::glfwGetMouseButton;
+using ::glfwGetCursorPos;
+using ::glfwSetCursorPos;
+using ::glfwCreateCursor;
+using ::glfwCreateStandardCursor;
+using ::glfwDestroyCursor;
+using ::glfwSetCursor;
+using ::glfwSetKeyCallback;
+using ::glfwSetCharCallback;
+using ::glfwSetCharModsCallback;
+using ::glfwSetMouseButtonCallback;
+using ::glfwSetCursorPosCallback;
+using ::glfwSetCursorEnterCallback;
+using ::glfwSetScrollCallback;
+using ::glfwSetDropCallback;
+using ::glfwJoystickPresent;
+using ::glfwGetJoystickAxes;
+using ::glfwGetJoystickButtons;
+using ::glfwGetJoystickHats;
+using ::glfwGetJoystickName;
+using ::glfwGetJoystickGUID;
+using ::glfwSetJoystickUserPointer;
+using ::glfwGetJoystickUserPointer;
+using ::glfwJoystickIsGamepad;
+using ::glfwSetJoystickCallback;
+using ::glfwUpdateGamepadMappings;
+using ::glfwGetGamepadName;
+using ::glfwGetGamepadState;
+using ::glfwSetClipboardString;
+using ::glfwGetClipboardString;
+using ::glfwGetTime;
+using ::glfwSetTime;
+using ::glfwGetTimerValue;
+using ::glfwGetTimerFrequency;
+using ::glfwMakeContextCurrent;
+using ::glfwGetCurrentContext;
+using ::glfwSwapBuffers;
+using ::glfwSwapInterval;
+using ::glfwExtensionSupported;
+using ::glfwGetProcAddress;
+using ::glfwVulkanSupported;
+using ::glfwGetRequiredInstanceExtensions;
 #if defined(VK_VERSION_1_0)
-export using ::glfwGetInstanceProcAddress;
-export using ::glfwGetPhysicalDevicePresentationSupport;
-export using ::glfwCreateWindowSurface;
+using ::glfwGetInstanceProcAddress;
+using ::glfwGetPhysicalDevicePresentationSupport;
+using ::glfwCreateWindowSurface;
 #endif // VK_VERSION_1_0
+}
 
 #define PRAGMA(...) _Pragma(#__VA_ARGS__)
 #define PUSH_MACRO(NAME) PRAGMA(push_macro(#NAME))
 #define EXPORT_POP_MACRO(NAME) export inline constexpr auto NAME = PRAGMA(pop_macro(#NAME)) NAME;
-
-#endif
 // NOLINTEND(misc-unused-using-decls)
 
-_GLFW_EXPORT
+export
 namespace GLFW {
-
 inline constexpr auto VersionMajor = GLFW_VERSION_MAJOR;
 inline constexpr auto VersionMinor = GLFW_VERSION_MINOR;
 inline constexpr auto VersionRevision = GLFW_VERSION_REVISION;

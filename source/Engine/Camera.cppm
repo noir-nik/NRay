@@ -1,20 +1,11 @@
-#ifdef USE_MODULES
 module;
-#endif
 
 #include "GpuTypes.h"
 
-#ifdef USE_MODULES
 export module Camera;
-#define _CAMERA_EXPORT export
 import lmath;
-#else
-#pragma once
-#define _CAMERA_EXPORT
-#include "lmath.hpp"
-#endif
 
-_CAMERA_EXPORT
+export
 namespace Engine {
 using namespace lmath;
 struct Camera {

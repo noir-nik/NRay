@@ -1,21 +1,5 @@
-#ifdef USE_MODULES
-module;
-#define _FILEMANAGER_EXPORT export
-#else
-#pragma once
-#include <string>
-#include <vector>
-#define _FILEMANAGER_EXPORT
-#endif
-
-#ifdef USE_MODULES
 export module FileManager;
 import std;
-#else
-#pragma once
-#include <string>
-#include <vector>
-#endif
 
 class FileManager {
 public:

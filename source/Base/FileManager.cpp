@@ -1,13 +1,6 @@
-#ifdef USE_MODULES
 module FileManager;
 import Log;
 import std;
-#else
-#include "Log.cppm"
-#include "FileManager.cppm"
-#include <filesystem>
-#include <fstream>
-#endif
 
 std::vector<char> FileManager::ReadRawBytes(std::string const& filename) {
 	std::ifstream file(filename, std::ios::ate | std::ios::binary);

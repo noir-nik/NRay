@@ -1,18 +1,11 @@
-#ifdef USE_MODULES
 module;
-#else
-#pragma once
-#endif
 
-#undef USE_MODULES
-#include "Types.cppm"
-#define USE_MODULES
+import Types;
 
 #define ENTT_ID_TYPE EntityType
 #include <entt/entity/registry.hpp>
 
 // NOLINTBEGIN(misc-unused-using-decls)
-#ifdef USE_MODULES
 export module entt;
 
 export
@@ -60,7 +53,4 @@ namespace entt {
 
 	using entt::null;
 }
-
-#endif
 // NOLINTEND(misc-unused-using-decls)
-

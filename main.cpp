@@ -1,11 +1,5 @@
-
-#ifdef USE_MODULES
 import Log;
 import FeatureTest;
-#else
-#include "Log.cppm"
-#include "tests/FeatureTest/FeatureTest.cppm"
-#endif
 // #include "tests/Test.hpp"
 
 int main(int argc, char* argv[])

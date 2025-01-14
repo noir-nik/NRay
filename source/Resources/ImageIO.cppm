@@ -1,15 +1,7 @@
-#ifdef USE_MODULES
 export module ImageIO;
-#define _IMAGEIO_EXPORT export
 import stb_image;
-#else
-#pragma once
-#define _IMAGEIO_EXPORT
-#include "stb_image.cppm"
 
-#endif
-
-_IMAGEIO_EXPORT
+export
 namespace ImageIO {
 
 inline unsigned char* Load(char const* filename, int* width, int* height, int* channels, int desiredChannels) {

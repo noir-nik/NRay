@@ -1,27 +1,16 @@
-#ifdef USE_MODULES
 export module SceneGraph;
-#define _SCENEGRAPH_EXPORT export
 import Component;
 import Entity;
 import std;
 import Types;
 import Structs;
-#else
-#pragma once
-#define _SCENEGRAPH_EXPORT
-#include "Component.cppm"
-#include "Entity.cppm"
-#include "Structs.cppm"
-#include "Types.cppm"
-#endif
 
-_SCENEGRAPH_EXPORT
+export
 struct SceneGraph : Structs::NoCopyNoMove {
 	using NodeIndex = u32;
 
 	struct Node {
 		Node(Entity entity = {nullptr, Entity::Null}) : entity(entity) {};
-		
 		Entity entity;
 		std::vector<NodeIndex> children;
 

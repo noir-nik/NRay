@@ -1,16 +1,11 @@
-#ifndef OPAQUE_H
-#define OPAQUE_H
+#ifndef SOURCE_SHADERS_INCLUDE_OPAQUE_H_
+#define SOURCE_SHADERS_INCLUDE_OPAQUE_H_
 
 #ifdef ENGINE
-#ifdef USE_MODULES
 import lmath;
-#else
-#include "lmath_types.hpp"
-#endif
 namespace Opaque {
 using namespace lmath;
 #endif // ENGINE
-
 
 struct OpaqueLight {
 	vec3 position;
@@ -37,4 +32,4 @@ struct OpaqueConstants {
 } // namespace Opaque
 #endif
 
-#endif // OPAQUE_H
+#endif // SOURCE_SHADERS_INCLUDE_OPAQUE_H_

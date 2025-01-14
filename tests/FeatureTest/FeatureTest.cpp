@@ -1,6 +1,4 @@
-#ifdef USE_MODULES
 module;
-#endif
 
 #include <vulkan/vulkan.h>
 
@@ -8,7 +6,6 @@ module;
 #include "Opaque.h"
 #include "GpuTypes.h"
 
-#ifdef USE_MODULES
 module FeatureTest;
 import glfw;
 import imgui;
@@ -33,29 +30,6 @@ import Camera;
 import Types;
 import Structs;
 import Materials;
-#else
-#include "lmath.hpp"
-#include <vulkan_backend/core.hpp>
-#include "Window.cppm"
-#include "Log.cppm"
-#include "Editor.cppm"
-#include "FeatureTest.cppm"
-#include "GLTFLoader.cppm"
-#include "Project.cppm"
-#include "UI.cppm"
-#include "Types.cppm"
-#include "Structs.cppm"
-#include "Materials.cppm"
-#include "Runtime.cppm"
-
-#include <cstdint>
-#include <cstdio>
-#include <vector>
-
-#include <imgui.h>
-#include <imgui_impl_vulkan.h>
-#include <imgui_impl_glfw.h>
-#endif
 
 #define GSLS_OPTIONS "-DGLSL -Isource/Shaders/include"
 #define BIN_PATH "bin"

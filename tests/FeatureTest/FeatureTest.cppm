@@ -1,16 +1,9 @@
 #ifdef ENGINE
-#ifdef USE_MODULES
 export module FeatureTest;
-#define _FEATURETEST_EXPORT export
 import lmath;
-#else
-#pragma once
-#include "lmath_types.hpp"
-#define _FEATURETEST_EXPORT
-#endif // USE_MODULES
-using namespace lmath;
+using lmath::mat4;
 
-_FEATURETEST_EXPORT
+export
 class FeatureTestApplication {
 public:
 	void run(char const* gltfPath);
@@ -22,8 +15,6 @@ private:
 	void MainLoop();
 	void Finish();
 };
-#else
-#define _FEATURETEST_EXPORT
 #endif // ENGINE
 
 struct FeatureTestConstants {
@@ -31,4 +22,3 @@ struct FeatureTestConstants {
 	mat4 proj;
 	mat4 viewProj;
 };
-

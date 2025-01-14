@@ -1,17 +1,6 @@
-#ifdef ENGINE
-#ifdef USE_MODULES
 export module ImageOptimization;
-#define _IMAGEOPTIMIZATION_EXPORT export
-#else
-#pragma once
-#define _IMAGEOPTIMIZATION_EXPORT
 
-#include <string>
-#include <cstdint>
-#include <vector>
-#endif
-
-_IMAGEOPTIMIZATION_EXPORT
+export
 struct ImageOptimizationInfo
 {
 	int width;
@@ -20,7 +9,7 @@ struct ImageOptimizationInfo
 	int numIterations;
 };
 
-_IMAGEOPTIMIZATION_EXPORT
+export
 class ImageOptimizationApplication {
 public:
 	void run(ImageOptimizationInfo* pImageOptimizationInfo);
@@ -33,9 +22,8 @@ private:
 
 	ImageOptimizationInfo* info;
 };
-#endif
 
-_IMAGEOPTIMIZATION_EXPORT
+export
 struct ImageOptConstants {
 	int width;
 	int height;

@@ -1,15 +1,7 @@
-#ifdef USE_MODULES
 module Window;
 import lmath;
 import glfw;
 import Log;
-#else
-#include "Window.cppm"
-#include "lmath.hpp"
-#include "glfw.cppm"
-#include "Log.cppm"
-#endif
-// #include <imgui/imgui.h>
 
 #define WINDOW_ALIVE_GUARD if (!alive) {LOG_WARN("ALIVE_GUARD {}:{}", __FILE__, __LINE__); return;}
 #define TRACE_WINDOW 0

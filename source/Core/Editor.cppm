@@ -1,22 +1,11 @@
-#ifdef USE_MODULES
 export module Editor;
-#define _EDITOR_EXPORT export
 import lmath;
 import std;
 import SceneGraph;
 import Camera;
 import Structs;
-#else
-#pragma once
-#define _EDITOR_EXPORT
-#include <variant>
-#include "lmath.hpp"
-#include "SceneGraph.cppm"
-#include "Camera.cppm"
-#include "Structs.cppm"
-#endif
 
-_EDITOR_EXPORT
+export
 namespace Editor {
 using namespace lmath;
 using Engine::Camera;

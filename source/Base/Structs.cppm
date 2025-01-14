@@ -1,13 +1,6 @@
-#ifdef USE_MODULES
 export module Structs;
-#define _STRUCTS_EXPORT export
-#else
-#pragma once
-#define _STRUCTS_EXPORT
-#endif
 
-_STRUCTS_EXPORT
-namespace Structs {
+export namespace Structs {
 struct NoCopy {
 	NoCopy() = default;
 	NoCopy(const NoCopy&) = delete;
@@ -25,7 +18,4 @@ struct NoCopyNoMove {
 	NoCopyNoMove& operator=(NoCopyNoMove&&) = delete;
 	~NoCopyNoMove() = default;
 };
-
 }; // namespace Structs
-
-#undef _STRUCTS_EXPORT

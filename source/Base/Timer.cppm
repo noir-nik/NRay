@@ -1,15 +1,8 @@
-#ifdef USE_MODULES
 export module Timer;
-#define _TIMER_EXPORT export
 import std;
-#else
-#pragma once
-#define _TIMER_EXPORT
-#include <chrono>
-#endif
 
-class Timer
-{
+export
+class Timer {
 public:
     inline void Start(){
         start = std::chrono::high_resolution_clock::now();

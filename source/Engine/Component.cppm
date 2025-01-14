@@ -1,29 +1,15 @@
-#ifdef USE_MODULES
 module;
-#endif
 
 #include "GpuTypes.h"
 
-#ifdef USE_MODULES
 export module Component;
-#define _COMPONENT_EXPORT export
 import lmath;
 import Objects;
 import std;
 import std.compat;
 import vulkan_backend;
-#else
-#pragma once
-#define _COMPONENT_EXPORT
-#include "lmath.hpp"
-#include "Objects.cppm"
 
-#include <cstdint>
-#include <string>
-#include <vector>
-#endif
-
-_COMPONENT_EXPORT
+export
 namespace Component {
 using namespace lmath;
 using namespace Objects;

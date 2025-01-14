@@ -1,17 +1,6 @@
-#ifdef USE_MODULES
-module;
-#endif
-
-#ifdef USE_MODULES
 module Log;
 import spdlog;
 import std;
-#else
-#include "Log.cppm"
-#include <spdlog/sinks/stdout_color_sinks.h>
-#include <spdlog/sinks/basic_file_sink.h>
-#endif
-
 
 std::shared_ptr<spdlog::logger> Logger::_logger;
 

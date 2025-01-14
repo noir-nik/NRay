@@ -1,16 +1,7 @@
 #ifdef ENGINE
-#ifdef USE_MODULES
 export module NeuralSdf;
 import std;
-#define _NEURALSDF_EXPORT export
-#else
-#pragma once
-#define _NEURALSDF_EXPORT
-
-#include <string>
-#include <vector>
 #endif
-
 
 struct NeuralSdfInfo
 {
@@ -33,8 +24,6 @@ private:
 	NeuralSdfInfo* info;
 	std::vector<float> weights;
 };
-#endif
-
 
 struct NeuralSdfConstants {
 	int width;

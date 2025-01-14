@@ -1,23 +1,12 @@
-#ifdef USE_MODULES
 export module Entity;
-#define _ENTITY_EXPORT export
 import entt;
 import std;
 import Types;
 import Component;
-#else
-#pragma once
-#define _ENTITY_EXPORT
-#include <entt/entity/registry.hpp>
-#include "Types.cppm"
-#include "Component.cppm"
-#endif
 
-_ENTITY_EXPORT
-using Registry = entt::registry;
+export using Registry = entt::registry;
 
-_ENTITY_EXPORT
-struct Entity {
+export struct Entity {
 	Entity(Registry* registry = nullptr, entt::entity entity = entt::null) :
 		registry(registry),
 		entity(entity) {}

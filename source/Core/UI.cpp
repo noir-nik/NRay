@@ -1,4 +1,3 @@
-#ifdef USE_MODULES
 module UI;
 import vulkan_backend;
 import Log;
@@ -6,20 +5,9 @@ import std;
 import imgui;
 import imgui_impl_glfw;
 import imgui_impl_vulkan;
-#else
-#include "UI.cppm"
-#include <vulkan_backend/core.hpp>
-#include "imgui.cppm"
-#include <imgui_impl_vulkan.h>
-#include <imgui_impl_glfw.h>
-#include "Log.cppm"
-
-#include <filesystem>
-#endif
-
 
 namespace UI {
-
+using ::ImGuiConfigFlags_;
 ImFontAtlas* sharedFontAtlas = nullptr;
 ImFont* defaultFont = nullptr;
 ImGuiContext* setupContext = nullptr;

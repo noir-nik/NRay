@@ -1,28 +1,11 @@
-#ifdef USE_MODULES
 export module Window;
-#define _WINDOW_EXPORT export
 import lmath;
 import Types;
 import glfw;
 import UI;
 import Structs;
 import std;
-#else
-#pragma once
-#define _WINDOW_EXPORT
-#include "lmath_types.hpp"
-// #include "Runtime.cppm"
-#include "Types.cppm"
-#include "glfw.cppm"
-#include "UI.cppm"
-#include "Structs.cppm"
-
-#include <chrono>
-#include <vector>
-#include <string>
-#endif
-
-_WINDOW_EXPORT
+export
 class WindowManager;
 enum class WindowMode {
 	Windowed,
@@ -56,7 +39,7 @@ void CharModsCallback    (GLFWwindow *window, unsigned int codepoint, int mods);
 void DropCallback        (GLFWwindow *window, int path_count, char const *paths[]);
 }
 
-_WINDOW_EXPORT
+export
 struct Mouse {
 	float       scroll      = .0f;
 	float       deltaScroll = .0f;
@@ -85,10 +68,10 @@ private:
 	friend void _InputCallbacks::CharModsCallback    (GLFWwindow *window, unsigned int codepoint, int mods);
 	friend void _InputCallbacks::DropCallback        (GLFWwindow *window, int path_count, char const *paths[]);
 };
-_WINDOW_EXPORT
+export
 extern Mouse mouse;
 
-_WINDOW_EXPORT
+export
 struct WindowCreateInfo {
 	lmath::ivec2 size = { 1280, 960 };
 	lmath::ivec2 pos = { 30, 30 };
@@ -96,7 +79,7 @@ struct WindowCreateInfo {
 	void* imGuiStyle = nullptr;
 };
 
-_WINDOW_EXPORT
+export
 class Window : Structs::NoCopyNoMove {
 	friend class WindowManager;
 	GLFWwindow*   window             = nullptr;

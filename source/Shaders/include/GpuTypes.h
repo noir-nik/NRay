@@ -1,24 +1,20 @@
-#ifndef _GPU_TYPES_H
-#define _GPU_TYPES_H
-
-#ifdef ENGINE
-#ifdef USE_MODULES
-import lmath;
-#else
-#include "lmath_types.hpp"
-#endif
-namespace GpuTypes {
-using namespace lmath;
-#endif // ENGINE
+#ifndef SOURCE_SHADERS_INCLUDE_GPU_TYPES_H_
+#define SOURCE_SHADERS_INCLUDE_GPU_TYPES_H_
 
 #define TEXTURE_UNDEFINED ~0u
 
 #ifdef ENGINE
+import lmath;
+namespace GpuTypes {
+using lmath::uint;
+using lmath::vec3;
+using lmath::vec4;
+using lmath::mat4;
 #define _EQ_UNDEFINED = TEXTURE_UNDEFINED
-#define _EQ_1f    = 1.0f
-#define _EQ_05f   = 0.5f
-#define _EQ_1vec3 = vec3(1.0f)
-#define _EQ_1vec4 = vec4(1.0f)
+#define _EQ_1f        = 1.0f
+#define _EQ_05f       = 0.5f
+#define _EQ_1vec3     = vec3(1.0f)
+#define _EQ_1vec4     = vec4(1.0f)
 #else
 #define _EQ_UNDEFINED
 #define _EQ_1f
@@ -28,15 +24,15 @@ using namespace lmath;
 #endif
 
 struct Material {
-	vec4 baseColorFactor    _EQ_1vec4;
+	vec4 baseColorFactor          _EQ_1vec4;
 
-	vec3 emissiveFactor     _EQ_1vec3;
-	float metallicFactor    _EQ_1f;
+	vec3 emissiveFactor           _EQ_1vec3;
+	float metallicFactor          _EQ_1f;
 
-	float roughnessFactor   _EQ_1f;
-    float normalScale       _EQ_1f;
-    float occlusionStrength _EQ_1f;
-    float alphaCutoff       _EQ_05f;
+	float roughnessFactor         _EQ_1f;
+    float normalScale             _EQ_1f;
+    float occlusionStrength       _EQ_1f;
+    float alphaCutoff             _EQ_05f;
 
 	uint baseColorTexture         _EQ_UNDEFINED;
 	uint metallicRoughnessTexture _EQ_UNDEFINED;
@@ -63,4 +59,4 @@ struct Camera {
 #undef _EQ_1vec3
 #undef _EQ_1vec4
 
-#endif // _GPU_TYPES_H
+#endif // SOURCE_SHADERS_INCLUDE_GPU_TYPES_H_

@@ -1,4 +1,4 @@
-#ifdef USE_MODULES
+#ifndef LOG_INCLUDE
 module;
 #define _LOG_EXPORT export
 #else
@@ -6,7 +6,7 @@ module;
 #define _LOG_EXPORT
 #endif
 
-#ifdef USE_MODULES
+#ifndef LOG_INCLUDE
 export module Log;
 import spdlog;
 import std;
@@ -24,7 +24,7 @@ private:
 	static std::shared_ptr<spdlog::logger> _logger;
 };
 
-#ifdef USE_MODULES
+#ifndef LOG_INCLUDE
 export template <typename... Args>
 void LOG_INFO(spdlog::format_string_t<Args...> fmt, Args &&...args) {
 	Logger::Get()->info(fmt, std::forward<Args>(args)...);
@@ -78,7 +78,6 @@ void ASSERT(bool condition, spdlog::format_string_t<Args...> fmt, Args &&...args
 }
 #else
 
-
 #define LOG_INFO(...) Logger::Get()->info(__VA_ARGS__);
 #define LOG_WARN(...) Logger::Get()->warn(__VA_ARGS__);
 #define LOG_ERROR(...) Logger::Get()->error(__VA_ARGS__);
@@ -96,5 +95,4 @@ void ASSERT(bool condition, spdlog::format_string_t<Args...> fmt, Args &&...args
 #endif
 
 #define ASSERT(condition, ...) { if (!(condition)) { LOG_ERROR("[ASSERTION FAILED] in {}:{} {}", __FILE__, __LINE__, __VA_ARGS__); exit(1); } }
-
 #endif

@@ -1,17 +1,8 @@
-#ifdef USE_MODULES
+module NeuralSdf;
 import lmath;
 import vulkan_backend;
-#else
-#include "lmath.hpp"
-#include <vulkan_backend/core.hpp>
-#include "Pch.hpp"
 
-#endif
-#include "Bindless.h"
 #include "FileManager.hpp"
-
-#include "NeuralSdf.hpp"
-
 #include "Timer.hpp"
 
 using Pixel = vec4;

@@ -1,9 +1,5 @@
-#ifdef USE_MODULES
+module Test;
 import FeatureTest;
-#else
-#include "FeatureTest/FeatureTest.cppm"
-#endif
-#include "Test.hpp"
 
 // #include "NeuralSdf/NeuralSdf.cppm"
 // #include "ImageOptimization/ImageOptimization.cppm"

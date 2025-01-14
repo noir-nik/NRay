@@ -1,24 +1,13 @@
-#ifdef USE_MODULES
 export module Project;
-#define _PROJECT_EXPORT export
 import lmath;
 import SceneGraph;
 import Entity;
 import Component;
 import Structs;
 import std;
-#else
-#pragma once
-#define _PROJECT_EXPORT
-#include "SceneGraph.cppm"
-#include "Entity.cppm"
-#include "Component.cppm"
-#include "Structs.cppm"
 
-#include <string_view>
-#endif
 
-_PROJECT_EXPORT
+export
 class Project : Structs::NoCopyNoMove {
 public:
 	Project() : registry(), sceneGraph(&registry) {}
